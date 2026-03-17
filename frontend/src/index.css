@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "LXGW WenKai Screen", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+
+  --bg-page:    #f8f9fb;
+  --bg-card:    #ffffff;
+  --bg-subtle:  #f8f9fb;
+  --border:     #f0f0f0;
+  --text-primary:   #1d1d1f;
+  --text-secondary: #6b7280;
+  --text-muted:     #9ca3af;
+}
+
+html.dark {
+  --bg-page:    #0f1117;
+  --bg-card:    #1c1f26;
+  --bg-subtle:  #161920;
+  --border:     #2a2d35;
+  --text-primary:   #f0f0f0;
+  --text-secondary: #9ca3af;
+  --text-muted:     #6b7280;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* 大号数字/纯英文标题用 DM Sans，视觉更干净 */
+.font-black, .font-bold {
+  font-family: "DM Sans", "LXGW WenKai Screen", "PingFang SC", system-ui, sans-serif;
+}
+/* 纯数字场景补丁：让字体特征数字更漂亮 */
+@supports (font-variant-numeric: tabular-nums) {
+  .font-black, .font-bold {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* 全局暗色覆盖 —— 作用于所有白色卡片 */
+html.dark .dk-card {
+  background-color: var(--bg-card) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary);
+}
+
+html.dark .dk-page {
+  background-color: var(--bg-page) !important;
+}
+
+html.dark .dk-subtle {
+  background-color: var(--bg-subtle) !important;
+}
+
+html.dark .dk-border {
+  border-color: var(--border) !important;
+}
+
+html.dark .dk-text {
+  color: var(--text-primary) !important;
+}
+
+html.dark .dk-text-muted {
+  color: var(--text-muted) !important;
+}
+
+/* 表格行 hover */
+html.dark .dk-row-hover:hover {
+  background-color: var(--bg-subtle) !important;
+}
+
+/* input */
+html.dark .dk-input {
+  background-color: var(--bg-card) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+html.dark .dk-input::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* thead */
+html.dark .dk-thead {
+  background-color: var(--bg-subtle) !important;
+}
+
+/* divider */
+html.dark .dk-divide > * + * {
+  border-color: var(--border) !important;
+}

@@ -1,0 +1,20 @@
+services:
+  backend:
+    image: ghcr.io/runzhliu/welink/backend:main
+    build: ./backend
+    container_name: welink-backend-demo
+    ports:
+      - "8080:8080"
+    environment:
+      - GIN_MODE=release
+      - DEMO_MODE=true
+      - DATA_DIR=/app/demo-data
+
+  frontend:
+    image: ghcr.io/runzhliu/welink/frontend:main
+    build: ./frontend
+    container_name: welink-frontend-demo
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend

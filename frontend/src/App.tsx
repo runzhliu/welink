@@ -1,0 +1,303 @@
+/**
+ * WeLink - 微信聊天数据分析平台
+ * 重构版本 - 组件化 + 微信风格设计
+ */
+
+import { useState, useMemo, useEffect } from 'react';
+import { Users, MessageSquare, Flame, Snowflake, Search } from 'lucide-react';
+
+// Layout Components
+import { Sidebar } from './components/layout/Sidebar';
+import { Header } from './components/layout/Header';
+
+// Dashboard Components
+import { KPICard } from './components/dashboard/KPICard';
+import { RelationshipHeatmap } from './components/dashboard/RelationshipHeatmap';
+import { MonthlyTrendChart } from './components/dashboard/MonthlyTrendChart';
+import { HourlyHeatmap } from './components/dashboard/HourlyHeatmap';
+import { ContactTable } from './components/dashboard/ContactTable';
+import { DatabaseView } from './components/dashboard/DatabaseView';
+import { LateNightRanking } from './components/dashboard/LateNightRanking';
+import { GroupsView, GroupDetailModal } from './components/groups/GroupsView';
+import { useDarkMode } from './hooks/useDarkMode';
+
+// Contact Components
+import { ContactModal } from './components/contact/ContactModal';
+
+// Common Components
+import { InitializingScreen } from './components/common/InitializingScreen';
+import { WelcomePage } from './components/common/WelcomePage';
+
+// Hooks
+import { useContacts } from './hooks/useContacts';
+import { useGlobalStats } from './hooks/useGlobalStats';
+import { useBackendStatus } from './hooks/useBackendStatus';
+
+// Types
+import type { TabType, ContactStats, HealthStatus, TimeRange, GroupInfo } from './types';
+
+// Utils
+import { formatCompactNumber } from './utils/formatters';
+import { globalApi } from './services/api';
+
+const ALL_TIME: TimeRange = { from: null, to: null, label: '全部' };
+
+function App() {
+  const { dark, toggle: toggleDark } = useDarkMode();
+
+  // State — 从 localStorage 恢复，刷新不回到欢迎页
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [search, setSearch] = useState('');
+  const [selectedContact, setSelectedContact] = useState<ContactStats | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<GroupInfo | null>(null);
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => {
+    try {
+      const saved = localStorage.getItem('welink_timeRange');
+      return saved ? JSON.parse(saved) : ALL_TIME;
+    } catch { return ALL_TIME; }
+  });
+  const [initLoading, setInitLoading] = useState(false);
+  const [hasStarted, setHasStarted] = useState(() => {
+    return localStorage.getItem('welink_hasStarted') === 'true';
+  });
+
+  // Backend Status Hook
+  const { isInitialized, isIndexing, backendReady, startPolling } = useBackendStatus(1000);
+
+  // Data Hooks (只在初始化完成后启动)
+  const { contacts: allContacts, loading: contactsLoading } = useContacts(isInitialized, 15000);
+  const { stats: globalStats } = useGlobalStats(isInitialized, 15000);
+  const statsLoading = contactsLoading;
+  const contacts = allContacts;
+
+  // Computed Values
+  const filteredContacts = useMemo(() => {
+    if (!search) return contacts;
+    const searchLower = search.toLowerCase();
+    return contacts.filter(
+      (c) =>
+        (c.remark + c.nickname + c.username).toLowerCase().includes(searchLower)
+    );
+  }, [contacts, search]);
+
+  const healthStatus: HealthStatus = useMemo(() => {
+    if (!contacts.length) return { hot: 0, warm: 0, cold: 0 };
+
+    const now = Date.now() / 1000;
+    let hot = 0,
+      warm = 0,
+      cold = 0;
+
+    contacts.forEach((c) => {
+      const ts = new Date(c.last_message_time).getTime() / 1000;
+      if (c.total_messages === 0) {
+        cold++;
+      } else if (now - ts < 7 * 86400) {
+        hot++;
+      } else {
+        warm++;
+      }
+    });
+
+    return { hot, warm, cold };
+  }, [contacts]);
+
+  // Handlers
+  const handleContactClick = (contact: ContactStats) => {
+    setSelectedContact(contact);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedContact(null);
+  };
+
+  const handleStart = async (from: number | null, to: number | null, label: string) => {
+    setInitLoading(true);
+    try {
+      await globalApi.init(from, to);
+      const range = { from, to, label };
+      setTimeRange(range);
+      setHasStarted(true);
+      localStorage.setItem('welink_hasStarted', 'true');
+      localStorage.setItem('welink_timeRange', JSON.stringify(range));
+      startPolling(); // 重新开始轮询，等待 is_initialized 变为 true
+    } catch (e) {
+      console.error('Init failed', e);
+    } finally {
+      setInitLoading(false);
+    }
+  };
+
+  const handleReselect = () => {
+    setHasStarted(false);
+    setTimeRange(ALL_TIME);
+    localStorage.removeItem('welink_hasStarted');
+    localStorage.removeItem('welink_timeRange');
+  };
+
+  // 后端重启后自动重新触发索引（localStorage 有记录但后端尚未索引）
+  useEffect(() => {
+    if (backendReady && hasStarted && !isInitialized && !isIndexing && !initLoading) {
+      globalApi.init(timeRange.from, timeRange.to).then(() => startPolling()).catch(console.error);
+    }
+  }, [backendReady]);
+
+  // 后端未连通时等待
+  if (!backendReady) {
+    return <InitializingScreen message="正在连接后端服务..." />;
+  }
+
+  // 用户还没选时间范围，或主动点了「重新选择」
+  if (!hasStarted) {
+    return <WelcomePage onStart={handleStart} loading={initLoading} />;
+  }
+
+  // 已选择时间范围，等待索引完成
+  if (!isInitialized || isIndexing) {
+    return <InitializingScreen message={`正在建立索引（${timeRange.label}）...`} />;
+  }
+
+  return (
+    <div className="flex h-screen dk-page bg-[#f8f9fb] dk-text text-[#1d1d1f] font-sans overflow-hidden">
+      {/* Sidebar */}
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} dark={dark} onToggleDark={toggleDark} />
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto p-4 sm:p-10 pb-20 sm:pb-10 dk-page">
+        {activeTab === 'dashboard' ? (
+          <div>
+            {/* Header */}
+            <Header
+              title="WeLink"
+              subtitle="微信聊天数据分析平台"
+            />
+
+            {/* 当前时间范围标签 */}
+            <div className="mb-6 flex items-center gap-2">
+              <span className="text-xs font-bold text-[#07c160] bg-[#07c16015] px-3 py-1.5 rounded-full">
+                当前分析范围：{timeRange.label}
+              </span>
+              <button
+                onClick={handleReselect}
+                className="text-xs text-gray-400 hover:text-gray-600 underline"
+              >
+                重新选择
+              </button>
+            </div>
+
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+              <KPICard
+                title="总好友数"
+                value={globalStats?.total_friends || 0}
+                subtitle="Total Friends"
+                icon={Users}
+                color="green"
+              />
+              <KPICard
+                title="总消息量"
+                value={formatCompactNumber(globalStats?.total_messages || 0)}
+                subtitle="Total Messages"
+                icon={MessageSquare}
+                color="blue"
+              />
+              <KPICard
+                title="活跃好友"
+                value={healthStatus.hot}
+                subtitle="7 天内有消息"
+                icon={Flame}
+                color="orange"
+              />
+              <KPICard
+                title="零消息"
+                value={healthStatus.cold}
+                subtitle="从未聊天"
+                icon={Snowflake}
+                color="purple"
+              />
+            </div>
+
+            {/* Relationship Heatmap */}
+            <div className="mb-6 sm:mb-8">
+              <RelationshipHeatmap
+                health={healthStatus}
+                totalContacts={contacts.length}
+              />
+            </div>
+
+            {/* Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-6 sm:mb-8">
+              <MonthlyTrendChart data={globalStats} />
+              <HourlyHeatmap data={globalStats} />
+            </div>
+
+            {/* Late Night Ranking */}
+            <div className="mb-6 sm:mb-8">
+              <LateNightRanking data={globalStats} />
+            </div>
+
+            {/* Contact Table */}
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="dk-text text-2xl font-black text-[#1d1d1f]">
+                  联系人列表
+                  <span className="text-gray-400 text-lg ml-3 font-semibold">
+                    {filteredContacts.length} 位
+                  </span>
+                </h2>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder="搜索联系人..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9 pr-4 py-2 w-56 bg-white border border-gray-200 rounded-xl text-sm font-medium placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#07c160]/20 focus:border-[#07c160] transition-all duration-200"
+                  />
+                </div>
+              </div>
+              {statsLoading && contacts.length === 0 ? (
+                <div className="bg-white rounded-3xl border border-gray-100 p-20 text-center">
+                  <div className="text-gray-300 font-bold text-lg animate-pulse">
+                    加载中...
+                  </div>
+                </div>
+              ) : (
+                <ContactTable
+                  contacts={filteredContacts}
+                  onContactClick={handleContactClick}
+                />
+              )}
+            </div>
+          </div>
+        ) : activeTab === 'groups' ? (
+          <GroupsView allContacts={allContacts} onContactClick={handleContactClick} />
+        ) : (
+          <div>
+            <Header title="Database" subtitle="数据库管理" />
+            <DatabaseView />
+          </div>
+        )}
+      </main>
+
+      {/* Contact Detail Modal */}
+      <ContactModal
+        contact={selectedContact}
+        onClose={handleCloseModal}
+        onGroupClick={(g) => { setSelectedContact(null); setSelectedGroup(g); }}
+      />
+
+      {/* Group Detail Modal (triggered from contact modal) */}
+      {selectedGroup && (
+        <GroupDetailModal
+          group={selectedGroup}
+          onClose={() => setSelectedGroup(null)}
+          allContacts={allContacts}
+          onContactClick={(c) => { setSelectedGroup(null); setSelectedContact(c); }}
+        />
+      )}
+    </div>
+  );
+}
+
+export default App;

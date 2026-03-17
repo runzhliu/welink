@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="200" height="200">
+  <!-- Green rounded square background -->
+  <rect width="100" height="100" rx="22" fill="#07c160"/>
+  <!-- White chat bubble icon (MessageSquare style) -->
+  <g transform="translate(22, 20)">
+    <!-- Outer rounded rect of chat bubble -->
+    <rect x="2" y="2" width="52" height="42" rx="7" fill="none" stroke="white" stroke-width="5" stroke-linejoin="round"/>
+    <!-- Three lines inside bubble -->
+    <line x1="14" y1="17" x2="42" y2="17" stroke="white" stroke-width="4.5" stroke-linecap="round"/>
+    <line x1="14" y1="27" x2="34" y2="27" stroke="white" stroke-width="4.5" stroke-linecap="round"/>
+    <!-- Tail pointing bottom-left -->
+    <polyline points="8,44 2,56 16,48" fill="white" stroke="white" stroke-width="1" stroke-linejoin="round"/>
+  </g>
+</svg>

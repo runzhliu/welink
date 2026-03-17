@@ -1,0 +1,43 @@
+# WeLink 配置文件
+# 将此文件放到项目根目录即可生效；Docker Compose 会自动挂载它。
+# 所有字段均有默认值，按需修改即可，不需要的行可以直接删除。
+
+server:
+  # HTTP 监听端口，也可通过环境变量 PORT 覆盖
+  port: "8080"
+
+data:
+  # 解密后的微信数据目录
+  # 本地开发默认值：../decrypted
+  # Docker 默认值：/app/data（由 docker-compose.yml 挂载）
+  dir: "/app/data"
+
+analysis:
+  # 时区（影响消息的小时/星期分布统计），使用 IANA 时区名
+  # 默认 Asia/Shanghai（UTC+8）
+  timezone: "Asia/Shanghai"
+
+  # 深夜区间定义：[late_night_start_hour, late_night_end_hour)
+  # 默认 0~5，即 00:00–04:59
+  late_night_start_hour: 0
+  late_night_end_hour: 5
+
+  # 判断新对话段的静默时长（秒），默认 21600（6 小时）
+  session_gap_seconds: 21600
+
+  # 并发分析联系人的 goroutine 数，建议不超过 CPU 核心数
+  worker_count: 4
+
+  # 深夜排行榜：联系人至少需要多少条消息才会进入排名
+  late_night_min_messages: 100
+
+  # 深夜排行榜保留前 N 名
+  late_night_top_n: 20
+
+  # 自动初始化时间范围（Unix 秒时间戳，0 表示不限）
+  # 设置后服务启动即自动开始索引，无需前端手动触发
+  # 示例：只分析 2023 年的消息
+  #   default_init_from: 1672531200   # 2023-01-01 00:00:00 UTC+8
+  #   default_init_to:   1704067199   # 2023-12-31 23:59:59 UTC+8
+  default_init_from: 0
+  default_init_to: 0
