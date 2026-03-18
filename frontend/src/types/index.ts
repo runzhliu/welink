@@ -147,6 +147,7 @@ export interface ChatMessage {
   content: string;
   is_mine: boolean;
   type: number;
+  date?: string;    // "2024-03-15"，搜索结果中使用
 }
 
 export interface GroupChatMessage {

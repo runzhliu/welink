@@ -70,6 +70,14 @@ export const contactsApi = {
     }),
 
   /**
+   * 搜索联系人聊天记录
+   */
+  searchMessages: (username: string, q: string, includeMine = false) =>
+    api.get<void, import('../types').ChatMessage[]>('/contacts/search', {
+      params: { username, q, ...(includeMine ? { include_mine: 'true' } : {}) }
+    }),
+
+  /**
    * 获取某月的文本消息（情感分析详情）
    */
   getMonthMessages: (username: string, month: string, includeMine = false) =>

@@ -614,10 +614,11 @@ func (s *ContactService) GetContactDetail(username string) *ContactDetail {
 
 // ChatMessage 单条聊天消息（用于日历点击查看当天记录）
 type ChatMessage struct {
-	Time    string `json:"time"`    // "14:23"
-	Content string `json:"content"` // 消息内容或类型描述
-	IsMine  bool   `json:"is_mine"` // true=我发的
-	Type    int    `json:"type"`    // local_type
+	Time    string `json:"time"`              // "14:23"
+	Content string `json:"content"`           // 消息内容或类型描述
+	IsMine  bool   `json:"is_mine"`           // true=我发的
+	Type    int    `json:"type"`              // local_type
+	Date    string `json:"date,omitempty"`    // "2024-03-15"，搜索结果中使用
 }
 
 // GetDayMessages 返回指定联系人某一天的聊天记录（按时间排序）
@@ -762,6 +763,80 @@ func (s *ContactService) GetMonthMessages(username, month string, includeMine bo
 
 	if msgs == nil {
 		return []ChatMessage{}
+	}
+	return msgs
+}
+
+// SearchMessages 在指定联系人的聊天记录中搜索关键词，返回匹配的文本消息（最多200条）
+func (s *ContactService) SearchMessages(username, query string, includeMine bool) []ChatMessage {
+	if query == "" {
+		return []ChatMessage{}
+	}
+	tableName := db.GetTableName(username)
+	tw := s.timeWhere()
+
+	var msgs []ChatMessage
+	for _, mdb := range s.dbMgr.MessageDBs {
+		var contactRowID int64 = -1
+		mdb.QueryRow(fmt.Sprintf("SELECT rowid FROM Name2Id WHERE user_name = %q", username)).Scan(&contactRowID)
+
+		senderFilter := ""
+		if !includeMine && contactRowID >= 0 {
+			senderFilter = fmt.Sprintf(" AND real_sender_id = %d", contactRowID)
+		}
+
+		whereClause := tw
+		if whereClause == "" {
+			whereClause = " WHERE local_type=1"
+		} else {
+			whereClause += " AND local_type=1"
+		}
+		whereClause += senderFilter
+
+		sqlStr := fmt.Sprintf(
+			"SELECT create_time, message_content, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s ORDER BY create_time DESC",
+			tableName, whereClause,
+		)
+		rows, err := mdb.Query(sqlStr)
+		if err != nil {
+			continue
+		}
+		lowerQuery := strings.ToLower(query)
+		for rows.Next() {
+			var ts int64
+			var rawContent []byte
+			var ct, senderID int64
+			rows.Scan(&ts, &rawContent, &ct, &senderID)
+
+			content := decodeGroupContent(rawContent, ct)
+			content = strings.TrimSpace(content)
+			if content == "" {
+				continue
+			}
+			if !strings.Contains(strings.ToLower(content), lowerQuery) {
+				continue
+			}
+
+			isMine := contactRowID < 0 || senderID != contactRowID
+			t := time.Unix(ts, 0).In(s.tz)
+			msgs = append(msgs, ChatMessage{
+				Time:    t.Format("15:04"),
+				Date:    t.Format("2006-01-02"),
+				Content: content,
+				IsMine:  isMine,
+				Type:    1,
+			})
+		}
+		rows.Close()
+	}
+
+	if msgs == nil {
+		return []ChatMessage{}
+	}
+	// 按时间倒序（最新在前）
+	sort.Slice(msgs, func(i, j int) bool { return msgs[i].Date+msgs[i].Time > msgs[j].Date+msgs[j].Time })
+	if len(msgs) > 200 {
+		msgs = msgs[:200]
 	}
 	return msgs
 }

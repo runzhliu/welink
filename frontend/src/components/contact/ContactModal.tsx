@@ -2,9 +2,9 @@
  * 联系人详情弹窗组件
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { X, Users, EyeOff } from 'lucide-react';
-import type { ContactStats, ContactDetail, SentimentResult, GroupInfo } from '../../types';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { X, Users, EyeOff, Search, Loader2 } from 'lucide-react';
+import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
 import { WordCloudCanvas } from './WordCloudCanvas';
 import { ContactDetailCharts } from './ContactDetailCharts';
 import { SentimentChart } from './SentimentChart';
@@ -18,7 +18,7 @@ interface ContactModalProps {
   onBlock?: (username: string) => void;
 }
 
-type ModalTab = 'wordcloud' | 'detail' | 'sentiment';
+type ModalTab = 'wordcloud' | 'detail' | 'sentiment' | 'search';
 
 export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, onGroupClick, onBlock }) => {
   const { data: wordData, loading: isAnalysing, fetch: fetchWordCloud } = useWordCloud();
@@ -29,6 +29,11 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
   const [sentimentLoading, setSentimentLoading] = useState(false);
   const [includeMine, setIncludeMine] = useState(false);
   const [commonGroups, setCommonGroups] = useState<GroupInfo[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchDone, setSearchDone] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const fetchDetail = useCallback(async (username: string) => {
     setDetailLoading(true);
@@ -61,6 +66,9 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
       setSentiment(null);
       setIncludeMine(false);
       setCommonGroups([]);
+      setSearchQuery('');
+      setSearchResults([]);
+      setSearchDone(false);
       fetchWordCloud(contact.username, false);
       fetchDetail(contact.username);
       fetchSentiment(contact.username, false);
@@ -68,12 +76,28 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
     }
   }, [contact, fetchWordCloud, fetchDetail, fetchSentiment]);
 
+  const handleSearch = useCallback(async (q: string) => {
+    if (!contact || !q.trim()) return;
+    setSearchLoading(true);
+    setSearchDone(false);
+    try {
+      const results = await contactsApi.searchMessages(contact.username, q.trim(), includeMine);
+      setSearchResults(results ?? []);
+      setSearchDone(true);
+    } catch (e) {
+      console.error('Search failed', e);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [contact, includeMine]);
+
   // 切换「包含我的消息」时重新拉取词云和情感
   const handleToggleMine = (val: boolean) => {
     if (!contact) return;
     setIncludeMine(val);
     if (tab === 'wordcloud') fetchWordCloud(contact.username, val);
     if (tab === 'sentiment') fetchSentiment(contact.username, val);
+    if (tab === 'search' && searchQuery.trim()) handleSearch(searchQuery);
   };
 
   if (!contact) return null;
@@ -181,7 +205,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         {/* Tabs + 消息范围切换 */}
         <div className="flex items-center justify-between mb-6 dk-border border-b border-gray-100">
           <div className="flex gap-2">
-            {(['wordcloud', 'detail', 'sentiment'] as ModalTab[]).map((t) => (
+            {(['wordcloud', 'detail', 'sentiment', 'search'] as ModalTab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => {
@@ -189,6 +213,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                   if (!contact) return;
                   if (t === 'wordcloud') fetchWordCloud(contact.username, includeMine);
                   if (t === 'sentiment') fetchSentiment(contact.username, includeMine);
+                  if (t === 'search') setTimeout(() => searchInputRef.current?.focus(), 50);
                 }}
                 className={`px-5 py-2 rounded-t-xl text-sm font-bold transition border-b-2 -mb-px ${
                   tab === t
@@ -196,13 +221,13 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                     : 'text-gray-400 border-transparent hover:text-gray-600'
                 }`}
               >
-                {t === 'wordcloud' ? '词云分析' : t === 'detail' ? '深度画像' : '情感分析'}
+                {t === 'wordcloud' ? '词云分析' : t === 'detail' ? '深度画像' : t === 'sentiment' ? '情感分析' : '搜索记录'}
               </button>
             ))}
           </div>
 
-          {/* 只在词云/情感 tab 显示切换 */}
-          {(tab === 'wordcloud' || tab === 'sentiment') && (
+          {/* 只在词云/情感/搜索 tab 显示切换 */}
+          {(tab === 'wordcloud' || tab === 'sentiment' || tab === 'search') && (
             <button
               onClick={() => handleToggleMine(!includeMine)}
               className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border transition-all mb-1 ${
@@ -287,6 +312,65 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
           ) : (
             <div className="text-center text-gray-300 py-12">暂无情感数据</div>
           )
+        )}
+
+        {tab === 'search' && (
+          <div>
+            {/* 搜索框 */}
+            <form
+              onSubmit={(e) => { e.preventDefault(); handleSearch(searchQuery); }}
+              className="flex gap-2 mb-6"
+            >
+              <div className="flex-1 relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" strokeWidth={2.5} />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="搜索聊天内容..."
+                  className="w-full pl-9 pr-4 py-2.5 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-[#07c160] transition-colors bg-gray-50"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!searchQuery.trim() || searchLoading}
+                className="px-5 py-2.5 bg-[#07c160] text-white rounded-2xl text-sm font-bold disabled:opacity-40 hover:bg-[#06ad56] transition-colors"
+              >
+                搜索
+              </button>
+            </form>
+
+            {/* 结果 */}
+            {searchLoading ? (
+              <div className="flex items-center justify-center h-40">
+                <Loader2 size={28} className="text-[#07c160] animate-spin" />
+              </div>
+            ) : searchDone && searchResults.length === 0 ? (
+              <div className="text-center text-gray-300 py-12 text-sm">未找到相关消息</div>
+            ) : searchResults.length > 0 ? (
+              <div>
+                <p className="text-xs text-gray-400 mb-4">找到 {searchResults.length} 条消息{searchResults.length >= 200 ? '（最多显示 200 条）' : ''}</p>
+                <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                  {searchResults.map((msg, i) => (
+                    <div key={i} className={`flex items-end gap-2 ${msg.is_mine ? 'flex-row-reverse' : 'flex-row'}`}>
+                      <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black
+                        ${msg.is_mine ? 'bg-[#07c160]' : 'bg-[#576b95]'}`}>
+                        {msg.is_mine ? '我' : displayName.charAt(0)}
+                      </div>
+                      <div className={`flex flex-col gap-0.5 max-w-[72%] ${msg.is_mine ? 'items-end' : 'items-start'}`}>
+                        <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words whitespace-pre-wrap
+                          ${msg.is_mine ? 'bg-[#07c160] text-white rounded-br-sm' : 'bg-[#f0f0f0] text-[#1d1d1f] rounded-bl-sm'}`}>
+                          {msg.content}
+                        </div>
+                        <span className="text-[10px] text-gray-300 px-1">{msg.date} {msg.time}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
         )}
       </div>
     </div>

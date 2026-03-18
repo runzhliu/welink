@@ -151,6 +151,18 @@ func main() {
 			c.JSON(http.StatusOK, contactSvc.GetDayMessages(uname, date))
 		})
 
+		// 搜索联系人聊天记录
+		api.GET("/contacts/search", func(c *gin.Context) {
+			uname := c.Query("username")
+			q := c.Query("q")
+			if uname == "" || q == "" {
+				c.JSON(400, gin.H{"error": "username and q required"})
+				return
+			}
+			includeMine := c.Query("include_mine") == "true"
+			c.JSON(http.StatusOK, contactSvc.SearchMessages(uname, q, includeMine))
+		})
+
 		// 某月的文本消息（情感分析详情）
 		api.GET("/contacts/messages/month", func(c *gin.Context) {
 			uname := c.Query("username")
