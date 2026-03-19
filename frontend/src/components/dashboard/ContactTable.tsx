@@ -16,25 +16,24 @@ type SortDir = 'asc' | 'desc';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
-const getStatusOrder = (contact: ContactStats) => {
-  const daysSince = Math.floor(
-    (Date.now() - new Date(contact.last_message_time).getTime()) / (1000 * 60 * 60 * 24)
-  );
-  if (contact.total_messages === 0) return 2;
-  if (daysSince < 7) return 0;
-  return 1;
+const getStatusTier = (contact: ContactStats): 0 | 1 | 2 | 3 | 4 => {
+  if (contact.total_messages === 0) return 4;
+  const days = (Date.now() - new Date(contact.last_message_time).getTime()) / 86400000;
+  if (days < 7)   return 0;
+  if (days < 30)  return 1;
+  if (days < 180) return 2;
+  return 3;
 };
 
-const getStatusBadge = (contact: ContactStats) => {
-  const daysSince = Math.floor(
-    (Date.now() - new Date(contact.last_message_time).getTime()) / (1000 * 60 * 60 * 24)
-  );
-  if (contact.total_messages === 0)
-    return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500">冷淡</span>;
-  if (daysSince < 7)
-    return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#e7f8f0] text-[#07c160]">活跃</span>;
-  return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-[#ff9500]">温热</span>;
-};
+const STATUS_BADGES = [
+  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#e7f8f0] text-[#07c160]">活跃</span>,
+  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#f0fce8] text-[#7bc934]">温热</span>,
+  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-[#ff9500]">渐冷</span>,
+  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#eef1f7] text-[#576b95]">沉寂</span>,
+  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-400">零消息</span>,
+];
+
+const getStatusBadge = (contact: ContactStats) => STATUS_BADGES[getStatusTier(contact)];
 
 export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactClick }) => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,7 +67,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
         cmp = (a.last_message_time || '').localeCompare(b.last_message_time || '');
         break;
       case 'status':
-        cmp = getStatusOrder(a) - getStatusOrder(b);
+        cmp = getStatusTier(a) - getStatusTier(b);
         break;
     }
     return sortDir === 'asc' ? cmp : -cmp;

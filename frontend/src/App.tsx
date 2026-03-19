@@ -128,13 +128,6 @@ function App() {
     );
   }, [contacts, search]);
 
-  const hotContacts = useMemo(() => {
-    const now = Date.now() / 1000;
-    return contacts.filter(
-      (c) => c.total_messages > 0 && now - new Date(c.last_message_time).getTime() / 1000 < 7 * 86400
-    );
-  }, [contacts]);
-
   const healthStatus: HealthStatus = useMemo(() => {
     if (!contacts.length) return { hot: 0, warm: 0, cooling: 0, silent: 0, cold: 0 };
 
@@ -277,7 +270,7 @@ function App() {
               <RelationshipHeatmap
                 health={healthStatus}
                 totalContacts={contacts.length}
-                hotContacts={hotContacts}
+                contacts={contacts}
                 onContactClick={handleContactClick}
               />
             </div>
