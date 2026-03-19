@@ -24,6 +24,8 @@
   <img src="https://img.shields.io/badge/data-local%20only-brightgreen" alt="Local Only" />
 </p>
 
+<https://github.com/user-attachments/assets/6964e121-c2a0-4595-8cb5-2f65dfa49420>
+
 微信聊天记录里隐藏着你和每个人关系的完整轨迹：
 
 - 第一条消息是哪天发的
