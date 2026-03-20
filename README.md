@@ -207,15 +207,14 @@ decrypted/
 
 **第三步：放置解密后的数据库**
 
-将上一步生成的 `decrypted/` 目录放在与 `welink/` 仓库**同级**的位置，目录结构如下：
+将上一步生成的 `decrypted/` 目录放在 `welink/` 仓库**内部**，目录结构如下：
 
 ```
-~/（或任意父目录）
-├── welink/            ← 本仓库
-│   ├── backend/
-│   ├── frontend/
-│   ├── docker-compose.yml
-│   └── ...
+welink/                ← 本仓库
+├── backend/
+├── frontend/
+├── docker-compose.yml
+├── ...
 └── decrypted/         ← 解密后的数据，放在这里
     ├── contact/
     │   └── contact.db
@@ -229,7 +228,7 @@ decrypted/
 
 **第四步：启动 WeLink**
 
-确认 `decrypted/` 与 `welink/` 同级后，执行：
+确认 `decrypted/` 位于 `welink/` 内部后，执行：
 
 ```bash
 cd welink
