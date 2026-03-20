@@ -2,13 +2,14 @@
  * 群聊画像视图
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Users, MessageSquare, ChevronRight, Loader2, X, BarChart2, EyeOff, Search } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { GroupInfo, GroupDetail, ContactStats, GroupChatMessage } from '../../types';
 import { groupsApi } from '../../services/api';
 import { CalendarHeatmap } from '../contact/CalendarHeatmap';
 import { GroupDayChatPanel } from './GroupDayChatPanel';
+import { MessageTypePieChart } from '../common/MessageTypePieChart';
 
 // ─── 群详情弹窗 ───────────────────────────────────────────────────────────────
 
@@ -90,6 +91,13 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
   }));
 
   const maxMember = detail?.member_rank[0]?.count ?? 1;
+
+  const peakDay = useMemo(() => {
+    if (!detail) return null;
+    const entries = Object.entries(detail.daily_heatmap);
+    if (entries.length === 0) return null;
+    return entries.reduce((best, cur) => cur[1] > best[1] ? cur : best);
+  }, [detail]);
 
   return (
     <div
@@ -290,6 +298,14 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
               </div>
             )}
 
+            {/* 消息类型分布 */}
+            {detail.type_dist && Object.keys(detail.type_dist).length > 0 && (
+              <MessageTypePieChart
+                typeData={detail.type_dist}
+                totalMessages={Object.values(detail.type_dist).reduce((a, b) => a + b, 0)}
+              />
+            )}
+
             {/* 24h 分布 */}
             <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
               <h4 className="text-sm font-black text-gray-500 uppercase mb-1 tracking-wider">24 小时活跃分布</h4>
@@ -325,7 +341,19 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             {/* 日历热力图 */}
             {Object.keys(detail.daily_heatmap).length > 0 && (
               <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
-                <h4 className="text-sm font-black text-gray-500 uppercase mb-1 tracking-wider">聊天日历</h4>
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-black text-gray-500 uppercase tracking-wider">聊天日历</h4>
+                  {peakDay && (
+                    <button
+                      onClick={() => setDayPanel({ date: peakDay[0], count: peakDay[1] })}
+                      className="flex items-center gap-1.5 text-[10px] font-bold text-[#07c160] bg-[#07c16012] hover:bg-[#07c16022] px-2.5 py-1 rounded-full transition-colors"
+                      title="查看最密集那天的聊天记录"
+                    >
+                      <span>🔥</span>
+                      <span>最密集：{peakDay[0]}（{peakDay[1].toLocaleString()} 条）</span>
+                    </button>
+                  )}
+                </div>
                 <p className="text-xs text-gray-400 mb-3">每格代表一天，颜色越深表示当天消息越多，点击可查看具体数量</p>
                 <CalendarHeatmap
                   data={detail.daily_heatmap}

@@ -63,6 +63,12 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
     }));
   }, [detail]);
 
+  const peakDay = useMemo(() => {
+    const entries = Object.entries(detail.daily_heatmap);
+    if (entries.length === 0) return null;
+    return entries.reduce((best, cur) => cur[1] > best[1] ? cur : best);
+  }, [detail.daily_heatmap]);
+
   const initiationRatio = detail.total_sessions > 0
     ? Math.round(detail.initiation_count / detail.total_sessions * 100)
     : 0;
@@ -148,7 +154,19 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
       {/* 日历热力图 */}
       {Object.keys(detail.daily_heatmap).length > 0 && (
         <div className="bg-[#f8f9fb] rounded-2xl p-4">
-          <h4 className="text-sm font-black text-gray-600 uppercase mb-1 tracking-wider">聊天日历</h4>
+          <div className="flex items-center justify-between mb-1">
+            <h4 className="text-sm font-black text-gray-600 uppercase tracking-wider">聊天日历</h4>
+            {peakDay && (
+              <button
+                onClick={() => setDayPanel({ date: peakDay[0], count: peakDay[1] })}
+                className="flex items-center gap-1.5 text-[10px] font-bold text-[#07c160] bg-[#07c16012] hover:bg-[#07c16022] px-2.5 py-1 rounded-full transition-colors"
+                title="查看最密集那天的聊天记录"
+              >
+                <span>🔥</span>
+                <span>最密集：{peakDay[0]}（{peakDay[1].toLocaleString()} 条）</span>
+              </button>
+            )}
+          </div>
           <p className="text-xs text-gray-400 mb-3">每格代表一天，颜色越深表示当天消息越多，点击可查看具体数量</p>
           <CalendarHeatmap
             data={detail.daily_heatmap}

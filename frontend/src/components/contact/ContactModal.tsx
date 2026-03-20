@@ -8,6 +8,7 @@ import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessa
 import { WordCloudCanvas } from './WordCloudCanvas';
 import { ContactDetailCharts } from './ContactDetailCharts';
 import { SentimentChart } from './SentimentChart';
+import { MessageTypePieChart } from '../common/MessageTypePieChart';
 import { useWordCloud } from '../../hooks/useContacts';
 import { contactsApi } from '../../services/api';
 
@@ -274,24 +275,11 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                 </p>
               </div>
 
-              {contact.type_pct && Object.keys(contact.type_pct).length > 0 && (
-                <div className="bg-gradient-to-br from-[#07c160] to-[#06ad56] text-white p-6 sm:p-10 rounded-3xl sm:rounded-[40px] shadow-lg shadow-green-100/50">
-                  <p className="text-[10px] font-black text-green-100 uppercase mb-1 tracking-[0.2em]">
-                    Message Mix
-                  </p>
-                  <p className="text-[10px] text-green-200 mb-3">各类型消息占全部消息的比例</p>
-                  <div className="space-y-2 font-bold text-sm">
-                    {Object.entries(contact.type_pct).map(([k, v]: any) => (
-                      <div key={k} className="flex justify-between items-center gap-2">
-                        <span className="text-white/90">{k}</span>
-                        <span className="text-white/50 text-xs font-normal flex-1 text-right">
-                          {contact.type_cnt?.[k]?.toLocaleString() ?? ''}
-                        </span>
-                        <span className="text-white font-black w-10 text-right">{Math.round(v)}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              {contact.type_cnt && Object.keys(contact.type_cnt).length > 0 && (
+                <MessageTypePieChart
+                  typeData={contact.type_cnt}
+                  totalMessages={contact.total_messages}
+                />
               )}
             </div>
           </div>

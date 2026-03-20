@@ -994,11 +994,12 @@ type MemberStat struct {
 }
 
 type GroupDetail struct {
-	HourlyDist   [24]int        `json:"hourly_dist"`
-	WeeklyDist   [7]int         `json:"weekly_dist"`
-	DailyHeatmap map[string]int `json:"daily_heatmap"`
-	MemberRank   []MemberStat   `json:"member_rank"`  // top 20 发言者
-	TopWords     []WordCount    `json:"top_words"`    // top 30 高频词
+	HourlyDist   [24]int           `json:"hourly_dist"`
+	WeeklyDist   [7]int            `json:"weekly_dist"`
+	DailyHeatmap map[string]int    `json:"daily_heatmap"`
+	MemberRank   []MemberStat      `json:"member_rank"`  // top 20 发言者
+	TopWords     []WordCount       `json:"top_words"`    // top 30 高频词
+	TypeDist     map[string]int    `json:"type_dist"`    // 消息类型分布（条数）
 }
 
 // GetGroups 返回所有群聊列表（含消息量），只返回有消息的群
@@ -1119,7 +1120,7 @@ func (s *ContactService) GetGroupDetail(username string) *GroupDetail {
 
 func (s *ContactService) computeGroupDetail(username string) {
 	tableName := db.GetTableName(username)
-	detail := &GroupDetail{DailyHeatmap: make(map[string]int)}
+	detail := &GroupDetail{DailyHeatmap: make(map[string]int), TypeDist: make(map[string]int)}
 	memberMap := make(map[string]int64)
 	wordCounts := make(map[string]int)
 
@@ -1141,15 +1142,25 @@ func (s *ContactService) computeGroupDetail(username string) {
 		}
 
 		rows, err := mdb.Query(fmt.Sprintf(
-			"SELECT create_time, real_sender_id FROM [%s]%s", tableName, twDetail))
+			"SELECT create_time, real_sender_id, local_type FROM [%s]%s", tableName, twDetail))
 		if err != nil { continue }
 		for rows.Next() {
 			var ts, senderID int64
-			rows.Scan(&ts, &senderID)
+			var lt int
+			rows.Scan(&ts, &senderID, &lt)
 			dt := time.Unix(ts, 0).In(s.tz)
 			detail.HourlyDist[dt.Hour()]++
 			detail.WeeklyDist[int(dt.Weekday())]++
 			detail.DailyHeatmap[dt.Format("2006-01-02")]++
+			typeName := "其他"
+			switch lt {
+			case 1:  typeName = "文本"
+			case 3:  typeName = "图片"
+			case 34: typeName = "语音"
+			case 47: typeName = "表情"
+			case 43: typeName = "视频"
+			}
+			if lt != 10000 { detail.TypeDist[typeName]++ }
 			if wxid, ok := idToWxid[senderID]; ok && wxid != "" {
 				speaker := wxid
 				if name, ok2 := nameMap[wxid]; ok2 { speaker = name }

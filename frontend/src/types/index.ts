@@ -143,6 +143,7 @@ export interface GroupDetail {
   daily_heatmap: Record<string, number>;
   member_rank: MemberStat[];
   top_words: { word: string; count: number }[];
+  type_dist?: Record<string, number>;
 }
 
 export interface HealthStatus {
