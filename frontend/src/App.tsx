@@ -18,7 +18,6 @@ import { HourlyHeatmap } from './components/dashboard/HourlyHeatmap';
 import { ContactTable } from './components/dashboard/ContactTable';
 import { DatabaseView } from './components/dashboard/DatabaseView';
 import { LateNightRanking } from './components/dashboard/LateNightRanking';
-import { CoolingRanking } from './components/dashboard/CoolingRanking';
 import { SearchView } from './components/search/SearchView';
 import { GroupsView, GroupDetailModal } from './components/groups/GroupsView';
 import { useDarkMode } from './hooks/useDarkMode';
@@ -286,11 +285,6 @@ function App() {
             {/* Late Night Ranking */}
             <div className="mb-6 sm:mb-8">
               <LateNightRanking data={globalStats} contacts={contacts} onContactClick={handleContactClick} />
-            </div>
-
-            {/* Cooling Ranking */}
-            <div className="mb-6 sm:mb-8">
-              <CoolingRanking isInitialized={isInitialized} contacts={contacts} onContactClick={handleContactClick} />
             </div>
 
             {/* Contact Table */}

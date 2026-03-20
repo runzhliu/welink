@@ -78,6 +78,9 @@ type ContactStatsExtended struct {
 	TypePct          map[string]float64 `json:"type_pct"`
 	TypeCnt          map[string]int     `json:"type_cnt"`
 	SharedGroupsCount int               `json:"shared_groups_count"`
+	PeakMonthly   int64  `json:"peak_monthly"`
+	PeakPeriod    string `json:"peak_period"`
+	RecentMonthly int64  `json:"recent_monthly"`
 }
 
 type ContactService struct {
@@ -291,6 +294,8 @@ func (s *ContactService) performAnalysis() {
 			var globalLastTs int64 = 0
 			var lateNightCnt int64
 			typeCounts := make(map[string]int)
+			monthly := make(map[string]int)
+			recentCutoff := time.Now().In(s.tz).AddDate(0, -1, 0)
 
 			for _, mdb := range s.dbMgr.MessageDBs {
 				mRows, err := mdb.Query(fmt.Sprintf("SELECT local_type, create_time, message_content, COALESCE(WCDB_CT_message_content,0) FROM [%s]%s", tableName, timeWhere))
@@ -308,6 +313,8 @@ func (s *ContactService) performAnalysis() {
 					h := dt.Hour()
 					if h >= s.cfg.LateNightStartHour && h < s.cfg.LateNightEndHour { lateNightCnt++ }
 					mu.Lock(); globalDaily[dt.Format("2006-01-02")]++; globalHourly[h]++; mu.Unlock()
+					monthly[dt.Format("2006-01")]++
+					if ts >= recentCutoff.Unix() { ext.RecentMonthly++ }
 
 					typeName := "其他"
 					switch lt {
@@ -342,6 +349,9 @@ func (s *ContactService) performAnalysis() {
 			if ext.TotalMessages > 0 {
 				ext.FirstMessage = s.formatTime(globalFirstTs); ext.LastMessage = s.formatTime(globalLastTs)
 				ext.MyMessages = ext.TotalMessages - ext.TheirMessages
+				for m, cnt := range monthly {
+					if int64(cnt) > ext.PeakMonthly { ext.PeakMonthly = int64(cnt); ext.PeakPeriod = m }
+				}
 				ext.TypePct = make(map[string]float64)
 				ext.TypeCnt = make(map[string]int)
 				for k, v := range typeCounts {

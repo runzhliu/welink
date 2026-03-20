@@ -26,6 +26,9 @@ export interface ContactStats extends Contact {
   hourly_heatmap?: number[];
   type_mix?: Record<string, number>;
   shared_groups_count?: number;
+  peak_monthly?: number;
+  peak_period?: string;
+  recent_monthly?: number;
 }
 
 export interface LateNightEntry {

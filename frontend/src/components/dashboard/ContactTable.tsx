@@ -11,7 +11,7 @@ interface ContactTableProps {
   onContactClick: (contact: ContactStats) => void;
 }
 
-type SortKey = 'name' | 'total_messages' | 'shared_groups' | 'last_message_time' | 'status';
+type SortKey = 'name' | 'total_messages' | 'shared_groups' | 'last_message_time' | 'status' | 'peak_monthly' | 'recent_monthly';
 type SortDir = 'asc' | 'desc';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
@@ -66,6 +66,12 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
       case 'last_message_time':
         cmp = (a.last_message_time || '').localeCompare(b.last_message_time || '');
         break;
+      case 'peak_monthly':
+        cmp = (a.peak_monthly ?? 0) - (b.peak_monthly ?? 0);
+        break;
+      case 'recent_monthly':
+        cmp = (a.recent_monthly ?? 0) - (b.recent_monthly ?? 0);
+        break;
       case 'status':
         cmp = getStatusTier(a) - getStatusTier(b);
         break;
@@ -107,11 +113,17 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
               <th className={thClass} onClick={() => handleSort('shared_groups')}>
                 <div className="flex items-center gap-1"><Users size={14} />共同群聊<SortIcon col="shared_groups" /></div>
               </th>
+              <th className={thClass} onClick={() => handleSort('peak_monthly')}>
+                <div className="flex items-center gap-1"><TrendingUp size={14} />历史峰值月<SortIcon col="peak_monthly" /></div>
+              </th>
+              <th className={thClass} onClick={() => handleSort('recent_monthly')}>
+                <div className="flex items-center gap-1"><Clock size={14} />近一个月<SortIcon col="recent_monthly" /></div>
+              </th>
               <th className={thClass} onClick={() => handleSort('last_message_time')}>
-                <div className="flex items-center gap-1"><Clock size={14} />最后联系<SortIcon col="last_message_time" /></div>
+                <div className="flex items-center gap-1">最后联系<SortIcon col="last_message_time" /></div>
               </th>
               <th className={thClass} onClick={() => handleSort('status')}>
-                <div className="flex items-center gap-1"><TrendingUp size={14} />状态<SortIcon col="status" /></div>
+                <div className="flex items-center gap-1">状态<SortIcon col="status" /></div>
               </th>
             </tr>
           </thead>
@@ -149,6 +161,26 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                     </span>
                   ) : (
                     <span className="text-sm text-gray-300">-</span>
+                  )}
+                </td>
+                <td className="px-8 py-5">
+                  {(contact.peak_monthly ?? 0) > 0 ? (
+                    <div>
+                      <span className="font-bold text-[#1d1d1f]">{contact.peak_monthly!.toLocaleString()}</span>
+                      <span className="text-xs text-gray-400 ml-1">条</span>
+                      {contact.peak_period && (
+                        <div className="text-[10px] text-gray-400 mt-0.5">{contact.peak_period}</div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-300">-</span>
+                  )}
+                </td>
+                <td className="px-8 py-5">
+                  {(contact.recent_monthly ?? 0) > 0 ? (
+                    <span className="font-bold text-[#07c160]">{contact.recent_monthly!.toLocaleString()}<span className="text-xs text-gray-400 ml-1 font-normal">条</span></span>
+                  ) : (
+                    <span className="text-sm text-gray-300">0</span>
                   )}
                 </td>
                 <td className="px-8 py-5">
