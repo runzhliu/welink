@@ -92,7 +92,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
     value: detail?.weekly_dist[i] ?? 0,
   }));
 
-  const maxMember = detail?.member_rank[0]?.count ?? 1;
+  const maxMember = detail?.member_rank?.[0]?.count ?? 1;
 
   const peakDay = useMemo(() => {
     if (!detail) return null;
@@ -231,7 +231,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         ) : tab === 'portrait' && detail ? (
           <div className="space-y-6">
             {/* 成员发言排行 */}
-            {detail.member_rank.length > 0 && (
+            {(detail.member_rank?.length ?? 0) > 0 && (
               <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
                 <h4 className="text-sm font-black text-gray-500 uppercase mb-1 tracking-wider flex items-center gap-2">
                   <BarChart2 size={14} /> 成员发言排行 Top {Math.min(detail.member_rank.length, 10)}
@@ -276,7 +276,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             )}
 
             {/* 高频词 */}
-            {detail.top_words.length > 0 && (
+            {(detail.top_words?.length ?? 0) > 0 && (
               <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
                 <h4 className="text-sm font-black text-gray-500 uppercase mb-1 tracking-wider">高频词汇</h4>
                 <p className="text-xs text-gray-400 mb-3">全部文本消息分词统计，已过滤停用词与表情符号</p>

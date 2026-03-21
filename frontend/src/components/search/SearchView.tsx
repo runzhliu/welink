@@ -40,7 +40,10 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick }) => {
   const findContact = (username: string) =>
     contacts.find((c) => c.username === username);
 
-  const totalMsgs = results.reduce((s, g) => s + g.messages.length, 0);
+  // 过滤掉被屏蔽用户的搜索结果（contacts 已是屏蔽过滤后的列表）
+  const visibleResults = results.filter((g) => findContact(g.username));
+
+  const totalMsgs = visibleResults.reduce((s, g) => s + g.messages.length, 0);
 
   return (
     <div className="max-w-3xl">
@@ -83,18 +86,18 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick }) => {
         </div>
       )}
 
-      {!loading && searched && results.length === 0 && (
+      {!loading && searched && visibleResults.length === 0 && (
         <div className="text-center py-20 text-gray-300 font-semibold">没有找到相关消息</div>
       )}
 
-      {!loading && results.length > 0 && (
+      {!loading && visibleResults.length > 0 && (
         <>
           <p className="text-xs text-gray-400 mb-4">
-            在 <span className="font-bold text-gray-600">{results.length}</span> 位联系人中找到约 <span className="font-bold text-gray-600">{totalMsgs}</span> 条消息（每人最多显示 5 条）
+            在 <span className="font-bold text-gray-600">{visibleResults.length}</span> 位联系人中找到约 <span className="font-bold text-gray-600">{totalMsgs}</span> 条消息（每人最多显示 5 条）
           </p>
 
           <div className="space-y-3">
-            {results.map((group) => {
+            {visibleResults.map((group) => {
               const contact = findContact(group.username);
               return (
                 <div key={group.username} className="dk-card bg-white dk-border border border-gray-100 rounded-2xl overflow-hidden">
@@ -124,8 +127,12 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick }) => {
                   <div className="divide-y divide-gray-50">
                     {group.messages.map((msg, i) => (
                       <div key={i} className={`px-5 py-3 flex gap-3 ${msg.is_mine ? 'flex-row-reverse' : 'flex-row'}`}>
-                        <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black mt-0.5
-                          ${msg.is_mine ? 'bg-[#07c160]' : 'bg-[#576b95]'}`}>
+                        <div
+                          className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black mt-0.5
+                            ${msg.is_mine ? 'bg-[#07c160]' : 'bg-[#576b95] cursor-pointer hover:opacity-80 transition-opacity'}`}
+                          onClick={!msg.is_mine && contact ? () => onContactClick?.(contact) : undefined}
+                          title={!msg.is_mine ? group.display_name : undefined}
+                        >
                           {msg.is_mine ? '我' : group.display_name.charAt(0)}
                         </div>
                         <div className={`flex flex-col gap-0.5 max-w-[80%] ${msg.is_mine ? 'items-end' : 'items-start'}`}>

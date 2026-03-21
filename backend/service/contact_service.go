@@ -1120,7 +1120,7 @@ func (s *ContactService) GetGroupDetail(username string) *GroupDetail {
 
 func (s *ContactService) computeGroupDetail(username string) {
 	tableName := db.GetTableName(username)
-	detail := &GroupDetail{DailyHeatmap: make(map[string]int), TypeDist: make(map[string]int)}
+	detail := &GroupDetail{DailyHeatmap: make(map[string]int), TypeDist: make(map[string]int), MemberRank: []MemberStat{}, TopWords: []WordCount{}}
 	memberMap := make(map[string]int64)
 	wordCounts := make(map[string]int)
 
