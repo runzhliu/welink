@@ -20,7 +20,7 @@
   <a href="https://github.com/runzhliu/welink/stargazers">
     <img src="https://img.shields.io/github/stars/runzhliu/welink?style=flat" alt="Stars" />
   </a>
-  <img src="https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple" alt="Platform" />
+  <img src="https://img.shields.io/badge/platform-macOS%2012%2B-lightgrey?logo=apple" alt="Platform" />
   <img src="https://img.shields.io/badge/data-local%20only-brightgreen" alt="Local Only" />
 </p>
 
@@ -178,7 +178,7 @@ docker compose -f docker-compose.demo.yml up
 
 ## 使用前提
 
-目前仅支持 **macOS**，Windows / Linux 支持敬请期待。
+目前仅支持 **macOS 12（Monterey）及以上版本**，Windows / Linux 支持敬请期待。
 
 **第一步：把手机聊天记录同步到电脑（推荐）**
 
@@ -240,6 +240,51 @@ docker compose up
 首次启动会自动拉取 GitHub CI 构建好的镜像，无需本地编译。如需强制本地构建，加上 `--build` 参数。
 
 访问 [localhost:3000](http://localhost:3000) 开始分析。
+
+## macOS App（无需 Docker）
+
+不想装 Docker？可以直接下载原生 macOS App，无需命令行、无需 Docker、无需任何依赖。
+
+> **系统要求：macOS 12（Monterey）及以上**
+
+### 安装
+
+1. 前往 [GitHub Releases](https://github.com/runzhliu/welink/releases) 下载最新的 `WeLink.dmg`
+2. 双击挂载 DMG，将 `WeLink.app` 拖入 `/Applications`
+3. 双击运行
+
+> **首次打开提示「无法打开」？** macOS Gatekeeper 会拦截未经 Apple 公证的 App。右键点击 `WeLink.app` → 「打开」→ 再次点击「打开」即可。
+>
+> 若右键仍无效，在终端执行一次：
+> ```bash
+> xattr -cr /Applications/WeLink.app
+> ```
+
+### 首次配置
+
+App 启动后会弹出配置向导：
+
+**有解密好的微信数据库：**
+
+在「解密数据库目录」一栏点击「浏览」选择 `decrypted/` 目录（参见下方[解密步骤](#使用前提)），日志目录可选填，点击「完成配置，开始分析」即可。
+
+**没有数据，只想看效果：**
+
+直接留空，点击「使用演示数据，开始分析」——App 会自动生成阿森纳 2025/26 赛季主题的示例数据，无需任何真实聊天记录。
+
+### 修改配置
+
+进入 App 后，点击左侧边栏底部的 **⚙️ 齿轮图标** → 「应用设置」，可以修改数据库目录或日志目录，保存后 App 自动重启生效。
+
+### 从源码构建
+
+如需自行打包（需安装 [Go 1.22+](https://go.dev/dl/) 和 [Node.js 18+](https://nodejs.org/)）：
+
+```bash
+git clone https://github.com/runzhliu/welink
+cd welink
+make dmg          # 生成 dist/WeLink.dmg
+```
 
 ## 配置
 

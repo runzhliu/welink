@@ -4,6 +4,7 @@
 
 import React, { useRef, useEffect, useCallback } from 'react';
 import type { WordCount } from '../../types';
+import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 declare global {
   interface Window {
@@ -22,6 +23,7 @@ export const WordCloudCanvas: React.FC<WordCloudCanvasProps> = ({
   data,
   loading = false,
 }) => {
+  const { privacyMode } = usePrivacyMode();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -116,7 +118,7 @@ export const WordCloudCanvas: React.FC<WordCloudCanvasProps> = ({
   }
 
   return (
-    <div ref={containerRef} className="bg-[#f8f9fb] rounded-[40px] border border-gray-50 w-full h-80">
+    <div ref={containerRef} className={`bg-[#f8f9fb] rounded-[40px] border border-gray-50 w-full h-80${privacyMode ? ' privacy-blur-canvas' : ''}`}>
       <canvas ref={canvasRef} className="w-full h-full" />
     </div>
   );

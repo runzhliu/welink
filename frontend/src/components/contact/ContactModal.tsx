@@ -11,6 +11,7 @@ import { SentimentChart } from './SentimentChart';
 import { MessageTypePieChart } from '../common/MessageTypePieChart';
 import { useWordCloud } from '../../hooks/useContacts';
 import { contactsApi } from '../../services/api';
+import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 interface ContactModalProps {
   contact: ContactStats | null;
@@ -22,6 +23,7 @@ interface ContactModalProps {
 type ModalTab = 'wordcloud' | 'detail' | 'sentiment' | 'search';
 
 export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, onGroupClick, onBlock }) => {
+  const { privacyMode } = usePrivacyMode();
   const { data: wordData, loading: isAnalysing, fetch: fetchWordCloud } = useWordCloud();
   const [tab, setTab] = useState<ModalTab>('wordcloud');
   const [detail, setDetail] = useState<ContactDetail | null>(null);
@@ -149,11 +151,11 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
             </div>
           )}
           <div>
-            <h3 className="dk-text text-xl sm:text-3xl font-black tracking-tight text-[#1d1d1f] mb-0.5">
+            <h3 className={`dk-text text-xl sm:text-3xl font-black tracking-tight text-[#1d1d1f] mb-0.5${privacyMode ? ' privacy-blur' : ''}`}>
               {displayName}
             </h3>
             {contact.remark && contact.nickname && (
-              <p className="text-sm text-gray-400 mb-1">{contact.nickname}</p>
+              <p className={`text-sm text-gray-400 mb-1${privacyMode ? ' privacy-blur' : ''}`}>{contact.nickname}</p>
             )}
             <p className="text-gray-400 font-bold flex flex-wrap items-center gap-2 tracking-widest uppercase text-xs">
               <span>始于 {contact.first_message_time}</span>
@@ -209,7 +211,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                 ) : (
                   <Users size={11} strokeWidth={2} />
                 )}
-                {g.name}
+                <span className={privacyMode ? 'privacy-blur' : ''}>{g.name}</span>
               </button>
             ))}
           </div>

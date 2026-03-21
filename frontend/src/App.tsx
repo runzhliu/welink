@@ -4,6 +4,7 @@
  */
 
 import { useState, useMemo, useEffect } from 'react';
+import { PrivacyModeContext } from './contexts/PrivacyModeContext';
 import { Users, MessageSquare, Flame, Snowflake, Search } from 'lucide-react';
 
 // Layout Components
@@ -29,9 +30,12 @@ import { ContactModal } from './components/contact/ContactModal';
 // Common Components
 import { InitializingScreen } from './components/common/InitializingScreen';
 import { WelcomePage } from './components/common/WelcomePage';
+import { AppSetupPage } from './components/common/AppSetupPage';
+import { SettingsPage } from './components/common/SettingsPage';
 
-// Privacy Components
-import { PrivacyView } from './components/privacy/PrivacyView';
+// App API
+import { appApi } from './services/appApi';
+import type { AppInfo } from './services/appApi';
 
 // Hooks
 import { useContacts } from './hooks/useContacts';
@@ -67,6 +71,9 @@ function App() {
     return localStorage.getItem('welink_hasStarted') === 'true';
   });
 
+  // App 模式检测
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
+
   // Backend Status Hook
   const { isInitialized, isIndexing, backendReady, startPolling } = useBackendStatus(1000);
 
@@ -74,6 +81,8 @@ function App() {
   const {
     blockedUsers,
     blockedGroups,
+    privacyMode,
+    setPrivacyMode,
     addBlockedUser,
     removeBlockedUser,
     addBlockedGroup,
@@ -185,6 +194,13 @@ function App() {
     localStorage.removeItem('welink_timeRange');
   };
 
+  // 后端就绪后获取 App 模式信息
+  useEffect(() => {
+    if (backendReady) {
+      appApi.getInfo().then(setAppInfo).catch(() => setAppInfo({ app_mode: false, needs_setup: false, ready: true }));
+    }
+  }, [backendReady]);
+
   // 后端重启后自动重新触发索引（localStorage 有记录但后端尚未索引）
   useEffect(() => {
     if (backendReady && hasStarted && !isInitialized && !isIndexing && !initLoading) {
@@ -197,9 +213,23 @@ function App() {
     return <InitializingScreen message="正在连接后端服务..." />;
   }
 
+  // 等待 app info 加载
+  if (!appInfo) {
+    return <InitializingScreen message="正在检测配置..." />;
+  }
+
+  // App 模式且未配置：显示 Setup 页面
+  if (appInfo.app_mode && appInfo.needs_setup) {
+    return (
+      <AppSetupPage
+        onSetupComplete={() => setAppInfo({ ...appInfo, needs_setup: false, ready: true })}
+      />
+    );
+  }
+
   // 用户还没选时间范围，或主动点了「重新选择」
   if (!hasStarted) {
-    return <WelcomePage onStart={handleStart} loading={initLoading} />;
+    return <WelcomePage onStart={handleStart} loading={initLoading} isAppMode={appInfo.app_mode} />;
   }
 
   // 已选择时间范围，等待索引完成
@@ -208,6 +238,7 @@ function App() {
   }
 
   return (
+    <PrivacyModeContext.Provider value={{ privacyMode, setPrivacyMode }}>
     <div className="flex h-screen dk-page bg-[#f8f9fb] dk-text text-[#1d1d1f] font-sans overflow-hidden">
       {/* Sidebar */}
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} dark={dark} onToggleDark={toggleDark} />
@@ -328,8 +359,9 @@ function App() {
           <TimelineView contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'search' ? (
           <SearchView contacts={contacts} onContactClick={handleContactClick} />
-        ) : activeTab === 'privacy' ? (
-          <PrivacyView
+        ) : activeTab === 'settings' ? (
+          <SettingsPage
+            isAppMode={appInfo.app_mode}
             blockedUsers={blockedUsers}
             blockedGroups={blockedGroups}
             onAddBlockedUser={addBlockedUser}
@@ -338,6 +370,8 @@ function App() {
             onRemoveBlockedGroup={removeBlockedGroup}
             allContacts={allContacts}
             allGroups={allGroups}
+            privacyMode={privacyMode}
+            onTogglePrivacyMode={setPrivacyMode}
           />
         ) : (
           <div>
@@ -366,6 +400,7 @@ function App() {
         />
       )}
     </div>
+    </PrivacyModeContext.Provider>
   );
 }
 

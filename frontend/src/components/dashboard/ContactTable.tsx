@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { MessageCircle, Clock, TrendingUp, Users, ChevronUp, ChevronDown } from 'lucide-react';
 import type { ContactStats } from '../../types';
+import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 interface ContactTableProps {
   contacts: ContactStats[];
@@ -36,6 +37,7 @@ const STATUS_BADGES = [
 const getStatusBadge = (contact: ContactStats) => STATUS_BADGES[getStatusTier(contact)];
 
 export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactClick }) => {
+  const { privacyMode } = usePrivacyMode();
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortKey, setSortKey] = useState<SortKey>('total_messages');
@@ -150,9 +152,9 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                       </div>
                     )}
                     <div>
-                      <div className="font-bold text-[#1d1d1f]">{contact.remark || contact.nickname || contact.username}</div>
+                      <div className={`font-bold text-[#1d1d1f]${privacyMode ? ' privacy-blur' : ''}`}>{contact.remark || contact.nickname || contact.username}</div>
                       {contact.remark && contact.nickname && (
-                        <div className="text-xs text-gray-400 mt-0.5">{contact.nickname}</div>
+                        <div className={`text-xs text-gray-400 mt-0.5${privacyMode ? ' privacy-blur' : ''}`}>{contact.nickname}</div>
                       )}
                     </div>
                   </div>
@@ -223,7 +225,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                 </div>
               )}
               <div className="min-w-0">
-                <div className="font-bold text-[#1d1d1f] truncate">{contact.remark || contact.nickname || contact.username}</div>
+                <div className={`font-bold text-[#1d1d1f] truncate${privacyMode ? ' privacy-blur' : ''}`}>{contact.remark || contact.nickname || contact.username}</div>
                 <div className="text-xs text-gray-400 mt-0.5">{contact.last_message_time || '-'}</div>
               </div>
             </div>

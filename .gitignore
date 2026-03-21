@@ -23,6 +23,15 @@ frontend/node_modules/
 frontend/dist/
 
 # ===========================
+# macOS App 构建产物
+# ===========================
+# backend/static/ 由 make dmg 自动填充，不提交（保留 .gitkeep）
+backend/static/*
+!backend/static/.gitkeep
+backend/WeLink
+dist/
+
+# ===========================
 # 系统 / 编辑器
 # ===========================
 .DS_Store

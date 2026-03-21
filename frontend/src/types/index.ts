@@ -102,7 +102,7 @@ export interface BackendStatus {
   total_cached: number;
 }
 
-export type TabType = 'dashboard' | 'db' | 'groups' | 'privacy' | 'search' | 'timeline';
+export type TabType = 'dashboard' | 'db' | 'groups' | 'search' | 'timeline' | 'settings';
 
 export interface CoolingEntry {
   username: string;

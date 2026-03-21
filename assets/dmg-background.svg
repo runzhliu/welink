@@ -1,0 +1,33 @@
+<svg width="580" height="380" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景尺寸 580x380，与窗口完全一致。图标中心: WeLink(140,210) Apps(440,210) -->
+
+  <!-- 白色背景 -->
+  <rect width="580" height="380" fill="#ffffff"/>
+
+  <!-- 顶部绿色品牌条，高度 100px（图标顶部在 y=165，留出 65px 空白） -->
+  <rect width="580" height="100" fill="#07c160"/>
+
+  <!-- 品牌文字（白色，在绿色条内） -->
+  <text x="290" y="58"
+        text-anchor="middle"
+        font-family="'SF Pro Display', 'PingFang SC', -apple-system, sans-serif"
+        font-size="34" font-weight="700" fill="#ffffff" letter-spacing="-0.5">WeLink</text>
+  <text x="290" y="84"
+        text-anchor="middle"
+        font-family="'SF Pro Text', 'PingFang SC', -apple-system, sans-serif"
+        font-size="14" fill="rgba(255,255,255,0.85)">微信聊天数据分析平台</text>
+
+  <!-- 箭头：从 WeLink 图标右边缘到 Apps 图标左边缘，垂直居中于 y=210 -->
+  <line x1="200" y1="210" x2="375" y2="210"
+        stroke="#07c160" stroke-width="2"
+        stroke-dasharray="8,5" opacity="0.6"/>
+  <polygon points="376,203 392,210 376,217" fill="#07c160" opacity="0.8"/>
+
+  <!-- 底部提示文字 -->
+  <text x="290" y="355"
+        text-anchor="middle"
+        font-family="'SF Pro Text', 'PingFang SC', -apple-system, sans-serif"
+        font-size="12" fill="#aaaaaa">
+    将 WeLink 拖入右侧 Applications 文件夹完成安装
+  </text>
+</svg>

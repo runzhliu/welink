@@ -6,6 +6,7 @@ import React, { useState, useRef } from 'react';
 import { Search, Loader2, ChevronRight } from 'lucide-react';
 import type { GlobalSearchGroup, ContactStats } from '../../types';
 import { searchApi } from '../../services/api';
+import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 interface Props {
   contacts: ContactStats[];
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export const SearchView: React.FC<Props> = ({ contacts, onContactClick }) => {
+  const { privacyMode } = usePrivacyMode();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<GlobalSearchGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -111,7 +113,7 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick }) => {
                         </div>
                       )}
                     </div>
-                    <span className="font-bold text-sm dk-text text-[#1d1d1f]">{group.display_name}</span>
+                    <span className={`font-bold text-sm dk-text text-[#1d1d1f]${privacyMode ? ' privacy-blur' : ''}`}>{group.display_name}</span>
                     <span className="ml-auto text-xs text-gray-400">{group.messages.length} 条</span>
                     {contact && onContactClick && (
                       <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />

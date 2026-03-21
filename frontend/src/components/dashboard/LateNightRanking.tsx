@@ -5,6 +5,7 @@
 import React from 'react';
 import { Moon } from 'lucide-react';
 import type { GlobalStats, ContactStats } from '../../types';
+import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 interface Props {
   data: GlobalStats | null;
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export const LateNightRanking: React.FC<Props> = ({ data, contacts = [], onContactClick }) => {
+  const { privacyMode } = usePrivacyMode();
   const ranking = data?.late_night_ranking;
   if (!ranking?.length) return null;
 
@@ -57,7 +59,7 @@ export const LateNightRanking: React.FC<Props> = ({ data, contacts = [], onConta
                   </div>
                 )}
               </div>
-              <span className="text-sm font-semibold text-gray-200 w-14 sm:w-20 truncate flex-shrink-0">
+              <span className={`text-sm font-semibold text-gray-200 w-14 sm:w-20 truncate flex-shrink-0${privacyMode ? ' privacy-blur' : ''}`}>
                 {entry.name}
               </span>
               <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">

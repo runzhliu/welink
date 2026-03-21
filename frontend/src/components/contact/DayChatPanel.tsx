@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import type { ChatMessage } from '../../types';
 import { contactsApi } from '../../services/api';
+import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 interface DayChatPanelProps {
   username: string;
@@ -18,9 +19,10 @@ interface DayChatPanelProps {
 export const DayChatPanel: React.FC<DayChatPanelProps> = ({
   username, date, dayCount, contactName, onClose,
 }) => {
+  const { privacyMode } = usePrivacyMode();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -32,7 +34,7 @@ export const DayChatPanel: React.FC<DayChatPanelProps> = ({
 
   useEffect(() => {
     if (!loading) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      topRef.current?.scrollIntoView({ behavior: 'instant' });
     }
   }, [loading]);
 
@@ -53,7 +55,7 @@ export const DayChatPanel: React.FC<DayChatPanelProps> = ({
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100 flex-shrink-0">
           <div>
             <div className="font-black text-[#1d1d1f] text-base">{formatDate(date)}</div>
-            <div className="text-xs text-gray-400 mt-0.5">与 {contactName} 的聊天 · {dayCount} 条</div>
+            <div className="text-xs text-gray-400 mt-0.5">与 <span className={privacyMode ? 'privacy-blur' : ''}>{contactName}</span> 的聊天 · {dayCount} 条</div>
           </div>
           <button onClick={onClose} className="text-gray-300 hover:text-gray-600 transition-colors">
             <X size={22} />
@@ -69,12 +71,14 @@ export const DayChatPanel: React.FC<DayChatPanelProps> = ({
           ) : messages.length === 0 ? (
             <div className="text-center text-gray-300 py-12 text-sm">暂无文字记录</div>
           ) : (
-            messages.map((msg, i) => (
+            <>
+            <div ref={topRef} />
+            {messages.map((msg, i) => (
               <div key={i} className={`flex items-end gap-2 ${msg.is_mine ? 'flex-row-reverse' : 'flex-row'}`}>
                 {/* Avatar dot */}
                 <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black
                   ${msg.is_mine ? 'bg-[#07c160]' : 'bg-[#576b95]'}`}>
-                  {msg.is_mine ? '我' : contactName.charAt(0)}
+                  {msg.is_mine ? '我' : <span className={privacyMode ? 'privacy-blur' : ''}>{contactName.charAt(0)}</span>}
                 </div>
                 <div className={`flex flex-col gap-0.5 max-w-[72%] ${msg.is_mine ? 'items-end' : 'items-start'}`}>
                   <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words whitespace-pre-wrap
@@ -89,9 +93,9 @@ export const DayChatPanel: React.FC<DayChatPanelProps> = ({
                   <span className="text-[10px] text-gray-300 px-1">{msg.time}</span>
                 </div>
               </div>
-            ))
+            ))}
+            </>
           )}
-          <div ref={bottomRef} />
         </div>
       </div>
     </div>

@@ -10,6 +10,7 @@ import { groupsApi } from '../../services/api';
 import { CalendarHeatmap } from '../contact/CalendarHeatmap';
 import { GroupDayChatPanel } from './GroupDayChatPanel';
 import { MessageTypePieChart } from '../common/MessageTypePieChart';
+import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 // ─── 群详情弹窗 ───────────────────────────────────────────────────────────────
 
@@ -27,6 +28,7 @@ interface GroupDetailModalProps {
 }
 
 export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClose, allContacts, onContactClick, onBlock }) => {
+  const { privacyMode } = usePrivacyMode();
 
   // 根据显示名（remark/nickname）查找联系人
   const findContact = (displayName: string): ContactStats | null => {
@@ -134,7 +136,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             </div>
           )}
           <div>
-            <h3 className="dk-text text-2xl sm:text-3xl font-black text-[#1d1d1f]">{group.name}</h3>
+            <h3 className={`dk-text text-2xl sm:text-3xl font-black text-[#1d1d1f]${privacyMode ? ' privacy-blur' : ''}`}>{group.name}</h3>
             <p className="text-xs text-gray-400 mt-1 flex flex-wrap items-center gap-1.5">
               <span>{group.total_messages.toLocaleString()} 条消息</span>
               {group.first_message_time && (
@@ -248,7 +250,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                           className={`text-sm font-semibold dk-text truncate ${contact ? 'text-[#07c160] cursor-pointer hover:underline' : 'text-[#1d1d1f]'}`}
                           onClick={() => contact && onContactClick(contact)}
                           title={contact ? '点击查看个人统计' : '非好友'}
-                        >{m.speaker}</span>
+                        ><span className={privacyMode ? 'privacy-blur' : ''}>{m.speaker}</span></span>
                         {contact
                           ? <span className="flex-shrink-0 text-[9px] font-bold text-[#07c160] bg-[#07c16018] px-1 py-0.5 rounded cursor-pointer" onClick={() => onContactClick(contact)}>好友↗</span>
                           : <span className="flex-shrink-0 text-[9px] text-gray-300">非好友</span>
@@ -286,7 +288,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                     return (
                       <span
                         key={w.word}
-                        className={`${size} font-bold px-2 py-1 rounded-lg`}
+                        className={`${size} font-bold px-2 py-1 rounded-lg${privacyMode ? ' privacy-blur' : ''}`}
                         style={{ color: MEMBER_COLORS[i % MEMBER_COLORS.length], background: `${MEMBER_COLORS[i % MEMBER_COLORS.length]}18` }}
                       >
                         {w.word}
@@ -397,6 +399,7 @@ interface GroupsViewProps {
 }
 
 export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactClick, blockedGroups = [], onBlockGroup }) => {
+  const { privacyMode } = usePrivacyMode();
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -484,7 +487,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <div className="dk-text font-bold text-[#1d1d1f] truncate">{group.name}</div>
+                <div className={`dk-text font-bold text-[#1d1d1f] truncate${privacyMode ? ' privacy-blur' : ''}`}>{group.name}</div>
                 <div className="text-xs text-gray-400 mt-0.5 sm:hidden">{group.total_messages.toLocaleString()} 条 · {group.last_message_time}</div>
               </div>
               <div className="hidden sm:block text-right w-24">

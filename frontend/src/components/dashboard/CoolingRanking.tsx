@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { Snowflake } from 'lucide-react';
 import type { CoolingEntry, ContactStats } from '../../types';
 import { contactsApi } from '../../services/api';
+import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 interface Props {
   isInitialized: boolean;
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export const CoolingRanking: React.FC<Props> = ({ isInitialized, contacts, onContactClick }) => {
+  const { privacyMode } = usePrivacyMode();
   const [ranking, setRanking] = useState<CoolingEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -75,7 +77,7 @@ export const CoolingRanking: React.FC<Props> = ({ isInitialized, contacts, onCon
               </div>
 
               {/* 名字 */}
-              <span className="text-sm font-semibold dk-text text-[#1d1d1f] w-16 sm:w-20 truncate flex-shrink-0 group-hover:text-[#07c160] transition-colors">
+              <span className={`text-sm font-semibold dk-text text-[#1d1d1f] w-16 sm:w-20 truncate flex-shrink-0 group-hover:text-[#07c160] transition-colors${privacyMode ? ' privacy-blur' : ''}`}>
                 {entry.display_name}
               </span>
 

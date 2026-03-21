@@ -14,6 +14,7 @@ import (
 type DBManager struct {
 	ContactDB  *sql.DB
 	MessageDBs []*sql.DB
+	dataDir    string
 }
 
 type DBInfo struct {
@@ -223,29 +224,35 @@ func (mgr *DBManager) GetTableData(dbName, tableName string, offset, limit int) 
 
 func (mgr *DBManager) GetDBInfos() []DBInfo {
 	var infos []DBInfo
-	
+
 	// 联系人库
 	if mgr.ContactDB != nil {
-		path := filepath.Join(os.Getenv("DATA_DIR"), "contact/contact.db")
-		fi, _ := os.Stat(path)
+		path := filepath.Join(mgr.dataDir, "contact/contact.db")
+		var size int64
+		if fi, err := os.Stat(path); err == nil {
+			size = fi.Size()
+		}
 		infos = append(infos, DBInfo{
 			Name: "contact.db",
 			Path: path,
-			Size: fi.Size(),
+			Size: size,
 			Type: "contact",
 		})
 	}
 
 	// 消息库
-	msgDir := filepath.Join(os.Getenv("DATA_DIR"), "message")
+	msgDir := filepath.Join(mgr.dataDir, "message")
 	files, _ := os.ReadDir(msgDir)
 	for _, f := range files {
 		if strings.HasSuffix(f.Name(), ".db") {
-			fi, _ := f.Info()
+			var size int64
+			if fi, err := f.Info(); err == nil {
+				size = fi.Size()
+			}
 			infos = append(infos, DBInfo{
 				Name: f.Name(),
 				Path: filepath.Join(msgDir, f.Name()),
-				Size: fi.Size(),
+				Size: size,
 				Type: "message",
 			})
 		}
@@ -253,8 +260,18 @@ func (mgr *DBManager) GetDBInfos() []DBInfo {
 	return infos
 }
 
+// Close 关闭所有数据库连接。
+func (mgr *DBManager) Close() {
+	if mgr.ContactDB != nil {
+		mgr.ContactDB.Close()
+	}
+	for _, mdb := range mgr.MessageDBs {
+		mdb.Close()
+	}
+}
+
 func NewDBManager(dataDir string) (*DBManager, error) {
-	mgr := &DBManager{}
+	mgr := &DBManager{dataDir: dataDir}
 	log.Printf("Initializing DBManager with DATA_DIR: %s", dataDir)
 
 	// 1. 加载联系人数据库

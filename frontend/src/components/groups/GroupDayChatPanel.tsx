@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import type { GroupChatMessage } from '../../types';
 import { groupsApi } from '../../services/api';
+import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 interface GroupDayChatPanelProps {
   username: string;
@@ -29,9 +30,10 @@ function speakerColor(name: string): string {
 export const GroupDayChatPanel: React.FC<GroupDayChatPanelProps> = ({
   username, date, dayCount, groupName, onClose,
 }) => {
+  const { privacyMode } = usePrivacyMode();
   const [messages, setMessages] = useState<GroupChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -42,7 +44,7 @@ export const GroupDayChatPanel: React.FC<GroupDayChatPanelProps> = ({
   }, [username, date]);
 
   useEffect(() => {
-    if (!loading) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!loading) topRef.current?.scrollIntoView({ behavior: 'instant' });
   }, [loading]);
 
   const formatDate = (d: string) => {
@@ -63,7 +65,7 @@ export const GroupDayChatPanel: React.FC<GroupDayChatPanelProps> = ({
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100 flex-shrink-0">
           <div>
             <div className="font-black text-[#1d1d1f] text-base">{formatDate(date)}</div>
-            <div className="text-xs text-gray-400 mt-0.5">{groupName} · {dayCount} 条</div>
+            <div className="text-xs text-gray-400 mt-0.5"><span className={privacyMode ? 'privacy-blur' : ''}>{groupName}</span> · {dayCount} 条</div>
           </div>
           <button onClick={onClose} className="text-gray-300 hover:text-gray-600 transition-colors">
             <X size={22} />
@@ -79,7 +81,9 @@ export const GroupDayChatPanel: React.FC<GroupDayChatPanelProps> = ({
           ) : messages.length === 0 ? (
             <div className="text-center text-gray-300 py-12 text-sm">暂无文字记录</div>
           ) : (
-            messages.map((msg, i) => {
+            <>
+            <div ref={topRef} />
+            {messages.map((msg, i) => {
               const color = speakerColor(msg.speaker);
               // 合并连续同一发言者的消息：只在第一条显示头像和名字
               const showHeader = i === 0 || messages[i - 1].speaker !== msg.speaker;
@@ -91,14 +95,14 @@ export const GroupDayChatPanel: React.FC<GroupDayChatPanelProps> = ({
                       className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-black mt-0.5"
                       style={{ background: color }}
                     >
-                      {msg.speaker.charAt(0)}
+                      <span className={privacyMode ? 'privacy-blur' : ''}>{msg.speaker.charAt(0)}</span>
                     </div>
                   ) : (
                     <div className="w-8 flex-shrink-0" />
                   )}
                   <div className="flex flex-col gap-0.5 max-w-[80%]">
                     {showHeader && (
-                      <span className="text-[11px] font-semibold" style={{ color }}>
+                      <span className={`text-[11px] font-semibold${privacyMode ? ' privacy-blur' : ''}`} style={{ color }}>
                         {msg.speaker}
                       </span>
                     )}
@@ -114,9 +118,9 @@ export const GroupDayChatPanel: React.FC<GroupDayChatPanelProps> = ({
                   </div>
                 </div>
               );
-            })
+            })}
+            </>
           )}
-          <div ref={bottomRef} />
         </div>
       </div>
     </div>

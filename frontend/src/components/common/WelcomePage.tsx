@@ -24,9 +24,10 @@ const OPTIONS: TimeOption[] = [
 interface WelcomePageProps {
   onStart: (from: number | null, to: number | null, label: string) => void;
   loading: boolean;
+  isAppMode?: boolean;
 }
 
-export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading }) => {
+export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAppMode = false }) => {
   const [selected, setSelected] = useState<number>(2);
   const today = new Date().toISOString().slice(0, 10);
   const [customFrom, setCustomFrom] = useState('');
@@ -139,7 +140,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading }) =>
             <div className="flex gap-3">
               <div className="w-6 h-6 rounded-full bg-[#07c16015] text-[#07c160] text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5">4</div>
               <div>
-                <p className="text-sm font-bold text-[#1d1d1f]">将解密后的数据库放入指定目录</p>
+                <p className="text-sm font-bold text-[#1d1d1f]">将解密后的数据库放入目录</p>
                 <div className="mt-2 bg-[#f8f9fb] rounded-xl px-3 py-2 flex items-start gap-2">
                   <Database size={12} className="text-gray-400 flex-shrink-0 mt-0.5" />
                   <code className="text-xs text-gray-600 font-mono leading-relaxed">
@@ -148,21 +149,26 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading }) =>
                     └── message/message_*.db
                   </code>
                 </div>
+                {isAppMode && (
+                  <p className="text-xs text-[#07c160] mt-1.5 font-medium">✓ 已完成配置，WeLink 将自动读取您指定的目录</p>
+                )}
               </div>
             </div>
 
-            {/* Step 5 */}
-            <div className="flex gap-3">
-              <div className="w-6 h-6 rounded-full bg-[#07c16015] text-[#07c160] text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5">5</div>
-              <div>
-                <p className="text-sm font-bold text-[#1d1d1f]">启动 WeLink</p>
-                <div className="mt-2 bg-[#f8f9fb] rounded-xl px-3 py-2 flex items-center gap-2">
-                  <Terminal size={12} className="text-gray-400 flex-shrink-0" />
-                  <code className="text-xs text-gray-600 font-mono">docker compose up</code>
+            {/* Step 5：仅 Docker/Web 模式显示 */}
+            {!isAppMode && (
+              <div className="flex gap-3">
+                <div className="w-6 h-6 rounded-full bg-[#07c16015] text-[#07c160] text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5">5</div>
+                <div>
+                  <p className="text-sm font-bold text-[#1d1d1f]">启动 WeLink</p>
+                  <div className="mt-2 bg-[#f8f9fb] rounded-xl px-3 py-2 flex items-center gap-2">
+                    <Terminal size={12} className="text-gray-400 flex-shrink-0" />
+                    <code className="text-xs text-gray-600 font-mono">docker compose up</code>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1.5">访问 <span className="font-mono">localhost:3000</span> 即可开始分析</p>
                 </div>
-                <p className="text-xs text-gray-400 mt-1.5">访问 <span className="font-mono">localhost:3000</span> 即可开始分析</p>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Credit */}

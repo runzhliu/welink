@@ -8,6 +8,7 @@ import { Moon, Gift, MessageSquare, Zap } from 'lucide-react';
 import type { ContactDetail } from '../../types';
 import { CalendarHeatmap } from './CalendarHeatmap';
 import { DayChatPanel } from './DayChatPanel';
+import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 interface Props {
   detail: ContactDetail;
@@ -37,6 +38,7 @@ const ModeBtn: React.FC<{ active: boolean; onClick: () => void; children: React.
 );
 
 export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, username, contactName }) => {
+  const { privacyMode } = usePrivacyMode();
   const [dayPanel, setDayPanel] = useState<{ date: string; count: number } | null>(null);
   const [trendMode, setTrendMode] = useState<TrendMode>('total');
   const hourlyData = detail.hourly_dist.map((v, h) => ({
@@ -205,7 +207,7 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
                   contentStyle={{ borderRadius: 10, fontSize: 12, border: '1px solid #eee', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
                   formatter={(v: number, name: string) => [
                     `${v.toLocaleString()} 条`,
-                    name === 'total' ? '总数' : name === 'their' ? `${contactName}` : '我',
+                    name === 'total' ? '总数' : name === 'their' ? (privacyMode ? '对方' : contactName) : '我',
                   ]}
                 />
                 {trendMode === 'total' && (
@@ -222,7 +224,7 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
           </div>
           <div className="flex gap-4 mt-2 text-xs text-gray-400">
             {trendMode === 'total' && <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#07c160] inline-block rounded" />总数</span>}
-            {trendMode === 'their' && <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#576b95] inline-block rounded" />{contactName}</span>}
+            {trendMode === 'their' && <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#576b95] inline-block rounded" /><span className={privacyMode ? 'privacy-blur' : ''}>{contactName}</span></span>}
             {trendMode === 'mine'  && <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#10aeff] inline-block rounded" />我</span>}
           </div>
         </div>

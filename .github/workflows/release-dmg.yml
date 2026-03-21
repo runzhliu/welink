@@ -1,0 +1,92 @@
+name: Release macOS DMG
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "版本号（如 v1.0.1），留空则用 dev-<sha>"
+        required: false
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # 允许创建 Release 和上传附件
+
+jobs:
+  build-dmg:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build DMG
+        run: make dmg
+
+      - name: 确定版本号
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ inputs.tag }}" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=dev-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 计算 SHA256
+        id: sha256
+        run: |
+          echo "sum=$(shasum -a 256 dist/WeLink.dmg | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: 创建 GitHub Release 并上传 DMG
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "WeLink ${{ steps.version.outputs.tag }}"
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          body: |
+            ## 安装方法
+
+            1. 下载 `WeLink.dmg`，双击挂载
+            2. 将 `WeLink.app` 拖入 `/Applications`
+            3. 双击运行
+
+            **首次打开提示"无法打开"？**
+
+            macOS 对未经 Apple 公证的 App 会拦截，按以下任一方式解除：
+
+            - **方式一（推荐）**：系统设置 → 隐私与安全性 → 拉到底部，点击「仍要打开」
+            - **方式二**：右键点击 `WeLink.app` → 「打开」→ 再次点击「打开」
+            - **方式三**（终端）：
+              ```bash
+              xattr -cr /Applications/WeLink.app
+              ```
+
+            ## 文件校验
+
+            ```
+            SHA256: ${{ steps.sha256.outputs.sum }}
+            ```
+
+            下载后可在终端验证：
+            ```bash
+            shasum -a 256 ~/Downloads/WeLink.dmg
+            ```
+
+            > COYG! 🔴⚪
+          files: dist/WeLink.dmg

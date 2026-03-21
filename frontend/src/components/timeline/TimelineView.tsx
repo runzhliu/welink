@@ -5,6 +5,7 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, MessageSquare } from 'lucide-react';
 import type { ContactStats } from '../../types';
+import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 interface Props {
   contacts: ContactStats[];
@@ -17,6 +18,7 @@ interface YearGroup {
 }
 
 export const TimelineView: React.FC<Props> = ({ contacts, onContactClick }) => {
+  const { privacyMode } = usePrivacyMode();
   const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
 
   const yearGroups: YearGroup[] = useMemo(() => {
@@ -115,7 +117,7 @@ export const TimelineView: React.FC<Props> = ({ contacts, onContactClick }) => {
 
                         {/* 名字 + 日期 */}
                         <div className="flex-1 min-w-0">
-                          <div className="font-bold text-sm text-[#1d1d1f] dk-text truncate">{name}</div>
+                          <div className={`font-bold text-sm text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>{name}</div>
                           <div className="text-xs text-gray-400 mt-0.5">{contact.first_message_time}</div>
                         </div>
 

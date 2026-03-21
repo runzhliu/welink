@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 录屏模式：模糊姓名、群名、词云 */
+.privacy-blur {
+  filter: blur(6px);
+  user-select: none;
+}
+.privacy-blur-canvas {
+  filter: blur(12px);
+}
+
 :root {
   font-family: "LXGW WenKai Screen", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 

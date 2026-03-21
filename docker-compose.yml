@@ -8,8 +8,10 @@ services:
     volumes:
       - ./decrypted:/app/data
       - ./config.yaml:/app/config.yaml:ro
+      - welink-prefs:/app/prefs
     environment:
       - GIN_MODE=release
+      - PREFERENCES_PATH=/app/prefs/preferences.json
 
   frontend:
     image: ghcr.io/runzhliu/welink/frontend:main
@@ -19,3 +21,6 @@ services:
       - "3000:80"
     depends_on:
       - backend
+
+volumes:
+  welink-prefs:
