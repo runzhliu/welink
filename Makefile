@@ -129,6 +129,49 @@ _dmg-package:
 		"$(DMG_NAME)" "dist/$(DMG_NAME).dmg"
 	rm -f backend/$(DMG_NAME)
 
+## ─── Windows App & EXE ───────────────────────────────────────────────────────
+
+EXE_NAME  := WeLink
+EXE_DIR   := dist/windows
+
+exe: _exe-frontend _exe-binary _exe-package  ## 打包 Windows .exe + ZIP（需 GOOS=windows，无需 CGO）
+	@echo ""
+	@echo "✅  EXE 打包完成：dist/$(EXE_NAME)-windows-amd64.zip"
+	@echo "    用法：解压后将 decrypted\\ 与 WeLink.exe 放在同一目录，双击运行。"
+
+_exe-frontend:
+	cd frontend && npm install && npm run build
+	rm -rf backend/static && mkdir -p backend/static
+	cp -r frontend/dist/. backend/static/
+
+_exe-binary: _exe-frontend
+	@echo "→ 生成 Windows 资源文件（图标 + 版本信息）..."
+	cd backend && go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest && \
+	  python3 -c "\
+import json, sys; \
+v='$(APP_VERSION)'.lstrip('v').split('-')[0].split('.'); \
+parts=(v+['0','0','0'])[:4]; \
+d=json.load(open('versioninfo.json')); \
+fv={'Major':int(parts[0]),'Minor':int(parts[1]),'Patch':int(parts[2]),'Build':int(parts[3])}; \
+d['FixedFileInfo']['FileVersion']=fv; d['FixedFileInfo']['ProductVersion']=fv; \
+d['StringFileInfo']['FileVersion']='$(APP_VERSION)'; \
+d['StringFileInfo']['ProductVersion']='$(APP_VERSION)'; \
+json.dump(d,open('versioninfo_build.json','w'),ensure_ascii=False,indent=2)" && \
+	  goversioninfo -o resource_windows.syso versioninfo_build.json && \
+	  rm -f versioninfo_build.json
+	@echo "→ 编译 Windows amd64（CGO_ENABLED=0，纯 Go WebView2）..."
+	cd backend && \
+	  CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+	  go build -tags app \
+	    -ldflags="-s -w -H windowsgui -X main.appVersion=$(APP_VERSION)" \
+	    -o $(EXE_NAME).exe .
+	rm -f backend/resource_windows.syso
+
+_exe-package: _exe-binary
+	mkdir -p $(EXE_DIR)
+	mv backend/$(EXE_NAME).exe $(EXE_DIR)/$(EXE_NAME).exe
+	cd dist && zip -r $(EXE_NAME)-windows-amd64.zip windows/$(EXE_NAME).exe
+
 ## ─── 清理 ────────────────────────────────────────────────────────────────────
 
 clean:           ## 删除本地编译产物

@@ -29,8 +29,7 @@ func preferencesPath() string {
 		return v
 	}
 	if hasFrontend {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Application Support", "WeLink", "preferences.json")
+		return filepath.Join(appPreferencesDir(), "preferences.json")
 	}
 	return "preferences.json"
 }

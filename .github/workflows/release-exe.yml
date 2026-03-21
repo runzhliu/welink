@@ -1,0 +1,92 @@
+name: Release Windows EXE
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "版本号（如 v1.0.1），留空则用 dev-<sha>"
+        required: false
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-exe:
+    runs-on: ubuntu-latest   # CGO_ENABLED=0 纯 Go 编译，无需 Windows runner
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build EXE
+        run: make exe
+
+      - name: 确定版本号
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ inputs.tag }}" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=dev-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 计算 SHA256
+        id: sha256
+        run: |
+          echo "sum=$(sha256sum dist/WeLink-windows-amd64.zip | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: 创建 GitHub Release 并上传 EXE
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "WeLink ${{ steps.version.outputs.tag }}"
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          body: |
+            ## Windows 安装方法
+
+            1. 下载 `WeLink-windows-amd64.zip`，解压到任意目录
+            2. 将解密后的微信数据目录（`decrypted\`）放在与 `WeLink.exe` 相同目录下
+            3. 双击 `WeLink.exe` 运行
+
+            **系统要求**：Windows 10 1903 或更高版本
+
+            **首次运行提示缺少 WebView2 Runtime？**
+
+            Windows 11 及安装了 Edge 的 Windows 10 已自带，无需额外安装。
+            如提示缺少运行时，请下载安装 Evergreen Bootstrapper（约 2 MB）：
+
+            ```
+            https://developer.microsoft.com/microsoft-edge/webview2/
+            ```
+
+            ## 文件校验
+
+            ```
+            SHA256 (WeLink-windows-amd64.zip): ${{ steps.sha256.outputs.sum }}
+            ```
+
+            下载后可在 PowerShell 验证：
+            ```powershell
+            Get-FileHash .\WeLink-windows-amd64.zip -Algorithm SHA256
+            ```
+
+            > COYG! 🔴⚪
+          files: dist/WeLink-windows-amd64.zip

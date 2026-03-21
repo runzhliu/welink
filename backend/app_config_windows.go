@@ -1,4 +1,4 @@
-//go:build app
+//go:build app && windows
 
 package main
 
@@ -11,14 +11,17 @@ import (
 	"strings"
 )
 
+// appPreferencesDir 返回 Windows 上持久化偏好文件所在目录。
+func appPreferencesDir() string {
+	return filepath.Join(os.Getenv("APPDATA"), "WeLink")
+}
+
 // demoDataDir 返回 App 模式演示数据的固定目录。
 func demoDataDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, "Library", "Application Support", "WeLink", "demo")
+	return filepath.Join(os.Getenv("APPDATA"), "WeLink", "demo")
 }
 
 // loadAppConfig 读取持久化配置中的 App 配置部分。
-// DemoMode=true 时 DataDir 可以为空，视为有效配置。
 func loadAppConfig() (*Preferences, bool) {
 	p := loadPreferences()
 	if p.DataDir == "" && !p.DemoMode {
@@ -29,7 +32,6 @@ func loadAppConfig() (*Preferences, bool) {
 
 // saveAppConfig 将 App 配置写入磁盘，保留已有的黑名单等偏好字段。
 func saveAppConfig(cfg *Preferences) error {
-	// 读取现有偏好，只更新 App 配置字段，避免覆盖黑名单
 	existing := loadPreferences()
 	existing.DataDir = cfg.DataDir
 	existing.LogDir = cfg.LogDir
@@ -57,13 +59,19 @@ func setupLogFile(logDir string) {
 	log.Printf("日志已重定向到 %s/welink.log", logDir)
 }
 
-// browseFolder 通过 osascript 弹出系统文件夹选择器，返回所选路径。
+// browseFolder 通过 PowerShell 弹出系统文件夹选择器，返回所选路径。
+// 使用 -Sta 确保 Windows Forms 对话框可在单线程 COM 公寓中正常弹出。
 func browseFolder(prompt string) (string, error) {
-	// 转义 AppleScript 字符串中的特殊字符，防止注入
-	safe := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(prompt)
-	script := fmt.Sprintf(`POSIX path of (choose folder with prompt "%s")`, safe)
-	out, err := exec.Command("osascript", "-e", script).Output()
-	if err != nil {
+	safe := strings.ReplaceAll(prompt, "'", "''")
+	script := "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; " +
+		"$dlg = New-Object System.Windows.Forms.FolderBrowserDialog; " +
+		"$dlg.Description = '" + safe + "'; " +
+		"$dlg.ShowNewFolderButton = $true; " +
+		"if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $dlg.SelectedPath }"
+	out, err := exec.Command(
+		"powershell", "-Sta", "-NoProfile", "-NonInteractive", "-Command", script,
+	).Output()
+	if err != nil || strings.TrimSpace(string(out)) == "" {
 		return "", fmt.Errorf("cancelled")
 	}
 	return strings.TrimSpace(string(out)), nil

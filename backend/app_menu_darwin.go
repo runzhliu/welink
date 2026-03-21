@@ -1,4 +1,4 @@
-//go:build app
+//go:build app && darwin
 
 package main
 
