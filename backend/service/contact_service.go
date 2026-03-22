@@ -997,7 +997,7 @@ type GroupDetail struct {
 	HourlyDist   [24]int           `json:"hourly_dist"`
 	WeeklyDist   [7]int            `json:"weekly_dist"`
 	DailyHeatmap map[string]int    `json:"daily_heatmap"`
-	MemberRank   []MemberStat      `json:"member_rank"`  // top 20 发言者
+	MemberRank   []MemberStat      `json:"member_rank"`  // top 500 发言者
 	TopWords     []WordCount       `json:"top_words"`    // top 30 高频词
 	TypeDist     map[string]int    `json:"type_dist"`    // 消息类型分布（条数）
 }
@@ -1213,12 +1213,12 @@ func (s *ContactService) computeGroupDetail(username string) {
 	}
 	s.segmenterMu.Unlock()
 
-	// 成员排行 top 20
+	// 成员排行 top 500
 	for speaker, cnt := range memberMap {
 		detail.MemberRank = append(detail.MemberRank, MemberStat{Speaker: speaker, Count: cnt})
 	}
 	sort.Slice(detail.MemberRank, func(i, j int) bool { return detail.MemberRank[i].Count > detail.MemberRank[j].Count })
-	if len(detail.MemberRank) > 20 { detail.MemberRank = detail.MemberRank[:20] }
+	if len(detail.MemberRank) > 500 { detail.MemberRank = detail.MemberRank[:500] }
 
 	// 高频词 top 30
 	for w, c := range wordCounts {

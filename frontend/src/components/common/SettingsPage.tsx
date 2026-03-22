@@ -5,8 +5,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   X, Plus, ShieldOff, User, Users,
-  FolderOpen, Loader2, Database, FileText, AlertCircle, RotateCcw, CheckCircle2, EyeOff,
+  FolderOpen, Loader2, Database, FileText, AlertCircle, RotateCcw, CheckCircle2, EyeOff, BarChart2,
 } from 'lucide-react';
+
+export const MEMBER_RANK_LIMIT_KEY = 'welink_member_rank_limit';
+export const MEMBER_NAME_WIDTH_KEY = 'welink_member_name_width';
+export const DEFAULT_RANK_LIMIT = 10;
+export const DEFAULT_NAME_WIDTH = 144; // px, roughly w-36
 import { appApi } from '../../services/appApi';
 import type { ContactStats, GroupInfo } from '../../types';
 
@@ -109,6 +114,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   privacyMode = false,
   onTogglePrivacyMode,
 }) => {
+  // 显示设置
+  const [rankLimit, setRankLimit] = useState<number>(() =>
+    Number(localStorage.getItem(MEMBER_RANK_LIMIT_KEY)) || DEFAULT_RANK_LIMIT
+  );
+  const [nameWidth, setNameWidth] = useState<number>(() =>
+    Number(localStorage.getItem(MEMBER_NAME_WIDTH_KEY)) || DEFAULT_NAME_WIDTH
+  );
+
   // App 配置状态
   const [dataDir, setDataDir] = useState('');
   const [logDir, setLogDir] = useState('');
@@ -195,6 +208,52 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           >
             <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${privacyMode ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
+        </div>
+      </section>
+
+      {/* ── 显示设置 ── */}
+      <section className="mb-8">
+        <div className="flex items-center gap-2 mb-3">
+          <BarChart2 size={18} className="text-[#07c160]" />
+          <h3 className="text-base font-bold text-[#1d1d1f]">显示设置</h3>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-[#1d1d1f]">群聊发言排行显示人数</p>
+              <p className="text-xs text-gray-400 mt-0.5">默认展示 Top N，最多支持 500（实时生效）</p>
+            </div>
+            <input
+              type="number"
+              min={1}
+              max={500}
+              value={rankLimit}
+              onChange={(e) => {
+                const v = Math.min(500, Math.max(1, Number(e.target.value) || DEFAULT_RANK_LIMIT));
+                setRankLimit(v);
+                localStorage.setItem(MEMBER_RANK_LIMIT_KEY, String(v));
+              }}
+              className="w-20 text-sm border border-gray-200 rounded-xl px-3 py-1.5 text-center focus:outline-none focus:border-[#07c160]"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-[#1d1d1f]">发言排行名字列宽度</p>
+              <p className="text-xs text-gray-400 mt-0.5">单位 px，也可在排行图表中直接拖拽调整（实时生效）</p>
+            </div>
+            <input
+              type="number"
+              min={60}
+              max={400}
+              value={nameWidth}
+              onChange={(e) => {
+                const v = Math.min(400, Math.max(60, Number(e.target.value) || DEFAULT_NAME_WIDTH));
+                setNameWidth(v);
+                localStorage.setItem(MEMBER_NAME_WIDTH_KEY, String(v));
+              }}
+              className="w-20 text-sm border border-gray-200 rounded-xl px-3 py-1.5 text-center focus:outline-none focus:border-[#07c160]"
+            />
+          </div>
         </div>
       </section>
 

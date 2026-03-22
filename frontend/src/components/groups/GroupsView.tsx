@@ -11,6 +11,10 @@ import { CalendarHeatmap } from '../contact/CalendarHeatmap';
 import { GroupDayChatPanel } from './GroupDayChatPanel';
 import { MessageTypePieChart } from '../common/MessageTypePieChart';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import {
+  MEMBER_RANK_LIMIT_KEY, MEMBER_NAME_WIDTH_KEY,
+  DEFAULT_RANK_LIMIT, DEFAULT_NAME_WIDTH,
+} from '../common/SettingsPage';
 
 // ─── 群详情弹窗 ───────────────────────────────────────────────────────────────
 
@@ -47,6 +51,47 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // 排行榜显示设置（从 localStorage 读取，与设置页同步）
+  const [rankLimit, setRankLimit] = useState<number>(() =>
+    Number(localStorage.getItem(MEMBER_RANK_LIMIT_KEY)) || DEFAULT_RANK_LIMIT
+  );
+  const [nameWidth, setNameWidth] = useState<number>(() =>
+    Number(localStorage.getItem(MEMBER_NAME_WIDTH_KEY)) || DEFAULT_NAME_WIDTH
+  );
+
+  // 监听 localStorage 变化（设置页修改时同步）
+  useEffect(() => {
+    const onStorage = () => {
+      setRankLimit(Number(localStorage.getItem(MEMBER_RANK_LIMIT_KEY)) || DEFAULT_RANK_LIMIT);
+      setNameWidth(Number(localStorage.getItem(MEMBER_NAME_WIDTH_KEY)) || DEFAULT_NAME_WIDTH);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  // 名字列拖拽
+  const dragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartWidth = useRef(0);
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    dragging.current = true;
+    dragStartX.current = e.clientX;
+    dragStartWidth.current = nameWidth;
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current) return;
+      const newW = Math.min(400, Math.max(60, dragStartWidth.current + ev.clientX - dragStartX.current));
+      setNameWidth(newW);
+      localStorage.setItem(MEMBER_NAME_WIDTH_KEY, String(newW));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [nameWidth]);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,19 +278,41 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             {/* 成员发言排行 */}
             {(detail.member_rank?.length ?? 0) > 0 && (
               <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
-                <h4 className="text-sm font-black text-gray-500 uppercase mb-1 tracking-wider flex items-center gap-2">
-                  <BarChart2 size={14} /> 成员发言排行 Top {Math.min(detail.member_rank.length, 10)}
-                </h4>
-                <p className="text-xs text-gray-400 mb-4">按各成员在该群的总消息条数排序</p>
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="text-sm font-black text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                    <BarChart2 size={14} /> 成员发言排行 Top {Math.min(detail.member_rank.length, rankLimit)}
+                  </h4>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-gray-400">显示</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={detail.member_rank.length}
+                      value={rankLimit}
+                      onChange={(e) => {
+                        const v = Math.min(500, Math.max(1, Number(e.target.value) || DEFAULT_RANK_LIMIT));
+                        setRankLimit(v);
+                        localStorage.setItem(MEMBER_RANK_LIMIT_KEY, String(v));
+                      }}
+                      className="w-14 text-xs border border-gray-200 rounded-lg px-2 py-0.5 text-center focus:outline-none focus:border-[#07c160] bg-white"
+                      title="修改显示人数（最多 500）"
+                    />
+                    <span className="text-[10px] text-gray-400">/ {detail.member_rank.length} 人</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 mb-4">
+                  按总消息条数排序 · 拖动名字列右侧边缘可调整列宽
+                </p>
                 <div className="space-y-2">
-                  {detail.member_rank.slice(0, 10).map((m, i) => {
+                  {detail.member_rank.slice(0, rankLimit).map((m, i) => {
                     const contact = findContact(m.speaker);
                     return (
                     <div key={m.speaker} className="flex items-center gap-3">
                       <span className={`w-5 text-xs font-black text-right flex-shrink-0 ${
                         i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-orange-400' : 'text-gray-300'
                       }`}>{i + 1}</span>
-                      <div className="flex items-center gap-1.5 w-24 sm:w-36 flex-shrink-0 min-w-0">
+                      {/* 名字列：宽度可拖拽 */}
+                      <div className="relative flex items-center gap-1.5 flex-shrink-0 min-w-0" style={{ width: nameWidth }}>
                         <span
                           className={`text-sm font-semibold dk-text truncate ${contact ? 'text-[#07c160] cursor-pointer hover:underline' : 'text-[#1d1d1f]'}`}
                           onClick={() => contact && onContactClick(contact)}
@@ -255,6 +322,12 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                           ? <span className="flex-shrink-0 text-[9px] font-bold text-[#07c160] bg-[#07c16018] px-1 py-0.5 rounded cursor-pointer" onClick={() => onContactClick(contact)}>好友↗</span>
                           : <span className="flex-shrink-0 text-[9px] text-gray-300">非好友</span>
                         }
+                        {/* 拖拽把手 */}
+                        <div
+                          className="absolute right-0 top-1/2 -translate-y-1/2 h-4 w-1.5 cursor-col-resize rounded-full bg-gray-300 hover:bg-[#07c160] transition-colors opacity-60 hover:opacity-100"
+                          onMouseDown={onDragStart}
+                          title="拖拽调整名字列宽度"
+                        />
                       </div>
                       <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div
