@@ -4,7 +4,7 @@ services:
     build: ./backend
     container_name: welink-backend
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - ./decrypted:/app/data
       - ./config.yaml:/app/config.yaml:ro
@@ -18,7 +18,7 @@ services:
     build: ./frontend
     container_name: welink-frontend
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     depends_on:
       - backend
 

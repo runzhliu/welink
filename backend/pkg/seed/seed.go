@@ -146,7 +146,7 @@ func Generate(destDir string) error {
 		return fmt.Errorf("create message db: %w", err)
 	}
 
-	log.Printf("[DEMO] Demo databases created in %s", destDir)
+	log.Printf("[DEMO] Demo databases created")
 	return nil
 }
 

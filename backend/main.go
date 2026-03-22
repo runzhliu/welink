@@ -90,13 +90,19 @@ func serverMain() {
 		}
 	}
 
+	dataLabel := cfg.Data.Dir
+	if dataLabel == "" {
+		dataLabel = "(demo)"
+	} else {
+		dataLabel = "(configured)"
+	}
 	log.Printf("WeLink config: data_dir=%s port=%s timezone=%s workers=%d",
-		cfg.Data.Dir, cfg.Server.Port, cfg.Analysis.Timezone, cfg.Analysis.WorkerCount)
+		dataLabel, cfg.Server.Port, cfg.Analysis.Timezone, cfg.Analysis.WorkerCount)
 
 	// 2. 初始化数据库管理器（DEMO_MODE 时先生成示例数据）
 	if os.Getenv("DEMO_MODE") == "true" {
 		demoDir := cfg.Data.Dir
-		log.Printf("[DEMO] Demo mode enabled, generating sample databases in %s", demoDir)
+		log.Printf("[DEMO] Demo mode enabled, generating sample databases")
 		if err := seed.Generate(demoDir); err != nil {
 			log.Fatalf("Failed to generate demo databases: %v", err)
 		}

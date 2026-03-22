@@ -76,9 +76,15 @@ func (mgr *DBManager) getDBByName(dbName string) *sql.DB {
 		}
 		rows.Close()
 	}
-	// fallback: 直接打开文件
+	// fallback: 直接打开文件（防止路径遍历：只允许文件名，不含路径分隔符）
+	if strings.ContainsAny(dbName, "/\\") || strings.Contains(dbName, "..") {
+		return nil
+	}
 	msgDir := filepath.Join(dataDir, "message")
-	dbPath := filepath.Join(msgDir, dbName)
+	dbPath := filepath.Clean(filepath.Join(msgDir, dbName))
+	if !strings.HasPrefix(dbPath, filepath.Clean(msgDir)+string(filepath.Separator)) {
+		return nil
+	}
 	if _, err := os.Stat(dbPath); err == nil {
 		db, err := sql.Open("sqlite", dbPath)
 		if err == nil {
@@ -272,11 +278,10 @@ func (mgr *DBManager) Close() {
 
 func NewDBManager(dataDir string) (*DBManager, error) {
 	mgr := &DBManager{dataDir: dataDir}
-	log.Printf("Initializing DBManager with DATA_DIR: %s", dataDir)
+	log.Printf("Initializing DBManager")
 
 	// 1. 加载联系人数据库
 	contactPath := filepath.Join(dataDir, "contact/contact.db")
-	log.Printf("Checking contact DB at: %s", contactPath)
 	if _, err := os.Stat(contactPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("contact db not found at %s", contactPath)
 	}
@@ -289,7 +294,7 @@ func NewDBManager(dataDir string) (*DBManager, error) {
 
 	// 2. 加载所有消息数据库
 	msgDir := filepath.Join(dataDir, "message")
-	log.Printf("Scanning message dir: %s", msgDir)
+	log.Printf("Scanning message dir")
 	if _, err := os.Stat(msgDir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("message dir not found at %s", msgDir)
 	}
