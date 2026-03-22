@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { ChevronRight, Loader2, Apple, Monitor, Terminal, Database, ExternalLink, Github, Calendar } from 'lucide-react';
+import { ChevronRight, Loader2, Monitor, Terminal, Database, ExternalLink, Github, Calendar } from 'lucide-react';
 
 interface TimeOption {
   label: string;
@@ -73,10 +73,10 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
 
         {/* Platform Notice */}
         <div className="bg-[#1d1d1f] text-white rounded-2xl p-4 mb-3 flex items-start gap-3">
-          <Apple size={18} className="text-gray-300 flex-shrink-0 mt-0.5" />
+          <Monitor size={18} className="text-gray-300 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-bold">目前仅支持 macOS</p>
-            <p className="text-xs text-gray-400 mt-0.5">Windows、Linux 等其他平台支持敬请期待</p>
+            <p className="text-sm font-bold">支持 macOS 12+ 和 Windows 10+</p>
+            <p className="text-xs text-gray-400 mt-0.5">数据库解密步骤目前需在 macOS 上完成，解密后可在 Windows 上使用</p>
           </div>
         </div>
 
@@ -100,7 +100,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
             <div className="flex gap-3">
               <div className="w-6 h-6 rounded-full bg-[#07c16015] text-[#07c160] text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
               <div>
-                <p className="text-sm font-bold text-[#1d1d1f]">将手机聊天记录同步到 Mac（推荐）</p>
+                <p className="text-sm font-bold text-[#1d1d1f]">将手机聊天记录同步到电脑（推荐）</p>
                 <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">打开手机微信 → 「我」→「设置」→「通用」→「聊天记录迁移与备份」→「迁移」，将记录迁移到电脑端，可获得更完整的历史数据</p>
               </div>
             </div>
@@ -109,8 +109,8 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
             <div className="flex gap-3">
               <div className="w-6 h-6 rounded-full bg-[#07c16015] text-[#07c160] text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
               <div>
-                <p className="text-sm font-bold text-[#1d1d1f]">确保微信在 Mac 上保持运行</p>
-                <p className="text-xs text-gray-400 mt-0.5">解密工具需要从运行中的微信进程内存读取密钥</p>
+                <p className="text-sm font-bold text-[#1d1d1f]">在 Mac 上解密数据库</p>
+                <p className="text-xs text-gray-400 mt-0.5">解密工具目前仅支持 macOS，需要确保微信在 Mac 上保持运行，工具会从进程内存读取密钥。<span className="text-[#07c160] font-medium">Windows 用户请先在 Mac 上完成解密，再将 decrypted/ 目录拷贝到 Windows 电脑。</span></p>
               </div>
             </div>
 
