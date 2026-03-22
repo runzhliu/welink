@@ -129,10 +129,9 @@ jobs:
           echo "sum=$(shasum -a 256 dist/WeLink.dmg | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       - name: 上传 DMG 到 Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.prepare.outputs.tag }}
-          files: dist/WeLink.dmg
+        run: gh release upload ${{ needs.prepare.outputs.tag }} dist/WeLink.dmg --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ─── Windows EXE ────────────────────────────────────────────────────────────
   build-exe:
@@ -170,7 +169,6 @@ jobs:
           echo "sum=$(sha256sum dist/WeLink-windows-amd64.zip | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       - name: 上传 EXE 到 Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.prepare.outputs.tag }}
-          files: dist/WeLink-windows-amd64.zip
+        run: gh release upload ${{ needs.prepare.outputs.tag }} dist/WeLink-windows-amd64.zip --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
