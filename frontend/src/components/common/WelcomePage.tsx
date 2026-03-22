@@ -67,7 +67,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
             className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-full bg-[#1d1d1f] text-white text-xs font-semibold hover:bg-[#333] transition-colors"
           >
             <Github size={13} />
-            runzhliu/WeLink
+            runzhliu/welink
           </a>
         </div>
 
