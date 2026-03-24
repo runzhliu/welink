@@ -397,7 +397,8 @@ func serverMain() {
 				c.JSON(400, gin.H{"error": "q required"})
 				return
 			}
-			c.JSON(http.StatusOK, getSvc().GlobalSearch(q))
+			searchType := c.DefaultQuery("type", "all")
+			c.JSON(http.StatusOK, getSvc().GlobalSearch(q, searchType))
 		})
 
 		// 某月的文本消息（情感分析详情）

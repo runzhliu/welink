@@ -104,8 +104,8 @@ export const contactsApi = {
 };
 
 export const searchApi = {
-  global: (q: string) =>
-    api.get<void, GlobalSearchGroup[]>('/search', { params: { q } }),
+  global: (q: string, type: 'contact' | 'group' | 'all') =>
+    api.get<void, GlobalSearchGroup[]>('/search', { params: { q, type } }),
 };
 
 export const globalApi = {

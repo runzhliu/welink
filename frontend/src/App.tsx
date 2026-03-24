@@ -358,7 +358,15 @@ function App() {
         ) : activeTab === 'timeline' ? (
           <TimelineView contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'search' ? (
-          <SearchView contacts={contacts} onContactClick={handleContactClick} />
+          <SearchView
+            contacts={contacts}
+            onContactClick={handleContactClick}
+            onGroupClick={(username) => {
+              const group = allGroups.find(g => g.username === username);
+              if (group) setSelectedGroup(group);
+            }}
+            blockedGroups={blockedGroups}
+          />
         ) : activeTab === 'settings' ? (
           <SettingsPage
             isAppMode={appInfo.app_mode}

@@ -1828,66 +1828,137 @@ type GlobalSearchGroup struct {
 	SmallHeadURL string        `json:"small_head_url"`
 	Messages     []ChatMessage `json:"messages"`
 	Count        int           `json:"count"`
+	IsGroup      bool          `json:"is_group"`
 }
 
-// GlobalSearch 跨所有联系人的消息搜索，按联系人分组返回，每人最多 5 条
-func (s *ContactService) GlobalSearch(q string) []GlobalSearchGroup {
-	s.cacheMu.RLock()
-	contacts := s.cache
-	s.cacheMu.RUnlock()
-
+// GlobalSearch 跨所有联系人/群聊的消息搜索，按对象分组返回，每个最多 5 条
+// searchType: "contact" | "group" | "all"
+func (s *ContactService) GlobalSearch(q, searchType string) []GlobalSearchGroup {
 	pattern := "%" + q + "%"
 	var results []GlobalSearchGroup
 
-	for _, c := range contacts {
-		tableName := db.GetTableName(c.Username)
-		var msgs []ChatMessage
+	// ── 私聊搜索 ──────────────────────────────────────────────────
+	if searchType == "contact" || searchType == "all" {
+		s.cacheMu.RLock()
+		contacts := s.cache
+		s.cacheMu.RUnlock()
 
-		for _, mdb := range s.dbMgr.MessageDBs {
-			var contactRowID int64 = -1
-			mdb.QueryRow(fmt.Sprintf("SELECT rowid FROM Name2Id WHERE user_name = %q", c.Username)).Scan(&contactRowID)
+		for _, c := range contacts {
+			tableName := db.GetTableName(c.Username)
+			var msgs []ChatMessage
 
-			rows, err := mdb.Query(fmt.Sprintf(
-				`SELECT create_time, local_type, message_content, COALESCE(real_sender_id,0)
-				 FROM [%s] WHERE local_type = 1 AND message_content LIKE ? ORDER BY create_time DESC LIMIT 5`,
-				tableName), pattern)
-			if err != nil {
-				continue
+			for _, mdb := range s.dbMgr.MessageDBs {
+				var contactRowID int64 = -1
+				mdb.QueryRow(fmt.Sprintf("SELECT rowid FROM Name2Id WHERE user_name = %q", c.Username)).Scan(&contactRowID)
+
+				rows, err := mdb.Query(fmt.Sprintf(
+					`SELECT create_time, local_type, message_content, COALESCE(real_sender_id,0)
+					 FROM [%s] WHERE local_type = 1 AND message_content LIKE ? ORDER BY create_time DESC LIMIT 5`,
+					tableName), pattern)
+				if err != nil {
+					continue
+				}
+				for rows.Next() {
+					var ts int64
+					var lt int
+					var content string
+					var senderID int64
+					rows.Scan(&ts, &lt, &content, &senderID)
+					dt := time.Unix(ts, 0).In(s.tz)
+					isMine := contactRowID < 0 || senderID != contactRowID
+					msgs = append(msgs, ChatMessage{
+						Time:    dt.Format("15:04"),
+						Date:    dt.Format("2006-01-02"),
+						Content: content,
+						IsMine:  isMine,
+						Type:    lt,
+					})
+				}
+				rows.Close()
 			}
-			for rows.Next() {
-				var ts int64
-				var lt int
-				var content string
-				var senderID int64
-				rows.Scan(&ts, &lt, &content, &senderID)
-				dt := time.Unix(ts, 0).In(s.tz)
-				isMine := contactRowID < 0 || senderID != contactRowID
-				msgs = append(msgs, ChatMessage{
-					Time:    dt.Format("15:04"),
-					Date:    dt.Format("2006-01-02"),
-					Content: content,
-					IsMine:  isMine,
-					Type:    lt,
+
+			if len(msgs) > 0 {
+				name := c.Remark
+				if name == "" {
+					name = c.Nickname
+				}
+				if name == "" {
+					name = c.Username
+				}
+				results = append(results, GlobalSearchGroup{
+					Username:     c.Username,
+					DisplayName:  name,
+					SmallHeadURL: c.SmallHeadURL,
+					Messages:     msgs,
+					Count:        len(msgs),
+					IsGroup:      false,
 				})
 			}
-			rows.Close()
 		}
+	}
 
-		if len(msgs) > 0 {
-			name := c.Remark
-			if name == "" {
-				name = c.Nickname
+	// ── 群聊搜索 ──────────────────────────────────────────────────
+	if searchType == "group" || searchType == "all" {
+		groupRows, err := s.dbMgr.ContactDB.Query(
+			`SELECT username, COALESCE(remark,''), nick_name, COALESCE(small_head_url,'')
+			 FROM contact WHERE username LIKE '%@chatroom'`)
+		if err == nil {
+			defer groupRows.Close()
+			for groupRows.Next() {
+				var username, remark, nickname, avatar string
+				groupRows.Scan(&username, &remark, &nickname, &avatar)
+
+				name := remark
+				if name == "" {
+					name = nickname
+				}
+				if name == "" {
+					name = username
+				}
+
+				tableName := db.GetTableName(username)
+				var msgs []ChatMessage
+
+				for _, mdb := range s.dbMgr.MessageDBs {
+					msgRows, err := mdb.Query(fmt.Sprintf(
+						`SELECT create_time, local_type, message_content
+						 FROM [%s] WHERE local_type = 1 AND message_content LIKE ? ORDER BY create_time DESC LIMIT 5`,
+						tableName), pattern)
+					if err != nil {
+						continue
+					}
+					for msgRows.Next() {
+						var ts int64
+						var lt int
+						var content string
+						msgRows.Scan(&ts, &lt, &content)
+						// 群消息格式："speakerWxid:\ncontent"，去掉发言人前缀
+						if idx := strings.Index(content, ":\n"); idx > 0 && idx < 80 {
+							content = content[idx+2:]
+						}
+						dt := time.Unix(ts, 0).In(s.tz)
+						msgs = append(msgs, ChatMessage{
+							Time:    dt.Format("15:04"),
+							Date:    dt.Format("2006-01-02"),
+							Content: content,
+							IsMine:  false,
+							Type:    lt,
+						})
+					}
+					msgRows.Close()
+				}
+
+				if len(msgs) > 0 {
+					results = append(results, GlobalSearchGroup{
+						Username:     username,
+						DisplayName:  name,
+						SmallHeadURL: avatar,
+						Messages:     msgs,
+						Count:        len(msgs),
+						IsGroup:      true,
+					})
+				}
 			}
-			if name == "" {
-				name = c.Username
-			}
-			results = append(results, GlobalSearchGroup{
-				Username:     c.Username,
-				DisplayName:  name,
-				SmallHeadURL: c.SmallHeadURL,
-				Messages:     msgs,
-				Count:        len(msgs),
-			})
 		}
 	}
 

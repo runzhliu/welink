@@ -121,6 +121,7 @@ export interface GlobalSearchGroup {
   small_head_url: string;
   messages: ChatMessage[];
   count: number;
+  is_group: boolean;
 }
 
 export interface GroupInfo {
