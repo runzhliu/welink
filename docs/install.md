@@ -1,6 +1,6 @@
 # 下载与安装
 
-当前版本：**v0.0.1**　[查看所有版本](https://github.com/runzhliu/welink/releases)
+当前版本：**v0.0.2**　[查看所有版本](https://github.com/runzhliu/welink/releases)
 
 ---
 
@@ -10,7 +10,7 @@
 
 无需 Docker、无需命令行，下载即用的原生 App。
 
-[下载 WeLink.dmg](https://github.com/runzhliu/welink/releases/download/v0.0.1/WeLink.dmg){ .btn-download }
+[下载 WeLink.dmg](https://github.com/runzhliu/welink/releases/download/v0.0.2/WeLink.dmg){ .btn-download }
 
 **安装步骤：**
 
@@ -41,7 +41,7 @@ App 启动后弹出配置向导：
 
 无需 Docker、无需命令行，解压即用。
 
-[下载 WeLink-windows-amd64.zip](https://github.com/runzhliu/welink/releases/download/v0.0.1/WeLink-windows-amd64.zip){ .btn-download }
+[下载 WeLink-windows-amd64.zip](https://github.com/runzhliu/welink/releases/download/v0.0.2/WeLink-windows-amd64.zip){ .btn-download }
 
 **安装步骤：**
 
