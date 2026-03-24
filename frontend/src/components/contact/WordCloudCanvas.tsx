@@ -15,6 +15,8 @@ declare global {
 interface WordCloudCanvasProps {
   data: WordCount[];
   loading?: boolean;
+  className?: string;
+  onRendered?: () => void;
 }
 
 const COLORS = ['#07c160', '#10aeff', '#ff9500', '#fa5151', '#576b95'];
@@ -22,10 +24,14 @@ const COLORS = ['#07c160', '#10aeff', '#ff9500', '#fa5151', '#576b95'];
 export const WordCloudCanvas: React.FC<WordCloudCanvasProps> = ({
   data,
   loading = false,
+  className = 'h-80',
+  onRendered,
 }) => {
   const { privacyMode } = usePrivacyMode();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const onRenderedRef = useRef(onRendered);
+  useEffect(() => { onRenderedRef.current = onRendered; }, [onRendered]);
 
   const renderCloud = useCallback(() => {
     if (!data.length || !canvasRef.current || !window.WordCloud) return;
@@ -45,7 +51,7 @@ export const WordCloudCanvas: React.FC<WordCloudCanvasProps> = ({
       return /[\u4e00-\u9fa5a-zA-Z]/.test(i.word);
     });
 
-    if (!validData.length) return;
+    if (!validData.length) { onRenderedRef.current?.(); return; }
 
     // 对数字号映射：缩小头部词、放大尾部词，整体分布更均匀
     const scale = canvas.width / 600;
@@ -64,6 +70,13 @@ export const WordCloudCanvas: React.FC<WordCloudCanvasProps> = ({
       return [i.word, size];
     });
 
+    // wordcloud2 在渲染完成后触发 wordcloudstop 事件
+    const handleStop = () => {
+      canvas.removeEventListener('wordcloudstop', handleStop);
+      onRenderedRef.current?.();
+    };
+    canvas.addEventListener('wordcloudstop', handleStop);
+
     try {
       window.WordCloud(canvas, {
         list,
@@ -81,6 +94,8 @@ export const WordCloudCanvas: React.FC<WordCloudCanvasProps> = ({
       });
     } catch (error) {
       console.error('WordCloud rendering error:', error);
+      canvas.removeEventListener('wordcloudstop', handleStop);
+      onRenderedRef.current?.();
     }
   }, [data]);
 
@@ -97,9 +112,11 @@ export const WordCloudCanvas: React.FC<WordCloudCanvasProps> = ({
     return () => ro.disconnect();
   }, [renderCloud]);
 
+  const baseClass = `bg-[#f8f9fb] rounded-[40px] border border-gray-50 ${className}`;
+
   if (loading) {
     return (
-      <div className="bg-[#f8f9fb] p-12 rounded-[40px] border border-gray-50 flex items-center justify-center h-80">
+      <div className={`${baseClass} p-12 flex items-center justify-center`}>
         <div className="text-[#07c160] font-black animate-pulse uppercase tracking-[0.3em] text-lg">
           Analysing...
         </div>
@@ -109,7 +126,7 @@ export const WordCloudCanvas: React.FC<WordCloudCanvasProps> = ({
 
   if (!data.length) {
     return (
-      <div className="bg-[#f8f9fb] p-12 rounded-[40px] border border-gray-50 flex items-center justify-center h-80">
+      <div className={`${baseClass} p-12 flex items-center justify-center`}>
         <div className="text-gray-200 font-black text-3xl tracking-wider">
           STILLNESS
         </div>
@@ -118,7 +135,7 @@ export const WordCloudCanvas: React.FC<WordCloudCanvasProps> = ({
   }
 
   return (
-    <div ref={containerRef} className={`bg-[#f8f9fb] rounded-[40px] border border-gray-50 w-full h-80${privacyMode ? ' privacy-blur-canvas' : ''}`}>
+    <div ref={containerRef} className={`${baseClass} w-full${privacyMode ? ' privacy-blur-canvas' : ''}`}>
       <canvas ref={canvasRef} className="w-full h-full" />
     </div>
   );
