@@ -7,6 +7,7 @@ import { Search, Loader2, ChevronRight, Users } from 'lucide-react';
 import type { GlobalSearchGroup, ContactStats } from '../../types';
 import { searchApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { SearchContextModal, type SearchContextTarget } from './SearchContextModal';
 
 interface Props {
   contacts: ContactStats[];
@@ -23,6 +24,7 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
   const [searched, setSearched] = useState(false);
   const [includeContacts, setIncludeContacts] = useState(true);
   const [includeGroups, setIncludeGroups] = useState(true);
+  const [contextTarget, setContextTarget] = useState<SearchContextTarget | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const searchType = includeContacts && includeGroups ? 'all' : includeContacts ? 'contact' : 'group';
@@ -173,12 +175,22 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
                   {/* 消息列表 */}
                   <div className="divide-y divide-gray-50">
                     {group.messages.map((msg, i) => (
-                      <div key={i} className={`px-5 py-3 flex gap-3 ${msg.is_mine ? 'flex-row-reverse' : 'flex-row'}`}>
+                      <div
+                        key={i}
+                        className={`px-5 py-3 flex gap-3 cursor-pointer hover:bg-[#f8f9fb] transition-colors ${msg.is_mine ? 'flex-row-reverse' : 'flex-row'}`}
+                        onClick={() => msg.date && setContextTarget({
+                          username: group.username,
+                          displayName: group.display_name,
+                          date: msg.date,
+                          targetTime: msg.time,
+                          targetContent: msg.content,
+                          isGroup: group.is_group,
+                        })}
+                        title="点击查看当天完整对话"
+                      >
                         <div
                           className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black mt-0.5
-                            ${msg.is_mine ? 'bg-[#07c160]' : group.is_group ? 'bg-[#576b95]' : 'bg-[#576b95] cursor-pointer hover:opacity-80 transition-opacity'}`}
-                          onClick={!msg.is_mine && !group.is_group && contact ? () => onContactClick?.(contact) : undefined}
-                          title={!msg.is_mine ? group.display_name : undefined}
+                            ${msg.is_mine ? 'bg-[#07c160]' : 'bg-[#576b95]'}`}
                         >
                           {msg.is_mine ? '我' : group.is_group ? <Users size={10} /> : group.display_name.charAt(0)}
                         </div>
@@ -197,6 +209,13 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
             })}
           </div>
         </>
+      )}
+
+      {contextTarget && (
+        <SearchContextModal
+          {...contextTarget}
+          onClose={() => setContextTarget(null)}
+        />
       )}
     </div>
   );
