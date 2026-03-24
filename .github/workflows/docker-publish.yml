@@ -51,7 +51,7 @@ jobs:
             type=sha,prefix=sha-,format=short
 
       - name: Build and push backend
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./backend
           push: true
@@ -62,7 +62,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
 
       - name: Build and push frontend
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./frontend
           push: true
