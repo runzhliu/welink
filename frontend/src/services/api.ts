@@ -4,7 +4,7 @@
  */
 
 import axios from 'axios';
-import type { ContactStats, GlobalStats, WordCount, DBInfo, BackendStatus, TableInfo, ColumnInfo, TableData, ContactDetail, GroupInfo, GroupDetail, FilteredStats, SentimentResult, GroupChatMessage, CoolingEntry, GlobalSearchGroup } from '../types';
+import type { ContactStats, GlobalStats, WordCount, DBInfo, BackendStatus, TableInfo, ColumnInfo, TableData, ContactDetail, GroupInfo, GroupDetail, FilteredStats, SentimentResult, GroupChatMessage, CoolingEntry, GlobalSearchGroup, QueryResult } from '../types';
 
 // 配置 axios 实例
 const api = axios.create({
@@ -160,6 +160,9 @@ export const databaseApi = {
     api.get<void, TableData>(`/databases/${encodeURIComponent(dbName)}/tables/${encodeURIComponent(tableName)}/data`, {
       params: { offset, limit }
     }),
+
+  query: (dbName: string, sql: string) =>
+    api.post<void, QueryResult>(`/databases/${encodeURIComponent(dbName)}/query`, { sql }),
 };
 
 export const statsApi = {

@@ -2,14 +2,14 @@
  * 数据库管理视图组件 - 支持查看表结构和表数据
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Database, HardDrive, Table, FileText, AlertCircle,
   ChevronRight, ChevronDown, Loader2, ArrowLeft, ArrowRight,
-  Hash, LayoutList, Search
+  Hash, LayoutList, Search, Terminal, Play, Copy, Check
 } from 'lucide-react';
 import { databaseApi } from '../../services/api';
-import type { DBInfo, TableInfo, ColumnInfo, TableData } from '../../types';
+import type { DBInfo, TableInfo, ColumnInfo, TableData, QueryResult } from '../../types';
 
 // ─── 子组件：表数据面板 ──────────────────────────────────────────────────────
 
@@ -251,6 +251,169 @@ const TablePanel: React.FC<TablePanelProps> = ({ dbName, tableName, onClose }) =
   );
 };
 
+// ─── 子组件：SQL 编辑器 ───────────────────────────────────────────────────────
+
+interface SQLEditorProps {
+  databases: DBInfo[];
+}
+
+const SQLEditor: React.FC<SQLEditorProps> = ({ databases }) => {
+  const [selectedDb, setSelectedDb] = useState('');
+  const [sql, setSql] = useState('SELECT * FROM sqlite_master WHERE type=\'table\';');
+  const [result, setResult] = useState<QueryResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleRun = async () => {
+    if (!selectedDb || !sql.trim()) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const r = await databaseApi.query(selectedDb, sql.trim());
+      setResult(r);
+    } catch (e: any) {
+      setResult({ columns: [], rows: [], error: e?.message || '查询失败' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleRun();
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const ta = textareaRef.current!;
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const newVal = sql.slice(0, start) + '  ' + sql.slice(end);
+      setSql(newVal);
+      setTimeout(() => { ta.selectionStart = ta.selectionEnd = start + 2; }, 0);
+    }
+  };
+
+  const copyResult = async () => {
+    if (!result) return;
+    const header = result.columns.join('\t');
+    const rows = result.rows.map(r => r.map(c => c ?? 'NULL').join('\t')).join('\n');
+    await navigator.clipboard.writeText(header + '\n' + rows);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const renderCellValue = (val: any) => {
+    if (val === null || val === undefined) return <span className="text-gray-300 italic">NULL</span>;
+    const str = String(val);
+    if (str.startsWith('<binary')) return <span className="text-orange-400 italic text-xs">{str}</span>;
+    if (str.length > 120) return <span title={str}>{str.slice(0, 120)}…</span>;
+    return str;
+  };
+
+  return (
+    <div className="dk-card bg-white rounded-3xl dk-border border border-gray-100 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-[#f8f9fb]">
+        <Terminal size={18} className="text-[#07c160]" strokeWidth={2.5} />
+        <h3 className="font-black text-[#1d1d1f] text-base">SQL 编辑器</h3>
+        <span className="text-xs text-gray-400 ml-1">仅支持 SELECT / PRAGMA / EXPLAIN，最多返回 500 行</span>
+        <div className="ml-auto flex items-center gap-2">
+          <select
+            value={selectedDb}
+            onChange={(e) => setSelectedDb(e.target.value)}
+            className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white"
+          >
+            <option value="">选择数据库</option>
+            {databases.map((db) => (
+              <option key={db.name} value={db.name}>{db.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleRun}
+            disabled={!selectedDb || !sql.trim() || loading}
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#07c160] text-white rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-[#06ad56] transition-colors"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+            运行
+          </button>
+        </div>
+      </div>
+
+      {/* Editor */}
+      <div className="px-4 pt-3 pb-2">
+        <textarea
+          ref={textareaRef}
+          value={sql}
+          onChange={(e) => setSql(e.target.value)}
+          onKeyDown={handleKeyDown}
+          rows={5}
+          spellCheck={false}
+          placeholder="SELECT * FROM ..."
+          className="w-full font-mono text-sm bg-[#f8f9fb] border border-gray-200 rounded-2xl px-4 py-3 resize-y focus:outline-none focus:border-[#07c160] transition-colors text-[#1d1d1f] leading-relaxed"
+        />
+        <p className="text-[10px] text-gray-300 mt-1 px-1">⌘+Enter 执行 · Tab 缩进</p>
+      </div>
+
+      {/* Results */}
+      {result && (
+        <div className="px-4 pb-4">
+          {result.error ? (
+            <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-sm text-red-700 font-mono">
+              {result.error}
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-400">
+                  {result.rows.length} 行 · {result.columns.length} 列
+                  {result.rows.length >= 500 && <span className="text-orange-400 ml-1">（已截断至 500 行）</span>}
+                </span>
+                <button
+                  onClick={copyResult}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-[#07c160] transition-colors"
+                >
+                  {copied ? <Check size={12} /> : <Copy size={12} />}
+                  {copied ? '已复制' : '复制'}
+                </button>
+              </div>
+              {result.columns.length === 0 ? (
+                <div className="text-center text-gray-300 py-6 text-sm">无结果</div>
+              ) : (
+                <div className="bg-[#f8f9fb] rounded-2xl border border-gray-100 overflow-auto max-h-80">
+                  <table className="w-full text-xs font-mono">
+                    <thead className="sticky top-0 bg-[#f0f0f0]">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-gray-400 w-8 font-bold">#</th>
+                        {result.columns.map((col) => (
+                          <th key={col} className="px-3 py-2 text-left text-gray-600 font-bold whitespace-nowrap">{col}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.rows.map((row, ri) => (
+                        <tr key={ri} className="border-t border-gray-100 hover:bg-white transition-colors">
+                          <td className="px-3 py-1.5 text-gray-300">{ri + 1}</td>
+                          {row.map((cell, ci) => (
+                            <td key={ci} className="px-3 py-1.5 text-gray-700 max-w-[240px] truncate">
+                              {renderCellValue(cell)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── 子组件：单个数据库行（可展开表列表）──────────────────────────────────────
 
 interface DBRowProps {
@@ -485,6 +648,9 @@ export const DatabaseView: React.FC = () => {
       </div>
 
       <p className="text-sm text-gray-400 -mt-4">点击数据库行可展开查看表列表，点击表名可查看结构与数据</p>
+
+      {/* SQL 编辑器 */}
+      <SQLEditor databases={databases} />
 
       {renderDBSection(
         contactDbs,

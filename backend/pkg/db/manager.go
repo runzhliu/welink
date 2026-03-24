@@ -228,6 +228,78 @@ func (mgr *DBManager) GetTableData(dbName, tableName string, offset, limit int) 
 	}, nil
 }
 
+// QueryResult SQL 查询结果
+type QueryResult struct {
+	Columns []string        `json:"columns"`
+	Rows    [][]interface{} `json:"rows"`
+	Error   string          `json:"error,omitempty"`
+}
+
+// ExecQuery 在指定数据库执行只读 SQL（只允许 SELECT）
+func (mgr *DBManager) ExecQuery(dbName, sql string) *QueryResult {
+	db := mgr.getDBByName(dbName)
+	if db == nil {
+		return &QueryResult{Error: "数据库不存在"}
+	}
+
+	// 只允许 SELECT 语句（简单前缀检查）
+	trimmed := strings.TrimSpace(sql)
+	upper := strings.ToUpper(trimmed)
+	if !strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "PRAGMA") && !strings.HasPrefix(upper, "EXPLAIN") {
+		return &QueryResult{Error: "只允许执行 SELECT / PRAGMA / EXPLAIN 语句"}
+	}
+
+	rows, err := db.Query(trimmed)
+	if err != nil {
+		return &QueryResult{Error: err.Error()}
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return &QueryResult{Error: err.Error()}
+	}
+
+	var result [][]interface{}
+	for rows.Next() {
+		vals := make([]interface{}, len(cols))
+		ptrs := make([]interface{}, len(cols))
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			continue
+		}
+		row := make([]interface{}, len(cols))
+		for i, v := range vals {
+			switch val := v.(type) {
+			case []byte:
+				s := string(val)
+				valid := true
+				for _, r := range s {
+					if r == '\uFFFD' {
+						valid = false
+						break
+					}
+				}
+				if valid && len(val) < 1024 {
+					row[i] = s
+				} else {
+					row[i] = fmt.Sprintf("<binary %d bytes>", len(val))
+				}
+			default:
+				row[i] = val
+			}
+		}
+		result = append(result, row)
+		if len(result) >= 500 {
+			break
+		}
+	}
+
+	return &QueryResult{Columns: cols, Rows: result}
+}
+
 func (mgr *DBManager) GetDBInfos() []DBInfo {
 	var infos []DBInfo
 

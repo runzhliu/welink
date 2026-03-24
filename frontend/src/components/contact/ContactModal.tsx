@@ -5,6 +5,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { X, Users, EyeOff, Search, Loader2 } from 'lucide-react';
 import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
+import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
 import { WordCloudCanvas } from './WordCloudCanvas';
 import { ContactDetailCharts } from './ContactDetailCharts';
 import { SentimentChart } from './SentimentChart';
@@ -36,6 +37,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
   const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
+  const [contextTarget, setContextTarget] = useState<SearchContextTarget | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const fetchDetail = useCallback(async (username: string) => {
@@ -109,6 +111,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
   const avatarUrl = contact.big_head_url || contact.small_head_url;
 
   return (
+    <>
     <div
       className="fixed inset-0 bg-[#1d1d1f]/90 backdrop-blur-md z-50 flex items-end sm:items-center justify-center sm:p-8 animate-in fade-in duration-200"
       onClick={onClose}
@@ -355,7 +358,19 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                 <p className="text-xs text-gray-400 mb-4">找到 {searchResults.length} 条消息{searchResults.length >= 200 ? '（最多显示 200 条）' : ''}</p>
                 <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
                   {searchResults.map((msg, i) => (
-                    <div key={i} className={`flex items-end gap-2 ${msg.is_mine ? 'flex-row-reverse' : 'flex-row'}`}>
+                    <div
+                      key={i}
+                      className={`flex items-end gap-2 cursor-pointer hover:opacity-80 transition-opacity ${msg.is_mine ? 'flex-row-reverse' : 'flex-row'}`}
+                      onClick={() => msg.date && setContextTarget({
+                        username: contact.username,
+                        displayName,
+                        date: msg.date,
+                        targetTime: msg.time,
+                        targetContent: msg.content,
+                        isGroup: false,
+                      })}
+                      title="点击查看当天完整对话"
+                    >
                       <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black
                         ${msg.is_mine ? 'bg-[#07c160]' : 'bg-[#576b95]'}`}>
                         {msg.is_mine ? '我' : displayName.charAt(0)}
@@ -376,5 +391,13 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         )}
       </div>
     </div>
+
+    {contextTarget && (
+      <SearchContextModal
+        {...contextTarget}
+        onClose={() => setContextTarget(null)}
+      />
+    )}
+  </>
   );
 };

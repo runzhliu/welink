@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Users, MessageSquare, ChevronRight, Loader2, X, BarChart2, EyeOff, Search } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { GroupInfo, GroupDetail, ContactStats, GroupChatMessage } from '../../types';
+import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
 import { groupsApi } from '../../services/api';
 import { CalendarHeatmap } from '../contact/CalendarHeatmap';
 import { GroupDayChatPanel } from './GroupDayChatPanel';
@@ -50,6 +51,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
   const [searchResults, setSearchResults] = useState<GroupChatMessage[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
+  const [contextTarget, setContextTarget] = useState<SearchContextTarget | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // 排行榜显示设置（从 localStorage 读取，与设置页同步）
@@ -248,7 +250,19 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                 <p className="text-xs text-gray-400 mb-4">找到 {searchResults.length} 条消息{searchResults.length >= 200 ? '（最多显示 200 条）' : ''}</p>
                 <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
                   {searchResults.map((msg, i) => (
-                    <div key={i} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                    <div
+                      key={i}
+                      className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-[#f8f9fb] rounded-xl px-2 transition-colors"
+                      onClick={() => msg.date && setContextTarget({
+                        username: group.username,
+                        displayName: group.name,
+                        date: msg.date,
+                        targetTime: msg.time,
+                        targetContent: msg.content,
+                        isGroup: true,
+                      })}
+                      title="点击查看当天完整对话"
+                    >
                       <div className="w-7 h-7 rounded-full bg-[#576b95] flex items-center justify-center text-white text-[9px] font-black flex-shrink-0 mt-0.5">
                         {msg.speaker.charAt(0)}
                       </div>
@@ -456,6 +470,13 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
           dayCount={dayPanel.count}
           groupName={group.name}
           onClose={() => setDayPanel(null)}
+        />
+      )}
+
+      {contextTarget && (
+        <SearchContextModal
+          {...contextTarget}
+          onClose={() => setContextTarget(null)}
         />
       )}
     </div>

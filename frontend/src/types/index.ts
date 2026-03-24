@@ -191,6 +191,12 @@ export interface GroupChatMessage {
   date?: string;    // "2024-03-15"，搜索结果中使用
 }
 
+export interface QueryResult {
+  columns: string[];
+  rows: (string | number | null)[][];
+  error?: string;
+}
+
 // null means "all time"
 export interface TimeRange {
   from: number | null;  // Unix seconds

@@ -491,6 +491,20 @@ func serverMain() {
 			c.JSON(http.StatusOK, data)
 		})
 
+		// 在指定数据库执行 SQL 查询（只读）
+		prot.POST("/databases/:dbName/query", func(c *gin.Context) {
+			dbName := c.Param("dbName")
+			var body struct {
+				SQL string `json:"sql"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil || body.SQL == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 sql 参数"})
+				return
+			}
+			result := getMgr().ExecQuery(dbName, body.SQL)
+			c.JSON(http.StatusOK, result)
+		})
+
 		// 初始化/重新索引（前端传入时间范围后调用）
 		prot.POST("/init", func(c *gin.Context) {
 			var body struct {
