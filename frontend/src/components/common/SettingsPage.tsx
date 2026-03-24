@@ -89,6 +89,7 @@ const AddInput: React.FC<{
 
 interface SettingsPageProps {
   isAppMode: boolean;
+  appVersion?: string;
   blockedUsers: string[];
   blockedGroups: string[];
   onAddBlockedUser: (v: string) => void;
@@ -103,6 +104,7 @@ interface SettingsPageProps {
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   isAppMode,
+  appVersion,
   blockedUsers,
   blockedGroups,
   onAddBlockedUser,
@@ -126,6 +128,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [dataDir, setDataDir] = useState('');
   const [logDir, setLogDir] = useState('');
   const [loadingCfg, setLoadingCfg] = useState(isAppMode);
+  const [bundling, setBundling] = useState(false);
+  const [bundlePath, setBundlePath] = useState<string | null>(null);
   const [browsing, setBrowsing] = useState<'data' | 'log' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -391,6 +395,55 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           )}
         </section>
       )}
+
+      {/* 版本信息 + 日志打包 */}
+      <section className="bg-white rounded-3xl border border-gray-100 p-6 sm:p-8">
+        <h2 className="text-lg font-black text-[#1d1d1f] mb-4 flex items-center gap-2">
+          <FileText size={18} className="text-gray-400" />
+          关于 WeLink
+        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-gray-500">
+              当前版本：<span className="font-mono font-bold text-[#1d1d1f]">{appVersion ?? 'dev'}</span>
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              <a href="https://github.com/runzhliu/welink/releases" target="_blank" rel="noreferrer" className="hover:text-[#07c160] underline">查看更新日志</a>
+              {' · '}
+              <a href="https://welink.click" target="_blank" rel="noreferrer" className="hover:text-[#07c160] underline">官方文档</a>
+            </p>
+          </div>
+          {isAppMode && (
+            <div className="flex flex-col items-end gap-1.5">
+              <button
+                onClick={async () => {
+                  setBundling(true);
+                  setBundlePath(null);
+                  try {
+                    const r = await appApi.bundleLogs();
+                    if (r.error) throw new Error(r.error);
+                    setBundlePath(r.path);
+                  } catch (e: any) {
+                    alert('打包失败：' + (e?.message || '未知错误'));
+                  } finally {
+                    setBundling(false);
+                  }
+                }}
+                disabled={bundling}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold disabled:opacity-50 transition-colors"
+              >
+                {bundling ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
+                一键打包日志
+              </button>
+              {bundlePath && (
+                <p className="text-xs text-[#07c160] font-mono break-all max-w-xs text-right">
+                  ✓ 已保存至：{bundlePath}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 };

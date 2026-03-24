@@ -3,15 +3,16 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { X, Users, EyeOff, Search, Loader2 } from 'lucide-react';
+import { X, Users, EyeOff, Search, Loader2, Download } from 'lucide-react';
 import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
+import { contactsApi } from '../../services/api';
+import { exportContactCsv, exportContactTxt, EXPORT_LIMIT, parseExportResult } from '../../utils/exportChat';
 import { WordCloudCanvas } from './WordCloudCanvas';
 import { ContactDetailCharts } from './ContactDetailCharts';
 import { SentimentChart } from './SentimentChart';
 import { MessageTypePieChart } from '../common/MessageTypePieChart';
 import { useWordCloud } from '../../hooks/useContacts';
-import { contactsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 interface ContactModalProps {
@@ -22,6 +23,21 @@ interface ContactModalProps {
 }
 
 type ModalTab = 'wordcloud' | 'detail' | 'sentiment' | 'search';
+
+function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
+function shiftDays(n: number) {
+  const d = new Date(); d.setDate(d.getDate() - n); return isoDate(d);
+}
+function shiftMonths(n: number) {
+  const d = new Date(); d.setMonth(d.getMonth() - n); return isoDate(d);
+}
+const today = isoDate(new Date());
+const exportPresets = [
+  { label: '最近一天', from: today,          to: today },
+  { label: '最近一周', from: shiftDays(6),   to: today },
+  { label: '最近一月', from: shiftMonths(1), to: today },
+  { label: '最近一年', from: shiftMonths(12),to: today },
+];
 
 export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, onGroupClick, onBlock }) => {
   const { privacyMode } = usePrivacyMode();
@@ -38,7 +54,54 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
   const [contextTarget, setContextTarget] = useState<SearchContextTarget | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportFrom, setExportFrom] = useState('');
+  const [exportTo, setExportTo] = useState('');
+  const [showExportPanel, setShowExportPanel] = useState(false);
+  const [exportMsg, setExportMsg] = useState<{ ok: boolean; message: string } | null>(null);
+  const [groupsReady, setGroupsReady] = useState(false);
+  const exportPanelRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // 点击外部关闭导出面板
+  useEffect(() => {
+    if (!showExportPanel) return;
+    const handler = (e: MouseEvent) => {
+      if (exportPanelRef.current && !exportPanelRef.current.contains(e.target as Node)) {
+        setShowExportPanel(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showExportPanel]);
+
+  const handleExport = useCallback(async (format: 'csv' | 'txt') => {
+    if (!contact) return;
+    setExporting(true);
+    setExportMsg(null);
+    try {
+      const from = exportFrom ? Math.floor(new Date(exportFrom).getTime() / 1000) : undefined;
+      const to = exportTo ? Math.floor(new Date(exportTo + 'T23:59:59').getTime() / 1000) : undefined;
+      const msgs = await contactsApi.exportMessages(contact.username, from, to) ?? [];
+      if (msgs.length === 0) {
+        setExportMsg({ ok: false, message: '该时间范围内没有消息记录' });
+        setTimeout(() => setExportMsg(null), 4000);
+        return;
+      }
+      const name = contact.remark || contact.nickname || contact.username;
+      const result = format === 'csv'
+        ? await exportContactCsv(msgs, name, exportFrom || undefined, exportTo || undefined)
+        : await exportContactTxt(msgs, name, exportFrom || undefined, exportTo || undefined);
+      const parsed = parseExportResult(result);
+      if (parsed.ok && msgs.length >= EXPORT_LIMIT) {
+        parsed.message += `（超出限制，仅含最近 ${EXPORT_LIMIT.toLocaleString()} 条）`;
+      }
+      setExportMsg(parsed);
+      setTimeout(() => setExportMsg(null), 4000);
+    } finally {
+      setExporting(false);
+    }
+  }, [contact, exportFrom, exportTo]);
 
   const fetchDetail = useCallback(async (username: string) => {
     setDetailLoading(true);
@@ -74,10 +137,13 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
       setSearchQuery('');
       setSearchResults([]);
       setSearchDone(false);
+      setGroupsReady(false);
       fetchWordCloud(contact.username, false);
       fetchDetail(contact.username);
       fetchSentiment(contact.username, false);
-      contactsApi.getCommonGroups(contact.username).then(setCommonGroups).catch(() => {});
+      contactsApi.getCommonGroups(contact.username)
+        .then(groups => { setCommonGroups(groups ?? []); setGroupsReady(true); })
+        .catch(() => { setCommonGroups([]); setGroupsReady(true); });
     }
   }, [contact, fetchWordCloud, fetchDetail, fetchSentiment]);
 
@@ -109,6 +175,9 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
 
   const displayName = contact.remark || contact.nickname || contact.username;
   const avatarUrl = contact.big_head_url || contact.small_head_url;
+  // 只需等共同群聊加载完（groups 和 commonGroups 同批次更新，内容出现时高度已稳定）。
+  // Canvas 在 opacity-0 容器里静默渲染，出现时通常已画好；若未画完，loading prop 短暂显示。
+  const allReady = groupsReady;
 
   return (
     <>
@@ -122,6 +191,52 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
       >
         {/* Top-right actions */}
         <div className="absolute top-5 right-5 sm:top-10 sm:right-10 flex items-center gap-2">
+          {/* 导出 */}
+          <div className="relative" ref={exportPanelRef}>
+            <button
+              disabled={exporting}
+              onClick={() => setShowExportPanel(v => !v)}
+              className={`p-2 rounded-xl transition-colors duration-200 disabled:opacity-40 ${showExportPanel ? 'text-[#07c160] bg-[#e7f8f0]' : 'text-gray-300 hover:text-[#07c160] hover:bg-[#e7f8f0]'}`}
+              title="导出聊天记录"
+            >
+              {exporting ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} strokeWidth={2} />}
+            </button>
+            {showExportPanel && (
+              <div className="absolute right-0 top-full mt-1 flex flex-col bg-white border border-gray-100 rounded-2xl shadow-lg z-10 w-56 p-3 gap-2">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">日期范围（可选）</p>
+                {/* 快捷选项 */}
+                <div className="flex flex-wrap gap-1">
+                  {exportPresets.map(p => (
+                    <button
+                      key={p.label}
+                      onClick={() => { setExportFrom(p.from); setExportTo(p.to); }}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors
+                        ${exportFrom === p.from && exportTo === p.to
+                          ? 'bg-[#07c160] text-white border-[#07c160]'
+                          : 'text-gray-500 border-gray-200 hover:border-[#07c160] hover:text-[#07c160]'}`}
+                    >{p.label}</button>
+                  ))}
+                </div>
+                <input
+                  type="date" value={exportFrom} onChange={e => setExportFrom(e.target.value)}
+                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160]"
+                />
+                <input
+                  type="date" value={exportTo} onChange={e => setExportTo(e.target.value)}
+                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160]"
+                />
+                <div className="flex gap-1 mt-1">
+                  <button onClick={() => handleExport('csv')} disabled={exporting} className="flex-1 px-2 py-2 text-xs text-center text-gray-700 bg-gray-50 hover:bg-[#f0faf4] hover:text-[#07c160] rounded-xl transition-colors font-medium disabled:opacity-40">CSV</button>
+                  <button onClick={() => handleExport('txt')} disabled={exporting} className="flex-1 px-2 py-2 text-xs text-center text-gray-700 bg-gray-50 hover:bg-[#f0faf4] hover:text-[#07c160] rounded-xl transition-colors font-medium disabled:opacity-40">TXT</button>
+                </div>
+                {exportMsg && (
+                  <p className={`text-[10px] mt-1.5 leading-tight ${exportMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
+                    {exportMsg.ok ? '✓ ' : '✕ '}{exportMsg.message}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
           {onBlock && (
             <button
               onClick={() => { onBlock(contact.username); onClose(); }}
@@ -138,6 +253,15 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
             <X size={28} strokeWidth={2} />
           </button>
         </div>
+
+        {!allReady ? (
+          <div className="flex items-center justify-center" style={{ minHeight: 400 }}>
+            <div className="text-[#07c160] font-black animate-pulse uppercase tracking-[0.3em] text-lg">
+              Analysing...
+            </div>
+          </div>
+        ) : (
+          <div className="animate-in fade-in duration-200">
 
         {/* Header */}
         <div className="mb-6 sm:mb-8 pr-10 sm:pr-0 flex items-center gap-4">
@@ -263,19 +387,21 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         {tab === 'wordcloud' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-10">
             {/* Word Cloud */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 flex flex-col">
               <p className="text-xs text-gray-400 mb-2">{includeMine ? '双方' : '对方'}文本消息分词统计，词越大出现频率越高，已过滤停用词与表情符号</p>
-              <WordCloudCanvas data={wordData} loading={isAnalysing} />
+              <WordCloudCanvas
+                data={wordData}
+                loading={isAnalysing}
+                className="h-[420px]"
+              />
             </div>
 
             {/* Side Info */}
             <div className="space-y-4 sm:space-y-8">
-              <div className="bg-gradient-to-br from-gray-900 to-gray-800 text-white p-6 sm:p-10 rounded-3xl sm:rounded-[40px] flex flex-col justify-center shadow-xl">
-                <p className="text-[10px] font-black text-gray-500 uppercase mb-1 tracking-[0.2em]">
-                  第一条消息
-                </p>
-                <p className="text-[10px] text-gray-500 mb-3">{contact.first_message_time}</p>
-                <p className="text-base sm:text-lg italic font-medium leading-relaxed">
+              <div className="bg-[#f8f9fb] border border-gray-100 p-5 rounded-[28px] flex flex-col gap-1">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">第一条消息</p>
+                <p className="text-[10px] text-gray-400">{contact.first_message_time}</p>
+                <p className="text-sm italic font-medium text-[#1d1d1f] leading-relaxed mt-1">
                   "{contact.first_msg || '穿越时空的信号...'}"
                 </p>
               </div>
@@ -387,6 +513,8 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                 </div>
               </div>
             ) : null}
+          </div>
+        )}
           </div>
         )}
       </div>

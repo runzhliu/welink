@@ -874,6 +874,201 @@ func (s *ContactService) SearchMessages(username, query string, includeMine bool
 	return msgs
 }
 
+const ExportLimit = 50000
+
+// exportTimeWhere 返回导出专用的 WHERE 子句。
+// 若 from/to 均为 0，回退到索引时的时间范围（fallback）。
+func exportTimeWhere(from, to int64, fallback string) string {
+	if from == 0 && to == 0 {
+		return fallback
+	}
+	if from > 0 && to > 0 {
+		return fmt.Sprintf(" WHERE create_time >= %d AND create_time <= %d", from, to)
+	}
+	if from > 0 {
+		return fmt.Sprintf(" WHERE create_time >= %d", from)
+	}
+	return fmt.Sprintf(" WHERE create_time <= %d", to)
+}
+
+// ExportContactMessages 导出联系人全量聊天记录（最多 ExportLimit 条，按时间正序）
+// from/to 为 Unix 秒，传 0 则沿用已索引的时间范围
+func (s *ContactService) ExportContactMessages(username string, from, to int64) []ChatMessage {
+	tableName := db.GetTableName(username)
+	tw := exportTimeWhere(from, to, s.timeWhere())
+
+	var msgs []ChatMessage
+	for _, mdb := range s.dbMgr.MessageDBs {
+		var contactRowID int64 = -1
+		mdb.QueryRow(fmt.Sprintf("SELECT rowid FROM Name2Id WHERE user_name = %q", username)).Scan(&contactRowID)
+
+		whereClause := tw
+		rows, err := mdb.Query(fmt.Sprintf(
+			"SELECT create_time, local_type, message_content, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s ORDER BY create_time ASC",
+			tableName, whereClause,
+		))
+		if err != nil {
+			continue
+		}
+		for rows.Next() {
+			var ts int64
+			var lt int
+			var rawContent []byte
+			var ct, senderID int64
+			rows.Scan(&ts, &lt, &rawContent, &ct, &senderID)
+
+			content := decodeGroupContent(rawContent, ct)
+			content = strings.TrimSpace(content)
+			switch lt {
+			case 3:
+				content = "[图片]"
+			case 34:
+				content = "[语音]"
+			case 43:
+				content = "[视频]"
+			case 47:
+				content = "[表情]"
+			case 49:
+				if strings.Contains(content, "wcpay") || strings.Contains(content, "redenvelope") {
+					content = "[红包/转账]"
+				} else {
+					content = "[链接/文件]"
+				}
+			default:
+				if lt != 1 && content == "" {
+					content = fmt.Sprintf("[消息类型 %d]", lt)
+				}
+			}
+			if content == "" {
+				continue
+			}
+			isMine := contactRowID < 0 || senderID != contactRowID
+			t := time.Unix(ts, 0).In(s.tz)
+			msgs = append(msgs, ChatMessage{
+				Date:    t.Format("2006-01-02"),
+				Time:    t.Format("15:04"),
+				Content: content,
+				IsMine:  isMine,
+				Type:    lt,
+			})
+		}
+		rows.Close()
+	}
+
+	sort.Slice(msgs, func(i, j int) bool {
+		return msgs[i].Date+msgs[i].Time < msgs[j].Date+msgs[j].Time
+	})
+	total := len(msgs)
+	if total > ExportLimit {
+		msgs = msgs[total-ExportLimit:]
+	}
+	return msgs
+}
+
+// ExportGroupMessages 导出群聊全量聊天记录（最多 ExportLimit 条，按时间正序）
+// from/to 为 Unix 秒，传 0 则沿用已索引的时间范围
+func (s *ContactService) ExportGroupMessages(username string, from, to int64) []GroupChatMessage {
+	tableName := db.GetTableName(username)
+	tw := exportTimeWhere(from, to, s.timeWhere())
+
+	nameMap := s.loadContactNameMap()
+	var msgs []GroupChatMessage
+
+	for _, mdb := range s.dbMgr.MessageDBs {
+		id2name := make(map[int64]string)
+		n2iRows, err2 := mdb.Query("SELECT rowid, user_name FROM Name2Id")
+		if err2 == nil {
+			for n2iRows.Next() {
+				var rid int64
+				var uname string
+				n2iRows.Scan(&rid, &uname)
+				id2name[rid] = uname
+			}
+			n2iRows.Close()
+		}
+
+		rows, err := mdb.Query(fmt.Sprintf(
+			"SELECT create_time, local_type, message_content, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s ORDER BY create_time ASC",
+			tableName, tw,
+		))
+		if err != nil {
+			continue
+		}
+		for rows.Next() {
+			var ts int64
+			var lt int
+			var rawContent []byte
+			var ct, senderID int64
+			rows.Scan(&ts, &lt, &rawContent, &ct, &senderID)
+
+			rawText := decodeGroupContent(rawContent, ct)
+			rawText = strings.TrimSpace(rawText)
+
+			speakerWxid := ""
+			content := rawText
+			if lt == 1 {
+				if idx := strings.Index(rawText, ":\n"); idx > 0 && idx < 80 {
+					speakerWxid = rawText[:idx]
+					content = strings.TrimSpace(rawText[idx+2:])
+				}
+			} else {
+				switch lt {
+				case 3:
+					content = "[图片]"
+				case 34:
+					content = "[语音]"
+				case 43:
+					content = "[视频]"
+				case 47:
+					content = "[表情]"
+				case 49:
+					if strings.Contains(content, "wcpay") || strings.Contains(content, "redenvelope") {
+						content = "[红包/转账]"
+					} else {
+						content = "[链接/文件]"
+					}
+				default:
+					content = fmt.Sprintf("[消息类型 %d]", lt)
+				}
+			}
+			if speakerWxid == "" {
+				if wxid, ok := id2name[senderID]; ok {
+					speakerWxid = wxid
+				}
+			}
+			if content == "" {
+				continue
+			}
+			speaker := speakerWxid
+			if n, ok := nameMap[speakerWxid]; ok && n != "" {
+				speaker = n
+			}
+			if speaker == "" {
+				speaker = "未知"
+			}
+			t := time.Unix(ts, 0).In(s.tz)
+			msgs = append(msgs, GroupChatMessage{
+				Date:    t.Format("2006-01-02"),
+				Time:    t.Format("15:04"),
+				Speaker: speaker,
+				Content: content,
+				IsMine:  false,
+				Type:    lt,
+			})
+		}
+		rows.Close()
+	}
+
+	sort.Slice(msgs, func(i, j int) bool {
+		return msgs[i].Date+msgs[i].Time < msgs[j].Date+msgs[j].Time
+	})
+	total := len(msgs)
+	if total > ExportLimit {
+		msgs = msgs[total-ExportLimit:]
+	}
+	return msgs
+}
+
 func (s *ContactService) GetWordCloud(username string, includeMine bool) []WordCount {
 	tableName := db.GetTableName(username)
 	// 先收集文本，关闭 DB 连接后再分词

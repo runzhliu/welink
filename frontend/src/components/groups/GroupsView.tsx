@@ -3,11 +3,12 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Users, MessageSquare, ChevronRight, Loader2, X, BarChart2, EyeOff, Search } from 'lucide-react';
+import { Users, MessageSquare, ChevronRight, Loader2, X, BarChart2, EyeOff, Search, Download } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { GroupInfo, GroupDetail, ContactStats, GroupChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
 import { groupsApi } from '../../services/api';
+import { exportGroupCsv, exportGroupTxt, EXPORT_LIMIT, parseExportResult } from '../../utils/exportChat';
 import { CalendarHeatmap } from '../contact/CalendarHeatmap';
 import { GroupDayChatPanel } from './GroupDayChatPanel';
 import { MessageTypePieChart } from '../common/MessageTypePieChart';
@@ -23,6 +24,17 @@ import {
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
 const WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const MEMBER_COLORS = ['#07c160', '#10aeff', '#ff9500', '#fa5151', '#576b95', '#40c463'];
+
+function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
+function shiftDays(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return isoDate(d); }
+function shiftMonths(n: number) { const d = new Date(); d.setMonth(d.getMonth() - n); return isoDate(d); }
+const _today = isoDate(new Date());
+const exportPresets = [
+  { label: '最近一天', from: _today,           to: _today },
+  { label: '最近一周', from: shiftDays(6),     to: _today },
+  { label: '最近一月', from: shiftMonths(1),   to: _today },
+  { label: '最近一年', from: shiftMonths(12),  to: _today },
+];
 
 interface GroupDetailModalProps {
   group: GroupInfo;
@@ -52,7 +64,51 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
   const [contextTarget, setContextTarget] = useState<SearchContextTarget | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportFrom, setExportFrom] = useState('');
+  const [exportTo, setExportTo] = useState('');
+  const [showExportPanel, setShowExportPanel] = useState(false);
+  const [exportMsg, setExportMsg] = useState<{ ok: boolean; message: string } | null>(null);
+  const exportPanelRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // 点击外部关闭导出面板
+  useEffect(() => {
+    if (!showExportPanel) return;
+    const handler = (e: MouseEvent) => {
+      if (exportPanelRef.current && !exportPanelRef.current.contains(e.target as Node)) {
+        setShowExportPanel(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showExportPanel]);
+
+  const handleExport = useCallback(async (format: 'csv' | 'txt') => {
+    setExporting(true);
+    setExportMsg(null);
+    try {
+      const from = exportFrom ? Math.floor(new Date(exportFrom).getTime() / 1000) : undefined;
+      const to = exportTo ? Math.floor(new Date(exportTo + 'T23:59:59').getTime() / 1000) : undefined;
+      const msgs = await groupsApi.exportMessages(group.username, from, to) ?? [];
+      if (msgs.length === 0) {
+        setExportMsg({ ok: false, message: '该时间范围内没有消息记录' });
+        setTimeout(() => setExportMsg(null), 4000);
+        return;
+      }
+      const result = format === 'csv'
+        ? await exportGroupCsv(msgs, group.name, exportFrom || undefined, exportTo || undefined)
+        : await exportGroupTxt(msgs, group.name, exportFrom || undefined, exportTo || undefined);
+      const parsed = parseExportResult(result);
+      if (parsed.ok && msgs.length >= EXPORT_LIMIT) {
+        parsed.message += `（超出限制，仅含最近 ${EXPORT_LIMIT.toLocaleString()} 条）`;
+      }
+      setExportMsg(parsed);
+      setTimeout(() => setExportMsg(null), 4000);
+    } finally {
+      setExporting(false);
+    }
+  }, [group, exportFrom, exportTo]);
 
   // 排行榜显示设置（从 localStorage 读取，与设置页同步）
   const [rankLimit, setRankLimit] = useState<number>(() =>
@@ -158,6 +214,51 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         onClick={(e) => e.stopPropagation()}
       >
         <div className="absolute top-5 right-5 flex items-center gap-2">
+          {/* 导出 */}
+          <div className="relative" ref={exportPanelRef}>
+            <button
+              disabled={exporting}
+              onClick={() => setShowExportPanel(v => !v)}
+              className={`p-2 rounded-xl transition-colors duration-200 disabled:opacity-40 ${showExportPanel ? 'text-[#07c160] bg-[#e7f8f0]' : 'text-gray-300 hover:text-[#07c160] hover:bg-[#e7f8f0]'}`}
+              title="导出聊天记录"
+            >
+              {exporting ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} strokeWidth={2} />}
+            </button>
+            {showExportPanel && (
+              <div className="absolute right-0 top-full mt-1 flex flex-col bg-white border border-gray-100 rounded-2xl shadow-lg z-10 w-56 p-3 gap-2">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">日期范围（可选）</p>
+                <div className="flex flex-wrap gap-1">
+                  {exportPresets.map(p => (
+                    <button
+                      key={p.label}
+                      onClick={() => { setExportFrom(p.from); setExportTo(p.to); }}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors
+                        ${exportFrom === p.from && exportTo === p.to
+                          ? 'bg-[#07c160] text-white border-[#07c160]'
+                          : 'text-gray-500 border-gray-200 hover:border-[#07c160] hover:text-[#07c160]'}`}
+                    >{p.label}</button>
+                  ))}
+                </div>
+                <input
+                  type="date" value={exportFrom} onChange={e => setExportFrom(e.target.value)}
+                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160]"
+                />
+                <input
+                  type="date" value={exportTo} onChange={e => setExportTo(e.target.value)}
+                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160]"
+                />
+                <div className="flex gap-1 mt-1">
+                  <button onClick={() => handleExport('csv')} disabled={exporting} className="flex-1 px-2 py-2 text-xs text-center text-gray-700 bg-gray-50 hover:bg-[#f0faf4] hover:text-[#07c160] rounded-xl transition-colors font-medium disabled:opacity-40">CSV</button>
+                  <button onClick={() => handleExport('txt')} disabled={exporting} className="flex-1 px-2 py-2 text-xs text-center text-gray-700 bg-gray-50 hover:bg-[#f0faf4] hover:text-[#07c160] rounded-xl transition-colors font-medium disabled:opacity-40">TXT</button>
+                </div>
+                {exportMsg && (
+                  <p className={`text-[10px] mt-1.5 leading-tight ${exportMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
+                    {exportMsg.ok ? '✓ ' : '✕ '}{exportMsg.message}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
           {onBlock && (
             <button
               onClick={() => { onBlock(group.username); onClose(); }}

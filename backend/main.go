@@ -19,11 +19,14 @@
 package main
 
 import (
+	"archive/zip"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -156,10 +159,80 @@ func serverMain() {
 		ready := contactSvc != nil
 		svcMu.RUnlock()
 		c.JSON(http.StatusOK, gin.H{
-			"app_mode":   hasFrontend,
+			"app_mode":    hasFrontend,
 			"needs_setup": needsSetup,
-			"ready":      ready,
+			"ready":       ready,
+			"version":     appVersion,
 		})
+	})
+
+	// 保存文件到 ~/Downloads（供 App 模式下的前端调用，绕过 WebView 的 blob 下载限制）
+	// 非 App 模式返回 404，前端据此 fallback 到 Blob 下载。
+	api.POST("/app/save-file", func(c *gin.Context) {
+		if !hasFrontend {
+			c.JSON(http.StatusNotFound, gin.H{"error": "only available in app mode"})
+			return
+		}
+		var body struct {
+			Filename string `json:"filename"`
+			Content  string `json:"content"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.Filename == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少参数"})
+			return
+		}
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "无法获取用户目录"})
+			return
+		}
+		savePath := filepath.Join(homeDir, "Downloads", body.Filename)
+		if err := os.WriteFile(savePath, []byte(body.Content), 0644); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "写入文件失败: " + err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"path": savePath})
+	})
+
+	// 日志打包：把 log_dir 下的 *.log 文件打成 zip 返回路径
+	api.POST("/app/bundle-logs", func(c *gin.Context) {
+		pref := loadPreferences()
+		logDir := pref.LogDir
+		if logDir == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "未配置日志目录"})
+			return
+		}
+		entries, err := os.ReadDir(logDir)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "读取日志目录失败: " + err.Error()})
+			return
+		}
+		zipPath := filepath.Join(logDir, fmt.Sprintf("welink-logs-%s.zip", time.Now().Format("20060102-150405")))
+		zf, err := os.Create(zipPath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建 zip 失败: " + err.Error()})
+			return
+		}
+		defer zf.Close()
+		zw := zip.NewWriter(zf)
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".log") {
+				continue
+			}
+			src, err := os.Open(filepath.Join(logDir, e.Name()))
+			if err != nil {
+				continue
+			}
+			w, err := zw.Create(e.Name())
+			if err != nil {
+				src.Close()
+				continue
+			}
+			io.Copy(w, src)
+			src.Close()
+		}
+		zw.Close()
+		c.JSON(http.StatusOK, gin.H{"path": zipPath})
 	})
 
 	// applyConfig 将配置落盘并热替换服务层；data_dir 为空时启用演示模式。
@@ -383,6 +456,32 @@ func serverMain() {
 			}
 			includeMine := c.Query("include_mine") == "true"
 			c.JSON(http.StatusOK, getSvc().SearchMessages(uname, q, includeMine))
+		})
+
+		// 导出联系人全量聊天记录（最多 50000 条）
+		prot.GET("/contacts/export", func(c *gin.Context) {
+			uname := c.Query("username")
+			if uname == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 username 参数"})
+				return
+			}
+			var from, to int64
+			fmt.Sscanf(c.Query("from"), "%d", &from)
+			fmt.Sscanf(c.Query("to"), "%d", &to)
+			c.JSON(http.StatusOK, getSvc().ExportContactMessages(uname, from, to))
+		})
+
+		// 导出群聊全量聊天记录（最多 50000 条）
+		prot.GET("/groups/export", func(c *gin.Context) {
+			uname := c.Query("username")
+			if uname == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 username 参数"})
+				return
+			}
+			var from, to int64
+			fmt.Sscanf(c.Query("from"), "%d", &from)
+			fmt.Sscanf(c.Query("to"), "%d", &to)
+			c.JSON(http.StatusOK, getSvc().ExportGroupMessages(uname, from, to))
 		})
 
 		// 关系降温榜
