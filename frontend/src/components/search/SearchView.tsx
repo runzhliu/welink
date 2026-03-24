@@ -93,26 +93,31 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
         </button>
       </form>
 
-      {/* 搜索范围 checkbox */}
-      <div className="flex items-center gap-5 mb-8">
-        <label className="flex items-center gap-1.5 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={includeContacts}
-            onChange={(e) => setIncludeContacts(e.target.checked)}
-            className="w-4 h-4 accent-[#07c160] rounded"
-          />
-          <span className="text-sm text-gray-600">私聊</span>
-        </label>
-        <label className="flex items-center gap-1.5 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={includeGroups}
-            onChange={(e) => setIncludeGroups(e.target.checked)}
-            className="w-4 h-4 accent-[#07c160] rounded"
-          />
-          <span className="text-sm text-gray-600">群聊</span>
-        </label>
+      {/* 搜索范围选择 */}
+      <div className="flex items-center gap-2 mb-8">
+        <button
+          type="button"
+          onClick={() => setIncludeContacts(v => !v)}
+          className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-all select-none
+            ${includeContacts
+              ? 'bg-[#07c160] text-white border-[#07c160]'
+              : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'}`}
+        >
+          私聊
+        </button>
+        <button
+          type="button"
+          onClick={() => setIncludeGroups(v => !v)}
+          className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-all select-none
+            ${includeGroups
+              ? 'bg-[#07c160] text-white border-[#07c160]'
+              : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'}`}
+        >
+          群聊
+        </button>
+        {includeGroups && (
+          <span className="text-xs text-gray-400 ml-1">· 群聊数据量大，搜索可能需要较长时间</span>
+        )}
       </div>
 
       {/* 状态 */}
