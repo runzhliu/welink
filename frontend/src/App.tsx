@@ -370,6 +370,7 @@ function App() {
         ) : activeTab === 'settings' ? (
           <SettingsPage
             isAppMode={appInfo.app_mode}
+            appVersion={appInfo.version}
             blockedUsers={blockedUsers}
             blockedGroups={blockedGroups}
             onAddBlockedUser={addBlockedUser}

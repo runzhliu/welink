@@ -6,6 +6,7 @@ export interface AppInfo {
   app_mode: boolean;
   needs_setup: boolean;
   ready: boolean;
+  version?: string;
 }
 
 export interface AppConfig {
@@ -29,4 +30,7 @@ export const appApi = {
   restart: (dataDir: string, logDir: string) =>
     api.post<{ status: string; error?: string }>('/app/restart', { data_dir: dataDir, log_dir: logDir })
       .then((r) => r.data),
+
+  bundleLogs: () =>
+    api.post<{ path: string; error?: string }>('/app/bundle-logs').then((r) => r.data),
 };

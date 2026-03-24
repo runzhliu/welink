@@ -3,11 +3,12 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { Search, Loader2, ChevronRight, Users } from 'lucide-react';
+import { Search, Loader2, ChevronRight, Users, Download } from 'lucide-react';
 import type { GlobalSearchGroup, ContactStats } from '../../types';
 import { searchApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { SearchContextModal, type SearchContextTarget } from './SearchContextModal';
+import { exportSearchResultsCsv, exportSearchResultsTxt, parseExportResult } from '../../utils/exportChat';
 
 interface Props {
   contacts: ContactStats[];
@@ -25,7 +26,17 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
   const [includeContacts, setIncludeContacts] = useState(true);
   const [includeGroups, setIncludeGroups] = useState(true);
   const [contextTarget, setContextTarget] = useState<SearchContextTarget | null>(null);
+  const [exportMsg, setExportMsg] = useState<{ ok: boolean; message: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = async (format: 'csv' | 'txt') => {
+    const result = format === 'csv'
+      ? await exportSearchResultsCsv(visibleResults, query)
+      : await exportSearchResultsTxt(visibleResults, query);
+    const parsed = parseExportResult(result);
+    setExportMsg(parsed);
+    setTimeout(() => setExportMsg(null), 4000);
+  };
 
   const searchType = includeContacts && includeGroups ? 'all' : includeContacts ? 'contact' : 'group';
   const canSearch = query.trim() && (includeContacts || includeGroups);
@@ -133,12 +144,24 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
 
       {!loading && visibleResults.length > 0 && (
         <>
-          <p className="text-xs text-gray-400 mb-4">
-            找到约 <span className="font-bold text-gray-600">{totalMsgs}</span> 条消息
-            {contactCount > 0 && <span>，<span className="font-bold text-gray-600">{contactCount}</span> 位联系人</span>}
-            {groupCount > 0 && <span>，<span className="font-bold text-gray-600">{groupCount}</span> 个群聊</span>}
-            （每个最多显示 5 条）
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs text-gray-400">
+              找到约 <span className="font-bold text-gray-600">{totalMsgs}</span> 条消息
+              {contactCount > 0 && <span>，<span className="font-bold text-gray-600">{contactCount}</span> 位联系人</span>}
+              {groupCount > 0 && <span>，<span className="font-bold text-gray-600">{groupCount}</span> 个群聊</span>}
+              （每个最多显示 5 条）
+            </p>
+            <div className="flex items-center gap-1 flex-shrink-0 ml-3">
+              <Download size={12} className="text-gray-300" />
+              <button onClick={() => handleExport('csv')} className="text-xs text-gray-400 hover:text-[#07c160] font-medium px-2 py-1 rounded-lg hover:bg-[#f0faf4] transition-colors">CSV</button>
+              <button onClick={() => handleExport('txt')} className="text-xs text-gray-400 hover:text-[#07c160] font-medium px-2 py-1 rounded-lg hover:bg-[#f0faf4] transition-colors">TXT</button>
+              {exportMsg && (
+                <span className={`text-[10px] font-medium ${exportMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
+                  {exportMsg.ok ? '✓' : '✕'} {exportMsg.message}
+                </span>
+              )}
+            </div>
+          </div>
 
           <div className="space-y-3">
             {visibleResults.map((group) => {

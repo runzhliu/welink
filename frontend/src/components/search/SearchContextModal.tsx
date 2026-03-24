@@ -2,11 +2,12 @@
  * 搜索结果点击消息后展示当天完整聊天记录，自动滚动到目标消息并高亮
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-import { X, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { X, Loader2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import type { ChatMessage, GroupChatMessage } from '../../types';
 import { contactsApi, groupsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { exportDayMessagesCsv, exportDayMessagesTxt, parseExportResult } from '../../utils/exportChat';
 
 export interface SearchContextTarget {
   username: string;
@@ -49,6 +50,31 @@ export const SearchContextModal: React.FC<Props> = ({
   const [date, setDate] = useState(initDate);
   const [messages, setMessages] = useState<(ChatMessage | GroupChatMessage)[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportMsg, setExportMsg] = useState<{ ok: boolean; message: string } | null>(null);
+  const [showExportPanel, setShowExportPanel] = useState(false);
+  const exportPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showExportPanel) return;
+    const handler = (e: MouseEvent) => {
+      if (exportPanelRef.current && !exportPanelRef.current.contains(e.target as Node)) {
+        setShowExportPanel(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showExportPanel]);
+
+  const handleExport = useCallback(async (format: 'csv' | 'txt') => {
+    setShowExportPanel(false);
+    const result = format === 'csv'
+      ? await exportDayMessagesCsv(messages, displayName, date, isGroup)
+      : await exportDayMessagesTxt(messages, displayName, date, isGroup);
+    const parsed = parseExportResult(result);
+    setExportMsg(parsed);
+    setTimeout(() => setExportMsg(null), 4000);
+  }, [messages, displayName, date, isGroup]);
+
   const targetRef = useRef<HTMLDivElement>(null);
   const shouldScrollToTarget = useRef(true);
 
@@ -114,6 +140,28 @@ export const SearchContextModal: React.FC<Props> = ({
             >
               <ChevronRight size={18} />
             </button>
+            {!loading && messages.length > 0 && (
+              <div className="relative ml-0.5" ref={exportPanelRef}>
+                <button
+                  onClick={() => setShowExportPanel(v => !v)}
+                  className={`p-2 transition-colors rounded-xl ${showExportPanel ? 'text-[#07c160] bg-[#e7f8f0]' : 'text-gray-300 hover:text-[#07c160] hover:bg-[#e7f8f0]'}`}
+                  title="导出当天记录"
+                >
+                  <Download size={16} />
+                </button>
+                {showExportPanel && (
+                  <div className="absolute right-0 top-full mt-1 flex flex-col bg-white border border-gray-100 rounded-xl shadow-lg z-10 overflow-hidden min-w-[120px]">
+                    <button onClick={() => handleExport('csv')} className="px-4 py-2 text-xs text-left text-gray-700 hover:bg-[#f0faf4] hover:text-[#07c160] whitespace-nowrap transition-colors">导出 CSV</button>
+                    <button onClick={() => handleExport('txt')} className="px-4 py-2 text-xs text-left text-gray-700 hover:bg-[#f0faf4] hover:text-[#07c160] whitespace-nowrap transition-colors">导出 TXT</button>
+                  </div>
+                )}
+                {exportMsg && (
+                  <div className={`absolute right-0 top-full mt-1 px-3 py-1.5 text-[10px] rounded-xl shadow-lg bg-white border border-gray-100 whitespace-nowrap z-10 ${exportMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
+                    {exportMsg.ok ? '✓ ' : '✕ '}{exportMsg.message}
+                  </div>
+                )}
+              </div>
+            )}
             <button
               onClick={onClose}
               className="p-2 text-gray-300 hover:text-gray-600 transition-colors rounded-xl hover:bg-gray-50 ml-1"

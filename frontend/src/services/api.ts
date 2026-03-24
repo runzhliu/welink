@@ -77,6 +77,9 @@ export const contactsApi = {
       params: { username, q, ...(includeMine ? { include_mine: 'true' } : {}) }
     }),
 
+  exportMessages: (username: string, from?: number, to?: number) =>
+    api.get<void, import('../types').ChatMessage[]>('/contacts/export', { params: { username, ...(from ? { from } : {}), ...(to ? { to } : {}) } }),
+
   /**
    * 获取某月的文本消息（情感分析详情）
    */
@@ -190,6 +193,9 @@ export const groupsApi = {
 
   searchMessages: (username: string, q: string) =>
     api.get<void, GroupChatMessage[]>('/groups/search', { params: { username, q } }),
+
+  exportMessages: (username: string, from?: number, to?: number) =>
+    api.get<void, GroupChatMessage[]>('/groups/export', { params: { username, ...(from ? { from } : {}), ...(to ? { to } : {}) } }),
 };
 
 export default api;
