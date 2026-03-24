@@ -57,7 +57,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
       )}
       {/* 桌面侧边栏 */}
       <aside className="hidden sm:flex w-20 dk-card bg-white dk-border border-r flex-col items-center py-8 gap-8 shadow-sm z-10">
-        <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-lg shadow-green-100/50">
+        <div
+          className="w-12 h-12 rounded-2xl overflow-hidden shadow-lg shadow-green-100/50 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => openExternal('https://welink.click')}
+          title="官方文档"
+        >
           <img src="/favicon.svg" alt="WeLink" className="w-full h-full" />
         </div>
         <nav className="flex flex-col gap-4 flex-1">
