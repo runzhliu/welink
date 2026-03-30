@@ -239,12 +239,14 @@ function App() {
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} dark={dark} onToggleDark={toggleDark} />
 
       {/* Main Content */}
-      <main className={`flex-1 overflow-y-auto dk-page ${activeTab === 'dashboard' ? '' : 'p-4 sm:p-10 pb-20 sm:pb-10'}`}>
+      <main className={`flex-1 overflow-y-auto dk-page ${activeTab === 'dashboard' ? 'pb-16 sm:pb-0' : 'p-4 sm:p-10 pb-20 sm:pb-10'}`}>
         {activeTab === 'dashboard' ? (
           <AIHomePage
             contacts={contacts}
             timeRange={timeRange}
             onReselect={handleReselect}
+            onContactClick={handleContactClick}
+            onGroupClick={(g) => setSelectedGroup(g)}
           />
         ) : activeTab === 'stats' ? (
           <StatsPage
@@ -258,7 +260,7 @@ function App() {
             onContactClick={handleContactClick}
           />
         ) : activeTab === 'groups' ? (
-          <GroupsView allContacts={allContacts} onContactClick={handleContactClick} blockedGroups={blockedGroups} onBlockGroup={addBlockedGroup} />
+          <GroupsView allContacts={allContacts} onContactClick={handleContactClick} blockedGroups={blockedGroups} onBlockGroup={addBlockedGroup} onOpenSettings={() => setActiveTab('settings')} />
         ) : activeTab === 'timeline' ? (
           <TimelineView contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'calendar' ? (
@@ -287,6 +289,8 @@ function App() {
             allGroups={allGroups}
             privacyMode={privacyMode}
             onTogglePrivacyMode={setPrivacyMode}
+            dark={dark}
+            onToggleDark={toggleDark}
           />
         ) : (
           <div>
@@ -302,6 +306,7 @@ function App() {
         onClose={handleCloseModal}
         onGroupClick={(g) => { setSelectedContact(null); setSelectedGroup(g); }}
         onBlock={(username) => { addBlockedUser(username); }}
+        onOpenSettings={() => { handleCloseModal(); setActiveTab('settings'); }}
       />
 
       {/* Group Detail Modal (triggered from contact modal) */}
@@ -312,6 +317,7 @@ function App() {
           allContacts={allContacts}
           onContactClick={(c) => { setSelectedGroup(null); setSelectedContact(c); }}
           onBlock={(username) => { addBlockedGroup(username); }}
+          onOpenSettings={() => { setSelectedGroup(null); setActiveTab('settings'); }}
         />
       )}
     </div>

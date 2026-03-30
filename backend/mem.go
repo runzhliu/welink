@@ -91,19 +91,31 @@ const memExtractChunkSize = 80 // 每批送给 LLM 的消息条数
 //   - startChunk：从哪个批次开始（0 = 全新，>0 = 续传）。调用方负责在续传时不清空 mem_facts。
 //   - onProgress：每批完成后回调 (当前已完成批数, 总批数)，可为 nil。
 //   - onChunkDone：每批完成后回调该批的索引（用于写检查点），可为 nil。
+//   - abortCh：关闭此 channel 时提前结束（暂停），返回 ErrAborted。可传 nil 表示不支持中止。
 //
 // 返回本次新增的事实数；若所有批次均失败则同时返回最后一个错误。
+var ErrAborted = fmt.Errorf("mem: 提炼已暂停")
+
 func extractAndStoreFacts(
 	key string, msgs []rawMsg, prefs Preferences, db *sql.DB, embCfg EmbeddingConfig,
 	startChunk int,
 	onProgress func(done, total int),
 	onChunkDone func(chunkIdx int),
+	abortCh <-chan struct{},
 ) (int, error) {
 	totalChunks := (len(msgs) + memExtractChunkSize - 1) / memExtractChunkSize
 	total := 0
 	var lastErr error
 
 	for chunkIdx := startChunk; chunkIdx < totalChunks; chunkIdx++ {
+		// 检查是否被暂停
+		if abortCh != nil {
+			select {
+			case <-abortCh:
+				return total, ErrAborted
+			default:
+			}
+		}
 		i := chunkIdx * memExtractChunkSize
 		end := i + memExtractChunkSize
 		if end > len(msgs) {

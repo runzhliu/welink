@@ -7,6 +7,7 @@ import { Snowflake } from 'lucide-react';
 import type { CoolingEntry, ContactStats } from '../../types';
 import { contactsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { avatarSrc } from '../../utils/avatar';
 
 interface Props {
   isInitialized: boolean;
@@ -67,7 +68,7 @@ export const CoolingRanking: React.FC<Props> = ({ isInitialized, contacts, onCon
               {/* 头像 */}
               <div className="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden ring-1 ring-gray-100">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt={entry.display_name} className="w-full h-full object-cover"
+                  <img src={avatarSrc(avatarUrl)} alt={entry.display_name} className="w-full h-full object-cover"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
                   <div className="w-full h-full bg-[#576b95] flex items-center justify-center text-white text-[10px] font-black">

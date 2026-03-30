@@ -9,6 +9,7 @@ import { searchApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { SearchContextModal, type SearchContextTarget } from './SearchContextModal';
 import { exportSearchResultsCsv, exportSearchResultsTxt, parseExportResult } from '../../utils/exportChat';
+import { avatarSrc } from '../../utils/avatar';
 
 interface Props {
   contacts: ContactStats[];
@@ -112,7 +113,7 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
           className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-all select-none
             ${includeContacts
               ? 'bg-[#07c160] text-white border-[#07c160]'
-              : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'}`}
+              : 'bg-white dark:bg-white/5 text-gray-400 border-gray-200 hover:border-gray-300'}`}
         >
           私聊
         </button>
@@ -122,7 +123,7 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
           className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-all select-none
             ${includeGroups
               ? 'bg-[#07c160] text-white border-[#07c160]'
-              : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'}`}
+              : 'bg-white dark:bg-white/5 text-gray-400 border-gray-200 hover:border-gray-300'}`}
         >
           群聊
         </button>
@@ -146,15 +147,15 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
         <>
           <div className="flex items-center justify-between mb-4">
             <p className="text-xs text-gray-400">
-              找到约 <span className="font-bold text-gray-600">{totalMsgs}</span> 条消息
-              {contactCount > 0 && <span>，<span className="font-bold text-gray-600">{contactCount}</span> 位联系人</span>}
-              {groupCount > 0 && <span>，<span className="font-bold text-gray-600">{groupCount}</span> 个群聊</span>}
+              找到约 <span className="font-bold text-gray-600 dark:text-gray-300">{totalMsgs}</span> 条消息
+              {contactCount > 0 && <span>，<span className="font-bold text-gray-600 dark:text-gray-300">{contactCount}</span> 位联系人</span>}
+              {groupCount > 0 && <span>，<span className="font-bold text-gray-600 dark:text-gray-300">{groupCount}</span> 个群聊</span>}
               （每个最多显示 5 条）
             </p>
             <div className="flex items-center gap-1 flex-shrink-0 ml-3">
               <Download size={12} className="text-gray-300" />
-              <button onClick={() => handleExport('csv')} className="text-xs text-gray-400 hover:text-[#07c160] font-medium px-2 py-1 rounded-lg hover:bg-[#f0faf4] transition-colors">CSV</button>
-              <button onClick={() => handleExport('txt')} className="text-xs text-gray-400 hover:text-[#07c160] font-medium px-2 py-1 rounded-lg hover:bg-[#f0faf4] transition-colors">TXT</button>
+              <button onClick={() => handleExport('csv')} className="text-xs text-gray-400 hover:text-[#07c160] font-medium px-2 py-1 rounded-lg hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 transition-colors">CSV</button>
+              <button onClick={() => handleExport('txt')} className="text-xs text-gray-400 hover:text-[#07c160] font-medium px-2 py-1 rounded-lg hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 transition-colors">TXT</button>
               {exportMsg && (
                 <span className={`text-[10px] font-medium ${exportMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
                   {exportMsg.ok ? '✓' : '✕'} {exportMsg.message}
@@ -171,7 +172,7 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
                 <div key={group.username} className="dk-card bg-white dk-border border border-gray-100 rounded-2xl overflow-hidden">
                   {/* 头部 */}
                   <div
-                    className={`flex items-center gap-3 px-5 py-3 bg-[#f8f9fb] border-b border-gray-100 ${clickable ? 'cursor-pointer hover:bg-[#eef8f4] transition-colors' : ''}`}
+                    className={`flex items-center gap-3 px-5 py-3 bg-[#f8f9fb] dk-subtle border-b border-gray-100 dk-border ${clickable ? 'cursor-pointer hover:bg-[#eef8f4] dark:hover:bg-[#07c160]/10 transition-colors' : ''}`}
                     onClick={() => {
                       if (group.is_group) onGroupClick?.(group.username);
                       else if (contact) onContactClick?.(contact);
@@ -179,7 +180,7 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
                   >
                     <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-gray-200">
                       {group.small_head_url ? (
-                        <img src={group.small_head_url} alt="" className="w-full h-full object-cover"
+                        <img src={avatarSrc(group.small_head_url)} alt="" className="w-full h-full object-cover"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       ) : (
                         <div className={`w-full h-full flex items-center justify-center text-white text-xs font-black
@@ -201,11 +202,11 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
                   </div>
 
                   {/* 消息列表 */}
-                  <div className="divide-y divide-gray-50">
+                  <div className="divide-y divide-gray-50 dark:divide-white/5">
                     {group.messages.map((msg, i) => (
                       <div
                         key={i}
-                        className={`px-5 py-3 flex gap-3 cursor-pointer hover:bg-[#f8f9fb] transition-colors ${msg.is_mine ? 'flex-row-reverse' : 'flex-row'}`}
+                        className={`px-5 py-3 flex gap-3 cursor-pointer hover:bg-[#f8f9fb] dark:hover:bg-white/5 transition-colors ${msg.is_mine ? 'flex-row-reverse' : 'flex-row'}`}
                         onClick={() => msg.date && setContextTarget({
                           username: group.username,
                           displayName: group.display_name,
@@ -224,7 +225,7 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
                         </div>
                         <div className={`flex flex-col gap-0.5 max-w-[80%] ${msg.is_mine ? 'items-end' : 'items-start'}`}>
                           <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words whitespace-pre-wrap
-                            ${msg.is_mine ? 'bg-[#07c160] text-white rounded-br-sm' : 'bg-[#f0f0f0] text-[#1d1d1f] rounded-bl-sm'}`}>
+                            ${msg.is_mine ? 'bg-[#07c160] text-white rounded-br-sm' : 'bg-[#f0f0f0] dark:bg-white/10 text-[#1d1d1f] dark:text-gray-100 rounded-bl-sm'}`}>
                             <HighlightText text={msg.content} keyword={query} />
                           </div>
                           <span className="text-[10px] text-gray-300 px-1">{msg.date} {msg.time}</span>
@@ -257,7 +258,7 @@ const HighlightText: React.FC<{ text: string; keyword: string }> = ({ text, keyw
     <>
       {parts.map((part, i) =>
         part.toLowerCase() === keyword.toLowerCase()
-          ? <mark key={i} className="bg-yellow-200 text-[#1d1d1f] rounded px-0.5">{part}</mark>
+          ? <mark key={i} className="bg-yellow-200 dark:bg-yellow-500/40 text-[#1d1d1f] dark:text-gray-100 rounded px-0.5">{part}</mark>
           : part
       )}
     </>

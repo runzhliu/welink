@@ -10,10 +10,14 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { Hourglass, MessageSquare, ChevronLeft, ChevronRight, X, Users, MessagesSquare, Bot, Send, Loader2, Square } from 'lucide-react';
+import { Hourglass, MessageSquare, ChevronLeft, ChevronRight, X, Users, MessagesSquare, Bot, Send, Loader2, Square, Copy, Check, Share2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { generateShareImage } from '../../utils/shareImage';
 import { calendarApi } from '../../services/api';
 import type { CalendarDayEntry, ContactStats, ChatMessage, GroupChatMessage } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { avatarSrc } from '../../utils/avatar';
 
 interface Props {
   contacts: ContactStats[];
@@ -130,7 +134,7 @@ const MessagesView: React.FC<MessagesViewProps> = ({ date, entry, onBack }) => {
         </button>
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {entry.small_head_url ? (
-            <img src={entry.small_head_url} alt="" className="w-7 h-7 rounded-lg object-cover flex-shrink-0"
+            <img src={avatarSrc(entry.small_head_url)} alt="" className="w-7 h-7 rounded-lg object-cover flex-shrink-0"
               onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           ) : (
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-xs font-black flex-shrink-0">
@@ -173,7 +177,13 @@ interface DayAIMessage {
   role: 'user' | 'assistant';
   content: string;
   streaming?: boolean;
+  stats?: { elapsed: number; tokensPerSec: number; chars: number; provider?: string; model?: string };
 }
+
+const PROVIDER_LABELS: Record<string, string> = {
+  deepseek: 'DeepSeek', kimi: 'Kimi', gemini: 'Gemini', glm: 'GLM',
+  grok: 'Grok', openai: 'OpenAI', claude: 'Claude', ollama: 'Ollama', custom: '自定义',
+};
 
 const DAY_PRESETS = [
   { label: '今日概览', prompt: '请总结今天所有聊天的主要内容、话题和情绪基调。' },
@@ -189,6 +199,107 @@ interface DayAIPanelProps {
   onBack: () => void;
 }
 
+// ─── 时光机 AI 气泡（含复制/分享）──────────────────────────────────────────────
+
+const DayAssistantBubble: React.FC<{
+  msg: DayAIMessage;
+  date: string;
+  prevQuestion?: string;
+}> = ({ msg, date, prevQuestion }) => {
+  const [copied, setCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const handleCopy = () => {
+    if (!msg.content) return;
+    navigator.clipboard.writeText(msg.content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
+
+  const handleShare = async () => {
+    if (!msg.content || sharing) return;
+    setSharing(true);
+    setShareMsg(null);
+    try {
+      const savedPath = await generateShareImage({
+        question: prevQuestion,
+        answer: msg.content,
+        contactName: `${date} 时光机`,
+        stats: msg.stats ? {
+          provider: msg.stats.provider,
+          model: msg.stats.model,
+          elapsedSecs: msg.stats.elapsed,
+          tokensPerSec: msg.stats.tokensPerSec,
+          charCount: msg.stats.chars,
+        } : undefined,
+      });
+      const isAppMode = savedPath.startsWith('/');
+      setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载' });
+    } catch (err) {
+      setShareMsg({ ok: false, text: `生成失败：${(err as Error).message}` });
+    } finally {
+      setSharing(false);
+      setTimeout(() => setShareMsg(null), 4000);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex gap-2 group">
+        <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white mt-0.5 bg-[#576b95]">
+          <Bot size={12} />
+        </div>
+        <div className="max-w-[85%] flex flex-col gap-0.5">
+          <div className="px-3 py-2 rounded-2xl rounded-bl-sm text-sm leading-relaxed break-words bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-gray-200 prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 dark:prose-invert">
+            {msg.content
+              ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              : msg.streaming
+                ? null
+                : ''}
+            {msg.stats && !msg.streaming && (
+              <div className="flex items-center justify-end gap-1.5 mt-1.5 text-[10px] text-gray-400 not-prose">
+                {msg.stats.provider && <span className="font-medium">{PROVIDER_LABELS[msg.stats.provider] ?? msg.stats.provider}{msg.stats.model ? ` · ${msg.stats.model}` : ''}</span>}
+                {msg.stats.provider && <span className="text-gray-300">·</span>}
+                <span>{msg.stats.elapsed.toFixed(1)}s</span>
+                <span className="text-gray-300">·</span>
+                <span>~{msg.stats.tokensPerSec} tok/s</span>
+                <span className="text-gray-300">·</span>
+                <span>{msg.stats.chars} 字符</span>
+              </div>
+            )}
+          </div>
+          {msg.content && !msg.streaming && (
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={handleCopy}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#07c160] hover:bg-[#f0faf4] transition-colors"
+              >
+                {copied ? <Check size={10} className="text-[#07c160]" /> : <Copy size={10} />}
+                {copied ? '已复制' : '复制'}
+              </button>
+              <button
+                onClick={handleShare}
+                disabled={sharing}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#576b95] hover:bg-[#f0f4ff] transition-colors disabled:opacity-50"
+              >
+                {sharing ? <Loader2 size={10} className="animate-spin" /> : <Share2 size={10} />}
+                {sharing ? '生成中…' : '分享'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      {shareMsg && (
+        <p className={`text-[10px] font-medium ml-8 break-all leading-relaxed ${shareMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
+          {shareMsg.text}
+        </p>
+      )}
+    </div>
+  );
+};
+
 const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, onBack }) => {
   const [messages, setMessages] = useState<DayAIMessage[]>([]);
   const [input, setInput] = useState('');
@@ -197,6 +308,25 @@ const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, onBack 
   const [ragInfo, setRagInfo] = useState<{ hits: number; retrieved: number } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // 加载 LLM profiles
+  interface ProfileItem { id: string; provider: string; model?: string; }
+  const [profiles, setProfiles] = useState<ProfileItem[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState('');
+  useEffect(() => {
+    fetch('/api/preferences')
+      .then(r => r.json())
+      .then((d: { llm_profiles?: ProfileItem[]; llm_provider?: string; llm_model?: string }) => {
+        if (d.llm_profiles && d.llm_profiles.length > 0) {
+          setProfiles(d.llm_profiles);
+          setSelectedProfileId(d.llm_profiles[0].id);
+        } else if (d.llm_provider) {
+          setProfiles([{ id: '__default__', provider: d.llm_provider, model: d.llm_model }]);
+          setSelectedProfileId('__default__');
+        }
+      }).catch(() => {});
+  }, []);
+  const selectedProfile = profiles.find(p => p.id === selectedProfileId) ?? profiles[0];
 
   const scrollToBottom = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
 
@@ -239,6 +369,7 @@ const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, onBack 
 
     const abort = new AbortController();
     abortRef.current = abort;
+    const streamStart = Date.now();
 
     const updateAssistant = (patch: Partial<DayAIMessage>) =>
       setMessages(prev => {
@@ -247,12 +378,14 @@ const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, onBack 
         return next;
       });
 
+    const profileId = selectedProfileId !== '__default__' ? selectedProfileId : '';
+
     try {
       if (ragMode === 'hybrid') {
         const resp = await fetch('/api/ai/day-rag', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ date, messages: newMessages.map(m => ({ role: m.role, content: m.content })) }),
+          body: JSON.stringify({ date, profile_id: profileId, messages: newMessages.map(m => ({ role: m.role, content: m.content })) }),
           signal: abort.signal,
         });
         if (!resp.ok) {
@@ -291,6 +424,7 @@ const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, onBack 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             username: '', is_group: false, from: 0, to: 0,
+            profile_id: profileId,
             messages: [{ role: 'system', content: systemPrompt }, ...newMessages.map(m => ({ role: m.role, content: m.content }))],
           }),
           signal: abort.signal,
@@ -324,7 +458,21 @@ const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, onBack 
       if ((e as { name?: string }).name === 'AbortError') return;
       updateAssistant({ content: `❌ ${e instanceof Error ? e.message : '请求失败'}`, streaming: false });
     } finally {
-      updateAssistant({ streaming: false });
+      const elapsed = (Date.now() - streamStart) / 1000;
+      setMessages(prev => {
+        const next = [...prev];
+        const msg = next[assistantIdx];
+        if (msg?.streaming) {
+          const chars = msg.content.length;
+          const tokensPerSec = elapsed > 0.1 ? Math.round(chars / elapsed / 1.5) : 0;
+          next[assistantIdx] = { ...msg, streaming: false, stats: {
+            elapsed, tokensPerSec, chars,
+            provider: selectedProfile?.provider,
+            model: selectedProfile?.model,
+          }};
+        }
+        return next;
+      });
       setLoading(false);
       scrollToBottom();
     }
@@ -340,6 +488,24 @@ const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, onBack 
           <div className="font-black text-sm text-[#1d1d1f] dark:text-white truncate">{date} · AI 分析</div>
           <div className="text-[10px] text-gray-400">{contacts.length} 私聊 · {groups.length} 群聊</div>
         </div>
+        {/* 模型切换 */}
+        {profiles.length > 1 && (
+          <div className="flex items-center gap-1 flex-wrap">
+            {profiles.map(p => (
+              <button
+                key={p.id}
+                onClick={() => setSelectedProfileId(p.id)}
+                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
+                  selectedProfileId === p.id
+                    ? 'bg-[#576b95] text-white border-[#576b95]'
+                    : 'bg-white dark:bg-white/5 text-gray-400 border-gray-200 dark:border-white/10 hover:border-[#576b95] hover:text-[#576b95]'
+                }`}
+              >
+                {`${PROVIDER_LABELS[p.provider] ?? p.provider}${p.model ? ` · ${p.model}` : ''}`}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex rounded-lg border border-gray-200 dark:border-white/10 overflow-hidden flex-shrink-0">
           <button onClick={() => setRagMode('full')}
             className={`px-2 py-1 text-[10px] font-bold transition-colors ${ragMode === 'full' ? 'bg-[#07c160] text-white' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}>
@@ -374,18 +540,31 @@ const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, onBack 
           </div>
         )}
         {messages.map((msg, i) => (
-          <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-            <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white mt-0.5 ${msg.role === 'user' ? 'bg-[#07c160] text-[10px] font-black' : 'bg-[#576b95]'}`}>
-              {msg.role === 'user' ? '我' : <Bot size={12} />}
+          msg.role === 'user' ? (
+            <div key={i} className="flex gap-2 flex-row-reverse">
+              <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center bg-[#07c160] text-white text-[10px] font-black mt-0.5">我</div>
+              <div className="max-w-[85%] px-3 py-2 rounded-2xl rounded-br-sm text-sm leading-relaxed whitespace-pre-wrap break-words bg-[#07c160] text-white">
+                {msg.content}
+              </div>
             </div>
-            <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${msg.role === 'user' ? 'bg-[#07c160] text-white rounded-br-sm' : 'bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-gray-200 rounded-bl-sm'}`}>
-              {msg.content
-                ? msg.content
-                : msg.streaming
-                  ? <span className="flex items-center gap-1.5 text-gray-400 text-xs"><Loader2 size={12} className="animate-spin text-[#576b95]" />分析中…</span>
-                  : ''}
+          ) : msg.streaming ? (
+            <div key={i} className="flex gap-2">
+              <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center bg-[#576b95] text-white mt-0.5"><Bot size={12} /></div>
+              <div className="px-3 py-2 rounded-2xl rounded-bl-sm text-sm bg-gray-100 dark:bg-white/10 text-gray-400">
+                <span className="flex items-center gap-1.5 text-xs">
+                  <Loader2 size={12} className="animate-spin text-[#576b95]" />
+                  分析中…{selectedProfile && <span className="ml-1 text-[#576b95]/70">{PROVIDER_LABELS[selectedProfile.provider] ?? selectedProfile.provider}{selectedProfile.model ? ` · ${selectedProfile.model}` : ''}</span>}
+                </span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <DayAssistantBubble
+              key={i}
+              msg={msg}
+              date={date}
+              prevQuestion={[...messages].slice(0, i).reverse().find(m => m.role === 'user')?.content}
+            />
+          )
         ))}
         <div ref={bottomRef} />
       </div>
@@ -436,7 +615,7 @@ const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, on
       onClick={() => setViewEntry(entry)}
     >
       {entry.small_head_url ? (
-        <img src={entry.small_head_url} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0"
+        <img src={avatarSrc(entry.small_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0"
           onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
       ) : (
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
@@ -519,6 +698,28 @@ export const ChatCalendarPage: React.FC<Props> = () => {
   const [dayGroups, setDayGroups] = useState<CalendarDayEntry[]>([]);
   const [dayLoading, setDayLoading] = useState(false);
   const dayFetchRef = useRef(0);
+
+  // 右侧面板宽度（可拖动）
+  const [panelWidth, setPanelWidth] = useState(320);
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startWidth: panelWidth };
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return;
+      const delta = dragRef.current.startX - ev.clientX;
+      const next = Math.min(600, Math.max(240, dragRef.current.startWidth + delta));
+      setPanelWidth(next);
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -773,7 +974,13 @@ export const ChatCalendarPage: React.FC<Props> = () => {
 
       {/* ── 右侧面板 ─────────────────────────────────────────────────────────── */}
       {selectedDate && (
-        <div className="border-l dark:border-white/10 bg-white dark:bg-[#1c1c1e] overflow-hidden flex flex-col w-80 flex-shrink-0">
+        <div className="border-l dark:border-white/10 bg-white dark:bg-[#1c1c1e] overflow-hidden flex flex-col flex-shrink-0 relative"
+          style={{ width: panelWidth }}>
+          {/* 拖动把手 */}
+          <div
+            className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#07c160]/40 active:bg-[#07c160]/60 z-10"
+            onMouseDown={handleDragStart}
+          />
           <DayPanel
             date={selectedDate}
             contacts={dayContacts}

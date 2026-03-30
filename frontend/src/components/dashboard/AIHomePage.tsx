@@ -3,12 +3,38 @@
  */
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Bot, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, Share2 } from 'lucide-react';
+import { Bot, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, Share2, Users, Plus, ChevronDown, ChevronRight, BrainCircuit } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateShareImage } from '../../utils/shareImage';
-import type { ContactStats, TimeRange, ChatMessage } from '../../types';
-import { contactsApi } from '../../services/api';
+import { avatarSrc } from '../../utils/avatar';
+import type { ContactStats, TimeRange, ChatMessage, GroupInfo, GroupChatMessage } from '../../types';
+import { contactsApi, groupsApi } from '../../services/api';
+
+const PROVIDER_LABELS: Record<string, string> = {
+  deepseek: 'DeepSeek', kimi: 'Kimi', gemini: 'Gemini', glm: 'GLM',
+  grok: 'Grok', openai: 'OpenAI', claude: 'Claude', ollama: 'Ollama', custom: '自定义',
+};
+
+// ─── 可选对象（联系人 or 群聊）──────────────────────────────────────────────
+
+type SelectableItem =
+  | { kind: 'contact'; data: ContactStats }
+  | { kind: 'group'; data: GroupInfo };
+
+function itemName(item: SelectableItem): string {
+  if (item.kind === 'contact') return item.data.remark || item.data.nickname || item.data.username;
+  return item.data.name || item.data.username;
+}
+
+function itemAvatar(item: SelectableItem): string | undefined {
+  if (item.kind === 'contact') return item.data.small_head_url || item.data.big_head_url || undefined;
+  return item.data.small_head_url || undefined;
+}
+
+function itemId(item: SelectableItem): string {
+  return (item.kind === 'contact' ? 'c:' : 'g:') + item.data.username;
+}
 
 // ─── 隐私脱敏 ─────────────────────────────────────────────────────────────────
 
@@ -28,94 +54,176 @@ function maskPrivacy(text: string, displayName?: string): string {
 // ─── 快捷预设 Prompt ───────────────────────────────────────────────────────────
 
 const PRESETS = [
-  { label: '关系分析', prompt: '请分析我和这个人的聊天关系，包括互动频率、话题偏好和情感倾向，以及这段关系的特点。' },
-  { label: '情感变化', prompt: '请分析我们聊天记录中情感基调的变化，找出情绪高峰和低谷的时期，以及可能的原因。' },
-  { label: '高频话题', prompt: '请总结我们聊天中最常讨论的话题和关键词，并分析各话题的比重与变化趋势。' },
-  { label: '沟通风格', prompt: '请分析我和这个人各自的沟通风格：用词习惯、句子长短、表达方式，以及两人风格的异同。' },
-  { label: '趣味总结', prompt: '请用轻松有趣的方式总结我们的聊天记录，找出印象最深的对话片段或有趣的互动模式。' },
+  { label: '关系分析', prompt: '请分析聊天记录中的关系特点，包括互动频率、话题偏好和情感倾向。' },
+  { label: '情感变化', prompt: '请分析聊天记录中情感基调的变化，找出情绪高峰和低谷的时期，以及可能的原因。' },
+  { label: '高频话题', prompt: '请总结聊天中最常讨论的话题和关键词，并分析各话题的比重与变化趋势。' },
+  { label: '沟通风格', prompt: '请分析聊天中各方的沟通风格：用词习惯、句子长短、表达方式，以及风格的异同。' },
+  { label: '趣味总结', prompt: '请用轻松有趣的方式总结聊天记录，找出印象最深的对话片段或有趣的互动模式。' },
 ];
 
-// ─── 联系人选择器 ──────────────────────────────────────────────────────────────
+// ─── 多选对象选择器 ────────────────────────────────────────────────────────────
+// 以 chips + 小「+」按钮呈现，避免与下方聊天输入框混淆
 
-const ContactPicker: React.FC<{
+const SubjectPicker: React.FC<{
   contacts: ContactStats[];
-  selected: ContactStats | null;
-  onSelect: (c: ContactStats | null) => void;
+  groups: GroupInfo[];
+  selected: SelectableItem[];
+  onAdd: (item: SelectableItem) => void;
+  onRemove: (id: string) => void;
   disabled?: boolean;
-}> = ({ contacts, selected, onSelect, disabled }) => {
+}> = ({ contacts, groups, selected, onAdd, onRemove, disabled }) => {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const ref = useRef<HTMLDivElement>(null);
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return contacts.slice(0, 20);
+  const selectedIds = useMemo(() => new Set(selected.map(itemId)), [selected]);
+
+  const filteredContacts = useMemo(() => {
     const q = query.toLowerCase();
     return contacts
-      .filter(c => (c.remark + c.nickname + c.username).toLowerCase().includes(q))
-      .slice(0, 20);
-  }, [contacts, query]);
+      .filter(c => !selectedIds.has('c:' + c.username) && (c.remark + c.nickname + c.username).toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [contacts, query, selectedIds]);
+
+  const filteredGroups = useMemo(() => {
+    const q = query.toLowerCase();
+    return groups
+      .filter(g => !selectedIds.has('g:' + g.username) && (g.name + g.username).toLowerCase().includes(q))
+      .slice(0, 6);
+  }, [groups, query, selectedIds]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQuery(''); }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  if (selected) {
-    const name = selected.remark || selected.nickname || selected.username;
-    const avatar = selected.small_head_url || selected.big_head_url;
-    return (
-      <div className="flex items-center gap-2 px-3 py-2 bg-[#f0faf4] border border-[#07c160]/30 rounded-xl">
-        {avatar
-          ? <img src={avatar} className="w-6 h-6 rounded-full object-cover flex-shrink-0" alt={name} />
-          : <div className="w-6 h-6 rounded-full bg-[#07c160] flex items-center justify-center flex-shrink-0 text-white text-[10px] font-black">{name[0]}</div>
-        }
-        <span className="text-sm font-semibold text-[#07c160] flex-1 truncate">{name}</span>
-        {!disabled && (
-          <button onClick={() => onSelect(null)} className="text-[#07c160]/60 hover:text-[#07c160] transition-colors">
-            <X size={14} />
-          </button>
-        )}
-      </div>
-    );
-  }
+  const openSearch = () => {
+    setOpen(true);
+    setTimeout(() => searchRef.current?.focus(), 30);
+  };
+
+  const showDropdown = open && (filteredContacts.length > 0 || filteredGroups.length > 0 || query.length === 0);
 
   return (
     <div ref={ref} className="relative">
-      <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl bg-white hover:border-[#07c160]/40 transition-colors">
-        <Search size={14} className="text-gray-300 flex-shrink-0" />
-        <input
-          className="flex-1 text-sm bg-transparent outline-none placeholder-gray-300 min-w-0"
-          placeholder="选择联系人…"
-          value={query}
-          onChange={e => { setQuery(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-        />
-      </div>
-      {open && filtered.length > 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden max-h-60 overflow-y-auto">
-          {filtered.map(c => {
-            const name = c.remark || c.nickname || c.username;
-            const avatar = c.small_head_url || c.big_head_url;
-            return (
-              <button
-                key={c.username}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#f0faf4] transition-colors text-left"
-                onMouseDown={e => { e.preventDefault(); onSelect(c); setQuery(''); setOpen(false); }}
-              >
-                {avatar
-                  ? <img src={avatar} className="w-8 h-8 rounded-full object-cover flex-shrink-0" alt={name} />
-                  : <div className="w-8 h-8 rounded-full bg-[#07c160]/20 flex items-center justify-center flex-shrink-0 text-[#07c160] text-sm font-black">{name[0]}</div>
-                }
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-[#1d1d1f] truncate">{name}</div>
-                  <div className="text-[10px] text-gray-400">{c.total_messages.toLocaleString()} 条消息</div>
-                </div>
+      <div className="flex items-center gap-2 flex-wrap min-h-[28px]">
+        {/* 标签 */}
+        <span className="text-[11px] font-bold text-gray-300 flex-shrink-0 select-none">分析对象</span>
+
+        {/* 已选 chips */}
+        {selected.map(item => {
+          const name = itemName(item);
+          const avatar = itemAvatar(item);
+          const id = itemId(item);
+          return (
+            <div key={id} className="flex items-center gap-1 pl-1 pr-1 py-0.5 bg-[#f0faf4] dark:bg-[#07c160]/15 border border-[#07c160]/25 rounded-full">
+              {avatar
+                ? <img src={avatarSrc(avatar)} className="w-5 h-5 rounded-full object-cover flex-shrink-0" alt={name} />
+                : item.kind === 'group'
+                  ? <div className="w-5 h-5 rounded-full bg-[#576b95]/15 flex items-center justify-center flex-shrink-0"><Users size={10} className="text-[#576b95]" /></div>
+                  : <div className="w-5 h-5 rounded-full bg-[#07c160] flex items-center justify-center text-white text-[9px] font-black flex-shrink-0">{name[0]}</div>
+              }
+              <span className="text-xs font-semibold text-[#07c160] max-w-[72px] truncate">{name}</span>
+              {!disabled && (
+                <button onClick={() => onRemove(id)} className="text-[#07c160]/40 hover:text-[#07c160] transition-colors p-0.5 ml-0.5">
+                  <X size={9} />
+                </button>
+              )}
+            </div>
+          );
+        })}
+
+        {/* + 添加 按钮 */}
+        {!disabled && (
+          open ? (
+            <div className="flex items-center gap-1 bg-white dark:bg-white/10 border border-[#07c160]/40 rounded-full px-2 py-0.5">
+              <Search size={11} className="text-gray-300 flex-shrink-0" />
+              <input
+                ref={searchRef}
+                className="text-xs bg-transparent outline-none placeholder-gray-300 dark:placeholder-gray-500 dark:text-gray-200 w-28"
+                placeholder="搜索联系人或群聊…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+              />
+              <button onClick={() => { setOpen(false); setQuery(''); }} className="text-gray-300 hover:text-gray-500 dark:hover:text-gray-300 transition-colors">
+                <X size={10} />
               </button>
-            );
-          })}
+            </div>
+          ) : (
+            <button
+              onClick={openSearch}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-gray-300 dark:border-gray-600 text-[11px] font-semibold text-gray-400 dark:text-gray-500 hover:border-[#07c160] hover:text-[#07c160] hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 transition-colors"
+            >
+              <Plus size={11} />
+              {selected.length === 0 ? '选择联系人或群聊' : '添加'}
+            </button>
+          )
+        )}
+      </div>
+
+      {/* 下拉列表 */}
+      {showDropdown && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1.5 bg-white dark:bg-[#2c2c2e] border border-gray-100 dark:border-white/10 rounded-2xl shadow-xl overflow-hidden max-h-72 overflow-y-auto">
+          {filteredContacts.length === 0 && filteredGroups.length === 0 && query && (
+            <div className="px-4 py-3 text-sm text-gray-400 text-center">未找到匹配项</div>
+          )}
+          {filteredContacts.length === 0 && filteredGroups.length === 0 && !query && (
+            <div className="px-4 py-3 text-xs text-gray-400 text-center">输入名称搜索…</div>
+          )}
+          {filteredContacts.length > 0 && (
+            <>
+              <div className="px-3 pt-2 pb-1 text-[10px] font-black text-gray-300 dark:text-gray-500 uppercase tracking-widest">联系人</div>
+              {filteredContacts.map(c => {
+                const name = c.remark || c.nickname || c.username;
+                const avatar = c.small_head_url || c.big_head_url;
+                return (
+                  <button
+                    key={c.username}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#f0faf4] dark:hover:bg-white/5 transition-colors text-left"
+                    onMouseDown={e => { e.preventDefault(); onAdd({ kind: 'contact', data: c }); setQuery(''); setOpen(false); }}
+                  >
+                    {avatar
+                      ? <img src={avatarSrc(avatar)} className="w-7 h-7 rounded-full object-cover flex-shrink-0" alt={name} />
+                      : <div className="w-7 h-7 rounded-full bg-[#07c160]/20 flex items-center justify-center text-[#07c160] text-sm font-black flex-shrink-0">{name[0]}</div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-[#1d1d1f] dark:text-gray-100 truncate">{name}</div>
+                      <div className="text-[10px] text-gray-400">{c.total_messages.toLocaleString()} 条消息</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </>
+          )}
+          {filteredGroups.length > 0 && (
+            <>
+              <div className={`px-3 pt-2 pb-1 text-[10px] font-black text-gray-300 dark:text-gray-500 uppercase tracking-widest ${filteredContacts.length > 0 ? 'border-t border-gray-50 dark:border-white/5' : ''}`}>群聊</div>
+              {filteredGroups.map(g => {
+                const name = g.name || g.username;
+                const avatar = g.small_head_url;
+                return (
+                  <button
+                    key={g.username}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#f0faf4] dark:hover:bg-white/5 transition-colors text-left"
+                    onMouseDown={e => { e.preventDefault(); onAdd({ kind: 'group', data: g }); setQuery(''); setOpen(false); }}
+                  >
+                    {avatar
+                      ? <img src={avatarSrc(avatar)} className="w-7 h-7 rounded-full object-cover flex-shrink-0" alt={name} />
+                      : <div className="w-7 h-7 rounded-full bg-[#576b95]/20 flex items-center justify-center flex-shrink-0"><Users size={14} className="text-[#576b95]" /></div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-[#1d1d1f] dark:text-gray-100 truncate">{name}</div>
+                      <div className="text-[10px] text-gray-400">{g.total_messages.toLocaleString()} 条消息 · 群聊</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -124,16 +232,25 @@ const ContactPicker: React.FC<{
 
 // ─── 消息气泡 ──────────────────────────────────────────────────────────────────
 
-type ChatMsg = { role: 'user' | 'assistant'; content: string; streaming?: boolean };
+type ChatMsg = {
+  role: 'user' | 'assistant';
+  content: string;
+  thinking?: string;
+  streaming?: boolean;
+  stats?: { elapsed: number; tokensPerSec: number; chars: number; provider?: string; model?: string; timestamp?: number };
+};
 
 const MessageBubble: React.FC<{
   msg: ChatMsg;
   contactName?: string;
   avatarUrl?: string;
   prevQuestion?: string;
-}> = ({ msg, contactName, avatarUrl, prevQuestion }) => {
+  llmProvider?: string;
+  llmModel?: string;
+}> = ({ msg, contactName, avatarUrl, prevQuestion, llmProvider, llmModel }) => {
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [thinkingOpen, setThinkingOpen] = useState(false);
 
   if (msg.role === 'user') {
     return (
@@ -161,7 +278,20 @@ const MessageBubble: React.FC<{
     setSharing(true);
     setShareMsg(null);
     try {
-      const savedPath = await generateShareImage({ question: prevQuestion, answer: msg.content, contactName, avatarUrl });
+      const savedPath = await generateShareImage({
+        question: prevQuestion,
+        answer: msg.content,
+        contactName,
+        avatarUrl,
+        stats: msg.stats ? {
+          provider: msg.stats.provider,
+          model: msg.stats.model,
+          elapsedSecs: msg.stats.elapsed,
+          tokensPerSec: msg.stats.tokensPerSec,
+          charCount: msg.stats.chars,
+          timestamp: msg.stats.timestamp,
+        } : undefined,
+      });
       const isAppMode = savedPath.startsWith('/');
       setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载' });
     } catch (err) {
@@ -173,24 +303,63 @@ const MessageBubble: React.FC<{
   };
 
   return (
-    <div className="flex gap-2 flex-row group">
-      <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-[#576b95] text-white mt-0.5">
-        <Bot size={13} />
-      </div>
-      <div className="flex flex-col gap-1 max-w-[80%]">
-        <div className="px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed bg-[#f0f0f0] text-[#1d1d1f] prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-hr:my-2">
-          {msg.content
-            ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-            : msg.streaming
-              ? <span className="flex items-center gap-2 text-gray-400 text-xs"><Loader2 size={13} className="animate-spin text-[#576b95] flex-shrink-0" />正在分析，请稍候…</span>
-              : ''}
+    <div className="flex flex-col gap-1">
+      <div className="flex gap-2 flex-row group">
+        <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-[#576b95] text-white mt-0.5">
+          <Bot size={13} />
         </div>
-        {msg.content && !msg.streaming && (
-          <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 max-w-[80%]">
+          <div className="px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed bg-[#f0f0f0] dark:bg-white/10 text-[#1d1d1f] dark:text-gray-100 prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-hr:my-2">
+            {msg.thinking && (
+              <div className="not-prose mb-2">
+                <button
+                  onClick={() => setThinkingOpen(v => !v)}
+                  className="flex items-center gap-1.5 text-[11px] text-[#576b95] hover:text-[#576b95]/80 transition-colors"
+                >
+                  <BrainCircuit size={12} />
+                  <span>{msg.streaming && !msg.content ? '正在思考…' : '思考过程'}</span>
+                  {thinkingOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                </button>
+                {thinkingOpen && (
+                  <div className={`mt-1.5 px-3 py-2 rounded-lg bg-[#576b95]/8 dark:bg-[#576b95]/15 border border-[#576b95]/15 text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed whitespace-pre-wrap font-mono ${msg.streaming ? '' : 'max-h-48 overflow-y-auto'}`}>
+                    {msg.thinking}
+                  </div>
+                )}
+              </div>
+            )}
+            {msg.content
+              ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              : msg.streaming
+                ? <span className="flex items-center gap-2 text-gray-400 text-xs">
+                    <Loader2 size={13} className="animate-spin text-[#576b95] flex-shrink-0" />
+                    <span>{msg.thinking ? '正在生成回答…' : '正在分析，请稍候…'}{llmProvider && <span className="ml-1.5 text-[#576b95]/70">{llmProvider}{llmModel ? ` · ${llmModel}` : ''}</span>}</span>
+                  </span>
+                : ''}
+            {msg.stats && !msg.streaming && (
+              <div className="flex flex-col items-end gap-0.5 mt-2 text-[10px] text-gray-400 not-prose">
+                {msg.stats.provider && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">{msg.stats.provider}{msg.stats.model ? ` · ${msg.stats.model}` : ''}</span>
+                    <span className="text-gray-300">·</span>
+                    <span>{msg.stats.elapsed.toFixed(1)}s</span>
+                    <span className="text-gray-300">·</span>
+                    <span>~{msg.stats.tokensPerSec} tok/s</span>
+                    <span className="text-gray-300">·</span>
+                    <span>{msg.stats.chars} 字符</span>
+                  </div>
+                )}
+                {msg.stats.timestamp && (() => {
+                  const d = new Date(msg.stats!.timestamp!);
+                  return <span>{d.getFullYear()}年{d.getMonth()+1}月{d.getDate()}日{d.getHours()}点{String(d.getMinutes()).padStart(2,'0')}分</span>;
+                })()}
+              </div>
+            )}
+          </div>
+          {msg.content && !msg.streaming && (
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#07c160] hover:bg-[#f0faf4] transition-colors"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#07c160] hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 transition-colors"
                 title="复制内容"
               >
                 {copied ? <Check size={11} className="text-[#07c160]" /> : <Copy size={11} />}
@@ -199,21 +368,21 @@ const MessageBubble: React.FC<{
               <button
                 onClick={handleShare}
                 disabled={sharing}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#576b95] hover:bg-[#f0f4ff] transition-colors disabled:opacity-50"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#576b95] hover:bg-[#f0f4ff] dark:hover:bg-[#576b95]/15 transition-colors disabled:opacity-50"
                 title="保存为图片分享"
               >
                 {sharing ? <Loader2 size={11} className="animate-spin" /> : <Share2 size={11} />}
                 {sharing ? '生成中…' : '分享'}
               </button>
             </div>
-            {shareMsg && (
-              <p className={`text-[10px] font-medium px-1 ${shareMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
-                {shareMsg.text}
-              </p>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </div>
+      {shareMsg && (
+        <p className={`text-[10px] font-medium ml-9 break-all leading-relaxed ${shareMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
+          {shareMsg.text}
+        </p>
+      )}
     </div>
   );
 };
@@ -224,16 +393,21 @@ export interface AIHomePageProps {
   contacts: ContactStats[];
   timeRange: TimeRange;
   onReselect: () => void;
+  onContactClick?: (contact: ContactStats) => void;
+  onGroupClick?: (group: GroupInfo) => void;
 }
 
 export const AIHomePage: React.FC<AIHomePageProps> = ({
   contacts,
   timeRange,
   onReselect,
+  onContactClick,
+  onGroupClick,
 }) => {
-  const [selectedContact, setSelectedContact] = useState<ContactStats | null>(null);
+  const [selectedItems, setSelectedItems] = useState<SelectableItem[]>([]);
+  const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [input, setInput] = useState('');
-  const [noContactHint, setNoContactHint] = useState(false);
+  const [noSelectionHint, setNoSelectionHint] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [loading, setLoading] = useState(false);
   const [ctxLoading, setCtxLoading] = useState(false);
@@ -243,14 +417,48 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
 
   const hasChatHistory = messages.length > 0;
 
-  // 最近聊天：按最后消息时间排序，取前 12 个
-  const recentContacts = useMemo(() =>
-    [...contacts]
+  // 加载群聊列表
+  useEffect(() => {
+    groupsApi.getList().then(setGroups).catch(() => {});
+  }, []);
+
+  // Provider profiles（支持多配置切换）
+  interface ProfileItem { id: string; name: string; provider: string; model?: string; }
+  const [profiles, setProfiles] = useState<ProfileItem[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState('');
+  useEffect(() => {
+    fetch('/api/preferences')
+      .then(r => r.json())
+      .then((d: { llm_profiles?: ProfileItem[]; llm_provider?: string; llm_model?: string }) => {
+        if (d.llm_profiles && d.llm_profiles.length > 0) {
+          setProfiles(d.llm_profiles);
+          setSelectedProfileId(d.llm_profiles[0].id);
+        } else if (d.llm_provider) {
+          const p = { id: '__default__', name: d.llm_provider, provider: d.llm_provider, model: d.llm_model ?? '' };
+          setProfiles([p]);
+          setSelectedProfileId('__default__');
+        }
+      })
+      .catch(() => {});
+  }, []);
+  const selectedProfile = profiles.find(p => p.id === selectedProfileId) ?? profiles[0];
+  const llmProvider = selectedProfile?.provider ?? '';
+  const llmModel = selectedProfile?.model ?? '';
+
+  // 最近聊天：联系人 + 群聊，按最后消息时间排序取前 14 个
+  const recentItems = useMemo(() => {
+    const contactItems: SelectableItem[] = contacts
       .filter(c => c.total_messages > 0)
-      .sort((a, b) => new Date(b.last_message_time).getTime() - new Date(a.last_message_time).getTime())
-      .slice(0, 12),
-    [contacts]
-  );
+      .map(c => ({ kind: 'contact' as const, data: c }));
+    const groupItems: SelectableItem[] = groups
+      .map(g => ({ kind: 'group' as const, data: g }));
+    const all = [...contactItems, ...groupItems];
+    return all.sort((a, b) => {
+      const aT = new Date(a.data.last_message_time).getTime();
+      const bT = new Date(b.data.last_message_time).getTime();
+      return bT - aT;
+    }).slice(0, 14);
+  }, [contacts, groups]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
@@ -268,11 +476,24 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
     setInput('');
   };
 
+  const handleAddItem = (item: SelectableItem) => {
+    const id = itemId(item);
+    setSelectedItems(prev => prev.some(s => itemId(s) === id) ? prev : [...prev, item]);
+  };
+
+  const handleRemoveItem = (id: string) => {
+    setSelectedItems(prev => {
+      const next = prev.filter(s => itemId(s) !== id);
+      if (next.length === 0) handleNewChat();
+      return next;
+    });
+  };
+
   const sendMessage = useCallback(async (q: string) => {
     if (!q.trim() || loading) return;
-    if (!selectedContact) {
-      setNoContactHint(true);
-      setTimeout(() => setNoContactHint(false), 2000);
+    if (selectedItems.length === 0) {
+      setNoSelectionHint(true);
+      setTimeout(() => setNoSelectionHint(false), 2000);
       textareaRef.current?.focus();
       return;
     }
@@ -281,17 +502,32 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
     setCtxLoading(true);
     setInput('');
 
-    const name = selectedContact.remark || selectedContact.nickname || selectedContact.username;
+    // 加载所有选中对象的消息
+    const perItem = Math.max(50, Math.floor(200 / selectedItems.length));
+    const sections: string[] = [];
 
-    // 加载最近 200 条消息
-    let ctxText = '';
     try {
-      const msgs: ChatMessage[] = await contactsApi.exportMessages(selectedContact.username) ?? [];
-      const recent = msgs.slice(-200);
-      const lines = recent.map(m => `[${m.date ?? ''} ${m.time}] ${m.is_mine ? '我' : name}：${m.content}`);
-      ctxText = lines.map(l => maskPrivacy(l, name)).join('\n');
-    } catch { /* ignore, send without context */ }
+      for (const item of selectedItems) {
+        const name = itemName(item);
+        if (item.kind === 'contact') {
+          const msgs: ChatMessage[] = await contactsApi.exportMessages(item.data.username) ?? [];
+          const recent = msgs.slice(-perItem);
+          const lines = recent.map(m => `[${m.date ?? ''} ${m.time}] ${m.is_mine ? '我' : name}：${m.content}`);
+          sections.push(`=== 与「${name}」的聊天记录 ===\n${lines.map(l => maskPrivacy(l, name)).join('\n')}`);
+        } else {
+          const msgs: GroupChatMessage[] = await groupsApi.exportMessages(item.data.username) ?? [];
+          const recent = msgs.slice(-perItem);
+          const lines = recent.map(m => `[${m.date ?? ''} ${m.time}] ${m.speaker || '成员'}：${m.content}`);
+          sections.push(`=== 「${name}」群聊记录 ===\n${lines.map(l => maskPrivacy(l)).join('\n')}`);
+        }
+      }
+    } catch { /* ignore */ }
     setCtxLoading(false);
+
+    const ctxText = sections.join('\n\n');
+    const contactLabels = selectedItems.map(item =>
+      item.kind === 'contact' ? `「${itemName(item)}」` : `「${itemName(item)}」群`
+    ).join('、');
 
     const userMsg: ChatMsg = { role: 'user', content: q.trim() };
     const newMessages = [...messages, userMsg];
@@ -300,11 +536,12 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
     scrollToBottom();
 
     const sysPrompt = ctxText
-      ? `你是一个聊天记录分析助手。以下是我与「${name}」的最近聊天记录（已脱敏处理）：\n\n${ctxText}\n\n请根据以上聊天记录回答用户的问题，分析时请客观、有洞察力，用中文回答，语言自然流畅。`
-      : `你是一个聊天记录分析助手，请帮助分析我与「${name}」的聊天关系，用中文回答。`;
+      ? `你是一个聊天记录分析助手。以下是${contactLabels}的聊天记录（已脱敏处理）：\n\n${ctxText}\n\n请根据以上聊天记录回答用户的问题，分析时请客观、有洞察力，用中文回答，语言自然流畅。`
+      : `你是一个聊天记录分析助手，请帮助分析${contactLabels}的聊天记录，用中文回答。`;
 
     const abort = new AbortController();
     abortRef.current = abort;
+    const streamStart = Date.now();
 
     try {
       const resp = await fetch('/api/ai/analyze', {
@@ -315,6 +552,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
             { role: 'system', content: sysPrompt },
             ...newMessages.map(m => ({ role: m.role, content: m.content })),
           ],
+          profile_id: selectedProfileId !== '__default__' ? selectedProfileId : '',
         }),
         signal: abort.signal,
       });
@@ -337,14 +575,18 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           try {
-            const chunk = JSON.parse(line.slice(6)) as { delta?: string; done?: boolean; error?: string };
+            const chunk = JSON.parse(line.slice(6)) as { delta?: string; thinking?: string; done?: boolean; error?: string };
             if (chunk.error) throw new Error(chunk.error);
             if (chunk.done) break;
-            if (chunk.delta) {
+            if (chunk.delta || chunk.thinking) {
               setMessages(prev => {
                 const next = [...prev];
                 const msg = next[assistantIdx];
-                if (msg) next[assistantIdx] = { ...msg, content: msg.content + chunk.delta };
+                if (msg) next[assistantIdx] = {
+                  ...msg,
+                  content: chunk.delta ? msg.content + chunk.delta : msg.content,
+                  thinking: chunk.thinking ? (msg.thinking ?? '') + chunk.thinking : msg.thinking,
+                };
                 return next;
               });
               scrollToBottom();
@@ -363,16 +605,21 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         return next;
       });
     } finally {
+      const elapsed = (Date.now() - streamStart) / 1000;
       setMessages(prev => {
         const next = [...prev];
         const msg = next[assistantIdx];
-        if (msg?.streaming) next[assistantIdx] = { ...msg, streaming: false };
+        if (msg?.streaming) {
+          const chars = msg.content.length;
+          const tokensPerSec = elapsed > 0.1 ? Math.round(chars / elapsed / 1.5) : 0;
+          next[assistantIdx] = { ...msg, streaming: false, stats: { elapsed, tokensPerSec, chars, provider: llmProvider, model: llmModel, timestamp: Date.now() } };
+        }
         return next;
       });
       setLoading(false);
       abortRef.current = null;
     }
-  }, [loading, selectedContact, messages, scrollToBottom]);
+  }, [loading, selectedItems, messages, scrollToBottom, selectedProfileId, llmProvider, llmModel]);
 
   const handleSend = (query?: string) => {
     const q = query ?? input;
@@ -380,10 +627,10 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   };
 
   const handleChip = (prompt: string) => {
-    if (!selectedContact) {
+    if (selectedItems.length === 0) {
       setInput(prompt);
-      setNoContactHint(true);
-      setTimeout(() => setNoContactHint(false), 2000);
+      setNoSelectionHint(true);
+      setTimeout(() => setNoSelectionHint(false), 2000);
       return;
     }
     sendMessage(prompt);
@@ -410,21 +657,33 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
     setCtxLoading(false);
   };
 
+  // 分享用：联系人展示名称 + 第一个联系人头像
+  const shareContactName = selectedItems.length > 0
+    ? selectedItems.map(item =>
+        item.kind === 'group' ? `${itemName(item)}群` : itemName(item)
+      ).join('、')
+    : undefined;
+  const shareAvatarUrl = selectedItems.length === 1 ? itemAvatar(selectedItems[0]) : undefined;
+
   // ── 输入卡片（复用于两种布局）─────────────────────────────────────────────
 
   const inputCard = (
     <div className="w-full max-w-xl mx-auto">
-      <div className={`bg-white rounded-3xl border-2 shadow-sm transition-colors ${noContactHint ? 'border-amber-300' : 'border-gray-100 focus-within:border-[#07c160]/40'}`}>
-        <div className="px-4 pt-4 pb-2">
-          <ContactPicker
+      <div className={`bg-white dark:bg-[#1c1c1e] rounded-3xl border-2 shadow-sm transition-colors ${noSelectionHint ? 'border-amber-300 dark:border-amber-500/60' : 'border-gray-100 dark:border-white/10 focus-within:border-[#07c160]/40 dark:focus-within:border-[#07c160]/50'}`}>
+        {/* 分析对象选择区 */}
+        <div className="px-4 pt-3.5 pb-2.5">
+          <SubjectPicker
             contacts={contacts}
-            selected={selectedContact}
-            onSelect={c => { setSelectedContact(c); if (!c) handleNewChat(); }}
+            groups={groups}
+            selected={selectedItems}
+            onAdd={handleAddItem}
+            onRemove={handleRemoveItem}
             disabled={loading}
           />
         </div>
-        <div className="mx-4 border-t border-dashed border-gray-100" />
-        <div className="px-4 pt-2 pb-3 flex items-end gap-2">
+        <div className="mx-4 border-t border-dashed border-gray-100 dark:border-white/10" />
+        {/* 问题输入区 */}
+        <div className="px-4 pt-2.5 pb-2">
           <textarea
             ref={textareaRef}
             value={input}
@@ -434,18 +693,44 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
             disabled={loading}
             placeholder={
               ctxLoading ? '正在加载聊天记录…'
-              : noContactHint ? '请先选择一个联系人↑'
+              : noSelectionHint ? '请先在上方选择分析对象↑'
               : hasChatHistory ? '继续提问…（Enter 发送）'
               : '想问什么？（Enter 发送，Shift+Enter 换行）'
             }
-            className={`flex-1 resize-none bg-transparent text-sm outline-none leading-relaxed transition-colors ${
-              noContactHint ? 'placeholder-amber-400' : 'placeholder-gray-300'
+            className={`w-full resize-none bg-transparent text-sm outline-none leading-relaxed transition-colors ${
+              noSelectionHint ? 'placeholder-amber-400' : 'placeholder-gray-300'
             } disabled:opacity-50`}
           />
+        </div>
+        {/* 底栏：模型切换 + 发送按钮 */}
+        <div className="px-3 pb-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1 flex-wrap min-h-[28px]">
+            {profiles.length > 1
+              ? profiles.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedProfileId(p.id)}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
+                      selectedProfileId === p.id
+                        ? 'bg-[#576b95] text-white border-[#576b95]'
+                        : 'bg-white dark:bg-white/5 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-white/10 hover:border-[#576b95] hover:text-[#576b95]'
+                    }`}
+                  >
+                    {`${PROVIDER_LABELS[p.provider] ?? p.provider}${p.model ? ` · ${p.model}` : ''}`}
+                  </button>
+                ))
+              : selectedProfile && (
+                  <span className="text-[10px] text-gray-300 font-medium">
+                    {PROVIDER_LABELS[selectedProfile.provider] ?? selectedProfile.provider}
+                    {selectedProfile.model ? ` · ${selectedProfile.model}` : ''}
+                  </span>
+                )
+            }
+          </div>
           {loading ? (
             <button
               onClick={handleStop}
-              className="mb-0.5 flex-shrink-0 w-9 h-9 bg-red-400 hover:bg-red-500 text-white rounded-xl flex items-center justify-center transition-colors"
+              className="flex-shrink-0 w-9 h-9 bg-red-400 hover:bg-red-500 text-white rounded-xl flex items-center justify-center transition-colors"
               title="停止"
             >
               <Square size={13} fill="white" />
@@ -454,7 +739,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
             <button
               onClick={() => handleSend()}
               disabled={!input.trim()}
-              className="mb-0.5 flex-shrink-0 w-9 h-9 bg-[#07c160] hover:bg-[#06ad56] disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl flex items-center justify-center transition-colors"
+              className="flex-shrink-0 w-9 h-9 bg-[#07c160] hover:bg-[#06ad56] disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl flex items-center justify-center transition-colors"
             >
               <Send size={15} />
             </button>
@@ -470,33 +755,65 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   // ── 对话模式 ───────────────────────────────────────────────────────────────
 
   if (hasChatHistory) {
-    const contactName = selectedContact
-      ? (selectedContact.remark || selectedContact.nickname || selectedContact.username)
-      : '';
-    const contactAvatar = selectedContact?.small_head_url || selectedContact?.big_head_url || undefined;
+    // 对话标题：最多显示前两个名字
+    const headerNames = selectedItems.slice(0, 2).map(itemName);
+    const headerTitle = headerNames.join('、') + (selectedItems.length > 2 ? ` 等${selectedItems.length}个` : '');
+    const headerAvatar = selectedItems.length === 1 ? itemAvatar(selectedItems[0]) : undefined;
 
     return (
       <div className="flex flex-col min-h-full">
         {/* 顶部栏 */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-3 bg-white/90 backdrop-blur border-b border-gray-100">
-          {/* 返回首页按钮（左侧，最显眼的操作） */}
+        <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-3 bg-white/90 dark:bg-[#1c1c1e]/90 backdrop-blur border-b border-gray-100 dark:border-white/10">
           <button
             onClick={handleNewChat}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-gray-100 text-sm font-semibold text-gray-500 hover:text-[#1d1d1f] transition-all -ml-1"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-white/8 text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-[#1d1d1f] dark:hover:text-gray-100 transition-all -ml-1"
             title="返回首页"
           >
             <ArrowLeft size={16} />
             返回
           </button>
 
-          {/* 中间：联系人信息 */}
-          {selectedContact && (
+          {/* 中间：对象信息 */}
+          {selectedItems.length > 0 && (
             <div className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2">
-              {contactAvatar
-                ? <img src={contactAvatar} className="w-6 h-6 rounded-full object-cover flex-shrink-0" alt={contactName} />
-                : <div className="w-6 h-6 rounded-full bg-[#07c160] flex items-center justify-center text-white text-[10px] font-black flex-shrink-0">{contactName[0]}</div>
-              }
-              <span className="text-sm font-semibold text-[#1d1d1f] truncate max-w-[120px]">{contactName}</span>
+              {selectedItems.length === 1 ? (() => {
+                const item = selectedItems[0];
+                const canClick = item.kind === 'contact' ? !!onContactClick : !!onGroupClick;
+                const handleClick = () => {
+                  if (item.kind === 'contact' && onContactClick) onContactClick(item.data);
+                  else if (item.kind === 'group' && onGroupClick) onGroupClick(item.data);
+                };
+                const avatar = headerAvatar
+                  ? <img src={avatarSrc(headerAvatar)} className="w-6 h-6 rounded-full object-cover flex-shrink-0" alt={headerTitle} />
+                  : item.kind === 'group'
+                    ? <div className="w-6 h-6 rounded-full bg-[#576b95]/20 flex items-center justify-center flex-shrink-0"><Users size={13} className="text-[#576b95]" /></div>
+                    : <div className="w-6 h-6 rounded-full bg-[#07c160] flex items-center justify-center text-white text-[10px] font-black flex-shrink-0">{headerTitle[0]}</div>;
+                return (
+                  <button
+                    onClick={canClick ? handleClick : undefined}
+                    className={`flex items-center gap-1.5 ${canClick ? 'hover:opacity-70 transition-opacity cursor-pointer' : 'cursor-default'}`}
+                    title={canClick ? `查看${item.kind === 'group' ? '群聊' : '私聊'}详情` : undefined}
+                  >
+                    {avatar}
+                    <span className="text-sm font-semibold text-[#1d1d1f] dark:text-gray-100 truncate max-w-[120px]">{headerTitle}</span>
+                  </button>
+                );
+              })() : (
+                <div className="flex items-center gap-1.5">
+                  <div className="flex -space-x-2">
+                    {selectedItems.slice(0, 3).map((item, i) => {
+                      const av = itemAvatar(item);
+                      const nm = itemName(item);
+                      return av
+                        ? <img key={i} src={avatarSrc(av)} className="w-6 h-6 rounded-full object-cover border-2 border-white dark:border-[#1c1c1e] flex-shrink-0" alt={nm} />
+                        : item.kind === 'group'
+                          ? <div key={i} className="w-6 h-6 rounded-full bg-[#576b95]/20 border-2 border-white dark:border-[#1c1c1e] flex items-center justify-center flex-shrink-0"><Users size={10} className="text-[#576b95]" /></div>
+                          : <div key={i} className="w-6 h-6 rounded-full bg-[#07c160] border-2 border-white dark:border-[#1c1c1e] flex items-center justify-center text-white text-[8px] font-black flex-shrink-0">{nm[0]}</div>;
+                    })}
+                  </div>
+                  <span className="text-sm font-semibold text-[#1d1d1f] dark:text-gray-100 truncate max-w-[140px]">{headerTitle}</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -510,8 +827,10 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
             <MessageBubble
               key={i}
               msg={msg}
-              contactName={contactName}
-              avatarUrl={contactAvatar}
+              contactName={shareContactName}
+              avatarUrl={shareAvatarUrl}
+              llmProvider={llmProvider}
+              llmModel={llmModel}
               prevQuestion={
                 msg.role === 'assistant'
                   ? [...messages].slice(0, i).reverse().find(m => m.role === 'user')?.content
@@ -523,7 +842,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         </div>
 
         {/* 输入区 */}
-        <div className="sticky bottom-0 bg-white/90 backdrop-blur border-t border-gray-100 px-4 sm:px-6 py-4">
+        <div className="sticky bottom-0 bg-white/90 dark:bg-[#1c1c1e]/90 backdrop-blur border-t border-gray-100 dark:border-white/10 px-4 sm:px-6 py-4">
           {inputCard}
         </div>
       </div>
@@ -540,7 +859,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 shadow-lg shadow-green-100 overflow-hidden">
           <img src="/favicon.svg" alt="WeLink" className="w-full h-full" />
         </div>
-        <h1 className="text-3xl font-black text-[#1d1d1f] tracking-tight">WeLink</h1>
+        <h1 className="text-3xl font-black text-[#1d1d1f] dark:text-gray-100 tracking-tight">WeLink</h1>
         <p className="text-gray-400 mt-1.5 text-sm font-medium">想了解哪段关系？直接问我</p>
         <div className="mt-2 flex items-center justify-center gap-2 text-xs text-gray-400">
           <span className="font-semibold text-[#07c160]">{timeRange.label}</span>
@@ -563,7 +882,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
           <button
             key={p.label}
             onClick={() => handleChip(p.prompt)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border border-gray-200 text-gray-500 hover:border-[#07c160] hover:text-[#07c160] hover:bg-[#f0faf4] transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-[#07c160] hover:text-[#07c160] hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 transition-colors"
           >
             <Bot size={11} />
             {p.label}
@@ -571,33 +890,56 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         ))}
       </div>
 
-      {/* 最近聊天 */}
-      {recentContacts.length > 0 && (
+      {/* 最近聊天（联系人 + 群聊混合） */}
+      {recentItems.length > 0 && (
         <div className="w-full max-w-xl mt-8">
           <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-3 text-center">最近聊天</p>
           <div className="flex gap-3 overflow-x-auto pb-1 justify-center flex-wrap">
-            {recentContacts.map(c => {
-              const name = c.remark || c.nickname || c.username;
-              const avatar = c.small_head_url || c.big_head_url;
+            {recentItems.map(item => {
+              const name = itemName(item);
+              const avatar = itemAvatar(item);
+              const id = itemId(item);
+              const isSelected = selectedItems.some(s => itemId(s) === id);
               return (
                 <button
-                  key={c.username}
-                  onClick={() => { setSelectedContact(c); textareaRef.current?.focus(); }}
+                  key={id}
+                  onClick={() => {
+                    if (isSelected) {
+                      handleRemoveItem(id);
+                    } else {
+                      handleAddItem(item);
+                      textareaRef.current?.focus();
+                    }
+                  }}
                   className={`flex-shrink-0 flex flex-col items-center gap-1.5 p-2 rounded-2xl border-2 transition-all ${
-                    selectedContact?.username === c.username
-                      ? 'border-[#07c160] bg-[#f0faf4]'
-                      : 'border-transparent hover:border-gray-200 hover:bg-gray-50'
+                    isSelected
+                      ? 'border-[#07c160] bg-[#f0faf4] dark:bg-[#07c160]/10'
+                      : 'border-transparent hover:border-gray-200 dark:hover:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5'
                   }`}
                 >
-                  {avatar
-                    ? <img src={avatar} className="w-10 h-10 rounded-full object-cover" alt={name} />
-                    : <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black">{name[0]}</div>
-                  }
-                  <span className="text-[10px] font-semibold text-gray-500 max-w-[52px] truncate">{name}</span>
+                  <div className="relative">
+                    {avatar
+                      ? <img src={avatarSrc(avatar)} className="w-10 h-10 rounded-full object-cover" alt={name} />
+                      : item.kind === 'group'
+                        ? <div className="w-10 h-10 rounded-full bg-[#576b95]/15 flex items-center justify-center"><Users size={18} className="text-[#576b95]" /></div>
+                        : <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black">{name[0]}</div>
+                    }
+                    {isSelected && (
+                      <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#07c160] flex items-center justify-center">
+                        <Check size={10} className="text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 max-w-[52px] truncate">{name}</span>
                 </button>
               );
             })}
           </div>
+          {selectedItems.length > 0 && (
+            <p className="text-center text-[10px] text-[#07c160] font-semibold mt-2">
+              已选 {selectedItems.length} 个对话 · 点击已选项可取消
+            </p>
+          )}
         </div>
       )}
     </div>

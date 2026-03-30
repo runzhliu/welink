@@ -6,6 +6,7 @@ import React from 'react';
 import { Moon } from 'lucide-react';
 import type { GlobalStats, ContactStats } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { avatarSrc } from '../../utils/avatar';
 
 interface Props {
   data: GlobalStats | null;
@@ -51,7 +52,7 @@ export const LateNightRanking: React.FC<Props> = ({ data, contacts = [], onConta
               {/* 头像 */}
               <div className="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden ring-1 ring-white/10">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt={entry.name} className="w-full h-full object-cover"
+                  <img src={avatarSrc(avatarUrl)} alt={entry.name} className="w-full h-full object-cover"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
                   <div className="w-full h-full bg-[#576b95] flex items-center justify-center text-white text-[10px] font-black">
