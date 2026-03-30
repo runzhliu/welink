@@ -10,7 +10,7 @@ export const useBackendStatus = (pollInterval = 1000) => {
   const [status, setStatus] = useState<BackendStatus | null>(null);
   const [backendReady, setBackendReady] = useState(false); // 后端可连通
   const [error, setError] = useState<Error | null>(null);
-  const timerRef = useRef<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchStatus = useCallback(async () => {
     try {

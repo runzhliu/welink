@@ -3,7 +3,10 @@
  */
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Bot, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft } from 'lucide-react';
+import { Bot, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, Share2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { generateShareImage } from '../../utils/shareImage';
 import type { ContactStats, TimeRange, ChatMessage } from '../../types';
 import { contactsApi } from '../../services/api';
 
@@ -123,8 +126,14 @@ const ContactPicker: React.FC<{
 
 type ChatMsg = { role: 'user' | 'assistant'; content: string; streaming?: boolean };
 
-const MessageBubble: React.FC<{ msg: ChatMsg }> = ({ msg }) => {
+const MessageBubble: React.FC<{
+  msg: ChatMsg;
+  contactName?: string;
+  avatarUrl?: string;
+  prevQuestion?: string;
+}> = ({ msg, contactName, avatarUrl, prevQuestion }) => {
   const [copied, setCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   if (msg.role === 'user') {
     return (
@@ -145,27 +154,64 @@ const MessageBubble: React.FC<{ msg: ChatMsg }> = ({ msg }) => {
     }).catch(() => {});
   };
 
+  const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const handleShare = async () => {
+    if (!msg.content || sharing) return;
+    setSharing(true);
+    setShareMsg(null);
+    try {
+      const savedPath = await generateShareImage({ question: prevQuestion, answer: msg.content, contactName, avatarUrl });
+      const isAppMode = savedPath.startsWith('/');
+      setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载' });
+    } catch (err) {
+      setShareMsg({ ok: false, text: `生成失败：${(err as Error).message}` });
+    } finally {
+      setSharing(false);
+      setTimeout(() => setShareMsg(null), 4000);
+    }
+  };
+
   return (
     <div className="flex gap-2 flex-row group">
       <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-[#576b95] text-white mt-0.5">
         <Bot size={13} />
       </div>
       <div className="flex flex-col gap-1 max-w-[80%]">
-        <div className="px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed whitespace-pre-wrap break-words bg-[#f0f0f0] text-[#1d1d1f]">
+        <div className="px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed bg-[#f0f0f0] text-[#1d1d1f] prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-hr:my-2">
           {msg.content
-            ? msg.content
+            ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
             : msg.streaming
               ? <span className="flex items-center gap-2 text-gray-400 text-xs"><Loader2 size={13} className="animate-spin text-[#576b95] flex-shrink-0" />正在分析，请稍候…</span>
               : ''}
         </div>
         {msg.content && !msg.streaming && (
-          <button
-            onClick={handleCopy}
-            className="self-start flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#07c160] hover:bg-[#f0faf4] transition-colors opacity-0 group-hover:opacity-100"
-          >
-            {copied ? <Check size={11} className="text-[#07c160]" /> : <Copy size={11} />}
-            {copied ? '已复制' : '复制'}
-          </button>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={handleCopy}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#07c160] hover:bg-[#f0faf4] transition-colors"
+                title="复制内容"
+              >
+                {copied ? <Check size={11} className="text-[#07c160]" /> : <Copy size={11} />}
+                {copied ? '已复制' : '复制'}
+              </button>
+              <button
+                onClick={handleShare}
+                disabled={sharing}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#576b95] hover:bg-[#f0f4ff] transition-colors disabled:opacity-50"
+                title="保存为图片分享"
+              >
+                {sharing ? <Loader2 size={11} className="animate-spin" /> : <Share2 size={11} />}
+                {sharing ? '生成中…' : '分享'}
+              </button>
+            </div>
+            {shareMsg && (
+              <p className={`text-[10px] font-medium px-1 ${shareMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
+                {shareMsg.text}
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -427,7 +473,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
     const contactName = selectedContact
       ? (selectedContact.remark || selectedContact.nickname || selectedContact.username)
       : '';
-    const contactAvatar = selectedContact?.small_head_url || selectedContact?.big_head_url;
+    const contactAvatar = selectedContact?.small_head_url || selectedContact?.big_head_url || undefined;
 
     return (
       <div className="flex flex-col min-h-full">
@@ -461,7 +507,17 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         {/* 消息区 */}
         <div className="flex-1 px-4 sm:px-6 py-6 space-y-5 max-w-3xl w-full mx-auto">
           {messages.map((msg, i) => (
-            <MessageBubble key={i} msg={msg} />
+            <MessageBubble
+              key={i}
+              msg={msg}
+              contactName={contactName}
+              avatarUrl={contactAvatar}
+              prevQuestion={
+                msg.role === 'assistant'
+                  ? [...messages].slice(0, i).reverse().find(m => m.role === 'user')?.content
+                  : undefined
+              }
+            />
           ))}
           <div ref={bottomRef} />
         </div>

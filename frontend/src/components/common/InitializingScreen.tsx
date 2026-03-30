@@ -1,85 +1,106 @@
 /**
- * 初始化加载屏幕
+ * 初始化加载屏幕 — 与 AI 首页风格保持一致
  */
 
-import React from 'react';
-import { Loader2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 
 interface InitializingScreenProps {
   message?: string;
 }
 
+const STEPS = [
+  '正在创建数据库索引',
+  '正在分析联系人数据',
+  '正在生成统计报告',
+];
+
 export const InitializingScreen: React.FC<InitializingScreenProps> = ({
   message = '正在初始化数据...',
 }) => {
-  return (
-    <div className="fixed inset-0 bg-gradient-to-br from-[#f8f9fb] to-[#e7f8f0] flex items-center justify-center z-50">
-      <div className="text-center">
-        {/* Logo with Animation */}
-        <div className="mb-8 relative">
-          <div className="w-24 h-24 mx-auto rounded-[32px] shadow-2xl shadow-green-200/50 animate-pulse overflow-hidden">
-            <img src="/favicon.svg" alt="WeLink" className="w-full h-full" />
-          </div>
+  // 依次点亮步骤
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setStep(s => Math.min(s + 1, STEPS.length - 1)), 3000);
+    return () => clearInterval(id);
+  }, []);
 
-          {/* Spinning Loader */}
-          <div className="absolute -bottom-4 left-1/2 -translate-x-1/2">
-            <div className="bg-white rounded-full p-3 shadow-lg">
-              <Loader2 size={24} className="text-[#07c160] animate-spin" strokeWidth={3} />
-            </div>
+  // 进度条
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setProgress(p => Math.min(p + 1, 90)), 300);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
+      <div className="flex flex-col items-center gap-0 w-72">
+
+        {/* Logo 区：ai-avatar + WeLink 标题 */}
+        <div className="flex items-center gap-4 mb-10">
+          <img src="/favicon.svg" alt="WeLink" className="w-16 h-16 rounded-2xl shadow-lg shadow-green-100" />
+          <div>
+            <h1 className="text-3xl font-black text-[#1d1d1f] tracking-tight leading-none mb-1">
+              WeLink
+            </h1>
+            <p className="text-sm font-semibold text-gray-400 leading-none">
+              AI 驱动 · 微信聊天分析
+            </p>
           </div>
         </div>
 
-        {/* Title */}
-        <h2 className="text-4xl font-black text-[#1d1d1f] mb-3 tracking-tight">
-          WeLink
-        </h2>
-
-        {/* Subtitle */}
-        <p className="text-gray-500 font-semibold text-lg mb-8">
-          微信聊天数据分析平台
+        {/* 当前状态文字 */}
+        <p className="text-sm font-semibold text-[#07c160] mb-4 self-start">
+          {message}
         </p>
 
-        {/* Status Message */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl px-8 py-4 inline-block shadow-lg">
-          <p className="text-[#07c160] font-bold text-sm tracking-wide">
-            {message}
-          </p>
+        {/* 进度条 */}
+        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden mb-6">
+          <div
+            className="h-full bg-gradient-to-r from-[#09d46a] to-[#07c160] rounded-full transition-all duration-300 ease-out"
+            style={{ width: `${progress}%` }}
+          />
         </div>
 
-        {/* Progress Steps */}
-        <div className="mt-12 space-y-3 text-left max-w-md mx-auto">
-          <div className="flex items-center gap-3 text-sm">
-            <div className="w-2 h-2 rounded-full bg-[#07c160] animate-pulse" />
-            <span className="text-gray-600 font-medium">正在创建数据库索引...</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <div className="w-2 h-2 rounded-full bg-[#07c160] animate-pulse animation-delay-200" />
-            <span className="text-gray-600 font-medium">正在分析联系人数据...</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <div className="w-2 h-2 rounded-full bg-gray-300 animate-pulse animation-delay-400" />
-            <span className="text-gray-400 font-medium">正在生成统计报告...</span>
-          </div>
+        {/* 步骤列表 */}
+        <div className="w-full space-y-2.5">
+          {STEPS.map((s, i) => {
+            const done    = i < step;
+            const active  = i === step;
+            const pending = i > step;
+            return (
+              <div key={s} className="flex items-center gap-3">
+                {/* 状态圆点 */}
+                {done ? (
+                  <svg className="w-4 h-4 flex-shrink-0 text-[#07c160]" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="7" fill="#e7f8f0" />
+                    <path d="M5 8l2 2 4-4" stroke="#07c160" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                ) : active ? (
+                  <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center">
+                    <span className="w-2 h-2 rounded-full bg-[#07c160] animate-pulse" />
+                  </span>
+                ) : (
+                  <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center">
+                    <span className="w-2 h-2 rounded-full bg-gray-200" />
+                  </span>
+                )}
+                <span className={`text-sm font-medium ${
+                  done    ? 'text-[#07c160]' :
+                  active  ? 'text-[#1d1d1f]' :
+                            'text-gray-300'
+                }`}>
+                  {s}{active ? '…' : done ? ' ✓' : ''}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
-        {/* Hint */}
-        <p className="mt-12 text-xs text-gray-400 font-medium">
-          首次启动需要约 10-30 秒，请耐心等待...
+        {/* 底部提示 */}
+        <p className="mt-10 text-xs text-gray-300 font-medium text-center">
+          首次启动需要约 10–30 秒，请耐心等待
         </p>
       </div>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-        .animation-delay-200 {
-          animation-delay: 200ms;
-        }
-        .animation-delay-400 {
-          animation-delay: 400ms;
-        }
-      `}</style>
     </div>
   );
 };

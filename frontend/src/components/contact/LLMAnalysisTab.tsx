@@ -3,7 +3,10 @@
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Bot, Send, RotateCcw, Loader2, AlertTriangle, Info, Copy, Check, CalendarDays, SlidersHorizontal, Square, Database, Search } from 'lucide-react';
+import { Bot, Send, RotateCcw, Loader2, AlertTriangle, Info, Copy, Check, CalendarDays, SlidersHorizontal, Square, Database, Search, Share2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { generateShareImage } from '../../utils/shareImage';
 import { contactsApi, groupsApi } from '../../services/api';
 import { CalendarRangePicker } from './CalendarRangePicker';
 import {
@@ -26,6 +29,7 @@ export interface LLMAnalysisProps {
   displayName: string;
   isGroup: boolean;
   totalMessages?: number; // 总消息数（用于估算）
+  avatarUrl?: string;     // 联系人头像 URL（用于分享卡片）
   initialQuery?: string;  // 从首页传入的预填问题
   quickMode?: boolean;    // 首页快速提问：全量模式 + 最近 200 条 + 自动脱敏 + 自动发送
 }
@@ -190,8 +194,15 @@ async function loadMessages(
 
 // ─── 消息气泡（含复制按钮）────────────────────────────────────────────────────
 
-const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
+const AssistantMessage: React.FC<{
+  msg: Message;
+  displayName?: string;
+  avatarUrl?: string;
+  prevQuestion?: string;
+}> = ({ msg, displayName, avatarUrl, prevQuestion }) => {
   const [copied, setCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const handleCopy = () => {
     if (!msg.content) return;
@@ -199,6 +210,22 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }).catch(() => {});
+  };
+
+  const handleShare = async () => {
+    if (!msg.content || sharing) return;
+    setSharing(true);
+    setShareMsg(null);
+    try {
+      const savedPath = await generateShareImage({ question: prevQuestion, answer: msg.content, contactName: displayName, avatarUrl });
+      const isAppMode = savedPath.startsWith('/');
+      setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载' });
+    } catch (err) {
+      setShareMsg({ ok: false, text: `生成失败：${(err as Error).message}` });
+    } finally {
+      setSharing(false);
+      setTimeout(() => setShareMsg(null), 4000);
+    }
   };
 
   if (msg.role === 'user') {
@@ -220,9 +247,9 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
         <Bot size={13} />
       </div>
       <div className="flex flex-col gap-1 max-w-[80%]">
-        <div className="px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed whitespace-pre-wrap break-words bg-[#f0f0f0] text-[#1d1d1f]">
+        <div className="px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed bg-[#f0f0f0] text-[#1d1d1f] prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-hr:my-2">
           {msg.content
-            ? msg.content
+            ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
             : msg.streaming
               ? (
                 <span className="flex items-center gap-2 text-gray-400 text-xs">
@@ -232,16 +259,33 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
               )
               : ''}
         </div>
-        {/* 复制按钮：有内容且不在流式输出时显示 */}
         {msg.content && !msg.streaming && (
-          <button
-            onClick={handleCopy}
-            className="self-start flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#07c160] hover:bg-[#f0faf4] transition-colors opacity-0 group-hover:opacity-100"
-            title="复制内容"
-          >
-            {copied ? <Check size={11} className="text-[#07c160]" /> : <Copy size={11} />}
-            {copied ? '已复制' : '复制'}
-          </button>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={handleCopy}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#07c160] hover:bg-[#f0faf4] transition-colors"
+                title="复制内容"
+              >
+                {copied ? <Check size={11} className="text-[#07c160]" /> : <Copy size={11} />}
+                {copied ? '已复制' : '复制'}
+              </button>
+              <button
+                onClick={handleShare}
+                disabled={sharing}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#576b95] hover:bg-[#f0f4ff] transition-colors disabled:opacity-50"
+                title="保存为图片分享"
+              >
+                {sharing ? <Loader2 size={11} className="animate-spin" /> : <Share2 size={11} />}
+                {sharing ? '生成中…' : '分享'}
+              </button>
+            </div>
+            {shareMsg && (
+              <p className={`text-[10px] font-medium px-1 ${shareMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
+                {shareMsg.text}
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -251,7 +295,7 @@ const AssistantMessage: React.FC<{ msg: Message }> = ({ msg }) => {
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
 
 export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
-  username, displayName, isGroup, initialQuery, quickMode,
+  username, displayName, isGroup, avatarUrl, initialQuery, quickMode,
 }) => {
   const key = `${isGroup ? 'group' : 'contact'}:${username}`;
   const { messages, loading, chunkProgress } = useAnalysisState(key);
@@ -1292,7 +1336,17 @@ ${effectiveCtx}
       {messages.length > 0 && (
         <div className="flex-1 overflow-y-auto space-y-4 max-h-[45vh] pr-1">
           {messages.map((msg, i) => (
-            <AssistantMessage key={i} msg={msg} />
+            <AssistantMessage
+              key={i}
+              msg={msg}
+              displayName={displayName}
+              avatarUrl={avatarUrl}
+              prevQuestion={
+                msg.role === 'assistant'
+                  ? [...messages].slice(0, i).reverse().find(m => m.role === 'user')?.content
+                  : undefined
+              }
+            />
           ))}
           <div ref={bottomRef} />
         </div>

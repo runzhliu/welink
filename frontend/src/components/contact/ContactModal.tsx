@@ -461,6 +461,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
             displayName={displayName}
             isGroup={false}
             totalMessages={contact.total_messages}
+            avatarUrl={avatarUrl || undefined}
           />
         )}
 

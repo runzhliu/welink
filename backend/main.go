@@ -20,6 +20,7 @@ package main
 
 import (
 	"archive/zip"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -182,6 +183,7 @@ func serverMain() {
 		var body struct {
 			Filename string `json:"filename"`
 			Content  string `json:"content"`
+			Encoding string `json:"encoding"` // "base64" → 解码后写入（用于 PNG 等二进制文件）
 		}
 		if err := c.ShouldBindJSON(&body); err != nil || body.Filename == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少参数"})
@@ -192,8 +194,19 @@ func serverMain() {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "无法获取用户目录"})
 			return
 		}
+		var fileBytes []byte
+		if body.Encoding == "base64" {
+			decoded, decErr := base64.StdEncoding.DecodeString(body.Content)
+			if decErr != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "base64 解码失败: " + decErr.Error()})
+				return
+			}
+			fileBytes = decoded
+		} else {
+			fileBytes = []byte(body.Content)
+		}
 		savePath := filepath.Join(homeDir, "Downloads", body.Filename)
-		if err := os.WriteFile(savePath, []byte(body.Content), 0644); err != nil {
+		if err := os.WriteFile(savePath, fileBytes, 0644); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "写入文件失败: " + err.Error()})
 			return
 		}
@@ -1302,6 +1315,27 @@ func serverMain() {
 			return
 		}
 		c.JSON(200, svc.GetStatus())
+	})
+
+	// 头像代理：将外部头像 URL（微信 CDN）通过后端转发，避免前端 Canvas CORS 污染
+	api.GET("/avatar", func(c *gin.Context) {
+		rawURL := c.Query("url")
+		if rawURL == "" || (!strings.HasPrefix(rawURL, "https://") && !strings.HasPrefix(rawURL, "http://")) {
+			c.Status(http.StatusBadRequest)
+			return
+		}
+		resp, err := http.Get(rawURL) // #nosec G107 — URL 来自受信任的数据库记录
+		if err != nil || resp.StatusCode != http.StatusOK {
+			c.Status(http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+		ct := resp.Header.Get("Content-Type")
+		if ct == "" {
+			ct = "image/jpeg"
+		}
+		c.Header("Cache-Control", "public, max-age=86400")
+		c.DataFromReader(http.StatusOK, resp.ContentLength, ct, resp.Body, nil)
 	})
 
 	// App 模式：用系统浏览器打开外部 URL（仅允许 https）
