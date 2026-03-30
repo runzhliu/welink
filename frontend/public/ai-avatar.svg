@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- WeLink 绿色底色 -->
+  <rect width="32" height="32" rx="7" fill="#07c160"/>
+
+  <!-- 聊天气泡（整体偏左下，给右上角徽章留空间） -->
+  <g transform="translate(4.5, 8)">
+    <rect x="1" y="1" width="17" height="13" rx="3"
+          fill="none" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+    <line x1="4.5" y1="5.5" x2="14" y2="5.5"
+          stroke="white" stroke-width="1.7" stroke-linecap="round"/>
+    <line x1="4.5" y1="9"   x2="11" y2="9"
+          stroke="white" stroke-width="1.7" stroke-linecap="round"/>
+    <!-- 气泡尾巴 -->
+    <polyline points="2.5,14 1,18.5 5.5,16"
+              fill="white" stroke="white" stroke-width="0.6" stroke-linejoin="round"/>
+  </g>
+
+  <!-- AI+ 徽章（右上角，圆角胶囊） -->
+  <rect x="17.5" y="0.5" width="13.5" height="9" rx="4.5" fill="#4f46e5"/>
+  <text
+    x="24.25" y="7.2"
+    font-family="system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif"
+    font-size="5.8"
+    font-weight="700"
+    fill="white"
+    text-anchor="middle"
+    letter-spacing="0.2"
+  >AI+</text>
+</svg>

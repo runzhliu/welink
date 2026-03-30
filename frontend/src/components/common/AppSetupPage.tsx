@@ -60,7 +60,7 @@ export const AppSetupPage: React.FC<Props> = ({ onSetupComplete }) => {
             <img src="/favicon.svg" alt="WeLink" className="w-full h-full" />
           </div>
           <h1 className="text-4xl font-black text-[#1d1d1f] tracking-tight">WeLink</h1>
-          <p className="text-gray-400 mt-2 text-sm font-medium">微信聊天数据分析平台</p>
+          <p className="text-gray-400 mt-2 text-sm font-medium">微信聊天记录 AI 助手</p>
         </div>
 
         {/* 说明卡片 */}
