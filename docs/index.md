@@ -3,44 +3,47 @@ layout: home
 
 hero:
   name: WeLink
-  text: 微信聊天数据分析平台
-  tagline: 你的每一段关系都有迹可循
+  text: AI 驱动的微信聊天数据分析平台
+  tagline: 对你的聊天记录直接提问，让 AI 读懂每一段关系
   image:
     src: /logo.svg
     alt: WeLink
   actions:
     - theme: brand
-      text: 下载安装
-      link: /install
+      text: AI 分析功能
+      link: /ai-analysis
     - theme: brand
       text: 在线 Demo
       link: https://demo.welink.click
+    - theme: alt
+      text: 下载安装
+      link: /install
 
 features:
+  - icon: 🤖
+    title: AI 对话分析
+    details: 针对任意联系人或群聊直接提问。「我们最常聊什么话题？」「这段关系经历了哪些阶段？」AI 读完聊天记录再回答，不是搜索框。
+  - icon: 🔀
+    title: 混合检索（RAG）
+    details: FTS5 全文检索 + 语义向量检索双引擎并行，精准召回相关消息片段作为上下文，问题越具体答案越准确。
+  - icon: 🧠
+    title: 记忆提炼
+    details: LLM 批量阅读历史记录，自动提炼关键事实（人名、事件、情感节点）持久化存储，让 AI 在后续对话中拥有长期记忆。
+  - icon: ⏳
+    title: 时光机
+    details: 可滑动的全历史日历热力图，点击任意一天查看当天所有私聊和群聊，或直接对当天内容发起 AI 分析。
   - icon: 👥
-    title: 好友深度分析
-    details: 消息排行、峰值月份、聊天趋势折线图、24 小时活跃分布、聊天日历热力图，一屏读懂一段关系。
-  - icon: 🕐
-    title: 认识时间线
-    details: 所有联系人按第一条消息排成时间轴，按年份分组，一眼看出每年认识了哪些人。
+    title: 好友深度画像
+    details: 消息排行、峰值月份、聊天趋势、24 小时活跃分布、词云、情感曲线，一屏读懂一段关系的完整轨迹。
+  - icon: 💬
+    title: 群聊分析
+    details: 成员发言排行、活跃时间分布、高频词云，支持查看任意一天的完整群聊记录。
   - icon: 🔍
     title: 全局搜索
     details: 跨所有联系人与群聊搜索聊天记录，关键词高亮，点击任意消息可弹出当天完整对话并自动定位。
-  - icon: 👥
-    title: 群聊画像
-    details: 群内发言排行（Top 500）、活跃时间分布、高频词云，支持查看任意一天的完整群聊记录。
-  - icon: 🗄️
-    title: SQL 编辑器
-    details: 数据库页内置 SQL 编辑器，可直接对底层 SQLite 执行 SELECT 查询，⌘+Enter 执行，结果一键复制。
-  - icon: 😊
-    title: 情感分析
-    details: 基于关键词逐条打分，按月聚合，呈现数年情感趋势折线图。
   - icon: 🔒
-    title: 完全本地
-    details: 所有数据仅在本机处理，不上传任何服务器。隐私屏蔽功能可从列表中完全隐藏指定联系人。
-  - icon: 🤖
-    title: MCP Server
-    details: 内置 MCP Server，让 Claude Code 用自然语言直接查询你的微信聊天数据——无需打开界面，直接在终端提问。
+    title: 完全本地，数据不出机
+    details: 所有分析和 AI 推理均在本机完成，不上传任何服务器。支持 Ollama 离线运行，连 API Key 都不需要。
 ---
 
 <div class="vp-doc" style="max-width:900px;margin:0 auto;padding:48px 24px;">
@@ -169,6 +172,9 @@ docker compose up
 | 后端 | Go + Gin |
 | 前端 | React 18 + TypeScript + Tailwind CSS |
 | 数据库 | SQLite（modernc，纯 Go，无 CGO） |
+| 全文检索 | SQLite FTS5 |
+| 向量检索 | 余弦相似度（纯 Go，无外部依赖） |
+| AI / LLM | OpenAI / Ollama / Gemini / 自定义（兼容 OpenAI 接口） |
 | 中文分词 | go-ego/gse |
 | 部署 | Docker Compose |
 

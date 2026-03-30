@@ -1,9 +1,9 @@
 /**
- * 侧边栏组件 - 桌面侧边 / 手机底部导航栏
+ * 侧边栏组件 - 桌面侧边（可折叠）/ 手机底部导航栏
  */
 
 import { useState } from 'react';
-import { Users, Database, Sun, Moon, MessagesSquare, BookOpen, Github, Search, GitCommitHorizontal, X, Settings } from 'lucide-react';
+import { Bot, BarChart2, Database, Sun, Moon, MessagesSquare, BookOpen, Github, Search, GitCommitHorizontal, Hourglass, X, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { TabType } from '../../types';
 
 interface SidebarProps {
@@ -21,7 +21,6 @@ const isWebView = () => {
 
 const openExternal = (url: string) => {
   if (isWebView()) {
-    // App 模式：调用后端接口用系统浏览器打开
     fetch(`/api/open-url?url=${encodeURIComponent(url)}`);
   } else {
     window.open(url, '_blank');
@@ -30,13 +29,31 @@ const openExternal = (url: string) => {
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, onToggleDark }) => {
   const [swaggerOpen, setSwaggerOpen] = useState(false);
+  const [expanded, setExpanded] = useState(() => {
+    return localStorage.getItem('welink_sidebar_expanded') !== 'false';
+  });
+
+  const toggleExpanded = () => {
+    const next = !expanded;
+    setExpanded(next);
+    localStorage.setItem('welink_sidebar_expanded', String(next));
+  };
+
   const navItems: { tab: TabType; icon: React.ReactNode; label: string }[] = [
-    { tab: 'dashboard', icon: <Users size={22} strokeWidth={2} />, label: '好友' },
-    { tab: 'groups', icon: <MessagesSquare size={22} strokeWidth={2} />, label: '群聊' },
-    { tab: 'timeline', icon: <GitCommitHorizontal size={22} strokeWidth={2} />, label: '时间线' },
-    { tab: 'search', icon: <Search size={22} strokeWidth={2} />, label: '搜索' },
-    { tab: 'db', icon: <Database size={22} strokeWidth={2} />, label: '数据库' },
-    { tab: 'settings', icon: <Settings size={22} strokeWidth={2} />, label: '设置' },
+    { tab: 'dashboard', icon: <Bot size={20} strokeWidth={2} />,              label: 'AI 首页' },
+    { tab: 'stats',     icon: <BarChart2 size={20} strokeWidth={2} />,        label: '数据概览' },
+    { tab: 'groups',    icon: <MessagesSquare size={20} strokeWidth={2} />,   label: '群聊' },
+    { tab: 'timeline',  icon: <GitCommitHorizontal size={20} strokeWidth={2} />, label: '时间线' },
+    { tab: 'calendar',  icon: <Hourglass size={20} strokeWidth={2} />,        label: '时光机' },
+    { tab: 'search',    icon: <Search size={20} strokeWidth={2} />,           label: '搜索' },
+    { tab: 'db',        icon: <Database size={20} strokeWidth={2} />,         label: '数据库' },
+    { tab: 'settings',  icon: <Settings size={20} strokeWidth={2} />,         label: '设置' },
+  ];
+
+  const bottomItems = [
+    { icon: <BookOpen size={18} strokeWidth={2} />,  label: 'API 文档', onClick: () => setSwaggerOpen(true) },
+    { icon: <Github size={18} strokeWidth={2} />,    label: 'GitHub',   onClick: () => openExternal('https://github.com/runzhliu/WeLink') },
+    { icon: dark ? <Sun size={18} strokeWidth={2} /> : <Moon size={18} strokeWidth={2} />, label: dark ? '亮色模式' : '暗色模式', onClick: onToggleDark },
   ];
 
   return (
@@ -55,61 +72,78 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
           <iframe src="/swagger/" className="flex-1 w-full border-0" />
         </div>
       )}
+
       {/* 桌面侧边栏 */}
-      <aside className="hidden sm:flex w-20 dk-card bg-white dk-border border-r flex-col items-center py-8 gap-8 shadow-sm z-10">
-        <div
-          className="w-12 h-12 rounded-2xl overflow-hidden shadow-lg shadow-green-100/50 cursor-pointer hover:opacity-80 transition-opacity"
-          onClick={() => openExternal('https://welink.click')}
-          title="官方文档"
-        >
-          <img src="/favicon.svg" alt="WeLink" className="w-full h-full" />
+      <aside
+        className={`hidden sm:flex dk-card bg-white dk-border border-r flex-col py-4 shadow-sm z-10 transition-all duration-200 ${
+          expanded ? 'w-44' : 'w-16'
+        } overflow-hidden`}
+      >
+        {/* Logo 区 */}
+        <div className={`flex items-center gap-3 px-3 mb-4 ${expanded ? 'justify-between' : 'justify-center flex-col gap-2'}`}>
+          <div
+            className="w-9 h-9 rounded-xl overflow-hidden shadow-md shadow-green-100/50 cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
+            onClick={() => openExternal('https://welink.click')}
+            title="官方文档"
+          >
+            <img src="/favicon.svg" alt="WeLink" className="w-full h-full" />
+          </div>
+          {expanded && (
+            <span className="text-sm font-black text-[#1d1d1f] tracking-tight flex-1 truncate">WeLink</span>
+          )}
+          <button
+            onClick={toggleExpanded}
+            className="flex-shrink-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+            title={expanded ? '收起侧边栏' : '展开侧边栏'}
+          >
+            {expanded ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
+          </button>
         </div>
-        <nav className="flex flex-col gap-4 flex-1">
+
+        {/* 主导航 */}
+        <nav className="flex flex-col gap-1 flex-1 px-2">
           {navItems.map(({ tab, icon, label }) => (
             <button
               key={tab}
               onClick={() => onTabChange(tab)}
-              title={label}
-              className={`p-4 rounded-2xl transition-all duration-200 ${
+              title={expanded ? undefined : label}
+              className={`flex items-center gap-3 rounded-xl transition-all duration-150 ${
+                expanded ? 'px-3 py-2.5' : 'p-3 justify-center'
+              } ${
                 activeTab === tab
-                  ? 'bg-[#e7f8f0] text-[#07c160] shadow-sm dark:bg-[#07c160]/20'
+                  ? 'bg-[#e7f8f0] text-[#07c160] dark:bg-[#07c160]/20'
                   : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-white/5'
               }`}
             >
-              {icon}
+              <span className="flex-shrink-0">{icon}</span>
+              {expanded && (
+                <span className="text-xs font-semibold truncate">{label}</span>
+              )}
             </button>
           ))}
         </nav>
-        {/* 底部操作按钮组（收拢间距，避免小屏溢出截断） */}
-        <div className="flex flex-col gap-2">
-          {/* API 文档 */}
-          <button
-            onClick={() => setSwaggerOpen(true)}
-            className="p-3 rounded-2xl text-gray-400 hover:text-[#07c160] hover:bg-[#e7f8f0] transition-all duration-200"
-            title="API 文档"
-          >
-            <BookOpen size={20} strokeWidth={2} />
-          </button>
-          {/* GitHub */}
-          <button
-            onClick={() => openExternal('https://github.com/runzhliu/WeLink')}
-            className="p-3 rounded-2xl text-gray-400 hover:text-[#1d1d1f] hover:bg-gray-100 dark:hover:bg-white/5 transition-all duration-200"
-            title="GitHub"
-          >
-            <Github size={20} strokeWidth={2} />
-          </button>
-          {/* 暗色切换 */}
-          <button
-            onClick={onToggleDark}
-            className="p-3 rounded-2xl text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 transition-all duration-200"
-            title={dark ? '切换亮色' : '切换暗色'}
-          >
-            {dark ? <Sun size={20} strokeWidth={2} /> : <Moon size={20} strokeWidth={2} />}
-          </button>
+
+        {/* 底部工具按钮 */}
+        <div className="flex flex-col gap-1 px-2 pt-2 border-t border-gray-100 mt-2">
+          {bottomItems.map(({ icon, label, onClick }) => (
+            <button
+              key={label}
+              onClick={onClick}
+              title={expanded ? undefined : label}
+              className={`flex items-center gap-3 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-50 dark:hover:bg-white/5 transition-all duration-150 ${
+                expanded ? 'px-3 py-2' : 'p-2.5 justify-center'
+              }`}
+            >
+              <span className="flex-shrink-0">{icon}</span>
+              {expanded && (
+                <span className="text-xs font-semibold truncate">{label}</span>
+              )}
+            </button>
+          ))}
         </div>
       </aside>
 
-      {/* 手机底部导航栏 */}
+      {/* 手机底部导航栏（不受折叠影响） */}
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 dk-card bg-white dk-border border-t flex">
         {navItems.map(({ tab, icon, label }) => (
           <button
@@ -123,7 +157,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
             <span>{label}</span>
           </button>
         ))}
-        {/* API 文档 */}
         <button
           onClick={() => setSwaggerOpen(true)}
           className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-semibold text-gray-400"
@@ -131,7 +164,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
           <BookOpen size={22} strokeWidth={2} />
           <span>文档</span>
         </button>
-        {/* GitHub */}
         <button
           onClick={() => openExternal('https://github.com/runzhliu/WeLink')}
           className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-semibold text-gray-400"
@@ -139,7 +171,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
           <Github size={22} strokeWidth={2} />
           <span>GitHub</span>
         </button>
-        {/* 暗色切换按钮 */}
         <button
           onClick={onToggleDark}
           className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-semibold text-gray-400"
@@ -151,4 +182,3 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
     </>
   );
 };
-

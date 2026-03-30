@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Users, MessageSquare, ChevronRight, Loader2, X, BarChart2, EyeOff, Search, Download } from 'lucide-react';
+import { Users, MessageSquare, ChevronRight, Loader2, X, BarChart2, EyeOff, Search, Download, Bot } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { GroupInfo, GroupDetail, ContactStats, GroupChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
@@ -17,6 +17,8 @@ import {
   MEMBER_RANK_LIMIT_KEY, MEMBER_NAME_WIDTH_KEY,
   DEFAULT_RANK_LIMIT, DEFAULT_NAME_WIDTH,
 } from '../common/SettingsPage';
+import { LLMAnalysisTab } from '../contact/LLMAnalysisTab';
+import { AIAnalysisBadge } from '../dashboard/ContactTable';
 
 // ─── 群详情弹窗 ───────────────────────────────────────────────────────────────
 
@@ -55,7 +57,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
       c.username === displayName
     ) ?? null;
   };
-  const [tab, setTab] = useState<'portrait' | 'search'>('portrait');
+  const [tab, setTab] = useState<'portrait' | 'search' | 'ai'>('portrait');
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [dayPanel, setDayPanel] = useState<{ date: string; count: number } | null>(null);
@@ -301,21 +303,32 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
 
         {/* Tab bar */}
         <div className="flex gap-2 mb-6 border-b border-gray-100">
-          {(['portrait', 'search'] as const).map((t) => (
+          {(['portrait', 'search', 'ai'] as const).map((t) => (
             <button
               key={t}
               onClick={() => {
                 setTab(t);
                 if (t === 'search') setTimeout(() => searchInputRef.current?.focus(), 50);
               }}
-              className={`px-5 py-2 rounded-t-xl text-sm font-bold transition border-b-2 -mb-px ${
+              className={`flex items-center gap-1 px-5 py-2 rounded-t-xl text-sm font-bold transition border-b-2 -mb-px ${
                 tab === t ? 'text-[#07c160] border-[#07c160]' : 'text-gray-400 border-transparent hover:text-gray-600'
               }`}
             >
-              {t === 'portrait' ? '群聊画像' : '搜索记录'}
+              {t === 'ai' && <Bot size={13} className="flex-shrink-0" />}
+              {t === 'portrait' ? '群聊画像' : t === 'search' ? '搜索记录' : 'AI 分析'}
+              {t === 'ai' && <AIAnalysisBadge username={group.username} isGroup={true} />}
             </button>
           ))}
         </div>
+
+        {tab === 'ai' && (
+          <LLMAnalysisTab
+            username={group.username}
+            displayName={group.name}
+            isGroup={true}
+            totalMessages={group.total_messages}
+          />
+        )}
 
         {tab === 'search' && (
           <div>

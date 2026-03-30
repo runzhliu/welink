@@ -198,4 +198,27 @@ export const groupsApi = {
     api.get<void, GroupChatMessage[]>('/groups/export', { params: { username, ...(from ? { from } : {}), ...(to ? { to } : {}) } }),
 };
 
+export const calendarApi = {
+  getHeatmap: () =>
+    api.get<void, { heatmap: Record<string, number> }>('/calendar/heatmap'),
+
+  getTrend: (days = 90) =>
+    api.get<void, import('../types').CalendarTrendPoint[]>('/calendar/trend', { params: { days } }),
+
+  getDay: (date: string) =>
+    api.get<void, { contacts: import('../types').CalendarDayEntry[]; groups: import('../types').CalendarDayEntry[] }>(
+      '/calendar/day', { params: { date } }
+    ),
+
+  getContactMessages: (date: string, username: string) =>
+    api.get<void, import('../types').ChatMessage[]>('/calendar/messages', {
+      params: { date, username, is_group: '0' }
+    }),
+
+  getGroupMessages: (date: string, username: string) =>
+    api.get<void, import('../types').GroupChatMessage[]>('/calendar/messages', {
+      params: { date, username, is_group: '1' }
+    }),
+};
+
 export default api;

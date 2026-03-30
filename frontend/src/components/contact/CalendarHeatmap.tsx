@@ -2,11 +2,13 @@
  * GitHub 风格聊天日历热力图
  */
 
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 
 interface CalendarHeatmapProps {
   data: Record<string, number>; // "2023-01-15" -> count
   onDayClick?: (date: string, count: number) => void;
+  /** 当可见日期范围因滚动发生变化时触发 */
+  onVisibleRangeChange?: (start: string, end: string) => void;
 }
 
 const COLORS = ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'];
@@ -26,9 +28,10 @@ interface TooltipState {
   y: number;
 }
 
-export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ data, onDayClick }) => {
+export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ data, onDayClick, onVisibleRangeChange }) => {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const { weeks, months } = useMemo(() => {
     if (!Object.keys(data).length) return { weeks: [], months: [] };
@@ -93,6 +96,28 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ data, onDayCli
   const svgW = weeks.length * STEP + DAY_W;
   const svgH = 7 * STEP + LABEL_H;
 
+  // 计算当前可见列范围并上报
+  const computeVisible = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || !weeks.length || !onVisibleRangeChange) return;
+    const firstCol = Math.max(0, Math.floor(el.scrollLeft / STEP));
+    const lastCol = Math.min(weeks.length - 1, Math.floor((el.scrollLeft + el.clientWidth - DAY_W) / STEP));
+    const startDate = weeks[firstCol]?.[0]?.date;
+    const lastWeek = weeks[lastCol];
+    const endDate = lastWeek?.[lastWeek.length - 1]?.date;
+    if (startDate && endDate) onVisibleRangeChange(startDate, endDate);
+  }, [weeks, onVisibleRangeChange, STEP, DAY_W]);
+
+  // 初始滚到最右（最新日期），并上报初始可见范围（仅当调用方需要范围回调时）
+  useEffect(() => {
+    if (!onVisibleRangeChange) return;
+    const el = scrollRef.current;
+    if (!el || !weeks.length) return;
+    el.scrollLeft = el.scrollWidth;
+    const id = requestAnimationFrame(computeVisible);
+    return () => cancelAnimationFrame(id);
+  }, [weeks.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleCellClick = (cell: { date: string; count: number }, col: number, row: number, e: React.MouseEvent) => {
     e.stopPropagation();
     if (cell.count === 0) return;
@@ -106,7 +131,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ data, onDayCli
   };
 
   return (
-    <div className="overflow-x-auto" onClick={() => setTooltip(null)}>
+    <div ref={scrollRef} className="overflow-x-auto" onClick={() => setTooltip(null)} onScroll={computeVisible}>
       <svg ref={svgRef} width={svgW} height={svgH} style={{ display: 'block' }}>
         {/* 月份标签 */}
         {months.map(({ label, col }) => (

@@ -3,9 +3,11 @@
  */
 
 import React, { useState } from 'react';
-import { MessageCircle, Clock, TrendingUp, Users, ChevronUp, ChevronDown } from 'lucide-react';
+import { useSyncExternalStore } from 'react';
+import { MessageCircle, Clock, TrendingUp, Users, ChevronUp, ChevronDown, Bot, Loader2, CheckCircle2 } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { subscribeAnalysis, getAnalysisSnapshot } from '../../stores/llmAnalysisStore';
 
 interface ContactTableProps {
   contacts: ContactStats[];
@@ -35,6 +37,31 @@ const STATUS_BADGES = [
 ];
 
 const getStatusBadge = (contact: ContactStats) => STATUS_BADGES[getStatusTier(contact)];
+
+/** 单个联系人的 AI 分析状态角标 */
+export const AIAnalysisBadge: React.FC<{ username: string; isGroup?: boolean }> = ({ username, isGroup }) => {
+  const snap = useSyncExternalStore(subscribeAnalysis, getAnalysisSnapshot);
+  const key = `${isGroup ? 'group' : 'contact'}:${username}`;
+  const state = snap.get(key);
+  if (!state || state.messages.length === 0) return null;
+
+  if (state.loading) {
+    const prog = state.chunkProgress;
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-600 border border-purple-100">
+        <Loader2 size={9} className="animate-spin" />
+        {prog ? `分段 ${prog.current}/${prog.total}` : 'AI 分析中'}
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#e7f8f0] text-[#07c160] border border-[#c3efdc]">
+      <Bot size={9} />
+      AI 已完成
+    </span>
+  );
+};
 
 export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactClick }) => {
   const { privacyMode } = usePrivacyMode();
@@ -201,7 +228,12 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                 <td className="px-8 py-5">
                   <span className="text-sm font-medium text-gray-600">{contact.last_message_time || '-'}</span>
                 </td>
-                <td className="px-8 py-5">{getStatusBadge(contact)}</td>
+                <td className="px-8 py-5">
+                  <div className="flex flex-col gap-1.5 items-start">
+                    {getStatusBadge(contact)}
+                    <AIAnalysisBadge username={contact.username} />
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -229,9 +261,10 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                 <div className="text-xs text-gray-400 mt-0.5">{contact.last_message_time || '-'}</div>
               </div>
             </div>
-            <div className="flex items-center gap-3 ml-3 flex-shrink-0">
+            <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
               <span className="text-sm font-bold text-[#1d1d1f]">{contact.total_messages.toLocaleString()}</span>
               {getStatusBadge(contact)}
+              <AIAnalysisBadge username={contact.username} />
             </div>
           </div>
         ))}

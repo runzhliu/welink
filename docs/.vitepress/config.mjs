@@ -6,7 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   title: 'WeLink',
-  description: '微信聊天数据分析平台',
+  description: 'AI 驱动的微信聊天数据分析平台',
   lang: 'zh-CN',
 
   ignoreDeadLinks: [/^http:\/\/localhost/],
@@ -21,10 +21,10 @@ export default defineConfig({
 
     nav: [
       { text: '首页', link: '/' },
+      { text: 'AI 分析', link: '/ai-analysis' },
       { text: '下载安装', link: '/install' },
       { text: 'MCP Server', link: '/mcp-server' },
       { text: 'API 接口', link: '/api' },
-      { text: '技术文档', link: '/README' },
     ],
 
     sidebar: [
@@ -33,6 +33,13 @@ export default defineConfig({
         items: [
           { text: '产品概览', link: '/' },
           { text: '下载与安装', link: '/install' },
+        ],
+      },
+      {
+        text: 'AI 功能',
+        items: [
+          { text: 'AI 分析功能', link: '/ai-analysis' },
+          { text: 'Ollama 本地 AI 配置', link: '/ollama-setup' },
           { text: 'MCP Server', link: '/mcp-server' },
         ],
       },

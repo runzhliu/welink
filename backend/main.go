@@ -20,6 +20,7 @@ package main
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -115,6 +116,11 @@ func serverMain() {
 		// App 模式或数据目录无效时：服务层保持 nil，前端会收到 503 并提示用户
 		// Docker 模式下请检查 volumes 中 decrypted/ 目录是否挂载正确
 		log.Printf("[WARN] Init DB failed: %v — service unavailable until data is ready", err)
+	}
+
+	// 初始化 AI 分析历史数据库
+	if err := InitAIDB(); err != nil {
+		log.Printf("[WARN] AI analysis DB init failed: %v — history will not be persisted", err)
 	}
 
 	// 服务层访问助手（线程安全）
@@ -329,16 +335,679 @@ func serverMain() {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 			return
 		}
-		// read-modify-write：只更新 blocked 字段，保留 App 配置字段
+		// read-modify-write：只更新屏蔽名单和隐私模式，保留 App 配置字段
 		existing := loadPreferences()
 		existing.BlockedUsers = incoming.BlockedUsers
 		existing.BlockedGroups = incoming.BlockedGroups
+		existing.PrivacyMode = incoming.PrivacyMode
 		if err := savePreferences(existing); err != nil {
 			log.Printf("[PREFS] Failed to save preferences: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
 			return
 		}
 		c.JSON(http.StatusOK, existing)
+	})
+
+	// LLM 配置单独保存，避免与屏蔽名单 PUT 冲突
+	api.PUT("/preferences/llm", func(c *gin.Context) {
+		var incoming struct {
+			LLMProvider        string `json:"llm_provider"`
+			LLMAPIKey          string `json:"llm_api_key"`
+			LLMBaseURL         string `json:"llm_base_url"`
+			LLMModel           string `json:"llm_model"`
+			GeminiClientID     string `json:"gemini_client_id"`
+			GeminiClientSecret string `json:"gemini_client_secret"`
+			AIAnalysisDBPath   string `json:"ai_analysis_db_path"`
+			EmbeddingProvider  string `json:"embedding_provider"`
+			EmbeddingAPIKey    string `json:"embedding_api_key"`
+			EmbeddingBaseURL   string `json:"embedding_base_url"`
+			EmbeddingModel     string `json:"embedding_model"`
+			EmbeddingDims      int    `json:"embedding_dims"`
+			MemLLMBaseURL      string `json:"mem_llm_base_url"`
+			MemLLMModel        string `json:"mem_llm_model"`
+		}
+		if err := c.ShouldBindJSON(&incoming); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		existing := loadPreferences()
+		pathChanged := existing.AIAnalysisDBPath != incoming.AIAnalysisDBPath
+		existing.LLMProvider = incoming.LLMProvider
+		existing.LLMAPIKey = incoming.LLMAPIKey
+		existing.LLMBaseURL = incoming.LLMBaseURL
+		existing.LLMModel = incoming.LLMModel
+		existing.GeminiClientID = incoming.GeminiClientID
+		existing.GeminiClientSecret = incoming.GeminiClientSecret
+		existing.AIAnalysisDBPath = incoming.AIAnalysisDBPath
+		existing.EmbeddingProvider = incoming.EmbeddingProvider
+		existing.EmbeddingAPIKey = incoming.EmbeddingAPIKey
+		existing.EmbeddingBaseURL = incoming.EmbeddingBaseURL
+		existing.EmbeddingModel = incoming.EmbeddingModel
+		existing.EmbeddingDims = incoming.EmbeddingDims
+		existing.MemLLMBaseURL = incoming.MemLLMBaseURL
+		existing.MemLLMModel = incoming.MemLLMModel
+		if err := savePreferences(existing); err != nil {
+			log.Printf("[PREFS] Failed to save LLM preferences: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
+			return
+		}
+		// 路径变更时重新初始化 AI 数据库
+		if pathChanged {
+			if err := InitAIDB(); err != nil {
+				log.Printf("[WARN] Re-init AI DB failed: %v", err)
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	// ── AI 分析历史持久化 ──────────────────────────────────────────────────
+	// GET  /api/ai/conversations?key=contact:username
+	api.GET("/ai/conversations", func(c *gin.Context) {
+		key := c.Query("key")
+		if key == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 key 参数"})
+			return
+		}
+		msgs, err := GetAIConversation(key)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"messages": msgs})
+	})
+
+	// PUT /api/ai/conversations  body: {key, messages}
+	api.PUT("/ai/conversations", func(c *gin.Context) {
+		var body struct {
+			Key      string      `json:"key"`
+			Messages []AIMessage `json:"messages"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.Key == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		if err := PutAIConversation(body.Key, body.Messages); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	// DELETE /api/ai/conversations?key=contact:username
+	api.DELETE("/ai/conversations", func(c *gin.Context) {
+		key := c.Query("key")
+		if key == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 key 参数"})
+			return
+		}
+		if err := DeleteAIConversation(key); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	// ── Gemini OAuth ──────────────────────────────────────────────────────
+	// GET /api/auth/gemini/url — 返回 Google 授权 URL（前端打开新标签）
+	api.GET("/auth/gemini/url", func(c *gin.Context) {
+		prefs := loadPreferences()
+		if prefs.GeminiClientID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先填写并保存 Client ID"})
+			return
+		}
+		redirectURI := geminiRedirectURI(c.Request)
+		c.JSON(http.StatusOK, gin.H{"url": geminiAuthURL(prefs.GeminiClientID, redirectURI)})
+	})
+
+	// GET /api/auth/gemini/callback — Google 授权回调
+	api.GET("/auth/gemini/callback", func(c *gin.Context) {
+		successHTML := `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:system-ui,sans-serif;text-align:center;padding:60px 20px;color:#1d1d1f">
+<h2 style="color:#07c160;font-size:28px;margin-bottom:12px">✓ 授权成功！</h2>
+<p style="color:#666;font-size:15px">请返回 WeLink 应用，页面将自动更新。</p>
+<p style="color:#aaa;font-size:13px;margin-top:24px">此窗口将在 3 秒后自动关闭…</p>
+<script>setTimeout(()=>window.close(),3000)</script></body></html>`
+
+		failHTML := func(msg string) string {
+			return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:system-ui,sans-serif;text-align:center;padding:60px 20px">
+<h2 style="color:#e74c3c">授权失败</h2><p>` + msg + `</p><p style="color:#aaa;font-size:13px">请关闭此窗口并重试。</p></body></html>`
+		}
+
+		if errParam := c.Query("error"); errParam != "" {
+			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(failHTML(errParam)))
+			return
+		}
+		code := c.Query("code")
+		if code == "" {
+			c.Data(http.StatusBadRequest, "text/html; charset=utf-8", []byte(failHTML("无效回调，缺少 code 参数")))
+			return
+		}
+		prefs := loadPreferences()
+		redirectURI := geminiRedirectURI(c.Request)
+		access, refresh, expiry, err := geminiExchangeCode(prefs.GeminiClientID, prefs.GeminiClientSecret, code, redirectURI)
+		if err != nil {
+			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(failHTML(err.Error())))
+			return
+		}
+		prefs.GeminiAccessToken = access
+		prefs.GeminiRefreshToken = refresh
+		prefs.GeminiTokenExpiry = expiry.Unix()
+		if err := savePreferences(prefs); err != nil {
+			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(failHTML("保存令牌失败："+err.Error())))
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(successHTML))
+	})
+
+	// GET /api/auth/gemini/status — 查询授权状态（前端轮询用）
+	api.GET("/auth/gemini/status", func(c *gin.Context) {
+		prefs := loadPreferences()
+		c.JSON(http.StatusOK, gin.H{"authorized": prefs.GeminiAccessToken != ""})
+	})
+
+	// DELETE /api/auth/gemini — 撤销授权
+	api.DELETE("/auth/gemini", func(c *gin.Context) {
+		prefs := loadPreferences()
+		prefs.GeminiAccessToken = ""
+		prefs.GeminiRefreshToken = ""
+		prefs.GeminiTokenExpiry = 0
+		if err := savePreferences(prefs); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	// ── AI 分析（SSE 流式）────────────────────────────────────────────────
+	// POST /api/ai/analyze  body: { username, is_group, from, to, messages: [{role,content}] }
+	// 后端拉取聊天记录 → 构造 prompt → 流式转发 LLM 响应
+	api.POST("/ai/analyze", func(c *gin.Context) {
+		var body struct {
+			Username string       `json:"username"`
+			IsGroup  bool         `json:"is_group"`
+			From     int64        `json:"from"`
+			To       int64        `json:"to"`
+			Messages []LLMMessage `json:"messages"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		prefs := loadPreferences()
+		if prefs.LLMProvider == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
+			return
+		}
+		if prefs.LLMAPIKey == "" && !(prefs.LLMProvider == "gemini" && prefs.GeminiAccessToken != "") && prefs.LLMProvider != "ollama" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+			return
+		}
+		StreamLLM(c.Writer, body.Messages, prefs)
+	})
+
+	// POST /api/ai/complete — 非流式单次补全（用于分段摘要）
+	api.POST("/ai/complete", func(c *gin.Context) {
+		var body struct {
+			Messages []LLMMessage `json:"messages"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		prefs := loadPreferences()
+		if prefs.LLMProvider == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
+			return
+		}
+		if prefs.LLMAPIKey == "" && !(prefs.LLMProvider == "gemini" && prefs.GeminiAccessToken != "") && prefs.LLMProvider != "ollama" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+			return
+		}
+		content, err := CompleteLLM(body.Messages, prefs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, CompleteResponse{Error: err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, CompleteResponse{Content: content})
+	})
+
+	// ── RAG 索引（需要服务层） ────────────────────────────────────────────
+	// GET /api/ai/rag/index-status?key=contact:username
+	api.GET("/ai/rag/index-status", func(c *gin.Context) {
+		key := c.Query("key")
+		if key == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 key 参数"})
+			return
+		}
+		status, err := GetFTSIndexStatus(key)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, status)
+	})
+
+	// POST /api/ai/rag/build-index  body: {key, username, is_group}
+	api.POST("/ai/rag/build-index", func(c *gin.Context) {
+		var body struct {
+			Key      string `json:"key"`
+			Username string `json:"username"`
+			IsGroup  bool   `json:"is_group"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.Key == "" || body.Username == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		BuildFTSIndex(c.Writer, body.Key, body.Username, body.IsGroup, getSvc())
+	})
+
+	// ── 向量索引（混合 RAG） ──────────────────────────────────────────────
+	// GET /api/ai/vec/index-status?key=...
+	api.GET("/ai/vec/index-status", func(c *gin.Context) {
+		key := c.Query("key")
+		if key == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 key 参数"})
+			return
+		}
+		status, err := GetVecIndexStatus(key)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, status)
+	})
+
+	// POST /api/ai/vec/build-index  body: {key, username, is_group}
+	api.POST("/ai/vec/build-index", func(c *gin.Context) {
+		var body struct {
+			Key      string `json:"key"`
+			Username string `json:"username"`
+			IsGroup  bool   `json:"is_group"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.Key == "" || body.Username == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		StartVecIndexBackground(body.Key, body.Username, body.IsGroup, getSvc(), loadPreferences())
+		c.JSON(http.StatusOK, gin.H{"started": true})
+	})
+
+	// GET /api/ai/vec/build-progress?key=... — 轮询后台构建进度
+	api.GET("/ai/vec/build-progress", func(c *gin.Context) {
+		key := c.Query("key")
+		if key == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 key 参数"})
+			return
+		}
+		p := GetVecBuildProgress(key)
+		if p == nil {
+			c.JSON(http.StatusOK, gin.H{"running": false})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"running":    !p.Done && p.Error == "",
+			"step":       p.Step,
+			"current":    p.Current,
+			"total":      p.Total,
+			"done":       p.Done,
+			"error":      p.Error,
+			"fact_count": p.FactCount,
+		})
+	})
+
+	// POST /api/ai/vec/test-embedding — 验证 embedding 配置是否可用
+	api.POST("/ai/vec/test-embedding", func(c *gin.Context) {
+		prefs := loadPreferences()
+		cfg := defaultEmbeddingConfig(prefs)
+		_, err := GetEmbeddingsBatch([]string{"测试"}, cfg)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "provider": cfg.Provider, "model": cfg.Model})
+	})
+
+	// POST /api/ai/llm/test — 验证主 LLM 配置是否可用
+	api.POST("/ai/llm/test", func(c *gin.Context) {
+		prefs := loadPreferences()
+		model, err := testLLMConn(prefs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "provider": prefs.LLMProvider, "model": model})
+	})
+
+	// POST /api/ai/mem/test — 验证记忆提炼本地模型配置是否可用
+	api.POST("/ai/mem/test", func(c *gin.Context) {
+		prefs := loadPreferences()
+		memPrefs := memLLMPrefs(prefs)
+		model, err := testLLMConn(memPrefs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "provider": memPrefs.LLMProvider, "model": model})
+	})
+
+	// GET /api/ai/mem/status?key=...
+	api.GET("/ai/mem/status", func(c *gin.Context) {
+		key := c.Query("key")
+		if key == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 key 参数"})
+			return
+		}
+		count, err := GetMemFactsCount(key)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"fact_count": count})
+	})
+
+	// GET /api/ai/mem/facts?key=...
+	api.GET("/ai/mem/facts", func(c *gin.Context) {
+		key := c.Query("key")
+		if key == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 key 参数"})
+			return
+		}
+		facts, err := GetMemFacts(key)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"facts": facts})
+	})
+
+	// POST /api/ai/mem/build?key= — 独立触发记忆事实提炼（无需重建向量索引）
+	api.POST("/ai/mem/build", func(c *gin.Context) {
+		key := c.Query("key")
+		if key == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 key 参数"})
+			return
+		}
+		job := getOrCreateJob(key)
+		job.mu.Lock()
+		if job.Step != "" && !job.Done && job.Error == "" {
+			job.mu.Unlock()
+			c.JSON(http.StatusOK, gin.H{"started": false, "reason": "already running"})
+			return
+		}
+		job.Step = "extracting"
+		job.Done = false
+		job.Error = ""
+		job.FactCount = 0
+		job.mu.Unlock()
+
+		prefs := loadPreferences()
+		go func() {
+			aiDBMu.Lock()
+			db := aiDB
+			aiDBMu.Unlock()
+			setErr := func(msg string) {
+				job.mu.Lock()
+				job.Step = "error"
+				job.Error = msg
+				job.Done = true
+				job.mu.Unlock()
+			}
+			if db == nil {
+				setErr("数据库未初始化")
+				return
+			}
+			rows, err := db.Query(
+				`SELECT datetime, sender, content FROM vec_messages WHERE contact_key = ? ORDER BY seq`, key)
+			if err != nil {
+				setErr(err.Error())
+				return
+			}
+			var msgs []rawMsg
+			for rows.Next() {
+				var m rawMsg
+				rows.Scan(&m.DateTime, &m.Sender, &m.Content)
+				msgs = append(msgs, m)
+			}
+			rows.Close()
+			if len(msgs) == 0 {
+				setErr("语义向量索引为空，请先构建索引")
+				return
+			}
+			cfg := defaultEmbeddingConfig(prefs)
+			totalChunks := (len(msgs) + memExtractChunkSize - 1) / memExtractChunkSize
+
+			// ── 检查点：判断是续传还是全新开始 ──────────────────────────────────
+			startChunk := 0
+			var prevOffset int = -1
+			db.QueryRow("SELECT extract_offset FROM vec_index_status WHERE contact_key = ?", key).Scan(&prevOffset)
+			if prevOffset >= 0 && prevOffset < totalChunks {
+				// 上次中断于 prevOffset 批（已完成），从下一批续传
+				startChunk = prevOffset + 1
+			} else {
+				// 全新开始：清空旧事实，reset 检查点
+				if _, err := db.Exec("DELETE FROM mem_facts WHERE contact_key = ?", key); err != nil {
+					setErr("清理旧记忆失败：" + err.Error())
+					return
+				}
+			}
+			// 记录本次起始偏移，表示提炼进行中
+			db.Exec(`UPDATE vec_index_status SET extract_offset = ? WHERE contact_key = ?`,
+				startChunk-1, key) // 上一批已完成的索引（-1 表示尚未完成任何批次）
+
+			// 统计已有事实数（续传时保留）
+			var prevFactCount int
+			db.QueryRow("SELECT COUNT(*) FROM mem_facts WHERE contact_key = ?", key).Scan(&prevFactCount)
+
+			job.mu.Lock()
+			job.Total = totalChunks
+			job.Current = startChunk // 已完成批数（续传时为非零）
+			job.mu.Unlock()
+
+			newFacts, extractErr := extractAndStoreFacts(key, msgs, prefs, db, cfg,
+				startChunk,
+				func(done, total int) {
+					job.mu.Lock()
+					job.Current = done
+					job.Total = total
+					job.mu.Unlock()
+				},
+				func(chunkIdx int) {
+					// 每批完成后写检查点，服务重启后可续传
+					db.Exec(`UPDATE vec_index_status SET extract_offset = ? WHERE contact_key = ?`,
+						chunkIdx, key)
+				},
+			)
+
+			// 全部完成，清除检查点
+			db.Exec(`UPDATE vec_index_status SET extract_offset = -1 WHERE contact_key = ?`, key)
+
+			factCount := prevFactCount + newFacts
+			job.mu.Lock()
+			job.Step = "done"
+			job.Done = true
+			job.FactCount = factCount
+			if newFacts == 0 && extractErr != nil {
+				job.Error = "提炼失败：" + extractErr.Error()
+			}
+			job.mu.Unlock()
+		}()
+		c.JSON(http.StatusOK, gin.H{"started": true})
+	})
+
+	// POST /api/ai/rag  body: {key, messages, search_query?}
+	api.POST("/ai/rag", func(c *gin.Context) {
+		var body struct {
+			Key         string       `json:"key"`
+			Messages    []LLMMessage `json:"messages"`
+			SearchQuery string       `json:"search_query"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.Key == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		prefs := loadPreferences()
+		if prefs.LLMProvider == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
+			return
+		}
+		if prefs.LLMAPIKey == "" && !(prefs.LLMProvider == "gemini" && prefs.GeminiAccessToken != "") && prefs.LLMProvider != "ollama" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+			return
+		}
+
+		// 以最后一条用户消息作为检索词（如未指定）
+		searchQ := body.SearchQuery
+		if searchQ == "" {
+			for i := len(body.Messages) - 1; i >= 0; i-- {
+				if body.Messages[i].Role == "user" {
+					searchQ = body.Messages[i].Content
+					break
+				}
+			}
+		}
+
+		// 查询改写：将自然语言问题转为检索关键词，提升跨概念召回
+		rewrittenQ := rewriteSearchQuery(searchQ, prefs)
+
+		// 混合检索：向量搜索 + FTS，任一有结果即可
+		// 向量搜索用原始问题（保留疑问语义），FTS 用改写后关键词（提升词形覆盖）
+		vecResults, vecHitSeqs, _ := SearchVec(body.Key, searchQ, 20, prefs)
+		ftsResults, ftsHitSeqs, ftsErr := SearchFTS(body.Key, rewrittenQ, 20)
+		results, hitSeqs := mergeRAGResults(vecResults, vecHitSeqs, ftsResults, ftsHitSeqs)
+
+		// 从记忆事实库检索相关事实（有则补充，无则跳过）
+		memFacts, _ := SearchMemFacts(body.Key, searchQ, 10, prefs)
+
+		flusher, ok := c.Writer.(http.Flusher)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "不支持流式响应"})
+			return
+		}
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		c.Writer.Header().Set("Cache-Control", "no-cache")
+		c.Writer.Header().Set("X-Accel-Buffering", "no")
+
+		sendChunk := func(chunk StreamChunk) {
+			data, _ := json.Marshal(chunk)
+			fmt.Fprintf(c.Writer, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+
+		if len(results) == 0 {
+			msg := "未在索引中找到相关内容，请尝试换一种表达方式，或切换回全量分析模式。"
+			if ftsErr != nil && len(vecResults) == 0 {
+				msg = "检索失败：" + ftsErr.Error()
+			}
+			sendChunk(StreamChunk{Delta: msg})
+			sendChunk(StreamChunk{Done: true, RagMeta: &RagMeta{Hits: 0, Retrieved: 0}})
+			return
+		}
+
+		// 构建检索到的上下文 + snipets（带命中标记）
+		var ctxLines []string
+		snipets := make([]RagSnipet, 0, len(results))
+		for _, r := range results {
+			ctxLines = append(ctxLines, fmt.Sprintf("[%s] %s：%s", r.Datetime, r.Sender, r.Content))
+			snipets = append(snipets, RagSnipet{
+				Datetime: r.Datetime,
+				Sender:   r.Sender,
+				Content:  r.Content,
+				IsHit:    hitSeqs != nil && hitSeqs[r.Seq],
+			})
+		}
+		ctxText := strings.Join(ctxLines, "\n")
+
+		// 先推送 RAG 元数据（含命中消息列表）
+		sendChunk(StreamChunk{RagMeta: &RagMeta{
+			Hits:      len(hitSeqs),
+			Retrieved: len(results),
+			Messages:  snipets,
+		}})
+
+		// 构造 LLM 消息（注入检索上下文 + 记忆事实）
+		var memSection string
+		if len(memFacts) > 0 {
+			memSection = "\n\n【关于对方的已知事实（由 AI 从历史聊天中提炼）】\n"
+			for _, f := range memFacts {
+				memSection += "- " + f + "\n"
+			}
+		}
+		sysPrompt := fmt.Sprintf(
+			"你是一个聊天记录分析助手。以下是从聊天记录中混合检索（语义向量 + 关键词）到的相关片段（命中 %d 条，含上下文共 %d 条）：\n\n%s%s\n\n请根据以上内容回答用户问题，分析时请客观有洞察力，用中文回答。",
+			len(hitSeqs), len(results), ctxText, memSection,
+		)
+		llmMsgs := append([]LLMMessage{{Role: "system", Content: sysPrompt}}, body.Messages...)
+		streamLLMCore(sendChunk, llmMsgs, prefs)
+	})
+
+	// POST /api/ai/day-rag  body: {date, messages, search_query?}
+	// 跨联系人/群聊的日期混合检索，用于时光机 AI 分析
+	api.POST("/ai/day-rag", func(c *gin.Context) {
+		var body struct {
+			Date        string       `json:"date"`
+			Messages    []LLMMessage `json:"messages"`
+			SearchQuery string       `json:"search_query"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.Date == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		prefs := loadPreferences()
+		if prefs.LLMProvider == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
+			return
+		}
+		if prefs.LLMAPIKey == "" && !(prefs.LLMProvider == "gemini" && prefs.GeminiAccessToken != "") && prefs.LLMProvider != "ollama" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+			return
+		}
+
+		searchQ := body.SearchQuery
+		if searchQ == "" {
+			for i := len(body.Messages) - 1; i >= 0; i-- {
+				if body.Messages[i].Role == "user" {
+					searchQ = body.Messages[i].Content
+					break
+				}
+			}
+		}
+
+		rewrittenQ := rewriteSearchQuery(searchQ, prefs)
+		results, hitCount, _ := SearchFTSAcrossDate(body.Date, rewrittenQ, 30)
+
+		flusher, ok := c.Writer.(http.Flusher)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "不支持流式响应"})
+			return
+		}
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		c.Writer.Header().Set("Cache-Control", "no-cache")
+		c.Writer.Header().Set("X-Accel-Buffering", "no")
+
+		sendChunk := func(chunk StreamChunk) {
+			data, _ := json.Marshal(chunk)
+			fmt.Fprintf(c.Writer, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+
+		if len(results) == 0 {
+			sendChunk(StreamChunk{Delta: fmt.Sprintf("未在 %s 的索引中找到相关内容。提示：需要先在联系人/群聊详情中为相关对话构建 FTS 索引（混合检索 → 构建索引），或切换为全量分析模式。", body.Date)})
+			sendChunk(StreamChunk{Done: true, RagMeta: &RagMeta{Hits: 0, Retrieved: 0}})
+			return
+		}
+
+		var ctxLines []string
+		for _, r := range results {
+			ctxLines = append(ctxLines, fmt.Sprintf("[%s] %s：%s", r.Datetime, r.Sender, r.Content))
+		}
+
+		sendChunk(StreamChunk{RagMeta: &RagMeta{Hits: hitCount, Retrieved: len(results)}})
+
+		systemMsg := LLMMessage{
+			Role:    "system",
+			Content: fmt.Sprintf("你是微信聊天数据分析助手。以下是 %s 这一天检索到的相关聊天记录片段（来自多个联系人/群聊）：\n\n%s\n\n请基于以上检索内容回答用户的问题。", body.Date, strings.Join(ctxLines, "\n")),
+		}
+		msgs := append([]LLMMessage{systemMsg}, body.Messages...)
+		StreamLLM(c.Writer, msgs, prefs)
 	})
 
 	// ── 需要服务层的路由（未初始化时返回 503） ─────────────────────────────
@@ -382,6 +1051,9 @@ func serverMain() {
 		prot.GET("/groups", func(c *gin.Context) {
 			c.JSON(http.StatusOK, getSvc().GetGroups())
 		})
+
+		// 时光轴（聊天日历）
+		registerCalendarRoutes(prot, getSvc)
 
 		// 群聊某天聊天记录
 		prot.GET("/groups/messages", func(c *gin.Context) {

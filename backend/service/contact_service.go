@@ -102,6 +102,7 @@ type ContactService struct {
 	groupDetailComputing map[string]bool // 正在后台计算中的群聊
 	filterFrom       int64 // 全局时间范围过滤（Unix 秒，0=不限）
 	filterTo         int64
+	calendarHeatmap  map[string]int // 全局每日消息量（联系人+群聊），performAnalysis 后可读
 }
 
 // 强化的系统话术过滤词库
@@ -428,6 +429,11 @@ func (s *ContactService) performAnalysis() {
 		maxEmoji := -1
 		for _, r := range result { if r.EmojiCnt > maxEmoji { maxEmoji = r.EmojiCnt; name := r.Nickname; if r.Remark != "" { name = r.Remark }; s.global.EmojiKing = name } }
 	}
+	// 构建全局日历热力图（联系人 + 群聊）
+	calHeatmap := make(map[string]int, len(globalDaily))
+	for d, c := range globalDaily { calHeatmap[d] = c }
+	for d, c := range s.buildGroupDailyHeatmap() { calHeatmap[d] += c }
+	s.calendarHeatmap = calHeatmap
 	s.cacheMu.Unlock()
 }
 
@@ -894,6 +900,15 @@ func exportTimeWhere(from, to int64, fallback string) string {
 // ExportContactMessages 导出联系人全量聊天记录（最多 ExportLimit 条，按时间正序）
 // from/to 为 Unix 秒，传 0 则沿用已索引的时间范围
 func (s *ContactService) ExportContactMessages(username string, from, to int64) []ChatMessage {
+	return s.exportContactMessages(username, from, to, ExportLimit)
+}
+
+// ExportContactMessagesAll 导出联系人全部聊天记录（不限条数），用于 RAG 索引构建。
+func (s *ContactService) ExportContactMessagesAll(username string) []ChatMessage {
+	return s.exportContactMessages(username, 0, 0, 0)
+}
+
+func (s *ContactService) exportContactMessages(username string, from, to int64, limit int) []ChatMessage {
 	tableName := db.GetTableName(username)
 	tw := exportTimeWhere(from, to, s.timeWhere())
 
@@ -958,9 +973,8 @@ func (s *ContactService) ExportContactMessages(username string, from, to int64) 
 	sort.Slice(msgs, func(i, j int) bool {
 		return msgs[i].Date+msgs[i].Time < msgs[j].Date+msgs[j].Time
 	})
-	total := len(msgs)
-	if total > ExportLimit {
-		msgs = msgs[total-ExportLimit:]
+	if limit > 0 && len(msgs) > limit {
+		msgs = msgs[len(msgs)-limit:]
 	}
 	return msgs
 }
@@ -968,6 +982,15 @@ func (s *ContactService) ExportContactMessages(username string, from, to int64) 
 // ExportGroupMessages 导出群聊全量聊天记录（最多 ExportLimit 条，按时间正序）
 // from/to 为 Unix 秒，传 0 则沿用已索引的时间范围
 func (s *ContactService) ExportGroupMessages(username string, from, to int64) []GroupChatMessage {
+	return s.exportGroupMessages(username, from, to, ExportLimit)
+}
+
+// ExportGroupMessagesAll 导出群聊全部聊天记录（不限条数），用于 RAG 索引构建。
+func (s *ContactService) ExportGroupMessagesAll(username string) []GroupChatMessage {
+	return s.exportGroupMessages(username, 0, 0, 0)
+}
+
+func (s *ContactService) exportGroupMessages(username string, from, to int64, limit int) []GroupChatMessage {
 	tableName := db.GetTableName(username)
 	tw := exportTimeWhere(from, to, s.timeWhere())
 
@@ -1062,9 +1085,8 @@ func (s *ContactService) ExportGroupMessages(username string, from, to int64) []
 	sort.Slice(msgs, func(i, j int) bool {
 		return msgs[i].Date+msgs[i].Time < msgs[j].Date+msgs[j].Time
 	})
-	total := len(msgs)
-	if total > ExportLimit {
-		msgs = msgs[total-ExportLimit:]
+	if limit > 0 && len(msgs) > limit {
+		msgs = msgs[len(msgs)-limit:]
 	}
 	return msgs
 }
@@ -2161,4 +2183,153 @@ func (s *ContactService) GlobalSearch(q, searchType string) []GlobalSearchGroup 
 		return results[i].Count > results[j].Count
 	})
 	return results
+}
+
+// ─── 时光轴 Calendar ──────────────────────────────────────────────────────────
+
+// buildGroupDailyHeatmap 统计所有群聊的每日消息量（date → count）
+func (s *ContactService) buildGroupDailyHeatmap() map[string]int {
+	result := make(map[string]int)
+	rows, err := s.dbMgr.ContactDB.Query(`SELECT username FROM contact WHERE username LIKE '%@chatroom'`)
+	if err != nil {
+		return result
+	}
+	var groupUsernames []string
+	for rows.Next() {
+		var uname string
+		rows.Scan(&uname)
+		groupUsernames = append(groupUsernames, uname)
+	}
+	rows.Close()
+
+	twFilter := s.timeWhere()
+	for _, groupUname := range groupUsernames {
+		tableName := db.GetTableName(groupUname)
+		for _, mdb := range s.dbMgr.MessageDBs {
+			var query string
+			if twFilter == "" {
+				query = fmt.Sprintf("SELECT create_time FROM [%s]", tableName)
+			} else {
+				query = fmt.Sprintf("SELECT create_time FROM [%s]%s", tableName, twFilter)
+			}
+			mRows, err := mdb.Query(query)
+			if err != nil {
+				continue
+			}
+			for mRows.Next() {
+				var ts int64
+				mRows.Scan(&ts)
+				result[time.Unix(ts, 0).In(s.tz).Format("2006-01-02")]++
+			}
+			mRows.Close()
+		}
+	}
+	return result
+}
+
+// GetCalendarHeatmap 返回全局每日消息量（联系人+群聊合计）。
+// 必须在 performAnalysis 完成后调用，否则返回 nil。
+func (s *ContactService) GetCalendarHeatmap() map[string]int {
+	s.cacheMu.RLock()
+	defer s.cacheMu.RUnlock()
+	return s.calendarHeatmap
+}
+
+// CalendarDayEntry 表示某天某个联系人或群聊的消息摘要。
+type CalendarDayEntry struct {
+	Username     string `json:"username"`
+	DisplayName  string `json:"display_name"`
+	SmallHeadURL string `json:"small_head_url"`
+	Count        int    `json:"count"`
+	IsGroup      bool   `json:"is_group"`
+}
+
+// GetDayActivity 查询指定日期有消息的联系人和群聊，按消息数降序返回。
+// date 格式为 "2006-01-02"。
+func (s *ContactService) GetDayActivity(date string) (contacts []CalendarDayEntry, groups []CalendarDayEntry) {
+	t, err := time.ParseInLocation("2006-01-02", date, s.tz)
+	if err != nil {
+		return nil, nil
+	}
+	dayStart := t.Unix()
+	dayEnd := dayStart + 86400
+
+	// ── 联系人 ──────────────────────────────────────────────────────────────
+	cRows, err := s.dbMgr.ContactDB.Query(
+		"SELECT username, nick_name, remark, COALESCE(small_head_url,'') FROM contact WHERE verify_flag=0")
+	if err == nil {
+		defer cRows.Close()
+		for cRows.Next() {
+			var uname, nick, remark, avatar string
+			cRows.Scan(&uname, &nick, &remark, &avatar)
+			lower := strings.ToLower(uname)
+			if strings.HasSuffix(lower, "@chatroom") || strings.HasPrefix(lower, "gh_") || uname == "" {
+				continue
+			}
+
+			tableName := db.GetTableName(uname)
+			var total int
+			for _, mdb := range s.dbMgr.MessageDBs {
+				var cnt int
+				mdb.QueryRow(fmt.Sprintf(
+					"SELECT COUNT(*) FROM [%s] WHERE create_time >= %d AND create_time < %d",
+					tableName, dayStart, dayEnd,
+				)).Scan(&cnt)
+				total += cnt
+			}
+			if total == 0 {
+				continue
+			}
+			name := remark
+			if name == "" {
+				name = nick
+			}
+			if name == "" {
+				name = uname
+			}
+			contacts = append(contacts, CalendarDayEntry{
+				Username: uname, DisplayName: name, SmallHeadURL: avatar,
+				Count: total, IsGroup: false,
+			})
+		}
+	}
+
+	// ── 群聊 ────────────────────────────────────────────────────────────────
+	gRows, err := s.dbMgr.ContactDB.Query(
+		"SELECT username, nick_name, remark, COALESCE(small_head_url,'') FROM contact WHERE username LIKE '%@chatroom'")
+	if err == nil {
+		defer gRows.Close()
+		for gRows.Next() {
+			var uname, nick, remark, avatar string
+			gRows.Scan(&uname, &nick, &remark, &avatar)
+			tableName := db.GetTableName(uname)
+			var total int
+			for _, mdb := range s.dbMgr.MessageDBs {
+				var cnt int
+				mdb.QueryRow(fmt.Sprintf(
+					"SELECT COUNT(*) FROM [%s] WHERE create_time >= %d AND create_time < %d",
+					tableName, dayStart, dayEnd,
+				)).Scan(&cnt)
+				total += cnt
+			}
+			if total == 0 {
+				continue
+			}
+			name := remark
+			if name == "" {
+				name = nick
+			}
+			if name == "" {
+				name = uname
+			}
+			groups = append(groups, CalendarDayEntry{
+				Username: uname, DisplayName: name, SmallHeadURL: avatar,
+				Count: total, IsGroup: true,
+			})
+		}
+	}
+
+	sort.Slice(contacts, func(i, j int) bool { return contacts[i].Count > contacts[j].Count })
+	sort.Slice(groups, func(i, j int) bool { return groups[i].Count > groups[j].Count })
+	return contacts, groups
 }

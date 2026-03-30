@@ -5,22 +5,18 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { PrivacyModeContext } from './contexts/PrivacyModeContext';
-import { Users, MessageSquare, Flame, Snowflake, Search } from 'lucide-react';
 
 // Layout Components
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 
 // Dashboard Components
-import { KPICard } from './components/dashboard/KPICard';
-import { RelationshipHeatmap } from './components/dashboard/RelationshipHeatmap';
-import { MonthlyTrendChart } from './components/dashboard/MonthlyTrendChart';
-import { HourlyHeatmap } from './components/dashboard/HourlyHeatmap';
-import { ContactTable } from './components/dashboard/ContactTable';
+import { AIHomePage } from './components/dashboard/AIHomePage';
+import { StatsPage } from './components/dashboard/StatsPage';
 import { DatabaseView } from './components/dashboard/DatabaseView';
-import { LateNightRanking } from './components/dashboard/LateNightRanking';
 import { SearchView } from './components/search/SearchView';
 import { TimelineView } from './components/timeline/TimelineView';
+import { ChatCalendarPage } from './components/calendar/ChatCalendarPage';
 import { GroupsView, GroupDetailModal } from './components/groups/GroupsView';
 import { useDarkMode } from './hooks/useDarkMode';
 
@@ -46,8 +42,6 @@ import { usePrivacySettings } from './hooks/usePrivacySettings';
 // Types
 import type { TabType, ContactStats, HealthStatus, TimeRange, GroupInfo } from './types';
 
-// Utils
-import { formatCompactNumber } from './utils/formatters';
 import { globalApi, groupsApi } from './services/api';
 
 const ALL_TIME: TimeRange = { from: null, to: null, label: '全部' };
@@ -70,6 +64,7 @@ function App() {
   const [hasStarted, setHasStarted] = useState(() => {
     return localStorage.getItem('welink_hasStarted') === 'true';
   });
+
 
   // App 模式检测
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
@@ -244,119 +239,30 @@ function App() {
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} dark={dark} onToggleDark={toggleDark} />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-10 pb-20 sm:pb-10 dk-page">
+      <main className={`flex-1 overflow-y-auto dk-page ${activeTab === 'dashboard' ? '' : 'p-4 sm:p-10 pb-20 sm:pb-10'}`}>
         {activeTab === 'dashboard' ? (
-          <div>
-            {/* Header */}
-            <Header
-              title="WeLink"
-              subtitle="微信聊天数据分析平台"
-            />
-
-            {/* 当前时间范围标签 */}
-            <div className="mb-6 flex items-center gap-2">
-              <span className="text-xs font-bold text-[#07c160] bg-[#07c16015] px-3 py-1.5 rounded-full">
-                当前分析范围：{timeRange.label}
-              </span>
-              <button
-                onClick={handleReselect}
-                className="text-xs text-gray-400 hover:text-gray-600 underline"
-              >
-                重新选择
-              </button>
-            </div>
-
-            {/* KPI Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-              <KPICard
-                title="总好友数"
-                value={globalStats?.total_friends || 0}
-                subtitle="Total Friends"
-                icon={Users}
-                color="green"
-              />
-              <KPICard
-                title="总消息量"
-                value={formatCompactNumber(globalStats?.total_messages || 0)}
-                subtitle="Total Messages"
-                icon={MessageSquare}
-                color="blue"
-              />
-              <KPICard
-                title="活跃好友"
-                value={healthStatus.hot}
-                subtitle="7 天内有消息"
-                icon={Flame}
-                color="orange"
-              />
-              <KPICard
-                title="零消息"
-                value={healthStatus.cold}
-                subtitle="从未聊天"
-                icon={Snowflake}
-                color="purple"
-              />
-            </div>
-
-            {/* Relationship Heatmap */}
-            <div className="mb-6 sm:mb-8">
-              <RelationshipHeatmap
-                health={healthStatus}
-                totalContacts={contacts.length}
-                contacts={contacts}
-                onContactClick={handleContactClick}
-              />
-            </div>
-
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-6 sm:mb-8">
-              <MonthlyTrendChart data={globalStats} />
-              <HourlyHeatmap data={globalStats} />
-            </div>
-
-            {/* Late Night Ranking */}
-            <div className="mb-6 sm:mb-8">
-              <LateNightRanking data={globalStats} contacts={contacts} onContactClick={handleContactClick} />
-            </div>
-
-            {/* Contact Table */}
-            <div className="mb-8">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-                <h2 className="dk-text text-2xl font-black text-[#1d1d1f]">
-                  联系人列表
-                  <span className="text-gray-400 text-lg ml-3 font-semibold">
-                    {filteredContacts.length} 位
-                  </span>
-                </h2>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                  <input
-                    type="text"
-                    placeholder="搜索联系人..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9 pr-4 py-2 w-36 sm:w-56 bg-white border border-gray-200 rounded-xl text-sm font-medium placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#07c160]/20 focus:border-[#07c160] transition-all duration-200"
-                  />
-                </div>
-              </div>
-              {statsLoading && contacts.length === 0 ? (
-                <div className="bg-white rounded-3xl border border-gray-100 p-20 text-center">
-                  <div className="text-gray-300 font-bold text-lg animate-pulse">
-                    加载中...
-                  </div>
-                </div>
-              ) : (
-                <ContactTable
-                  contacts={filteredContacts}
-                  onContactClick={handleContactClick}
-                />
-              )}
-            </div>
-          </div>
+          <AIHomePage
+            contacts={contacts}
+            timeRange={timeRange}
+            onReselect={handleReselect}
+          />
+        ) : activeTab === 'stats' ? (
+          <StatsPage
+            contacts={contacts}
+            filteredContacts={filteredContacts}
+            globalStats={globalStats}
+            healthStatus={healthStatus}
+            statsLoading={statsLoading}
+            search={search}
+            onSearchChange={setSearch}
+            onContactClick={handleContactClick}
+          />
         ) : activeTab === 'groups' ? (
           <GroupsView allContacts={allContacts} onContactClick={handleContactClick} blockedGroups={blockedGroups} onBlockGroup={addBlockedGroup} />
         ) : activeTab === 'timeline' ? (
           <TimelineView contacts={contacts} onContactClick={handleContactClick} />
+        ) : activeTab === 'calendar' ? (
+          <ChatCalendarPage contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'search' ? (
           <SearchView
             contacts={contacts}

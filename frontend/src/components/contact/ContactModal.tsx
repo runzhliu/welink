@@ -3,12 +3,13 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { X, Users, EyeOff, Search, Loader2, Download } from 'lucide-react';
+import { X, Users, EyeOff, Search, Loader2, Download, Bot } from 'lucide-react';
 import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
 import { contactsApi } from '../../services/api';
 import { exportContactCsv, exportContactTxt, EXPORT_LIMIT, parseExportResult } from '../../utils/exportChat';
 import { WordCloudCanvas } from './WordCloudCanvas';
+import { LLMAnalysisTab } from './LLMAnalysisTab';
 import { ContactDetailCharts } from './ContactDetailCharts';
 import { SentimentChart } from './SentimentChart';
 import { MessageTypePieChart } from '../common/MessageTypePieChart';
@@ -20,9 +21,11 @@ interface ContactModalProps {
   onClose: () => void;
   onGroupClick?: (group: GroupInfo) => void;
   onBlock?: (username: string) => void;
+  initialTab?: ModalTab;
+  initialQuery?: string;
 }
 
-type ModalTab = 'wordcloud' | 'detail' | 'sentiment' | 'search';
+type ModalTab = 'wordcloud' | 'detail' | 'sentiment' | 'search' | 'ai';
 
 function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
 function shiftDays(n: number) {
@@ -39,10 +42,16 @@ const exportPresets = [
   { label: '最近一年', from: shiftMonths(12),to: today },
 ];
 
-export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, onGroupClick, onBlock }) => {
+export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, onGroupClick, onBlock, initialTab, initialQuery }) => {
   const { privacyMode } = usePrivacyMode();
   const { data: wordData, loading: isAnalysing, fetch: fetchWordCloud } = useWordCloud();
-  const [tab, setTab] = useState<ModalTab>('wordcloud');
+  const [tab, setTab] = useState<ModalTab>(initialTab ?? 'wordcloud');
+
+  // 联系人切换时重置到指定 tab（支持从首页跳转到 AI 分析）
+  useEffect(() => {
+    if (contact) setTab(initialTab ?? 'wordcloud');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contact?.username]);
   const [detail, setDetail] = useState<ContactDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [sentiment, setSentiment] = useState<SentimentResult | null>(null);
@@ -347,7 +356,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         {/* Tabs + 消息范围切换 */}
         <div className="flex items-center justify-between mb-6 dk-border border-b border-gray-100">
           <div className="flex gap-2">
-            {(['wordcloud', 'detail', 'sentiment', 'search'] as ModalTab[]).map((t) => (
+            {(['wordcloud', 'detail', 'sentiment', 'search', 'ai'] as ModalTab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => {
@@ -357,18 +366,19 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                   if (t === 'sentiment') fetchSentiment(contact.username, includeMine);
                   if (t === 'search') setTimeout(() => searchInputRef.current?.focus(), 50);
                 }}
-                className={`px-3 sm:px-5 py-2 rounded-t-xl text-xs sm:text-sm font-bold transition border-b-2 -mb-px ${
+                className={`flex items-center gap-1 px-3 sm:px-5 py-2 rounded-t-xl text-xs sm:text-sm font-bold transition border-b-2 -mb-px ${
                   tab === t
                     ? 'text-[#07c160] border-[#07c160]'
                     : 'text-gray-400 border-transparent hover:text-gray-600'
                 }`}
               >
-                {t === 'wordcloud' ? '词云分析' : t === 'detail' ? '深度画像' : t === 'sentiment' ? '情感分析' : '搜索记录'}
+                {t === 'ai' && <Bot size={13} className="flex-shrink-0" />}
+                {t === 'wordcloud' ? '词云分析' : t === 'detail' ? '深度画像' : t === 'sentiment' ? '情感分析' : t === 'search' ? '搜索记录' : 'AI 分析'}
               </button>
             ))}
           </div>
 
-          {/* 只在词云/情感/搜索 tab 显示切换 */}
+          {/* 只在词云/情感/搜索 tab 显示切换，AI tab 不需要 */}
           {(tab === 'wordcloud' || tab === 'sentiment' || tab === 'search') && (
             <button
               onClick={() => handleToggleMine(!includeMine)}
@@ -443,6 +453,15 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
           ) : (
             <div className="text-center text-gray-300 py-12">暂无情感数据</div>
           )
+        )}
+
+        {tab === 'ai' && (
+          <LLMAnalysisTab
+            username={contact.username}
+            displayName={displayName}
+            isGroup={false}
+            totalMessages={contact.total_messages}
+          />
         )}
 
         {tab === 'search' && (
