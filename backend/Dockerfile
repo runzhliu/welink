@@ -11,7 +11,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=linux go build -o welink-backend .
 
 # Final stage
-FROM alpine:latest
+FROM alpine:3.21
 RUN adduser -D -u 1001 welink && \
     mkdir -p /app/prefs && \
     chown -R welink:welink /app

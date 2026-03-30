@@ -255,7 +255,7 @@ func (s *ContactService) timeWhere() string {
 }
 
 func (s *ContactService) performAnalysis() {
-	rows, err := s.dbMgr.ContactDB.Query("SELECT username, nick_name, remark, alias, flag, COALESCE(big_head_url,''), COALESCE(small_head_url,'') FROM contact WHERE verify_flag=0")
+	rows, err := s.dbMgr.ContactDB.Query("SELECT username, nick_name, remark, COALESCE(alias,''), flag, COALESCE(big_head_url,''), COALESCE(small_head_url,'') FROM contact WHERE verify_flag=0")
 	if err != nil { return }
 	defer rows.Close()
 
@@ -445,7 +445,7 @@ type FilteredStats struct {
 
 // AnalyzeWithFilter 对指定时间范围内的消息做统计（不写入缓存）
 func (s *ContactService) AnalyzeWithFilter(from, to int64) *FilteredStats {
-	rows, err := s.dbMgr.ContactDB.Query("SELECT username, nick_name, remark, alias, flag, COALESCE(big_head_url,''), COALESCE(small_head_url,'') FROM contact WHERE verify_flag=0")
+	rows, err := s.dbMgr.ContactDB.Query("SELECT username, nick_name, remark, COALESCE(alias,''), flag, COALESCE(big_head_url,''), COALESCE(small_head_url,'') FROM contact WHERE verify_flag=0")
 	if err != nil { return nil }
 	defer rows.Close()
 

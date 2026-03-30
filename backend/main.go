@@ -107,12 +107,16 @@ func serverMain() {
 		dataLabel, cfg.Server.Port, cfg.Analysis.Timezone, cfg.Analysis.WorkerCount)
 
 	// 2. 初始化数据库管理器（DEMO_MODE 时先生成示例数据）
-	if os.Getenv("DEMO_MODE") == "true" {
+	isDemoMode := os.Getenv("DEMO_MODE") == "true"
+	if isDemoMode {
 		demoDir := cfg.Data.Dir
 		log.Printf("[DEMO] Demo mode enabled, generating sample databases")
 		if err := seed.Generate(demoDir); err != nil {
 			log.Fatalf("Failed to generate demo databases: %v", err)
 		}
+		// Demo 模式自动全量索引（无时间限制），用非零 to 触发 NewContactService 自动初始化
+		cfg.Analysis.DefaultInitFrom = 0
+		cfg.Analysis.DefaultInitTo = time.Now().Unix() + 365*24*3600*10 // 10年后
 	}
 
 	if err := reinitSvc(cfg.Data.Dir); err != nil {
@@ -124,6 +128,10 @@ func serverMain() {
 	// 初始化 AI 分析历史数据库
 	if err := InitAIDB(); err != nil {
 		log.Printf("[WARN] AI analysis DB init failed: %v — history will not be persisted", err)
+	}
+	// 将 AI 分析库注册到 DBManager，使数据库页面可查看和查询
+	if dbMgr != nil {
+		dbMgr.RegisterExtraDB("ai_analysis.db", aiAnalysisDBPath())
 	}
 
 	// 服务层访问助手（线程安全）
@@ -140,6 +148,11 @@ func serverMain() {
 
 	// 4. 初始化 Gin 路由
 	r := gin.Default()
+
+	// Demo 模式：全局限速（每 IP 每秒 20 请求）
+	if isDemoMode {
+		r.Use(demoRateLimit)
+	}
 
 	// 跨域设置：仅允许 localhost 来源（开发调试用），生产流量通过 Nginx 反代不需要 CORS
 	r.Use(func(c *gin.Context) {
@@ -365,6 +378,11 @@ func serverMain() {
 
 	// LLM 配置单独保存，避免与屏蔽名单 PUT 冲突
 	api.PUT("/preferences/llm", func(c *gin.Context) {
+		// Demo 模式下禁止修改（防止 SSRF / API key 滥用）
+		if isDemoMode {
+			demoBlockLLMWrite(c)
+			return
+		}
 		var incoming struct {
 			LLMProfiles        []LLMProfile `json:"llm_profiles"`
 			LLMProvider        string       `json:"llm_provider"`
@@ -417,10 +435,13 @@ func serverMain() {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
 			return
 		}
-		// 路径变更时重新初始化 AI 数据库
+		// 路径变更时重新初始化 AI 数据库，并同步更新 DBManager 注册
 		if pathChanged {
 			if err := InitAIDB(); err != nil {
 				log.Printf("[WARN] Re-init AI DB failed: %v", err)
+			}
+			if m := getMgr(); m != nil {
+				m.RegisterExtraDB("ai_analysis.db", aiAnalysisDBPath())
 			}
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -698,6 +719,10 @@ func serverMain() {
 
 	// POST /api/ai/vec/test-embedding — 验证 embedding 配置是否可用
 	api.POST("/ai/vec/test-embedding", func(c *gin.Context) {
+		if isDemoMode {
+			demoBlockLLMWrite(c)
+			return
+		}
 		prefs := loadPreferences()
 		cfg := defaultEmbeddingConfig(prefs)
 		_, err := GetEmbeddingsBatch([]string{"测试"}, cfg)
@@ -710,6 +735,10 @@ func serverMain() {
 
 	// POST /api/ai/llm/test — 验证 LLM 配置是否可用（可指定 profile_id）
 	api.POST("/ai/llm/test", func(c *gin.Context) {
+		if isDemoMode {
+			demoBlockLLMWrite(c)
+			return
+		}
 		var body struct {
 			ProfileID string `json:"profile_id"`
 		}
@@ -1354,6 +1383,11 @@ func serverMain() {
 
 		// 在指定数据库执行 SQL 查询（只读）
 		prot.POST("/databases/:dbName/query", func(c *gin.Context) {
+			// Demo 模式下禁止执行原始 SQL（防止数据泄露）
+			if isDemoMode {
+				demoBlockRawSQL(c)
+				return
+			}
 			dbName := c.Param("dbName")
 			var body struct {
 				SQL string `json:"sql"`
@@ -1401,6 +1435,11 @@ func serverMain() {
 			c.Status(http.StatusBadRequest)
 			return
 		}
+		// Demo 模式：只允许白名单域名，防止 SSRF 探测内网
+		if isDemoMode && !demoAvatarURLAllowed(rawURL) {
+			c.Status(http.StatusForbidden)
+			return
+		}
 
 		// Build a stable cache path: ~/.welink/avatar_cache/<md5(url)>
 		sum := md5.Sum([]byte(rawURL))
@@ -1417,7 +1456,9 @@ func serverMain() {
 			return
 		}
 
-		resp, err := http.Get(rawURL) // #nosec G107 — URL 来自受信任的数据库记录
+		req, _ := http.NewRequest("GET", rawURL, nil) // #nosec G107 — URL 来自受信任的数据库记录
+		req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; WelinkApp/1.0)")
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil || resp.StatusCode != http.StatusOK {
 			c.Status(http.StatusBadGateway)
 			return

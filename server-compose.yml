@@ -1,0 +1,58 @@
+# 服务器部署用：官网 (welink.click) + Demo (demo.welink.click)
+#
+# 镜像在本地构建后推送到 Docker Hub，服务器只做 pull + up，无需在服务器上编译。
+#
+# 本地（开发机）：
+#   make server-push      # 构建三个镜像并推送到 Docker Hub
+#
+# 服务器（首次 / 更新）：
+#   git clone https://github.com/runzhliu/welink && cd welink
+#   make server-up        # 拉取最新镜像并启动
+#   make server-pull      # 后续更新：git pull + docker pull + restart
+#
+# 前提：
+#   - 证书已在 /etc/letsencrypt/live/welink.click/{fullchain,privkey}.pem
+
+services:
+  # ── 官网 nginx（welink.click + demo.welink.click 反向代理）────────────────
+  website:
+    image: runzhliu/welink-website:latest
+    container_name: welink-website
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt/live/welink.click/fullchain.pem:/etc/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/welink.click/privkey.pem:/etc/certs/privkey.pem:ro
+    restart: unless-stopped
+    depends_on:
+      - demo-frontend
+    networks:
+      - welink-net
+
+  # ── Demo 前端（demo.welink.click → 此容器 → demo-backend）────────────────
+  demo-frontend:
+    image: runzhliu/welink-frontend:latest
+    container_name: welink-frontend-demo
+    restart: unless-stopped
+    depends_on:
+      - demo-backend
+    networks:
+      - welink-net
+
+  # ── Demo 后端（预置 Arsenal 测试数据）────────────────────────────────────
+  demo-backend:
+    image: runzhliu/welink-backend:latest
+    container_name: welink-backend-demo
+    hostname: backend
+    restart: unless-stopped
+    environment:
+      - GIN_MODE=release
+      - DEMO_MODE=true
+      - DATA_DIR=/app/demo-data
+    networks:
+      - welink-net
+
+networks:
+  welink-net:
+    name: welink-net

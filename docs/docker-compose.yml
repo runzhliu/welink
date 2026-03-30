@@ -2,8 +2,6 @@ services:
   website:
     build:
       context: .
-      platforms:
-        - linux/amd64
     image: ghcr.io/runzhliu/welink/website:main
     container_name: welink-website
     ports:

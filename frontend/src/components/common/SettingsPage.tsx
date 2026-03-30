@@ -97,7 +97,7 @@ const PROVIDERS = [
   { value: 'minimax',  label: 'MiniMax', defaultURL: 'https://api.minimax.io/v1', defaultModel: 'MiniMax-Text-01' },
   { value: 'openai',   label: 'OpenAI', defaultURL: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini' },
   { value: 'claude',   label: 'Claude (Anthropic)', defaultURL: '', defaultModel: 'claude-haiku-4-5-20251001' },
-  { value: 'ollama',   label: 'Ollama（本地）', defaultURL: 'http://localhost:11434/v1', defaultModel: 'llama3' },
+  { value: 'ollama',   label: 'Ollama（本地）', defaultURL: 'http://localhost:11434/v1', defaultModel: 'qwen2.5:3b' },
   { value: 'custom',   label: '自定义 OpenAI 兼容接口', defaultURL: '', defaultModel: '' },
 ] as const;
 
@@ -435,14 +435,7 @@ const AISettingsSection: React.FC = () => {
   if (!loaded) return null;
 
   return (
-    <section className="mb-8">
-      <div className="flex items-center gap-2 mb-3">
-        <Bot size={18} className="text-[#07c160]" />
-        <h3 className="text-base font-bold text-[#1d1d1f] dk-text">AI 分析配置</h3>
-      </div>
-      <p className="text-sm text-gray-400 mb-4">可配置多个 provider，在 AI 分析页面一键切换。</p>
-
-      <div className="space-y-3">
+    <div className="space-y-3">
         {profiles.map((p, i) => (
           <ProfileCard
             key={p.id}
@@ -505,8 +498,7 @@ const AISettingsSection: React.FC = () => {
             </span>
           )}
         </div>
-      </div>
-    </section>
+    </div>
   );
 };
 
@@ -615,11 +607,7 @@ const EmbeddingSettingsSection: React.FC = () => {
   const modelPlaceholder = providerInfo.defaultModel ? `默认：${providerInfo.defaultModel}` : '请输入模型名';
 
   return (
-    <section className="mb-8">
-      <div className="flex items-center gap-2 mb-3">
-        <Database size={18} className="text-[#07c160]" />
-        <h3 className="text-base font-bold text-[#1d1d1f] dk-text">向量 Embedding 配置</h3>
-      </div>
+    <div>
       <p className="text-sm text-gray-400 mb-4">
         用于混合检索模式的语义向量化。推荐使用 Ollama 本地运行，无需 API Key，完全免费。
         <br />
@@ -740,7 +728,7 @@ const EmbeddingSettingsSection: React.FC = () => {
           )}
         </div>
       </div>
-    </section>
+    </div>
   );
 };
 
@@ -819,11 +807,7 @@ const MemLLMSettingsSection: React.FC = () => {
     : (model || 'qwen2.5:7b');
 
   return (
-    <section className="mb-8">
-      <div className="flex items-center gap-2 mb-1">
-        <Bot size={18} className="text-[#07c160]" />
-        <h3 className="text-base font-bold text-[#1d1d1f] dk-text">记忆提炼模型</h3>
-      </div>
+    <div>
       <p className="text-sm text-gray-400 mb-3">
         提炼记忆事实时使用的模型。<strong className="text-gray-600 dark:text-gray-300">两个字段均留空 = 复用上方主 AI 配置</strong>；
         填写后使用本地 Ollama 模型，原始聊天内容不经过云端，更安全可靠。
@@ -898,6 +882,60 @@ const MemLLMSettingsSection: React.FC = () => {
             </span>
           )}
         </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── AI 配置分组（Tab 切换三个子区块）────────────────────────────────────────
+
+type AITab = 'llm' | 'embedding' | 'memory';
+
+const AIConfigGroup: React.FC = () => {
+  const [tab, setTab] = useState<AITab>('llm');
+
+  const tabs: { key: AITab; label: string }[] = [
+    { key: 'llm',       label: '分析模型' },
+    { key: 'embedding', label: '向量 Embedding' },
+    { key: 'memory',    label: '记忆提炼' },
+  ];
+
+  return (
+    <section className="mb-8">
+      <div className="flex items-center gap-2 mb-3">
+        <Bot size={18} className="text-[#07c160]" />
+        <h3 className="text-base font-bold text-[#1d1d1f] dk-text">AI 配置</h3>
+      </div>
+      <p className="text-sm text-gray-400 mb-4">
+        配置用于对话分析、语义搜索和记忆提炼的模型。
+      </p>
+
+      {/* Tab 导航 */}
+      <div className="flex gap-1 mb-4 bg-gray-100 dark:bg-white/5 rounded-xl p-1">
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${
+              tab === t.key
+                ? 'bg-white dark:bg-white/10 text-[#07c160] shadow-sm'
+                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 各 Tab 内容（用 hidden 保留 DOM / state） */}
+      <div className={tab === 'llm' ? '' : 'hidden'}>
+        <AISettingsSection />
+      </div>
+      <div className={tab === 'embedding' ? '' : 'hidden'}>
+        <EmbeddingSettingsSection />
+      </div>
+      <div className={tab === 'memory' ? '' : 'hidden'}>
+        <MemLLMSettingsSection />
       </div>
     </section>
   );
@@ -1022,7 +1060,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           <EyeOff size={18} className="text-[#07c160]" />
           <h3 className="text-base font-bold text-[#1d1d1f] dk-text">录屏模式</h3>
         </div>
-        <p className="text-sm text-gray-400 mb-4">开启后，所有联系人姓名、群名及词云内容将模糊显示，适合录制演示视频时保护隐私。</p>
+        <p className="text-sm text-gray-400 mb-4">开启后，所有联系人姓名、群名及词云内容将模糊显示，适合录制演示视频时保护隐私。<span className="text-amber-500 font-medium">注意：AI 首页的分析对象名字也会模糊，请选择好分析对象再开启。</span></p>
         <div className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center justify-between dk-card dk-border">
           <div>
             <p className="text-sm font-semibold text-[#1d1d1f] dk-text">模糊姓名与词云</p>
@@ -1098,14 +1136,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
       </section>
 
-      {/* ── AI 分析配置 ── */}
-      <AISettingsSection />
-
-      {/* ── 向量 Embedding 配置 ── */}
-      <EmbeddingSettingsSection />
-
-      {/* ── 记忆提炼模型（本地专用） ── */}
-      <MemLLMSettingsSection />
+      {/* ── AI 配置（分析模型 / Embedding / 记忆提炼） ── */}
+      <AIConfigGroup />
 
       {/* ── 隐私屏蔽 ── */}
       <section className="mb-8">

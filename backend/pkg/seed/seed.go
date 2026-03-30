@@ -19,6 +19,38 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// playerAvatarURLs maps username to a Wikimedia direct image URL (verified 200 OK).
+// These are served via the existing /api/avatar?url=... proxy on the frontend.
+var playerAvatarURLs = map[string]string{
+	"arteta_mikel":        "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Mikel_Arteta_2021_%28cropped%29.png/250px-Mikel_Arteta_2021_%28cropped%29.png",
+	"raya_david":          "https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/David_Raya_in_2025_%28cropped%29.jpg/250px-David_Raya_in_2025_%28cropped%29.jpg",
+	"gabriel_magalhaes":   "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/GabrielLille2019.png/250px-GabrielLille2019.png",
+	"timber_jurrien":      "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/JURRIEN_TIMBER.jpg/250px-JURRIEN_TIMBER.jpg",
+	"calafiori_riccardo":  "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e2/2024_Emirates_Cup_-_Riccardo_Calafiori_%282%29_%28cropped%29.jpg/250px-2024_Emirates_Cup_-_Riccardo_Calafiori_%282%29_%28cropped%29.jpg",
+	"lewis_skelly_myles":  "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/1_Myles_Lewis-Skelly_arsenal_2025_%28cropped%29.jpg/250px-1_Myles_Lewis-Skelly_arsenal_2025_%28cropped%29.jpg",
+	"tomiyasu_takehiro":   "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/Takehiro_Tomiyasu%2C_2019_AFC_Asian_Cup_1.jpg/250px-Takehiro_Tomiyasu%2C_2019_AFC_Asian_Cup_1.jpg",
+	"odegaard_martin":     "https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/Norway_Italy_-_June_2025_E_04.jpg/250px-Norway_Italy_-_June_2025_E_04.jpg",
+	"rice_declan":         "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/1_declan_rice_arsenal_2025_%28cropped%29.jpg/250px-1_declan_rice_arsenal_2025_%28cropped%29.jpg",
+	"partey_thomas":       "https://upload.wikimedia.org/wikipedia/commons/thumb/4/42/ATL-Madrid-Lokomotiv001-Thomas_%28cropped%29.jpg/250px-ATL-Madrid-Lokomotiv001-Thomas_%28cropped%29.jpg",
+	"havertz_kai":         "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/2019-06-11_Fu%C3%9Fball%2C_M%C3%A4nner%2C_L%C3%A4nderspiel%2C_Deutschland-Estland_StP_2059_LR10_by_Stepro.jpg/250px-2019-06-11_Fu%C3%9Fball%2C_M%C3%A4nner%2C_L%C3%A4nderspiel%2C_Deutschland-Estland_StP_2059_LR10_by_Stepro.jpg",
+	"saka_bukayo":         "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/1_bukayo_saka_arsenal_2025_%28cropped%29.jpg/250px-1_bukayo_saka_arsenal_2025_%28cropped%29.jpg",
+	"martinelli_gabriel":  "https://upload.wikimedia.org/wikipedia/commons/thumb/d/df/1_Gabriel_Martinelli_arsenal_2025_%28cropped%29.jpg/250px-1_Gabriel_Martinelli_arsenal_2025_%28cropped%29.jpg",
+	"trossard_leandro":    "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/RC_Lens_-_Arsenal_FC_%2803-10-2023%29_26_%28cropped%29.jpg/250px-RC_Lens_-_Arsenal_FC_%2803-10-2023%29_26_%28cropped%29.jpg",
+	"jesus_gabriel":       "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/20180610_FIFA_Friendly_Match_Austria_vs._Brazil_Gabriel_Jesus_850_1688.jpg/250px-20180610_FIFA_Friendly_Match_Austria_vs._Brazil_Gabriel_Jesus_850_1688.jpg",
+	"nwaneri_ethan":       "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Ethan_Nwaneri.png/250px-Ethan_Nwaneri.png",
+	"sterling_raheem":     "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Raheem_Sterling_2018.jpg/250px-Raheem_Sterling_2018.jpg",
+	// hein_karl, white_ben, zinchenko_oleksandr, vieira_fabio, jorginho_jorge,
+	// stuivenberg_albert: no reliable Wikipedia thumbnail available → SVG fallback
+}
+
+// playerAvatarURL returns a Wikimedia URL for the player, or empty string if unknown.
+func playerAvatarURL(username string, displayName string, isGroup bool) string {
+	if url, ok := playerAvatarURLs[username]; ok {
+		return url
+	}
+	return demoAvatarDataURI(displayName, isGroup)
+}
+
 // demoAvatarDataURI generates a small SVG data URI with colored background + initials.
 // Colors cycle through a palette derived from the contact name so they're stable.
 func demoAvatarDataURI(displayName string, isGroup bool) string {
@@ -261,7 +293,7 @@ func createContactDB(path string) error {
 		if displayName == "" {
 			displayName = c.Nickname
 		}
-		avatar := demoAvatarDataURI(displayName, c.IsGroup)
+		avatar := playerAvatarURL(c.Username, displayName, c.IsGroup)
 		if _, err := stmt.Exec(c.Username, c.Nickname, c.Remark, c.Flag, avatar, avatar); err != nil {
 			return err
 		}

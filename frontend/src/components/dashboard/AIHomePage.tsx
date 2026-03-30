@@ -10,6 +10,7 @@ import { generateShareImage } from '../../utils/shareImage';
 import { avatarSrc } from '../../utils/avatar';
 import type { ContactStats, TimeRange, ChatMessage, GroupInfo, GroupChatMessage } from '../../types';
 import { contactsApi, groupsApi } from '../../services/api';
+import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 const PROVIDER_LABELS: Record<string, string> = {
   deepseek: 'DeepSeek', kimi: 'Kimi', gemini: 'Gemini', glm: 'GLM',
@@ -72,6 +73,7 @@ const SubjectPicker: React.FC<{
   onRemove: (id: string) => void;
   disabled?: boolean;
 }> = ({ contacts, groups, selected, onAdd, onRemove, disabled }) => {
+  const { privacyMode } = usePrivacyMode();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -127,7 +129,7 @@ const SubjectPicker: React.FC<{
                   ? <div className="w-5 h-5 rounded-full bg-[#576b95]/15 flex items-center justify-center flex-shrink-0"><Users size={10} className="text-[#576b95]" /></div>
                   : <div className="w-5 h-5 rounded-full bg-[#07c160] flex items-center justify-center text-white text-[9px] font-black flex-shrink-0">{name[0]}</div>
               }
-              <span className="text-xs font-semibold text-[#07c160] max-w-[72px] truncate">{name}</span>
+              <span className={`text-xs font-semibold text-[#07c160] max-w-[72px] truncate${privacyMode ? ' privacy-blur' : ''}`}>{name}</span>
               {!disabled && (
                 <button onClick={() => onRemove(id)} className="text-[#07c160]/40 hover:text-[#07c160] transition-colors p-0.5 ml-0.5">
                   <X size={9} />
@@ -404,6 +406,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   onContactClick,
   onGroupClick,
 }) => {
+  const { privacyMode } = usePrivacyMode();
   const [selectedItems, setSelectedItems] = useState<SelectableItem[]>([]);
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [input, setInput] = useState('');
@@ -795,7 +798,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
                     title={canClick ? `查看${item.kind === 'group' ? '群聊' : '私聊'}详情` : undefined}
                   >
                     {avatar}
-                    <span className="text-sm font-semibold text-[#1d1d1f] dark:text-gray-100 truncate max-w-[120px]">{headerTitle}</span>
+                    <span className={`text-sm font-semibold text-[#1d1d1f] dark:text-gray-100 truncate max-w-[120px]${privacyMode ? ' privacy-blur' : ''}`}>{headerTitle}</span>
                   </button>
                 );
               })() : (
@@ -930,7 +933,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
                       </div>
                     )}
                   </div>
-                  <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 max-w-[52px] truncate">{name}</span>
+                  <span className={`text-[10px] font-semibold text-gray-500 dark:text-gray-400 max-w-[52px] truncate${privacyMode ? ' privacy-blur' : ''}`}>{name}</span>
                 </button>
               );
             })}

@@ -15,13 +15,23 @@ type DBManager struct {
 	ContactDB  *sql.DB
 	MessageDBs []*sql.DB
 	dataDir    string
+	// ExtraDBs 是额外注册的数据库（如 AI 分析库），key 为文件名，value 为路径
+	ExtraDBs map[string]string
+}
+
+// RegisterExtraDB 注册一个额外的数据库（如 ai_analysis.db）到管理器，使其可被 SQL 编辑器访问。
+func (mgr *DBManager) RegisterExtraDB(name, path string) {
+	if mgr.ExtraDBs == nil {
+		mgr.ExtraDBs = make(map[string]string)
+	}
+	mgr.ExtraDBs[name] = path
 }
 
 type DBInfo struct {
 	Name string `json:"name"`
 	Path string `json:"path"`
 	Size int64  `json:"size"`
-	Type string `json:"type"` // "contact" or "message"
+	Type string `json:"type"` // "contact", "message", or "ai"
 }
 
 // TableInfo 表信息
@@ -51,6 +61,15 @@ type TableData struct {
 func (mgr *DBManager) getDBByName(dbName string) *sql.DB {
 	if dbName == "contact.db" {
 		return mgr.ContactDB
+	}
+	// ExtraDBs（如 ai_analysis.db）
+	if path, ok := mgr.ExtraDBs[dbName]; ok {
+		if _, err := os.Stat(path); err == nil {
+			db, err := sql.Open("sqlite", path)
+			if err == nil {
+				return db
+			}
+		}
 	}
 	// 在消息数据库列表中查找（通过路径匹配文件名）
 	dataDir := os.Getenv("DATA_DIR")
@@ -335,6 +354,23 @@ func (mgr *DBManager) GetDBInfos() []DBInfo {
 			})
 		}
 	}
+
+	// ExtraDBs（如 ai_analysis.db）
+	for name, path := range mgr.ExtraDBs {
+		var size int64
+		if fi, err := os.Stat(path); err == nil {
+			size = fi.Size()
+		} else {
+			continue // 文件不存在则不展示
+		}
+		infos = append(infos, DBInfo{
+			Name: name,
+			Path: path,
+			Size: size,
+			Type: "ai",
+		})
+	}
+
 	return infos
 }
 
