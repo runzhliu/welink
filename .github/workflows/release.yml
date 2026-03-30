@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: 确定版本号和发布类型
         id: version
@@ -48,6 +50,38 @@ jobs:
             echo "draft=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: 生成 Changelog
+        id: changelog
+        run: |
+          PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV" ]; then
+            COMMITS=$(git log ${PREV}..HEAD --pretty=format:"%s" --no-merges)
+          else
+            COMMITS=$(git log --pretty=format:"%s" --no-merges)
+          fi
+
+          FEAT="" FIX="" CHORE="" DOCS=""
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            case "$line" in
+              feat:*|feat\(*) FEAT="$FEAT\n- ${line#*: }" ;;
+              fix:*|fix\(*)   FIX="$FIX\n- ${line#*: }" ;;
+              docs:*|doc:*)   DOCS="$DOCS\n- ${line#*: }" ;;
+              chore:*|ci:*|refactor:*|perf:*|test:*) CHORE="$CHORE\n- ${line#*: }" ;;
+              *)              CHORE="$CHORE\n- $line" ;;
+            esac
+          done <<< "$COMMITS"
+
+          NOTES=""
+          [ -n "$FEAT" ]  && NOTES="$NOTES\n## ✨ 新功能\n$FEAT\n"
+          [ -n "$FIX" ]   && NOTES="$NOTES\n## 🐛 修复\n$FIX\n"
+          [ -n "$DOCS" ]  && NOTES="$NOTES\n## 📖 文档\n$DOCS\n"
+          [ -n "$CHORE" ] && NOTES="$NOTES\n## 🔧 工程\n$CHORE\n"
+
+          printf "notes<<EOF\n" >> "$GITHUB_OUTPUT"
+          printf "$NOTES\n" >> "$GITHUB_OUTPUT"
+          printf "EOF\n" >> "$GITHUB_OUTPUT"
+
       - name: 创建 Release
         uses: softprops/action-gh-release@v2
         with:
@@ -55,93 +89,7 @@ jobs:
           name: "WeLink ${{ steps.version.outputs.tag }}"
           draft: ${{ steps.version.outputs.draft }}
           prerelease: ${{ steps.version.outputs.prerelease }}
-          body: |
-            ## 更新内容
-
-            ### ✨ 新功能
-
-            **全局搜索增强**
-            - 全局搜索现支持**群聊记录**，可通过 pill 按钮切换「私聊 / 群聊 / 全部」范围
-            - 搜索结果点击任意消息，弹出**当天完整聊天记录**，自动定位并高亮目标消息，支持前后翻日
-            - 联系人详情和群聊详情的「搜索记录」Tab 同样支持点击查看当天上下文
-
-            **数据库 SQL 编辑器**
-            - 数据库页面新增 SQL 编辑器，可直接对底层 SQLite 数据库执行 `SELECT / PRAGMA / EXPLAIN`
-            - 支持 ⌘+Enter 快捷执行、Tab 缩进、结果一键复制（TSV 格式），最多返回 500 行
-
-            **群聊画像**
-            - 成员发言排行支持显示最多 Top 500，人数可实时修改
-            - 名字列宽度可**拖拽调整**，设置页同步保存
-
-            **Windows 支持**
-            - 新增 Windows App 版本（基于 WebView2，无需 CGO）
-
-            **官方网站**
-            - 上线 [welink.click](https://welink.click)，含完整文档和 MCP Server 使用说明
-            - 上线 [demo.welink.click](https://demo.welink.click) 在线体验
-            - 侧边栏图标点击可直接跳转官网
-
-            ### 🐛 修复
-
-            - 搜索结果点击头像正确跳转联系人资料，过滤已屏蔽用户
-            - 修复群聊详情页崩溃问题
-            - 修复旧版 pip 不支持 `--break-system-packages` 导致 `make dmg` 失败
-
-            ---
-
-            ## macOS 安装方法
-
-            1. 下载 `WeLink.dmg`，双击挂载
-            2. 将 `WeLink.app` 拖入 `/Applications`
-            3. 双击运行，首次会进入演示模式，无需任何配置即可体验功能
-            4. 打开右上角「设置」，选择解密后的 `decrypted/` 目录路径，点击保存重启即可加载真实数据
-
-            **首次打开提示"无法打开"？**
-
-            macOS 对未经 Apple 公证的 App 会拦截，按以下任一方式解除：
-
-            - **方式一（推荐）**：系统设置 → 隐私与安全性 → 拉到底部，点击「仍要打开」
-            - **方式二**：右键点击 `WeLink.app` → 「打开」→ 再次点击「打开」
-            - **方式三**（终端）：
-              ```bash
-              xattr -cr /Applications/WeLink.app
-              ```
-
-            ---
-
-            ## Windows 安装方法
-
-            1. 下载 `WeLink-windows-amd64.zip`，解压到任意目录
-            2. 双击 `WeLink.exe` 运行，首次会进入演示模式，无需任何配置即可体验功能
-            3. 打开右上角「设置」，选择解密后的 `decrypted\` 目录路径，点击保存重启即可加载真实数据
-
-            > `decrypted\` 目录可放在任意位置，在设置页面选择路径即可，无需与 `WeLink.exe` 同目录。
-
-            **系统要求**：Windows 10 1903 或更高版本
-
-            **首次运行提示缺少 WebView2 Runtime？**
-
-            Windows 11 及安装了 Edge 的 Windows 10 已自带，无需额外安装。
-            如提示缺少运行时，请下载安装 Evergreen Bootstrapper（约 2 MB）：
-            https://developer.microsoft.com/microsoft-edge/webview2/
-
-            ---
-
-            ## 文件校验
-
-            下载后校验文件完整性：
-
-            ```bash
-            # macOS
-            shasum -a 256 ~/Downloads/WeLink.dmg
-            ```
-
-            ```powershell
-            # Windows
-            Get-FileHash .\WeLink-windows-amd64.zip -Algorithm SHA256
-            ```
-
-            > COYG! 🔴⚪
+          body: ${{ steps.changelog.outputs.notes }}
 
   # ─── macOS DMG ──────────────────────────────────────────────────────────────
   build-dmg:
@@ -153,7 +101,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-tags: true
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -191,7 +139,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-tags: true
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
