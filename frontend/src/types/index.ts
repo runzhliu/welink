@@ -102,7 +102,20 @@ export interface BackendStatus {
   total_cached: number;
 }
 
-export type TabType = 'dashboard' | 'db' | 'groups' | 'search' | 'timeline' | 'settings';
+export type TabType = 'dashboard' | 'stats' | 'db' | 'groups' | 'search' | 'timeline' | 'calendar' | 'settings';
+
+export interface CalendarDayEntry {
+  username: string;
+  display_name: string;
+  small_head_url: string;
+  count: number;
+  is_group: boolean;
+}
+
+export interface CalendarTrendPoint {
+  date: string;
+  count: number;
+}
 
 export interface CoolingEntry {
   username: string;

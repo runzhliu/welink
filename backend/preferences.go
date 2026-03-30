@@ -20,6 +20,32 @@ type Preferences struct {
 	BlockedUsers  []string `json:"blocked_users"`
 	BlockedGroups []string `json:"blocked_groups"`
 	PrivacyMode   bool     `json:"privacy_mode,omitempty"`
+
+	// LLM 配置
+	LLMProvider      string `json:"llm_provider,omitempty"` // openai/deepseek/kimi/gemini/claude/grok/glm/ollama/custom
+	LLMAPIKey        string `json:"llm_api_key,omitempty"`
+	LLMBaseURL       string `json:"llm_base_url,omitempty"`
+	LLMModel         string `json:"llm_model,omitempty"`
+	AIAnalysisDBPath string `json:"ai_analysis_db_path,omitempty"` // 留空 = 与 preferences.json 同目录
+
+	// Embedding 配置（向量检索，混合 RAG 模式使用）
+	EmbeddingProvider string `json:"embedding_provider,omitempty"` // openai/jina/ollama/custom；默认 ollama
+	EmbeddingAPIKey   string `json:"embedding_api_key,omitempty"`
+	EmbeddingBaseURL  string `json:"embedding_base_url,omitempty"`
+	EmbeddingModel    string `json:"embedding_model,omitempty"`
+	EmbeddingDims     int    `json:"embedding_dims,omitempty"` // 0 = 由模型默认值决定
+
+	// 记忆提炼模型（本地隐私专用，默认 Ollama）
+	// 提炼时原始聊天内容只发给此模型，与主 LLM 配置隔离
+	MemLLMBaseURL string `json:"mem_llm_base_url,omitempty"` // 默认 http://localhost:11434/v1
+	MemLLMModel   string `json:"mem_llm_model,omitempty"`    // 默认 qwen2.5:7b
+
+	// Gemini OAuth（可选，与 API Key 二选一）
+	GeminiClientID     string `json:"gemini_client_id,omitempty"`
+	GeminiClientSecret string `json:"gemini_client_secret,omitempty"`
+	GeminiAccessToken  string `json:"gemini_access_token,omitempty"`
+	GeminiRefreshToken string `json:"gemini_refresh_token,omitempty"`
+	GeminiTokenExpiry  int64  `json:"gemini_token_expiry,omitempty"` // Unix timestamp
 }
 
 // preferencesPath 返回 preferences.json 的绝对路径。

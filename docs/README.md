@@ -12,6 +12,8 @@
 | [indexing.md](./indexing.md) | 索引与初始化流程，包含 SQLite 索引策略、并发模型、时间过滤机制 |
 | [sentiment.md](./sentiment.md) | 情感分析算法说明，包含词典内容、评分流程、月度聚合逻辑 |
 | [wordcloud.md](./wordcloud.md) | 词云生成说明，包含分词流程、停用词表、字号对数映射、WordCloud2 渲染参数 |
+| [ai-analysis.md](./ai-analysis.md) | AI 分析功能说明，包含 LLM 配置、Embedding 配置、全量分析、混合检索（FTS5 + 向量 + 记忆提炼）、Gemini OAuth、API 端点 |
+| [ollama-setup.md](./ollama-setup.md) | Ollama 本地 AI 配置指南，包含安装、模型拉取、WeLink 接入、Docker 网络配置、常见问题 |
 
 
 ## 快速参考
