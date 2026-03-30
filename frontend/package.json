@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
-    "@types/marked": "^5.0.2",
+    "@types/marked": "^6.0.0",
     "axios": "^1.6.2",
     "clsx": "^2.0.0",
     "html-to-image": "^1.11.13",
