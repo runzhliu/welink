@@ -144,40 +144,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
       </aside>
 
       {/* 手机底部导航栏（不受折叠影响） */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 dk-card bg-white dk-border border-t flex">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 dk-card bg-white dk-border border-t flex safe-area-inset-bottom">
         {navItems.map(({ tab, icon, label }) => (
           <button
             key={tab}
             onClick={() => onTabChange(tab)}
-            className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-semibold transition-colors ${
+            className={`flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors min-w-0 ${
               activeTab === tab ? 'text-[#07c160]' : 'text-gray-400'
             }`}
           >
-            {icon}
-            <span>{label}</span>
+            <span className="flex-shrink-0">{icon}</span>
+            <span className="text-[10px] font-semibold truncate w-full text-center px-0.5">{label}</span>
           </button>
         ))}
-        <button
-          onClick={() => setSwaggerOpen(true)}
-          className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-semibold text-gray-400"
-        >
-          <BookOpen size={22} strokeWidth={2} />
-          <span>文档</span>
-        </button>
-        <button
-          onClick={() => openExternal('https://github.com/runzhliu/WeLink')}
-          className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-semibold text-gray-400"
-        >
-          <Github size={22} strokeWidth={2} />
-          <span>GitHub</span>
-        </button>
-        <button
-          onClick={onToggleDark}
-          className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-semibold text-gray-400"
-        >
-          {dark ? <Sun size={22} strokeWidth={2} /> : <Moon size={22} strokeWidth={2} />}
-          <span>{dark ? '亮色' : '暗色'}</span>
-        </button>
       </nav>
     </>
   );

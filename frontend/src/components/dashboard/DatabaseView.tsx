@@ -75,15 +75,15 @@ const TablePanel: React.FC<TablePanelProps> = ({ dbName, tableName, onClose }) =
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-2xl w-[92vw] h-[88vh] flex flex-col overflow-hidden">
+      <div className="dk-card bg-white rounded-3xl shadow-2xl w-[92vw] h-[88vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-8 py-5 border-b border-gray-100 flex-shrink-0">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-gray-100 dark:border-white/5 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-[#07c160] rounded-xl flex items-center justify-center">
               <Table size={20} className="text-white" strokeWidth={2.5} />
             </div>
             <div>
-              <h2 className="text-lg font-black text-[#1d1d1f]">{tableName}</h2>
+              <h2 className="text-lg font-black text-[#1d1d1f] dk-text">{tableName}</h2>
               <p className="text-xs text-gray-400 font-mono">{dbName}</p>
             </div>
           </div>
@@ -126,7 +126,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ dbName, tableName, onClose }) =
           )}
 
           {tab === 'schema' && (
-            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            <div className="dk-card dk-border bg-white rounded-2xl border border-gray-100 overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="dk-thead bg-[#f8f9fb] dk-border border-b border-gray-100">
@@ -140,9 +140,9 @@ const TablePanel: React.FC<TablePanelProps> = ({ dbName, tableName, onClose }) =
                 </thead>
                 <tbody>
                   {schema.map((col) => (
-                    <tr key={col.cid} className="border-b border-gray-50 hover:bg-[#f8f9fb]">
+                    <tr key={col.cid} className="border-b border-gray-50 dark:border-white/5 hover:bg-[#f8f9fb] dark:hover:bg-white/5">
                       <td className="px-5 py-3 text-gray-400 font-mono text-xs">{col.cid}</td>
-                      <td className="px-5 py-3 font-semibold text-[#1d1d1f]">
+                      <td className="px-5 py-3 font-semibold text-[#1d1d1f] dk-text">
                         {col.primary_key && (
                           <Hash size={12} className="inline mr-1 text-[#07c160]" />
                         )}
@@ -182,7 +182,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ dbName, tableName, onClose }) =
                   <Loader2 size={32} className="text-[#07c160] animate-spin" />
                 </div>
               ) : tableData && tableData.columns.length > 0 ? (
-                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                <div className="dk-card dk-border bg-white rounded-2xl border border-gray-100 overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -197,7 +197,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ dbName, tableName, onClose }) =
                       </thead>
                       <tbody>
                         {tableData.rows.map((row, ri) => (
-                          <tr key={ri} className="border-b border-gray-50 hover:bg-[#f8faf8] transition-colors">
+                          <tr key={ri} className="border-b border-gray-50 dark:border-white/5 hover:bg-[#f8faf8] dark:hover:bg-white/5 transition-colors">
                             <td className="px-4 py-2 text-gray-300 text-xs font-mono">
                               {offset + ri + 1}
                             </td>
@@ -221,7 +221,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ dbName, tableName, onClose }) =
 
         {/* Pagination */}
         {tab === 'data' && tableData && tableData.total > limit && (
-          <div className="flex items-center justify-between px-8 py-4 border-t border-gray-100 flex-shrink-0">
+          <div className="flex items-center justify-between px-8 py-4 border-t border-gray-100 dark:border-white/5 flex-shrink-0">
             <span className="text-sm text-gray-400">
               第 {offset + 1}–{Math.min(offset + limit, tableData.total)} 行，共 {tableData.total.toLocaleString()} 行
             </span>
@@ -229,7 +229,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ dbName, tableName, onClose }) =
               <button
                 disabled={offset === 0}
                 onClick={() => handlePageChange(Math.max(0, offset - limit))}
-                className="flex items-center gap-1 px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 hover:border-[#07c160] hover:text-[#07c160] disabled:opacity-30 disabled:cursor-not-allowed transition"
+                className="flex items-center gap-1 px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 dark:border-white/10 hover:border-[#07c160] hover:text-[#07c160] disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
                 <ArrowLeft size={14} /> 上一页
               </button>
@@ -239,7 +239,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ dbName, tableName, onClose }) =
               <button
                 disabled={offset + limit >= tableData.total}
                 onClick={() => handlePageChange(offset + limit)}
-                className="flex items-center gap-1 px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 hover:border-[#07c160] hover:text-[#07c160] disabled:opacity-30 disabled:cursor-not-allowed transition"
+                className="flex items-center gap-1 px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 dark:border-white/10 hover:border-[#07c160] hover:text-[#07c160] disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
                 下一页 <ArrowRight size={14} />
               </button>
@@ -315,15 +315,15 @@ const SQLEditor: React.FC<SQLEditorProps> = ({ databases }) => {
   return (
     <div className="dk-card bg-white rounded-3xl dk-border border border-gray-100 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-[#f8f9fb]">
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 dark:border-white/5 bg-[#f8f9fb] dk-subtle">
         <Terminal size={18} className="text-[#07c160]" strokeWidth={2.5} />
-        <h3 className="font-black text-[#1d1d1f] text-base">SQL 编辑器</h3>
+        <h3 className="font-black text-[#1d1d1f] dk-text text-base">SQL 编辑器</h3>
         <span className="text-xs text-gray-400 ml-1">仅支持 SELECT / PRAGMA / EXPLAIN，最多返回 500 行</span>
         <div className="ml-auto flex items-center gap-2">
           <select
             value={selectedDb}
             onChange={(e) => setSelectedDb(e.target.value)}
-            className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white"
+            className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white dk-input"
           >
             <option value="">选择数据库</option>
             {databases.map((db) => (
@@ -351,7 +351,7 @@ const SQLEditor: React.FC<SQLEditorProps> = ({ databases }) => {
           rows={5}
           spellCheck={false}
           placeholder="SELECT * FROM ..."
-          className="w-full font-mono text-sm bg-[#f8f9fb] border border-gray-200 rounded-2xl px-4 py-3 resize-y focus:outline-none focus:border-[#07c160] transition-colors text-[#1d1d1f] leading-relaxed"
+          className="w-full font-mono text-sm bg-[#f8f9fb] border border-gray-200 rounded-2xl px-4 py-3 resize-y focus:outline-none focus:border-[#07c160] transition-colors text-[#1d1d1f] leading-relaxed dk-input"
         />
         <p className="text-[10px] text-gray-300 mt-1 px-1">⌘+Enter 执行 · Tab 缩进</p>
       </div>
@@ -381,9 +381,9 @@ const SQLEditor: React.FC<SQLEditorProps> = ({ databases }) => {
               {result.columns.length === 0 ? (
                 <div className="text-center text-gray-300 py-6 text-sm">无结果</div>
               ) : (
-                <div className="bg-[#f8f9fb] rounded-2xl border border-gray-100 overflow-auto max-h-80">
+                <div className="dk-subtle dk-border bg-[#f8f9fb] rounded-2xl border border-gray-100 overflow-auto max-h-80">
                   <table className="w-full text-xs font-mono">
-                    <thead className="sticky top-0 bg-[#f0f0f0]">
+                    <thead className="sticky top-0 bg-[#f0f0f0] dark:bg-white/5">
                       <tr>
                         <th className="px-3 py-2 text-left text-gray-400 w-8 font-bold">#</th>
                         {result.columns.map((col) => (
@@ -393,7 +393,7 @@ const SQLEditor: React.FC<SQLEditorProps> = ({ databases }) => {
                     </thead>
                     <tbody>
                       {result.rows.map((row, ri) => (
-                        <tr key={ri} className="border-t border-gray-100 hover:bg-white transition-colors">
+                        <tr key={ri} className="border-t border-gray-100 dark:border-white/5 hover:bg-white dark:hover:bg-white/5 transition-colors">
                           <td className="px-3 py-1.5 text-gray-300">{ri + 1}</td>
                           {row.map((cell, ci) => (
                             <td key={ci} className="px-3 py-1.5 text-gray-700 max-w-[240px] truncate">
@@ -452,7 +452,7 @@ const DBRow: React.FC<DBRowProps> = ({ db, formatSize, onSelectTable }) => {
   return (
     <>
       <tr
-        className="border-b border-gray-100 hover:bg-[#f8f9fb] cursor-pointer select-none transition-colors"
+        className="border-b border-gray-100 dark:border-white/5 hover:bg-[#f8f9fb] dark:hover:bg-white/5 cursor-pointer select-none transition-colors"
         onClick={handleExpand}
       >
         <td className="px-6 py-4 w-8">
@@ -462,7 +462,7 @@ const DBRow: React.FC<DBRowProps> = ({ db, formatSize, onSelectTable }) => {
           }
         </td>
         <td className="px-4 py-4">
-          <span className="font-bold text-[#1d1d1f]">{db.name}</span>
+          <span className="font-bold text-[#1d1d1f] dk-text">{db.name}</span>
         </td>
         <td className="px-4 py-4">
           <span className="text-gray-600 font-medium">{formatSize(db.size)}</span>
@@ -474,7 +474,7 @@ const DBRow: React.FC<DBRowProps> = ({ db, formatSize, onSelectTable }) => {
 
       {expanded && (
         <tr>
-          <td colSpan={4} className="bg-[#f8faf8] px-6 pb-4 pt-2">
+          <td colSpan={4} className="bg-[#f8faf8] dark:bg-white/[0.03] px-6 pb-4 pt-2">
             {loading && (
               <div className="flex items-center gap-2 text-sm text-gray-400 py-4">
                 <Loader2 size={16} className="animate-spin text-[#07c160]" />
@@ -494,7 +494,7 @@ const DBRow: React.FC<DBRowProps> = ({ db, formatSize, onSelectTable }) => {
                       value={tableSearch}
                       onChange={(e) => setTableSearch(e.target.value)}
                       placeholder="过滤表名..."
-                      className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 w-60 focus:outline-none focus:border-[#07c160]"
+                      className="text-sm border border-gray-200 dark:border-white/10 rounded-lg px-3 py-1.5 w-60 focus:outline-none focus:border-[#07c160] dk-input"
                       onClick={(e) => e.stopPropagation()}
                     />
                     <span className="text-xs text-gray-400">{filteredTables.length}/{tables.length} 张表</span>
@@ -508,11 +508,11 @@ const DBRow: React.FC<DBRowProps> = ({ db, formatSize, onSelectTable }) => {
                         e.stopPropagation();
                         onSelectTable(db.name, t.name);
                       }}
-                      className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-4 py-3 hover:border-[#07c160] hover:bg-[#f0faf4] transition group text-left"
+                      className="flex items-center justify-between dk-card dk-border bg-white border border-gray-100 rounded-xl px-4 py-3 hover:border-[#07c160] hover:bg-[#f0faf4] dark:hover:bg-white/5 transition group text-left"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <LayoutList size={14} className="text-gray-300 group-hover:text-[#07c160] flex-shrink-0" />
-                        <span className="text-sm font-semibold text-[#1d1d1f] truncate">{t.name}</span>
+                        <span className="text-sm font-semibold text-[#1d1d1f] dk-text truncate">{t.name}</span>
                       </div>
                       <span className="text-xs text-gray-400 ml-2 flex-shrink-0">
                         {t.row_count.toLocaleString()}
@@ -593,7 +593,7 @@ export const DatabaseView: React.FC = () => {
     if (dbs.length === 0) return null;
     return (
       <div>
-        <h2 className="text-2xl font-black text-[#1d1d1f] mb-6 flex items-center gap-3">
+        <h2 className="text-2xl font-black text-[#1d1d1f] dk-text mb-6 flex items-center gap-3">
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
             {icon}
           </div>
@@ -667,7 +667,7 @@ export const DatabaseView: React.FC = () => {
       )}
 
       {databases.length === 0 && (
-        <div className="bg-white rounded-3xl border border-gray-100 p-20 text-center">
+        <div className="dk-card dk-border bg-white rounded-3xl border border-gray-100 p-20 text-center">
           <Database size={80} className="mx-auto text-gray-200 mb-6" />
           <h3 className="text-2xl font-black text-gray-300 mb-2">暂无数据库</h3>
           <p className="text-gray-400">请检查数据目录配置</p>

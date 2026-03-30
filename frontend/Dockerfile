@@ -19,9 +19,21 @@ RUN printf 'server {\n\
         index index.html;\n\
         try_files $uri $uri/ /index.html;\n\
     }\n\
+    location ~* ^/api/ai/(analyze|rag|day-rag) {\n\
+        set $backend http://backend:8080;\n\
+        proxy_pass $backend;\n\
+        proxy_http_version     1.1;\n\
+        proxy_set_header       Connection "";\n\
+        proxy_buffering        off;\n\
+        proxy_cache            off;\n\
+        proxy_read_timeout     600s;\n\
+        proxy_connect_timeout  10s;\n\
+        chunked_transfer_encoding on;\n\
+    }\n\
     location /api {\n\
         set $backend http://backend:8080;\n\
         proxy_pass $backend;\n\
+        proxy_read_timeout 120s;\n\
     }\n\
     location /swagger {\n\
         set $backend http://backend:8080;\n\

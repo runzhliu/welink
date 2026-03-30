@@ -9,7 +9,14 @@ import { useSyncExternalStore } from 'react';
 export interface AnalysisMessage {
   role: 'user' | 'assistant';
   content: string;
+  thinking?: string; // 思考型模型的推理过程（Ollama reasoning）
   streaming?: boolean;
+  provider?: string;
+  model?: string;
+  elapsedSecs?: number;
+  tokensPerSec?: number;
+  charCount?: number;
+  timestamp?: number; // Unix ms，回答完成时刻
 }
 
 export interface AnalysisState {

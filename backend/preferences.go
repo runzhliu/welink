@@ -7,6 +7,17 @@ import (
 	"path/filepath"
 )
 
+// LLMProfile 单个 LLM 配置项，支持多 provider 并行配置与一键切换。
+type LLMProfile struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Provider string `json:"provider"`
+	APIKey   string `json:"api_key,omitempty"`
+	BaseURL  string `json:"base_url,omitempty"`
+	Model    string `json:"model,omitempty"`
+	NoThink  bool   `json:"no_think,omitempty"` // Ollama 思考型模型（Qwen3+）专用：开启后在消息前加 /no_think 跳过推理
+}
+
 // Preferences 是唯一的持久化结构体，合并了用户偏好和 App 配置。
 // App 模式存储在 ~/Library/Application Support/WeLink/preferences.json，
 // Docker/CLI 模式存储路径由环境变量 PREFERENCES_PATH 指定，默认为工作目录的 preferences.json。
@@ -21,7 +32,9 @@ type Preferences struct {
 	BlockedGroups []string `json:"blocked_groups"`
 	PrivacyMode   bool     `json:"privacy_mode,omitempty"`
 
-	// LLM 配置
+	// LLM 配置（多 provider，支持在 AI 分析页面切换）
+	LLMProfiles      []LLMProfile `json:"llm_profiles,omitempty"`
+	// 以下单配置字段保持向后兼容（自动同步为 LLMProfiles[0]）
 	LLMProvider      string `json:"llm_provider,omitempty"` // openai/deepseek/kimi/gemini/claude/grok/glm/ollama/custom
 	LLMAPIKey        string `json:"llm_api_key,omitempty"`
 	LLMBaseURL       string `json:"llm_base_url,omitempty"`
@@ -34,6 +47,9 @@ type Preferences struct {
 	EmbeddingBaseURL  string `json:"embedding_base_url,omitempty"`
 	EmbeddingModel    string `json:"embedding_model,omitempty"`
 	EmbeddingDims     int    `json:"embedding_dims,omitempty"` // 0 = 由模型默认值决定
+
+	// 向量检索缓存（内存）
+	VecCacheMaxKeys int `json:"vec_cache_max_keys,omitempty"` // 最多缓存几个联系人的 embedding，0 = 默认 3
 
 	// 记忆提炼模型（本地隐私专用，默认 Ollama）
 	// 提炼时原始聊天内容只发给此模型，与主 LLM 配置隔离

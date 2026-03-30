@@ -8,6 +8,7 @@ import { MessageCircle, Clock, TrendingUp, Users, ChevronUp, ChevronDown, Bot, L
 import type { ContactStats } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { subscribeAnalysis, getAnalysisSnapshot } from '../../stores/llmAnalysisStore';
+import { avatarSrc } from '../../utils/avatar';
 
 interface ContactTableProps {
   contacts: ContactStats[];
@@ -130,7 +131,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
   const thClass = "px-8 py-5 text-left text-xs font-black text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-[#07c160] transition-colors";
 
   return (
-    <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 overflow-hidden">
+    <div className="dk-card dk-border bg-white rounded-2xl sm:rounded-3xl border border-gray-100 overflow-hidden">
       {/* 桌面表格 */}
       <div className="hidden sm:block overflow-x-auto">
         <table className="w-full">
@@ -162,24 +163,24 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-white/5">
             {currentContacts.map((contact) => (
               <tr
                 key={contact.username}
                 onClick={() => onContactClick(contact)}
-                className="dk-row-hover hover:bg-[#f8f9fb] cursor-pointer transition-colors duration-150"
+                className="dk-row-hover hover:bg-[#f8f9fb] dark:hover:bg-white/5 cursor-pointer transition-colors duration-150"
               >
                 <td className="px-8 py-5">
                   <div className="flex items-center gap-3">
                     {(contact.small_head_url || contact.big_head_url) ? (
-                      <img src={contact.small_head_url || contact.big_head_url} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                      <img src={avatarSrc(contact.small_head_url || contact.big_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
                     ) : (
                       <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
                         {(contact.remark || contact.nickname || contact.username).charAt(0)}
                       </div>
                     )}
                     <div>
-                      <div className={`font-bold text-[#1d1d1f]${privacyMode ? ' privacy-blur' : ''}`}>{contact.remark || contact.nickname || contact.username}</div>
+                      <div className={`font-bold text-[#1d1d1f] dk-text${privacyMode ? ' privacy-blur' : ''}`}>{contact.remark || contact.nickname || contact.username}</div>
                       {contact.remark && contact.nickname && (
                         <div className={`text-xs text-gray-400 mt-0.5${privacyMode ? ' privacy-blur' : ''}`}>{contact.nickname}</div>
                       )}
@@ -187,7 +188,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                   </div>
                 </td>
                 <td className="px-8 py-5">
-                  <span className="font-bold text-[#1d1d1f]">{contact.total_messages.toLocaleString()}</span>
+                  <span className="font-bold text-[#1d1d1f] dk-text">{contact.total_messages.toLocaleString()}</span>
                 </td>
                 <td className="px-8 py-5">
                   {(contact.shared_groups_count ?? 0) > 0 ? (
@@ -201,7 +202,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                 <td className="px-8 py-5">
                   {(contact.peak_monthly ?? 0) > 0 ? (
                     <div>
-                      <span className="font-bold text-[#1d1d1f]">{contact.peak_monthly!.toLocaleString()}</span>
+                      <span className="font-bold text-[#1d1d1f] dk-text">{contact.peak_monthly!.toLocaleString()}</span>
                       <span className="text-xs text-gray-400 ml-1">条</span>
                       {contact.peak_period && (
                         <div className="text-[10px] text-gray-400 mt-0.5">{contact.peak_period}</div>
@@ -220,7 +221,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                 </td>
                 <td className="px-8 py-5">
                   {(contact.avg_msg_len ?? 0) > 0 ? (
-                    <span className="font-bold text-[#1d1d1f]">{contact.avg_msg_len!.toFixed(1)}<span className="text-xs text-gray-400 ml-1 font-normal">字</span></span>
+                    <span className="font-bold text-[#1d1d1f] dk-text">{contact.avg_msg_len!.toFixed(1)}<span className="text-xs text-gray-400 ml-1 font-normal">字</span></span>
                   ) : (
                     <span className="text-sm text-gray-300">-</span>
                   )}
@@ -241,28 +242,28 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
       </div>
 
       {/* 手机卡片列表 */}
-      <div className="sm:hidden divide-y divide-gray-100">
+      <div className="sm:hidden divide-y divide-gray-100 dark:divide-white/5">
         {currentContacts.map((contact) => (
           <div
             key={contact.username}
             onClick={() => onContactClick(contact)}
-            className="dk-row-hover flex items-center justify-between px-4 py-4 active:bg-[#f8f9fb] cursor-pointer"
+            className="dk-row-hover flex items-center justify-between px-4 py-4 active:bg-[#f8f9fb] dark:active:bg-white/5 cursor-pointer"
           >
             <div className="flex items-center gap-3 min-w-0">
               {(contact.small_head_url || contact.big_head_url) ? (
-                <img src={contact.small_head_url || contact.big_head_url} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                <img src={avatarSrc(contact.small_head_url || contact.big_head_url)} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
               ) : (
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
                   {(contact.remark || contact.nickname || contact.username).charAt(0)}
                 </div>
               )}
               <div className="min-w-0">
-                <div className={`font-bold text-[#1d1d1f] truncate${privacyMode ? ' privacy-blur' : ''}`}>{contact.remark || contact.nickname || contact.username}</div>
+                <div className={`font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>{contact.remark || contact.nickname || contact.username}</div>
                 <div className="text-xs text-gray-400 mt-0.5">{contact.last_message_time || '-'}</div>
               </div>
             </div>
             <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
-              <span className="text-sm font-bold text-[#1d1d1f]">{contact.total_messages.toLocaleString()}</span>
+              <span className="text-sm font-bold text-[#1d1d1f] dk-text">{contact.total_messages.toLocaleString()}</span>
               {getStatusBadge(contact)}
               <AIAnalysisBadge username={contact.username} />
             </div>
@@ -285,7 +286,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                 className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                   itemsPerPage === size
                     ? 'bg-[#07c160] text-white'
-                    : 'text-gray-400 hover:bg-white hover:text-gray-600'
+                    : 'text-gray-400 hover:bg-white dark:hover:bg-white/5 hover:text-gray-600'
                 }`}
               >
                 {size}
@@ -299,7 +300,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
           <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="px-3 sm:px-4 py-2 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white"
+            className="px-3 sm:px-4 py-2 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-white/5"
           >
             上一页
           </button>
@@ -325,7 +326,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                     key={p}
                     onClick={() => setCurrentPage(p as number)}
                     className={`w-10 h-10 rounded-xl font-bold text-sm transition-all ${
-                      currentPage === p ? 'bg-[#07c160] text-white shadow-lg shadow-green-100/50' : 'hover:bg-white hover:shadow-sm'
+                      currentPage === p ? 'bg-[#07c160] text-white shadow-lg shadow-green-100/50' : 'hover:bg-white dark:hover:bg-white/5 hover:shadow-sm'
                     }`}
                   >
                     {p}
@@ -338,7 +339,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
           <button
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="px-3 sm:px-4 py-2 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white"
+            className="px-3 sm:px-4 py-2 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-white/5"
           >
             下一页
           </button>

@@ -50,7 +50,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
   };
 
   return (
-    <div className="min-h-screen bg-[#f8f9fb] overflow-y-auto">
+    <div className="min-h-screen bg-[#f8f9fb] dk-subtle overflow-y-auto">
       <div className="max-w-2xl mx-auto px-6 py-12">
 
         {/* Logo & Title */}
@@ -58,7 +58,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
           <div className="inline-block w-16 h-16 rounded-2xl mb-4 shadow-lg shadow-green-200 overflow-hidden">
             <img src="/favicon.svg" alt="WeLink" className="w-full h-full" />
           </div>
-          <h1 className="text-4xl font-black text-[#1d1d1f] tracking-tight">WeLink</h1>
+          <h1 className="text-4xl font-black text-[#1d1d1f] dk-text tracking-tight">WeLink</h1>
           <p className="text-gray-400 mt-2 text-sm font-medium">微信聊天记录 AI 助手</p>
           <a
             href="https://github.com/runzhliu/WeLink"
@@ -92,15 +92,15 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
         </div>
 
         {/* How-to Guide */}
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 mb-4">
-          <h2 className="text-base font-black text-[#1d1d1f] mb-4">使用前准备：获取聊天数据库</h2>
+        <div className="bg-white dk-card rounded-3xl border border-gray-100 dk-border shadow-sm p-6 mb-4">
+          <h2 className="text-base font-black text-[#1d1d1f] dk-text mb-4">使用前准备：获取聊天数据库</h2>
 
           <div className="space-y-4">
             {/* Step 1 */}
             <div className="flex gap-3">
               <div className="w-6 h-6 rounded-full bg-[#07c16015] text-[#07c160] text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
               <div>
-                <p className="text-sm font-bold text-[#1d1d1f]">将手机聊天记录同步到电脑（推荐）</p>
+                <p className="text-sm font-bold text-[#1d1d1f] dk-text">将手机聊天记录同步到电脑（推荐）</p>
                 <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">打开手机微信 → 「我」→「设置」→「通用」→「聊天记录迁移与备份」→「迁移」，将记录迁移到电脑端，可获得更完整的历史数据</p>
               </div>
             </div>
@@ -109,7 +109,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
             <div className="flex gap-3">
               <div className="w-6 h-6 rounded-full bg-[#07c16015] text-[#07c160] text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
               <div>
-                <p className="text-sm font-bold text-[#1d1d1f]">确保微信在电脑上保持运行</p>
+                <p className="text-sm font-bold text-[#1d1d1f] dk-text">确保微信在电脑上保持运行</p>
                 <p className="text-xs text-gray-400 mt-0.5">解密工具（macOS / Windows 均支持）需要从运行中的微信进程内存读取密钥</p>
               </div>
             </div>
@@ -118,7 +118,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
             <div className="flex gap-3">
               <div className="w-6 h-6 rounded-full bg-[#07c16015] text-[#07c160] text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
               <div>
-                <p className="text-sm font-bold text-[#1d1d1f]">克隆并运行解密工具</p>
+                <p className="text-sm font-bold text-[#1d1d1f] dk-text">克隆并运行解密工具</p>
                 <a
                   href="https://github.com/ylytdeng/wechat-decrypt"
                   target="_blank"
@@ -128,11 +128,11 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
                   github.com/ylytdeng/wechat-decrypt
                   <ExternalLink size={11} />
                 </a>
-                <div className="mt-2 bg-[#f8f9fb] rounded-xl px-3 py-2 flex items-center gap-2">
+                <div className="mt-2 bg-[#f8f9fb] dk-subtle rounded-xl px-3 py-2 flex items-center gap-2">
                   <Terminal size={12} className="text-gray-400 flex-shrink-0" />
-                  <code className="text-xs text-gray-600 font-mono">sudo python3 main.py</code>
+                  <code className="text-xs text-gray-600 dark:text-gray-300 font-mono">sudo python3 main.py</code>
                 </div>
-                <p className="text-xs text-gray-400 mt-1.5">选择 <span className="font-mono bg-gray-100 px-1 rounded">decrypt</span> 模式，工具会自动提取密钥并解密所有数据库</p>
+                <p className="text-xs text-gray-400 mt-1.5">选择 <span className="font-mono bg-gray-100 dark:bg-white/10 px-1 rounded">decrypt</span> 模式，工具会自动提取密钥并解密所有数据库</p>
               </div>
             </div>
 
@@ -140,10 +140,10 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
             <div className="flex gap-3">
               <div className="w-6 h-6 rounded-full bg-[#07c16015] text-[#07c160] text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5">4</div>
               <div>
-                <p className="text-sm font-bold text-[#1d1d1f]">将解密后的数据库放入目录</p>
-                <div className="mt-2 bg-[#f8f9fb] rounded-xl px-3 py-2 flex items-start gap-2">
+                <p className="text-sm font-bold text-[#1d1d1f] dk-text">将解密后的数据库放入目录</p>
+                <div className="mt-2 bg-[#f8f9fb] dk-subtle rounded-xl px-3 py-2 flex items-start gap-2">
                   <Database size={12} className="text-gray-400 flex-shrink-0 mt-0.5" />
-                  <code className="text-xs text-gray-600 font-mono leading-relaxed">
+                  <code className="text-xs text-gray-600 dark:text-gray-300 font-mono leading-relaxed">
                     decrypted/<br />
                     ├── contact/contact.db<br />
                     └── message/message_*.db
@@ -162,10 +162,10 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
               <div className="flex gap-3">
                 <div className="w-6 h-6 rounded-full bg-[#07c16015] text-[#07c160] text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5">5</div>
                 <div>
-                  <p className="text-sm font-bold text-[#1d1d1f]">启动 WeLink</p>
-                  <div className="mt-2 bg-[#f8f9fb] rounded-xl px-3 py-2 flex items-center gap-2">
+                  <p className="text-sm font-bold text-[#1d1d1f] dk-text">启动 WeLink</p>
+                  <div className="mt-2 bg-[#f8f9fb] dk-subtle rounded-xl px-3 py-2 flex items-center gap-2">
                     <Terminal size={12} className="text-gray-400 flex-shrink-0" />
-                    <code className="text-xs text-gray-600 font-mono">docker compose up</code>
+                    <code className="text-xs text-gray-600 dark:text-gray-300 font-mono">docker compose up</code>
                   </div>
                   <p className="text-xs text-gray-400 mt-1.5">访问 <span className="font-mono">localhost:3000</span> 即可开始分析</p>
                 </div>
@@ -174,7 +174,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
           </div>
 
           {/* Credit */}
-          <div className="mt-5 pt-4 border-t border-gray-100 flex items-center gap-2">
+          <div className="mt-5 pt-4 border-t border-gray-100 dk-border flex items-center gap-2">
             <Monitor size={13} className="text-gray-300" />
             <p className="text-xs text-gray-400">
               解密方案由{' '}
@@ -192,8 +192,8 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
         </div>
 
         {/* Time Range Selection */}
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 mb-6">
-          <h2 className="text-base font-black text-[#1d1d1f] mb-1">选择分析时间范围</h2>
+        <div className="bg-white dk-card rounded-3xl border border-gray-100 dk-border shadow-sm p-6 mb-6">
+          <h2 className="text-base font-black text-[#1d1d1f] dk-text mb-1">选择分析时间范围</h2>
           <p className="text-xs text-gray-400 mb-4">时间范围会影响所有统计数据，选择范围越小加载越快</p>
 
           <div className="space-y-2">
@@ -204,20 +204,20 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
                   className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all text-left ${
                     selected === i
                       ? 'border-[#07c160] bg-[#07c16008]'
-                      : 'border-gray-100 hover:border-gray-200'
+                      : 'border-gray-100 dark:border-white/10 hover:border-gray-200 dark:hover:border-white/20'
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     {opt.custom && <Calendar size={14} className={selected === i ? 'text-[#07c160]' : 'text-gray-300'} />}
                     <div>
-                      <div className={`text-sm font-bold ${selected === i ? 'text-[#07c160]' : 'text-[#1d1d1f]'}`}>
+                      <div className={`text-sm font-bold ${selected === i ? 'text-[#07c160]' : 'text-[#1d1d1f] dk-text'}`}>
                         {opt.label}
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5">{opt.sublabel}</div>
                     </div>
                   </div>
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                    selected === i ? 'border-[#07c160] bg-[#07c160]' : 'border-gray-200'
+                    selected === i ? 'border-[#07c160] bg-[#07c160]' : 'border-gray-200 dark:border-white/20'
                   }`}>
                     {selected === i && <div className="w-2 h-2 bg-white rounded-full" />}
                   </div>
@@ -225,27 +225,27 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
 
                 {/* 自定义日期输入，选中后展开 */}
                 {opt.custom && selected === i && (
-                  <div className="mt-2 px-4 py-3 bg-[#f8f9fb] rounded-2xl border border-[#07c16030] space-y-3">
+                  <div className="mt-2 px-4 py-3 bg-[#f8f9fb] dk-subtle rounded-2xl border border-[#07c16030] space-y-3">
                     <div className="flex items-center gap-3">
-                      <label className="text-xs font-bold text-gray-500 w-10 flex-shrink-0">开始</label>
+                      <label className="text-xs font-bold text-gray-500 dark:text-gray-400 w-10 flex-shrink-0">开始</label>
                       <input
                         type="date"
                         value={customFrom}
                         onChange={(e) => setCustomFrom(e.target.value)}
                         max={customTo || today}
-                        className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white"
+                        className="flex-1 text-sm border border-gray-200 dk-border rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white dk-input"
                       />
                       <span className="text-xs text-gray-400">（留空则从最早）</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <label className="text-xs font-bold text-gray-500 w-10 flex-shrink-0">结束</label>
+                      <label className="text-xs font-bold text-gray-500 dark:text-gray-400 w-10 flex-shrink-0">结束</label>
                       <input
                         type="date"
                         value={customTo}
                         onChange={(e) => setCustomTo(e.target.value)}
                         min={customFrom || undefined}
                         max={today}
-                        className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white"
+                        className="flex-1 text-sm border border-gray-200 dk-border rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white dk-input"
                       />
                       <span className="text-xs text-gray-400">（留空则到今天）</span>
                     </div>

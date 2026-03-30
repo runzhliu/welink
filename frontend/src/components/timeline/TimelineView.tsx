@@ -6,6 +6,7 @@ import React, { useMemo, useState } from 'react';
 import { Calendar, MessageSquare } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { avatarSrc } from '../../utils/avatar';
 
 interface Props {
   contacts: ContactStats[];
@@ -55,13 +56,13 @@ export const TimelineView: React.FC<Props> = ({ contacts, onContactClick }) => {
       <div className="mb-6">
         <h1 className="dk-text text-3xl sm:text-5xl font-black tracking-tight text-[#1d1d1f] mb-1">认识时间线</h1>
         <p className="text-gray-400 text-sm">
-          共 <span className="font-bold text-[#1d1d1f]">{totalWithFirst}</span> 位联系人，按第一条消息时间排列
+          共 <span className="font-bold text-[#1d1d1f] dk-text">{totalWithFirst}</span> 位联系人，按第一条消息时间排列
         </p>
       </div>
 
       <div className="relative">
         {/* 竖线 */}
-        <div className="absolute left-[22px] top-0 bottom-0 w-0.5 bg-gray-100" />
+        <div className="absolute left-[22px] top-0 bottom-0 w-0.5 bg-gray-100 dark:bg-white/10" />
 
         <div className="space-y-8">
           {yearGroups.map((group) => {
@@ -84,7 +85,7 @@ export const TimelineView: React.FC<Props> = ({ contacts, onContactClick }) => {
                   <h2 className="text-2xl font-black text-[#1d1d1f] dk-text group-hover:text-[#07c160] transition-colors">
                     {group.year}
                   </h2>
-                  <span className="text-sm font-semibold text-gray-400 bg-gray-100 px-2.5 py-0.5 rounded-full">
+                  <span className="text-sm font-semibold text-gray-400 bg-gray-100 dark:bg-white/10 px-2.5 py-0.5 rounded-full">
                     {group.contacts.length} 位
                   </span>
                   <span className="text-xs text-gray-300 ml-auto">
@@ -106,7 +107,7 @@ export const TimelineView: React.FC<Props> = ({ contacts, onContactClick }) => {
                         {/* 头像 */}
                         <div className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0">
                           {avatarUrl ? (
-                            <img src={avatarUrl} alt={name} className="w-full h-full object-cover"
+                            <img src={avatarSrc(avatarUrl)} alt={name} className="w-full h-full object-cover"
                               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                           ) : (
                             <div className="w-full h-full bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black">

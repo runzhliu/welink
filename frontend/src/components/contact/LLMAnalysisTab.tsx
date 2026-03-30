@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Bot, Send, RotateCcw, Loader2, AlertTriangle, Info, Copy, Check, CalendarDays, SlidersHorizontal, Square, Database, Search, Share2 } from 'lucide-react';
+import { Bot, Send, RotateCcw, Loader2, AlertTriangle, Info, Copy, Check, CalendarDays, SlidersHorizontal, Square, Database, Search, Share2, ChevronDown, ChevronRight, BrainCircuit, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateShareImage } from '../../utils/shareImage';
@@ -32,6 +32,7 @@ export interface LLMAnalysisProps {
   avatarUrl?: string;     // 联系人头像 URL（用于分享卡片）
   initialQuery?: string;  // 从首页传入的预填问题
   quickMode?: boolean;    // 首页快速提问：全量模式 + 最近 200 条 + 自动脱敏 + 自动发送
+  onOpenSettings?: () => void; // 跳转到设置页（配置失败时引导用户）
 }
 
 // ─── 时间范围 ──────────────────────────────────────────────────────────────────
@@ -199,10 +200,14 @@ const AssistantMessage: React.FC<{
   displayName?: string;
   avatarUrl?: string;
   prevQuestion?: string;
-}> = ({ msg, displayName, avatarUrl, prevQuestion }) => {
+  currentProvider?: string;
+  currentModel?: string;
+  onDelete?: () => void;
+}> = ({ msg, displayName, avatarUrl, prevQuestion, currentProvider, currentModel, onDelete }) => {
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [thinkingOpen, setThinkingOpen] = useState(false);
 
   const handleCopy = () => {
     if (!msg.content) return;
@@ -217,7 +222,20 @@ const AssistantMessage: React.FC<{
     setSharing(true);
     setShareMsg(null);
     try {
-      const savedPath = await generateShareImage({ question: prevQuestion, answer: msg.content, contactName: displayName, avatarUrl });
+      const savedPath = await generateShareImage({
+        question: prevQuestion,
+        answer: msg.content,
+        contactName: displayName,
+        avatarUrl,
+        stats: msg.elapsedSecs !== undefined ? {
+          provider: msg.provider,
+          model: msg.model,
+          elapsedSecs: msg.elapsedSecs,
+          tokensPerSec: msg.tokensPerSec,
+          charCount: msg.charCount,
+          timestamp: msg.timestamp,
+        } : undefined,
+      });
       const isAppMode = savedPath.startsWith('/');
       setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载' });
     } catch (err) {
@@ -230,41 +248,94 @@ const AssistantMessage: React.FC<{
 
   if (msg.role === 'user') {
     return (
-      <div className="flex gap-2 flex-row-reverse">
+      <div className="flex gap-2 flex-row-reverse group">
         <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-[#07c160] text-white text-[10px] font-black">
           我
         </div>
-        <div className="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-br-sm text-sm leading-relaxed whitespace-pre-wrap break-words bg-[#07c160] text-white">
-          {msg.content}
+        <div className="flex flex-col items-end gap-1 max-w-[80%]">
+          <div className="px-4 py-2.5 rounded-2xl rounded-br-sm text-sm leading-relaxed whitespace-pre-wrap break-words bg-[#07c160] text-white">
+            {msg.content}
+          </div>
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+              title="删除此问答"
+            >
+              <Trash2 size={11} />
+              删除
+            </button>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex gap-2 flex-row group">
-      <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-[#576b95] text-white text-[10px] font-black mt-0.5">
-        <Bot size={13} />
-      </div>
-      <div className="flex flex-col gap-1 max-w-[80%]">
-        <div className="px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed bg-[#f0f0f0] text-[#1d1d1f] prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-hr:my-2">
-          {msg.content
-            ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-            : msg.streaming
-              ? (
-                <span className="flex items-center gap-2 text-gray-400 text-xs">
-                  <Loader2 size={13} className="animate-spin text-[#576b95] flex-shrink-0" />
-                  正在分析，请稍候…
-                </span>
-              )
-              : ''}
+    <div className="flex flex-col gap-1">
+      <div className="flex gap-2 flex-row group">
+        <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-[#576b95] text-white text-[10px] font-black mt-0.5">
+          <Bot size={13} />
         </div>
-        {msg.content && !msg.streaming && (
-          <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 max-w-[80%]">
+          <div className="px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed bg-[#f0f0f0] dark:bg-white/10 text-[#1d1d1f] dark:text-gray-100 prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-hr:my-2">
+            {msg.thinking && (
+              <div className="not-prose mb-2">
+                <button
+                  onClick={() => setThinkingOpen(v => !v)}
+                  className="flex items-center gap-1.5 text-[11px] text-[#576b95] hover:text-[#576b95]/80 transition-colors"
+                >
+                  <BrainCircuit size={12} />
+                  <span>{msg.streaming && !msg.content ? '正在思考…' : '思考过程'}</span>
+                  {thinkingOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                </button>
+                {thinkingOpen && (
+                  <div className={`mt-1.5 px-3 py-2 rounded-lg bg-[#576b95]/8 dark:bg-[#576b95]/15 border border-[#576b95]/15 text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed whitespace-pre-wrap font-mono ${msg.streaming ? '' : 'max-h-48 overflow-y-auto'}`}>
+                    {msg.thinking}
+                  </div>
+                )}
+              </div>
+            )}
+            {msg.content
+              ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              : msg.streaming
+                ? (
+                  <span className="flex items-center gap-2 text-gray-400 text-xs">
+                    <Loader2 size={13} className="animate-spin text-[#576b95] flex-shrink-0" />
+                    <span>
+                      {msg.thinking ? '正在生成回答…' : '正在分析，请稍候…'}
+                      <span className="ml-1.5 text-[#576b95]/70">
+                        {currentProvider}{currentModel ? ` · ${currentModel}` : ''}
+                      </span>
+                    </span>
+                  </span>
+                )
+                : ''}
+            {msg.elapsedSecs !== undefined && !msg.streaming && (
+              <div className="flex flex-col items-end gap-0.5 mt-2 text-[10px] text-gray-400 not-prose">
+                {msg.provider && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">{msg.provider}{msg.model ? ` · ${msg.model}` : ''}</span>
+                    <span className="text-gray-300">·</span>
+                    <span>{msg.elapsedSecs.toFixed(1)}s</span>
+                    <span className="text-gray-300">·</span>
+                    <span>~{msg.tokensPerSec} tok/s</span>
+                    <span className="text-gray-300">·</span>
+                    <span>{msg.charCount} 字符</span>
+                  </div>
+                )}
+                {msg.timestamp && (() => {
+                  const d = new Date(msg.timestamp);
+                  return <span>{d.getFullYear()}年{d.getMonth()+1}月{d.getDate()}日{d.getHours()}点{String(d.getMinutes()).padStart(2,'0')}分</span>;
+                })()}
+              </div>
+            )}
+          </div>
+          {msg.content && !msg.streaming && (
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#07c160] hover:bg-[#f0faf4] transition-colors"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#07c160] hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 transition-colors"
                 title="复制内容"
               >
                 {copied ? <Check size={11} className="text-[#07c160]" /> : <Copy size={11} />}
@@ -273,21 +344,32 @@ const AssistantMessage: React.FC<{
               <button
                 onClick={handleShare}
                 disabled={sharing}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#576b95] hover:bg-[#f0f4ff] transition-colors disabled:opacity-50"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#576b95] hover:bg-[#f0f4ff] dark:hover:bg-[#576b95]/15 transition-colors disabled:opacity-50"
                 title="保存为图片分享"
               >
                 {sharing ? <Loader2 size={11} className="animate-spin" /> : <Share2 size={11} />}
                 {sharing ? '生成中…' : '分享'}
               </button>
+              {onDelete && (
+                <button
+                  onClick={onDelete}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                  title="删除此问答"
+                >
+                  <Trash2 size={11} />
+                  删除
+                </button>
+              )}
             </div>
-            {shareMsg && (
-              <p className={`text-[10px] font-medium px-1 ${shareMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
-                {shareMsg.text}
-              </p>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </div>
+      {/* 保存路径提示：移出 max-w-[80%] 容器，避免长路径被截断 */}
+      {shareMsg && (
+        <p className={`text-[10px] font-medium ml-9 break-all leading-relaxed ${shareMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
+          {shareMsg.text}
+        </p>
+      )}
     </div>
   );
 };
@@ -295,7 +377,7 @@ const AssistantMessage: React.FC<{
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
 
 export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
-  username, displayName, isGroup, avatarUrl, initialQuery, quickMode,
+  username, displayName, isGroup, avatarUrl, initialQuery, quickMode, onOpenSettings,
 }) => {
   const key = `${isGroup ? 'group' : 'contact'}:${username}`;
   const { messages, loading, chunkProgress } = useAnalysisState(key);
@@ -309,22 +391,33 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
   const [rangeFrom, setRangeFrom] = useState(shiftMonths(3));
   const [rangeTo,   setRangeTo]   = useState(today);
 
-  // Provider 和模型（从 preferences 加载）
-  const [provider, setProvider] = useState('deepseek');
-  const [llmModel, setLlmModel] = useState('');
+  // Provider profiles（从 preferences 加载，支持多配置切换）
+  interface ProfileItem { id: string; name: string; provider: string; model?: string; }
+  const [profiles, setProfilesState] = useState<ProfileItem[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState('');
   useEffect(() => {
     fetch('/api/preferences')
       .then(r => r.json())
-      .then((d: { llm_provider?: string; llm_model?: string }) => {
-        if (d.llm_provider) setProvider(d.llm_provider);
-        setLlmModel(d.llm_model ?? '');
+      .then((d: { llm_profiles?: ProfileItem[]; llm_provider?: string; llm_model?: string }) => {
+        if (d.llm_profiles && d.llm_profiles.length > 0) {
+          setProfilesState(d.llm_profiles);
+          setSelectedProfileId(d.llm_profiles[0].id);
+        } else if (d.llm_provider) {
+          const p = { id: '__default__', name: d.llm_provider, provider: d.llm_provider, model: d.llm_model ?? '' };
+          setProfilesState([p]);
+          setSelectedProfileId('__default__');
+        }
       })
       .catch(() => {});
   }, []);
+  const selectedProfile = profiles.find(p => p.id === selectedProfileId) ?? profiles[0];
+  const provider = selectedProfile?.provider ?? 'deepseek';
+  const llmModel = selectedProfile?.model ?? '';
 
   // 日历热力图数据
   const [heatmap, setHeatmap] = useState<Record<string, number>>({});
   const [calendarMode, setCalendarMode] = useState(false);
+  const [msgLimit, setMsgLimit] = useState<number | null>(null); // null = 不限条数
   useEffect(() => {
     const api = isGroup ? groupsApi : contactsApi;
     api.getDetail(username)
@@ -367,6 +460,7 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
   const [vecBuildProgress, setVecBuildProgress] = useState<{ current: number; total: number } | null>(null);
   const [vecBuildError, setVecBuildError] = useState<string | null>(null);
   const [memExtracting, setMemExtracting] = useState(false);
+  const [memPaused, setMemPaused] = useState(false);
   const [memExtractProgress, setMemExtractProgress] = useState<{ current: number; total: number } | null>(null);
   const [memFactsCount, setMemFactsCount] = useState<number | null>(null);
   const [memFactsOpen, setMemFactsOpen] = useState(false);
@@ -411,7 +505,10 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
     loadAbortRef.current?.abort();
 
     let cancelled = false;
-    loadMessages(username, displayName, isGroup, rangeFrom, rangeTo, quickMode ? 200 : undefined)
+    // msgLimit 模式：不限时间范围，直接取全量最后 N 条
+    const effectiveFrom = (!quickMode && msgLimit != null) ? '' : rangeFrom;
+    const effectiveTo   = (!quickMode && msgLimit != null) ? '' : rangeTo;
+    loadMessages(username, displayName, isGroup, effectiveFrom, effectiveTo, quickMode ? 200 : (msgLimit ?? undefined))
       .then(({ text, count, lines }) => {
         if (cancelled) return;
         contextRef.current = text;
@@ -424,7 +521,7 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
       });
 
     return () => { cancelled = true; };
-  }, [username, displayName, isGroup, rangeFrom, rangeTo]);
+  }, [username, displayName, isGroup, rangeFrom, rangeTo, msgLimit]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
@@ -581,11 +678,12 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
     memPollRef.current = setInterval(async () => {
       try {
         const p = await fetch(`/api/ai/vec/build-progress?key=${encodeURIComponent(k)}`).then(r => r.json()) as {
-          done?: boolean; error?: string; fact_count?: number; current?: number; total?: number;
+          done?: boolean; paused?: boolean; error?: string; fact_count?: number; current?: number; total?: number;
         };
         if (p.error) {
           setMemExtractError(p.error);
           setMemExtracting(false);
+          setMemPaused(false);
           setMemExtractProgress(null);
           clearInterval(memPollRef.current!);
           return;
@@ -593,10 +691,23 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
         if (p.current != null && p.total) {
           setMemExtractProgress({ current: p.current, total: p.total });
         }
+        // 实时更新已入库事实数量
+        fetch(`/api/ai/mem/status?key=${encodeURIComponent(k)}`)
+          .then(r => r.json())
+          .then((d: { fact_count: number }) => setMemFactsCount(d.fact_count ?? 0))
+          .catch(() => {});
+        if (p.paused) {
+          setMemExtracting(false);
+          setMemPaused(true);
+          setMemExtractProgress(prev => prev); // 保留进度显示
+          clearInterval(memPollRef.current!);
+          return;
+        }
         if (p.done) {
           setMemFactsCount(p.fact_count ?? 0);
           setMemFactsList(null);
           setMemExtracting(false);
+          setMemPaused(false);
           setMemExtractProgress(null);
           clearInterval(memPollRef.current!);
         }
@@ -609,25 +720,79 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
     if (ragMode !== 'hybrid') return;
     fetch(`/api/ai/vec/build-progress?key=${encodeURIComponent(key)}`)
       .then(r => r.json())
-      .then((p: { running?: boolean; step?: string; current?: number; total?: number }) => {
+      .then((p: { running?: boolean; paused?: boolean; step?: string; current?: number; total?: number }) => {
         if (p.running) {
           setVecBuilding(true);
           setVecBuildStep(p.step ?? null);
           if (p.step === 'embedding' && p.total) setVecBuildProgress({ current: p.current ?? 0, total: p.total });
           startVecPolling(key);
         }
+        if (p.step === 'extracting' && p.running) {
+          setMemExtracting(true);
+          if (p.current != null && p.total) setMemExtractProgress({ current: p.current, total: p.total });
+          startMemPolling(key);
+        }
+        if (p.paused) {
+          setMemPaused(true);
+          if (p.current != null && p.total) setMemExtractProgress({ current: p.current, total: p.total });
+        }
       })
       .catch(() => {});
-  }, [ragMode, key, startVecPolling]);
+  }, [ragMode, key, startVecPolling, startMemPolling]);
+
+  // 展开列表时拉取；提炼中每 4s 自动刷新
+  const memFactsListRefRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const memFactsListElRef = useRef<HTMLUListElement | null>(null);
 
   // 组件卸载时清理轮询
   useEffect(() => () => {
     if (vecPollRef.current) clearInterval(vecPollRef.current);
     if (memPollRef.current) clearInterval(memPollRef.current);
+    if (memFactsListRefRef.current) clearInterval(memFactsListRefRef.current);
   }, []);
+  useEffect(() => {
+    if (!memFactsOpen) {
+      if (memFactsListRefRef.current) { clearInterval(memFactsListRefRef.current); memFactsListRefRef.current = null; }
+      return;
+    }
+    let cancelled = false;
+    let isFirst = true;
+    const fetchFacts = () => {
+      if (isFirst) setMemFactsLoading(true);
+      // 保存当前滚动位置，刷新后恢复，避免自动滚到顶
+      const savedScrollTop = memFactsListElRef.current?.scrollTop ?? 0;
+      fetch(`/api/ai/mem/facts?key=${encodeURIComponent(key)}`)
+        .then(r => r.json())
+        .then((d: { facts: { id: number; fact: string }[] }) => {
+          if (!cancelled) {
+            setMemFactsList(d.facts ?? []);
+            if (!isFirst) {
+              // 下一帧恢复滚动位置
+              requestAnimationFrame(() => {
+                if (memFactsListElRef.current) memFactsListElRef.current.scrollTop = savedScrollTop;
+              });
+            }
+            isFirst = false;
+          }
+        })
+        .catch(() => { if (!cancelled) { setMemFactsList([]); isFirst = false; } })
+        .finally(() => { if (!cancelled) setMemFactsLoading(false); });
+    };
+    fetchFacts();
+    // 提炼中定时刷新
+    if (memExtracting) {
+      memFactsListRefRef.current = setInterval(fetchFacts, 4000);
+    }
+    return () => {
+      cancelled = true;
+      if (memFactsListRefRef.current) { clearInterval(memFactsListRefRef.current); memFactsListRefRef.current = null; }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memFactsOpen, memExtracting, key]);
 
   const buildMemFacts = useCallback(async () => {
     setMemExtracting(true);
+    setMemPaused(false);
     setMemExtractError(null);
     setMemExtractProgress(null);
     setMemFactsList(null);
@@ -643,6 +808,12 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
       setMemExtracting(false);
     }
   }, [key, startMemPolling]);
+
+  const pauseMemFacts = useCallback(async () => {
+    try {
+      await fetch(`/api/ai/mem/pause?key=${encodeURIComponent(key)}`, { method: 'POST' });
+    } catch { /* ignore */ }
+  }, [key]);
 
   const buildVecIndex = useCallback(async () => {
     setVecBuilding(true);
@@ -724,6 +895,7 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
 
     // ── 混合检索模式：直接检索，不加载全量记录 ────────────────────────────
     if (ragMode === 'hybrid') {
+      const streamStart = Date.now();
       try {
         const resp = await fetch('/api/ai/rag', {
           method: 'POST',
@@ -731,6 +903,7 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
           body: JSON.stringify({
             key,
             messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+            profile_id: selectedProfileId !== '__default__' ? selectedProfileId : '',
           }),
           signal: abort.signal,
         });
@@ -778,8 +951,17 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
         if ((e as { name?: string }).name === 'AbortError') return;
         updateMsg(assistantIdx, { content: `❌ ${e instanceof Error ? e.message : '请求失败'}`, streaming: false });
       } finally {
-        updateMsg(assistantIdx, { streaming: false });
-        updateAnalysisState(key, prev => ({ ...prev, loading: false, abort: null }));
+        const elapsedSecs = (Date.now() - streamStart) / 1000;
+        updateAnalysisState(key, prev => {
+          const next = [...prev.messages];
+          const msg = next[assistantIdx];
+          if (msg) {
+            const charCount = msg.content.length;
+            const tokensPerSec = elapsedSecs > 0.1 ? Math.round(charCount / elapsedSecs / 1.5) : 0;
+            next[assistantIdx] = { ...msg, streaming: false, provider, model: llmModel, elapsedSecs, tokensPerSec, charCount, timestamp: Date.now() };
+          }
+          return { ...prev, messages: next, loading: false, abort: null };
+        });
         scheduleSaveToDB(key);
         scrollToBottom();
       }
@@ -827,11 +1009,15 @@ ${effectiveCtx}
       ...newMessages.map(m => ({ role: m.role, content: m.content })),
     ];
 
+    const streamStart = Date.now();
     try {
       const resp = await fetch('/api/ai/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: llmMessages }),
+        body: JSON.stringify({
+          messages: llmMessages,
+          profile_id: selectedProfileId !== '__default__' ? selectedProfileId : '',
+        }),
         signal: abort.signal,
       });
 
@@ -853,14 +1039,18 @@ ${effectiveCtx}
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           try {
-            const chunk = JSON.parse(line.slice(6)) as { delta?: string; done?: boolean; error?: string };
+            const chunk = JSON.parse(line.slice(6)) as { delta?: string; thinking?: string; done?: boolean; error?: string };
             if (chunk.error) throw new Error(chunk.error);
             if (chunk.done) break;
-            if (chunk.delta) {
+            if (chunk.delta || chunk.thinking) {
               updateAnalysisState(key, prev => {
                 const next = [...prev.messages];
                 const msg = next[assistantIdx];
-                if (msg) next[assistantIdx] = { ...msg, content: msg.content + (chunk.delta ?? '') };
+                if (msg) next[assistantIdx] = {
+                  ...msg,
+                  content: chunk.delta ? msg.content + chunk.delta : msg.content,
+                  thinking: chunk.thinking ? (msg.thinking ?? '') + chunk.thinking : msg.thinking,
+                };
                 return { ...prev, messages: next };
               });
               scrollToBottom();
@@ -874,8 +1064,17 @@ ${effectiveCtx}
       if ((e as { name?: string }).name === 'AbortError') return;
       updateMsg(assistantIdx, { content: `❌ ${e instanceof Error ? e.message : '请求失败'}`, streaming: false });
     } finally {
-      updateMsg(assistantIdx, { streaming: false });
-      updateAnalysisState(key, prev => ({ ...prev, loading: false, abort: null }));
+      const elapsedSecs = (Date.now() - streamStart) / 1000;
+      updateAnalysisState(key, prev => {
+        const next = [...prev.messages];
+        const msg = next[assistantIdx];
+        if (msg) {
+          const charCount = msg.content.length;
+          const tokensPerSec = elapsedSecs > 0.1 ? Math.round(charCount / elapsedSecs / 1.5) : 0;
+          next[assistantIdx] = { ...msg, streaming: false, provider, model: llmModel, elapsedSecs, tokensPerSec, charCount, timestamp: Date.now() };
+        }
+        return { ...prev, messages: next, loading: false, abort: null };
+      });
       scheduleSaveToDB(key);
       scrollToBottom();
     }
@@ -932,21 +1131,30 @@ ${effectiveCtx}
       {/* ── 分析模式切换 + 当前模型 ── */}
       <div className="flex items-center gap-3 flex-wrap">
         {!quickMode && (
-          <div className="flex rounded-xl overflow-hidden border border-gray-200 text-xs font-bold">
-            <button
-              onClick={() => setRagMode('hybrid')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${ragMode === 'hybrid' ? 'bg-[#576b95] text-white' : 'text-gray-400 hover:text-gray-600 bg-white'}`}
-            >
-              <Search size={11} />
-              混合检索
-            </button>
-            <button
-              onClick={() => { setRagMode('full'); setRagInfo(null); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${ragMode === 'full' ? 'bg-[#07c160] text-white' : 'text-gray-400 hover:text-gray-600 bg-white'}`}
-            >
-              <SlidersHorizontal size={11} />
-              全量分析
-            </button>
+          <div className="flex flex-col gap-1">
+            <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-white/15 text-xs font-bold">
+              <button
+                onClick={() => setRagMode('hybrid')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${ragMode === 'hybrid' ? 'bg-[#576b95] text-white' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-white dark:bg-white/5'}`}
+                title="适合消息量大（数年）、查询具体问题：他喜欢什么、某件事什么时候发生"
+              >
+                <Search size={11} />
+                混合检索
+              </button>
+              <button
+                onClick={() => { setRagMode('full'); setRagInfo(null); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${ragMode === 'full' ? 'bg-[#07c160] text-white' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-white dark:bg-white/5'}`}
+                title="适合消息量适中、需要整体总结：分析关系、聊天风格、情感走势"
+              >
+                <SlidersHorizontal size={11} />
+                全量分析
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400 leading-relaxed">
+              {ragMode === 'hybrid'
+                ? '适合查询具体事件 / 细节，消息量无上限'
+                : '适合整体总结分析，受消息量限制'}
+            </p>
           </div>
         )}
         {quickMode && (
@@ -955,24 +1163,23 @@ ${effectiveCtx}
             最近 200 条 · 已脱敏
           </div>
         )}
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[10px] text-gray-400">
-          <Bot size={10} className="flex-shrink-0" />
-          <span className="font-semibold text-gray-600">{PROVIDER_LABELS[provider] ?? provider}</span>
-          <span className="text-gray-300">·</span>
-          <span className="font-mono">{llmModel || PROVIDER_DEFAULT_MODELS[provider] || provider}</span>
-        </div>
       </div>
 
       {/* ── 混合检索模式：索引管理 ── */}
       {ragMode === 'hybrid' && (
-        <div className="bg-[#f0f4ff] rounded-2xl border border-[#d0d8f0] p-4 space-y-3">
-          <p className="text-[10px] font-black text-[#576b95] uppercase tracking-wider flex items-center gap-1.5">
-            <Database size={11} />
-            混合检索索引
+        <div className="bg-[#f0f4ff] dark:bg-[#576b95]/10 rounded-2xl border border-[#d0d8f0] dark:border-[#576b95]/30 p-4 space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-[10px] font-black text-[#576b95] uppercase tracking-wider flex items-center gap-1.5">
+              <Database size={11} />
+              混合检索索引
+            </p>
+          </div>
+          <p className="text-[10px] text-[#576b95]/70 leading-relaxed -mt-1">
+            每次提问时自动从全量聊天记录中检索最相关的片段，适合问「他喜欢什么」「我们什么时候去过 XX」等具体问题。需要总结整体关系或分析情感走势，请切换到<button className="underline font-semibold hover:text-[#576b95] transition-colors" onClick={() => { setRagMode('full'); setRagInfo(null); }}>全量分析</button>。
           </p>
 
           {/* FTS 关键词索引 */}
-          <div className="bg-white rounded-xl border border-[#dce3f5] p-3">
+          <div className="dk-card bg-white rounded-xl border border-[#dce3f5] dark:border-[#576b95]/30 p-3">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] font-bold text-[#576b95]">关键词索引（FTS）</span>
               {ragIndexStatus?.built && (
@@ -990,7 +1197,7 @@ ${effectiveCtx}
                     : '加载消息中…'}
                 </div>
                 {ragBuildProgress?.total ? (
-                  <div className="w-full h-1 bg-[#d0d8f0] rounded-full overflow-hidden">
+                  <div className="w-full h-1 bg-[#d0d8f0] dark:bg-[#576b95]/20 rounded-full overflow-hidden">
                     <div className="h-full bg-[#576b95] rounded-full transition-all duration-300"
                       style={{ width: `${Math.round(ragBuildProgress.current / ragBuildProgress.total * 100)}%` }} />
                   </div>
@@ -1003,7 +1210,7 @@ ${effectiveCtx}
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 flex-1">未建立</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400 flex-1">未建立</span>
                 <button onClick={buildRagIndex} className="px-2.5 py-1 rounded-lg bg-[#576b95] text-white text-[10px] font-semibold hover:bg-[#4a5c82] transition-colors">构建</button>
               </div>
             )}
@@ -1011,7 +1218,7 @@ ${effectiveCtx}
           </div>
 
           {/* 向量索引 */}
-          <div className="bg-white rounded-xl border border-[#dce3f5] p-3">
+          <div className="dk-card bg-white rounded-xl border border-[#dce3f5] dark:border-[#576b95]/30 p-3">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] font-bold text-[#576b95]">语义向量索引</span>
               {vecIndexStatus?.built && (
@@ -1029,7 +1236,7 @@ ${effectiveCtx}
                     : '加载消息中…'}
                 </div>
                 {vecBuildProgress?.total ? (
-                  <div className="w-full h-1 bg-[#d0d8f0] rounded-full overflow-hidden">
+                  <div className="w-full h-1 bg-[#d0d8f0] dark:bg-[#576b95]/20 rounded-full overflow-hidden">
                     <div className="h-full bg-[#576b95] rounded-full transition-all duration-300"
                       style={{ width: `${Math.round(vecBuildProgress.current / vecBuildProgress.total * 100)}%` }} />
                   </div>
@@ -1041,35 +1248,35 @@ ${effectiveCtx}
                 <button onClick={buildVecIndex} className="ml-auto text-[10px] font-semibold text-gray-400 hover:text-[#576b95] underline">重建</button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 flex-1">未建立（需先在设置中配置 Embedding）</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-gray-500 dark:text-gray-400 flex-1">未建立（需先配置 Embedding）
+                  {onOpenSettings && (
+                    <button onClick={onOpenSettings} className="ml-1.5 text-[#576b95] underline hover:text-[#4a5c82] transition-colors font-semibold">去设置</button>
+                  )}
+                </span>
                 <button onClick={buildVecIndex} className="px-2.5 py-1 rounded-lg bg-[#576b95] text-white text-[10px] font-semibold hover:bg-[#4a5c82] transition-colors">构建</button>
               </div>
             )}
-            {vecBuildError && <p className="mt-1 text-xs text-red-500">❌ {vecBuildError}</p>}
+            {vecBuildError && (
+              <p className="mt-1 text-xs text-red-500 flex items-start gap-1 flex-wrap">
+                <span>❌ Embedding 失败：{vecBuildError}</span>
+                {onOpenSettings && (
+                  <button onClick={onOpenSettings} className="text-[#576b95] underline hover:text-[#4a5c82] transition-colors font-semibold flex-shrink-0">去设置</button>
+                )}
+              </p>
+            )}
           </div>
 
           {/* 记忆事实（LLM 提炼） */}
-          <div className="bg-white rounded-xl border border-[#dce3f5] p-3">
+          <div className="dk-card bg-white rounded-xl border border-[#dce3f5] dark:border-[#576b95]/30 p-3">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] font-bold text-[#576b95]">记忆事实（LLM 提炼）</span>
-              {memFactsCount != null && memFactsCount > 0 && !memExtracting && (
+              {memFactsCount != null && memFactsCount > 0 && (
                 <button
-                  onClick={async () => {
-                    const next = !memFactsOpen;
-                    setMemFactsOpen(next);
-                    if (next && memFactsList === null) {
-                      setMemFactsLoading(true);
-                      try {
-                        const d = await fetch(`/api/ai/mem/facts?key=${encodeURIComponent(key)}`).then(r => r.json()) as { facts: { id: number; fact: string }[] };
-                        setMemFactsList(d.facts ?? []);
-                      } catch { setMemFactsList([]); }
-                      finally { setMemFactsLoading(false); }
-                    }
-                  }}
+                  onClick={() => setMemFactsOpen(prev => !prev)}
                   className="text-[10px] text-[#576b95] hover:text-[#4a5c82] font-semibold flex items-center gap-1 transition-colors"
                 >
-                  {memFactsCount} 条事实
+                  {memFactsCount} 条{memExtracting ? '（提炼中…）' : ''}
                   <span className="opacity-60">{memFactsOpen ? '▲' : '▼'}</span>
                 </button>
               )}
@@ -1078,12 +1285,43 @@ ${effectiveCtx}
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2 text-xs text-[#576b95]">
                   <Loader2 size={11} className="animate-spin flex-shrink-0" />
-                  {memExtractProgress?.total
-                    ? `正在提炼第 ${memExtractProgress.current} / ${memExtractProgress.total} 批…`
-                    : '正在提炼记忆事实…'}
+                  <span className="flex-1">
+                    {memExtractProgress?.total
+                      ? `正在提炼第 ${memExtractProgress.current} / ${memExtractProgress.total} 批…`
+                      : '正在提炼记忆事实…'}
+                  </span>
+                  <button
+                    onClick={pauseMemFacts}
+                    className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] font-semibold hover:bg-amber-200 transition-colors flex-shrink-0"
+                  >
+                    暂停
+                  </button>
                 </div>
                 {memExtractProgress?.total ? (
-                  <div className="w-full h-1 bg-[#d0d8f0] rounded-full overflow-hidden">
+                  <div className="w-full h-1 bg-[#d0d8f0] dark:bg-[#576b95]/20 rounded-full overflow-hidden">
+                    <div className="h-full bg-[#576b95] rounded-full transition-all duration-300"
+                      style={{ width: `${Math.round(memExtractProgress.current / memExtractProgress.total * 100)}%` }} />
+                  </div>
+                ) : null}
+              </div>
+            ) : memPaused ? (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-amber-600 flex-1">
+                    ⏸ 已暂停
+                    {memExtractProgress?.total
+                      ? `（${memExtractProgress.current} / ${memExtractProgress.total} 批）`
+                      : ''}
+                  </span>
+                  <button
+                    onClick={buildMemFacts}
+                    className="px-2.5 py-1 rounded-lg bg-[#576b95] text-white text-[10px] font-semibold hover:bg-[#4a5c82] transition-colors"
+                  >
+                    继续
+                  </button>
+                </div>
+                {memExtractProgress?.total ? (
+                  <div className="w-full h-1 bg-[#d0d8f0] dark:bg-[#576b95]/20 rounded-full overflow-hidden">
                     <div className="h-full bg-[#576b95] rounded-full transition-all duration-300"
                       style={{ width: `${Math.round(memExtractProgress.current / memExtractProgress.total * 100)}%` }} />
                   </div>
@@ -1094,14 +1332,14 @@ ${effectiveCtx}
             ) : memFactsCount > 0 ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-[#576b95]">✓ 已提炼，对话时自动补充背景知识</span>
-                {vecIndexStatus?.built && !memExtracting && (
+                {vecIndexStatus?.built && (
                   <button onClick={buildMemFacts} className="ml-auto text-[10px] font-semibold text-gray-400 hover:text-[#576b95] underline">重新提炼</button>
                 )}
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 flex-1">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 flex-1">
                     {vecIndexStatus?.built ? '尚未提炼' : '请先构建语义向量索引'}
                   </span>
                   {vecIndexStatus?.built && (
@@ -1119,15 +1357,15 @@ ${effectiveCtx}
               </div>
             )}
             {memFactsOpen && (
-              <div className="mt-2 border-t border-[#eef1f7] pt-2">
+              <div className="mt-2 border-t border-[#eef1f7] dark:border-white/10 pt-2">
                 {memFactsLoading ? (
                   <div className="flex items-center gap-1.5 text-xs text-gray-400">
                     <Loader2 size={11} className="animate-spin" />加载中…
                   </div>
                 ) : memFactsList && memFactsList.length > 0 ? (
-                  <ul className="max-h-48 overflow-y-auto space-y-1 pr-1">
+                  <ul ref={memFactsListElRef} className="max-h-48 overflow-y-auto space-y-1 pr-1">
                     {memFactsList.map(f => (
-                      <li key={f.id} className="flex items-start gap-1.5 text-xs text-gray-700">
+                      <li key={f.id} className="flex items-start gap-1.5 text-xs text-gray-700 dark:text-gray-300">
                         <span className="mt-0.5 w-1 h-1 rounded-full bg-[#576b95] flex-shrink-0" />
                         {f.fact}
                       </li>
@@ -1141,20 +1379,26 @@ ${effectiveCtx}
           </div>
           {ragInfo && (
             <div className="mt-2">
+              {ragInfo.hits === 0 ? (
+                <p className="text-[10px] text-amber-600 leading-relaxed">
+                  ⚠️ 本次未检索到相关内容，回答可能不准确。建议：换一种表达方式，或切换到<button className="underline font-semibold hover:text-amber-700 transition-colors" onClick={() => { setRagMode('full'); setRagInfo(null); }}>全量分析</button>。
+                </p>
+              ) : (
               <button
                 onClick={() => setRagContextOpen(o => !o)}
                 className="flex items-center gap-1.5 text-[10px] text-[#576b95] hover:text-[#4a5c82] transition-colors"
               >
                 <Search size={10} />
-                上次检索：命中 {ragInfo.hits} 条，含上下文共 {ragInfo.retrieved} 条
+                本次检索：命中 {ragInfo.hits} 条，含上下文共 {ragInfo.retrieved} 条
                 <span className="ml-0.5 opacity-60">{ragContextOpen ? '▲' : '▼'}</span>
               </button>
+              )}
               {ragContextOpen && ragInfo.messages && ragInfo.messages.length > 0 && (
-                <div className="mt-2 max-h-60 overflow-y-auto rounded-xl border border-[#c8d0e8] bg-white divide-y divide-[#eaedfa]">
+                <div className="mt-2 max-h-60 overflow-y-auto rounded-xl border border-[#c8d0e8] dark:border-[#576b95]/30 dk-card bg-white dark:divide-white/10 divide-y divide-[#eaedfa]">
                   {ragInfo.messages.map((m, i) => (
                     <div
                       key={i}
-                      className={`px-3 py-2 text-[11px] leading-relaxed ${m.is_hit ? 'bg-[#eef1fb]' : ''}`}
+                      className={`px-3 py-2 text-[11px] leading-relaxed ${m.is_hit ? 'bg-[#eef1fb] dark:bg-[#576b95]/15' : ''}`}
                     >
                       <span className="text-[#576b95] font-semibold mr-1.5">
                         {m.sender}
@@ -1163,7 +1407,7 @@ ${effectiveCtx}
                       {m.is_hit && (
                         <span className="inline-block px-1 py-0.5 rounded text-[9px] font-bold bg-[#576b95] text-white mr-1.5 leading-none">命中</span>
                       )}
-                      <span className="text-gray-700 break-all">{m.content}</span>
+                      <span className="text-gray-700 dark:text-gray-300 break-all">{m.content}</span>
                     </div>
                   ))}
                 </div>
@@ -1175,27 +1419,28 @@ ${effectiveCtx}
 
       {/* ── 时间范围选择器（全量模式） ── */}
       {ragMode === 'full' && (
-      <div className="bg-[#f8f9fb] rounded-2xl border border-gray-100 p-4">
+      <div className="dk-subtle dk-border bg-[#f8f9fb] rounded-2xl border border-gray-100 p-4">
         {/* 标题 + 模式切换 */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-1">
           <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">分析时间范围</p>
-          <div className="flex rounded-xl overflow-hidden border border-gray-200 text-[10px] font-bold">
+          <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-white/15 text-[10px] font-bold">
             <button
               onClick={() => setCalendarMode(false)}
-              className={`flex items-center gap-1 px-2.5 py-1.5 transition-colors ${!calendarMode ? 'bg-[#07c160] text-white' : 'text-gray-400 hover:text-gray-600 bg-white'}`}
+              className={`flex items-center gap-1 px-2.5 py-1.5 transition-colors ${!calendarMode ? 'bg-[#07c160] text-white' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-white dark:bg-white/5'}`}
             >
               <SlidersHorizontal size={10} />
               预设
             </button>
             <button
               onClick={() => setCalendarMode(true)}
-              className={`flex items-center gap-1 px-2.5 py-1.5 transition-colors ${calendarMode ? 'bg-[#07c160] text-white' : 'text-gray-400 hover:text-gray-600 bg-white'}`}
+              className={`flex items-center gap-1 px-2.5 py-1.5 transition-colors ${calendarMode ? 'bg-[#07c160] text-white' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-white dark:bg-white/5'}`}
             >
               <CalendarDays size={10} />
               日历
             </button>
           </div>
         </div>
+        <p className="text-[10px] text-gray-400 mb-3 leading-relaxed">将所选时间范围内的全量消息发给 AI，适合总结关系、分析情感走势。消息量过大时建议缩短范围，或切换到<button className="underline font-semibold hover:text-gray-500 transition-colors" onClick={() => setRagMode('hybrid')}>混合检索</button>。</p>
 
         {calendarMode ? (
           /* ── 日历拖选 ── */
@@ -1208,36 +1453,57 @@ ${effectiveCtx}
         ) : (
           /* ── 快捷预设 + 日期输入 ── */
           <>
-            <div className="flex flex-wrap gap-1.5 mb-3">
+            <div className="flex flex-wrap gap-1.5 mb-2">
               {RANGE_PRESETS.map(p => (
                 <button
                   key={p.label}
-                  onClick={() => handleRangeChange(p.from, p.to)}
+                  onClick={() => { handleRangeChange(p.from, p.to); setMsgLimit(null); }}
                   className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                    activePreset(p.from, p.to)
+                    activePreset(p.from, p.to) && msgLimit === null
                       ? 'bg-[#07c160] text-white border-[#07c160]'
-                      : 'text-gray-500 border-gray-200 hover:border-[#07c160] hover:text-[#07c160]'
+                      : 'text-gray-500 dark:text-gray-400 border-gray-200 dark:border-white/15 hover:border-[#07c160] hover:text-[#07c160]'
                   }`}
                 >
                   {p.label}
                 </button>
               ))}
             </div>
+            <div className="flex flex-wrap gap-1.5 mb-3 items-center">
+              <span className="text-[10px] text-gray-400 font-semibold">最近条数：</span>
+              {[100, 300, 1000].map(n => (
+                <button
+                  key={n}
+                  onClick={() => setMsgLimit(prev => prev === n ? null : n)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                    msgLimit === n
+                      ? 'bg-[#576b95] text-white border-[#576b95]'
+                      : 'text-gray-500 dark:text-gray-400 border-gray-200 dark:border-white/15 hover:border-[#576b95] hover:text-[#576b95]'
+                  }`}
+                >
+                  {n} 条
+                </button>
+              ))}
+              {msgLimit !== null && (
+                <span className="text-[10px] text-[#576b95]">· 全部聊天记录中最近 {msgLimit} 条，不受时间范围限制</span>
+              )}
+            </div>
+            {msgLimit === null && (
             <div className="flex items-center gap-2">
               <input
                 type="date"
                 value={rangeFrom}
                 onChange={e => handleRangeChange(e.target.value, rangeTo)}
-                className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white"
+                className="dk-input flex-1 text-xs border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white"
               />
               <span className="text-gray-300 text-xs">至</span>
               <input
                 type="date"
                 value={rangeTo}
                 onChange={e => handleRangeChange(rangeFrom, e.target.value)}
-                className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white"
+                className="dk-input flex-1 text-xs border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white"
               />
             </div>
+            )}
           </>
         )}
 
@@ -1248,7 +1514,7 @@ ${effectiveCtx}
             正在统计该时间范围的消息数…
           </div>
         ) : ctxStatus === 'ready' && realMsgCount === 0 ? (
-          <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl border bg-gray-50 border-gray-100 text-xs text-gray-400">
+          <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl border dk-subtle bg-gray-50 dk-border border-gray-100 text-xs text-gray-400">
             <Info size={13} className="flex-shrink-0" />
             该时间范围内没有聊天记录，请选择其他时间段。
           </div>
@@ -1288,8 +1554,8 @@ ${effectiveCtx}
             onChange={e => setPrivacyMask(e.target.checked)}
             className="mt-0.5 w-3.5 h-3.5 rounded accent-[#07c160] flex-shrink-0 cursor-pointer"
           />
-          <span className="text-xs leading-relaxed text-gray-500 group-hover:text-gray-700 transition-colors select-none">
-            <span className="font-semibold text-gray-700">发送前隐私脱敏</span>
+          <span className="text-xs leading-relaxed text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors select-none">
+            <span className="font-semibold text-gray-700 dark:text-gray-300">发送前隐私脱敏</span>
             <span className="mx-1">·</span>
             自动将手机号、身份证、邮箱、银行卡号
             {!isGroup && <span>及联系人姓名</span>}
@@ -1299,6 +1565,52 @@ ${effectiveCtx}
         </label>
       </div>
       )} {/* end ragMode === 'full' */}
+
+      {/* ── 模式引导（无对话时显示） ── */}
+      {messages.length === 0 && !quickMode && (
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => setRagMode('hybrid')}
+            className={`text-left p-3.5 rounded-2xl border-2 transition-all ${
+              ragMode === 'hybrid'
+                ? 'border-[#576b95] bg-[#f0f4ff] dark:bg-[#576b95]/10'
+                : 'border-gray-100 dark:border-white/10 bg-white dark:bg-white/5 hover:border-[#576b95]/40'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1.5">
+              <Search size={13} className="text-[#576b95] flex-shrink-0" />
+              <span className="text-xs font-bold text-[#576b95]">混合检索</span>
+              {ragMode === 'hybrid' && <span className="ml-auto text-[9px] bg-[#576b95] text-white px-1.5 py-0.5 rounded-full font-bold">当前</span>}
+            </div>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed mb-2">适合消息量大（多年记录），查询具体事件或细节</p>
+            <ul className="text-[10px] text-gray-400 space-y-0.5">
+              <li>✓ 他喜欢什么运动/食物</li>
+              <li>✓ 我们什么时候去过某个地方</li>
+              <li>✓ 他说过关于工作的哪些事</li>
+            </ul>
+          </button>
+          <button
+            onClick={() => { setRagMode('full'); setRagInfo(null); }}
+            className={`text-left p-3.5 rounded-2xl border-2 transition-all ${
+              ragMode === 'full'
+                ? 'border-[#07c160] bg-[#f0faf4] dark:bg-[#07c160]/10'
+                : 'border-gray-100 dark:border-white/10 bg-white dark:bg-white/5 hover:border-[#07c160]/40'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1.5">
+              <SlidersHorizontal size={13} className="text-[#07c160] flex-shrink-0" />
+              <span className="text-xs font-bold text-[#07c160]">全量分析</span>
+              {ragMode === 'full' && <span className="ml-auto text-[9px] bg-[#07c160] text-white px-1.5 py-0.5 rounded-full font-bold">当前</span>}
+            </div>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed mb-2">适合消息量适中，需要整体总结或情感分析</p>
+            <ul className="text-[10px] text-gray-400 space-y-0.5">
+              <li>✓ 总结我们的聊天风格</li>
+              <li>✓ 分析这段关系的走势</li>
+              <li>✓ 我们聊得最多的话题</li>
+            </ul>
+          </button>
+        </div>
+      )}
 
       {/* ── 快捷 Prompt（无对话时、全量模式下显示） ── */}
       {messages.length === 0 && ragMode === 'full' && (
@@ -1310,7 +1622,7 @@ ${effectiveCtx}
                 key={p.label}
                 onClick={() => sendMessage(p.prompt)}
                 disabled={loading || (ctxStatus === 'ready' && realMsgCount === 0)}
-                className="px-3 py-1.5 text-xs font-semibold rounded-full border border-gray-200 text-gray-600 hover:border-[#07c160] hover:text-[#07c160] hover:bg-[#f0faf4] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold rounded-full border border-gray-200 dark:border-white/15 text-gray-600 dark:text-gray-300 hover:border-[#07c160] hover:text-[#07c160] hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 {p.label}
               </button>
@@ -1346,6 +1658,30 @@ ${effectiveCtx}
                   ? [...messages].slice(0, i).reverse().find(m => m.role === 'user')?.content
                   : undefined
               }
+              currentProvider={provider}
+              currentModel={llmModel}
+              onDelete={loading ? undefined : () => {
+                // 找到与当前消息配对的索引，成对删除
+                let delStart: number;
+                let delEnd: number;
+                if (msg.role === 'user') {
+                  delStart = i;
+                  // 找紧随其后的 assistant 消息
+                  const nextAssist = messages.findIndex((m, j) => j > i && m.role === 'assistant');
+                  delEnd = nextAssist >= 0 ? nextAssist + 1 : i + 1;
+                } else {
+                  // assistant 消息：找它前面紧邻的 user 消息
+                  let prevUser = i - 1;
+                  while (prevUser >= 0 && messages[prevUser].role !== 'user') prevUser--;
+                  delStart = prevUser >= 0 ? prevUser : i;
+                  delEnd = i + 1;
+                }
+                updateAnalysisState(key, prev => ({
+                  ...prev,
+                  messages: prev.messages.filter((_, j) => j < delStart || j >= delEnd),
+                }));
+                scheduleSaveToDB(key);
+              }}
             />
           ))}
           <div ref={bottomRef} />
@@ -1354,14 +1690,40 @@ ${effectiveCtx}
 
       {/* ── 输入区 ── */}
       <div className="flex flex-col gap-2 mt-auto">
-        {loading && (
+        {/* 当前模型提示 */}
+        {profiles.length === 0 ? (
           <button
-            onClick={handleStop}
-            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 hover:border-red-300 text-xs font-semibold transition-colors"
+            onClick={onOpenSettings}
+            className="flex items-center gap-1.5 self-start px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-[10px] text-amber-600 hover:bg-amber-100 transition-colors"
           >
-            <Square size={12} className="fill-red-500" />
-            停止生成
+            <Bot size={9} className="flex-shrink-0" />
+            <span className="font-semibold">未配置 AI 模型</span>
+            <span className="underline">去设置</span>
           </button>
+        ) : profiles.length <= 1 ? (
+          <div className="flex items-center gap-1 self-start px-2 py-0.5 rounded-full bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 text-[10px] text-gray-400">
+            <Bot size={9} className="flex-shrink-0" />
+            <span className="font-semibold text-gray-500 dark:text-gray-300">{PROVIDER_LABELS[provider] ?? provider}</span>
+            <span className="text-gray-300">·</span>
+            <span className="font-mono">{llmModel || PROVIDER_DEFAULT_MODELS[provider] || provider}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 flex-wrap">
+            <Bot size={9} className="text-gray-400 flex-shrink-0" />
+            {profiles.map(p => (
+              <button
+                key={p.id}
+                onClick={() => setSelectedProfileId(p.id)}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
+                  selectedProfileId === p.id
+                    ? 'bg-[#576b95] text-white border-[#576b95]'
+                    : 'bg-white dark:bg-white/5 text-gray-400 dark:text-gray-400 border-gray-200 dark:border-white/15 hover:border-[#576b95] hover:text-[#576b95]'
+                }`}
+              >
+                {`${PROVIDER_LABELS[p.provider] ?? p.provider}${p.model ? ` · ${p.model}` : ''}`}
+              </button>
+            ))}
+          </div>
         )}
         <div className="flex items-end gap-2">
         {!loading && (
@@ -1377,18 +1739,28 @@ ${effectiveCtx}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={ragMode === 'hybrid' ? '输入关键词或问题，智能检索相关聊天记录…' : '输入问题，或选择上方快捷分析…（Enter 发送，Shift+Enter 换行）'}
+          placeholder={ragMode === 'hybrid' ? '问具体问题：他喜欢什么、我们什么时候去过哪里… （Enter 发送）' : '输入问题，或选择上方快捷分析…（Enter 发送，Shift+Enter 换行）'}
           rows={2}
-          disabled={ragMode === 'full' ? (ctxStatus === 'ready' && realMsgCount === 0) : (ragMode === 'hybrid' && !ragIndexStatus?.built)}
-          className="flex-1 resize-none px-4 py-2.5 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-[#07c160] transition-colors bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={loading || (ragMode === 'full' ? (ctxStatus === 'ready' && realMsgCount === 0) : (ragMode === 'hybrid' && !ragIndexStatus?.built))}
+          className="dk-input flex-1 resize-none px-4 py-2.5 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-[#07c160] transition-colors bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
         />
-        <button
-          onClick={() => sendMessage(input)}
-          disabled={!input.trim() || loading || (ragMode === 'full' ? (ctxStatus === 'ready' && realMsgCount === 0) : !ragIndexStatus?.built)}
-          className="p-2.5 bg-[#07c160] text-white rounded-xl hover:bg-[#06ad56] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-        >
-          {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-        </button>
+        {loading ? (
+          <button
+            onClick={handleStop}
+            className="p-2.5 bg-red-400 hover:bg-red-500 text-white rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
+            title="停止生成"
+          >
+            <Square size={18} fill="white" />
+          </button>
+        ) : (
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={!input.trim() || (ragMode === 'full' ? (ctxStatus === 'ready' && realMsgCount === 0) : !ragIndexStatus?.built)}
+            className="p-2.5 bg-[#07c160] text-white rounded-xl hover:bg-[#06ad56] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+          >
+            <Send size={18} />
+          </button>
+        )}
         </div>
       </div>
 
@@ -1399,19 +1771,19 @@ ${effectiveCtx}
           onClick={() => setResetConfirmOpen(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl p-6 w-72 flex flex-col gap-4"
+            className="dk-card bg-white rounded-2xl shadow-xl p-6 w-72 flex flex-col gap-4"
             onClick={e => e.stopPropagation()}
           >
             <div>
-              <p className="font-semibold text-gray-800 mb-1">重置对话？</p>
-              <p className="text-xs text-gray-500 leading-relaxed">
+              <p className="font-semibold text-gray-800 dark:text-gray-200 mb-1">重置对话？</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
                 将清空当前对话记录，并从数据库中删除本次分析历史，此操作不可撤销。
               </p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setResetConfirmOpen(false)}
-                className="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                className="flex-1 py-2 rounded-xl border border-gray-200 dark:border-white/15 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
               >
                 取消
               </button>

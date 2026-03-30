@@ -44,7 +44,7 @@ export const StatsPage: React.FC<StatsPageProps> = ({
   return (
     <div>
       <div className="mb-6 sm:mb-8">
-        <h2 className="text-2xl font-black text-[#1d1d1f] mb-1">数据概览</h2>
+        <h2 className="text-2xl font-black text-[#1d1d1f] dk-text mb-1">数据概览</h2>
         <p className="text-sm text-gray-400">聊天记录统计分析</p>
       </div>
 
@@ -79,7 +79,7 @@ export const StatsPage: React.FC<StatsPageProps> = ({
       {/* Contact Table */}
       <div className="mb-8">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <h2 className="text-2xl font-black text-[#1d1d1f]">
+          <h2 className="text-2xl font-black text-[#1d1d1f] dk-text">
             联系人列表
             <span className="text-gray-400 text-lg ml-3 font-semibold">{filteredContacts.length} 位</span>
           </h2>
@@ -90,12 +90,12 @@ export const StatsPage: React.FC<StatsPageProps> = ({
               placeholder="搜索联系人..."
               value={search}
               onChange={e => onSearchChange(e.target.value)}
-              className="pl-9 pr-4 py-2 w-36 sm:w-56 bg-white border border-gray-200 rounded-xl text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#07c160]/20 focus:border-[#07c160] transition-all"
+              className="pl-9 pr-4 py-2 w-36 sm:w-56 bg-white dk-input border border-gray-200 dk-border rounded-xl text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#07c160]/20 focus:border-[#07c160] transition-all"
             />
           </div>
         </div>
         {statsLoading && contacts.length === 0 ? (
-          <div className="bg-white rounded-3xl border border-gray-100 p-20 text-center">
+          <div className="bg-white dk-card rounded-3xl border border-gray-100 dk-border p-20 text-center">
             <div className="text-gray-300 font-bold text-lg animate-pulse">加载中...</div>
           </div>
         ) : (

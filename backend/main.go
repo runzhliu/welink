@@ -20,7 +20,9 @@ package main
 
 import (
 	"archive/zip"
+	"crypto/md5"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -364,20 +366,21 @@ func serverMain() {
 	// LLM 配置单独保存，避免与屏蔽名单 PUT 冲突
 	api.PUT("/preferences/llm", func(c *gin.Context) {
 		var incoming struct {
-			LLMProvider        string `json:"llm_provider"`
-			LLMAPIKey          string `json:"llm_api_key"`
-			LLMBaseURL         string `json:"llm_base_url"`
-			LLMModel           string `json:"llm_model"`
-			GeminiClientID     string `json:"gemini_client_id"`
-			GeminiClientSecret string `json:"gemini_client_secret"`
-			AIAnalysisDBPath   string `json:"ai_analysis_db_path"`
-			EmbeddingProvider  string `json:"embedding_provider"`
-			EmbeddingAPIKey    string `json:"embedding_api_key"`
-			EmbeddingBaseURL   string `json:"embedding_base_url"`
-			EmbeddingModel     string `json:"embedding_model"`
-			EmbeddingDims      int    `json:"embedding_dims"`
-			MemLLMBaseURL      string `json:"mem_llm_base_url"`
-			MemLLMModel        string `json:"mem_llm_model"`
+			LLMProfiles        []LLMProfile `json:"llm_profiles"`
+			LLMProvider        string       `json:"llm_provider"`
+			LLMAPIKey          string       `json:"llm_api_key"`
+			LLMBaseURL         string       `json:"llm_base_url"`
+			LLMModel           string       `json:"llm_model"`
+			GeminiClientID     string       `json:"gemini_client_id"`
+			GeminiClientSecret string       `json:"gemini_client_secret"`
+			AIAnalysisDBPath   string       `json:"ai_analysis_db_path"`
+			EmbeddingProvider  string       `json:"embedding_provider"`
+			EmbeddingAPIKey    string       `json:"embedding_api_key"`
+			EmbeddingBaseURL   string       `json:"embedding_base_url"`
+			EmbeddingModel     string       `json:"embedding_model"`
+			EmbeddingDims      int          `json:"embedding_dims"`
+			MemLLMBaseURL      string       `json:"mem_llm_base_url"`
+			MemLLMModel        string       `json:"mem_llm_model"`
 		}
 		if err := c.ShouldBindJSON(&incoming); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
@@ -385,10 +388,20 @@ func serverMain() {
 		}
 		existing := loadPreferences()
 		pathChanged := existing.AIAnalysisDBPath != incoming.AIAnalysisDBPath
-		existing.LLMProvider = incoming.LLMProvider
-		existing.LLMAPIKey = incoming.LLMAPIKey
-		existing.LLMBaseURL = incoming.LLMBaseURL
-		existing.LLMModel = incoming.LLMModel
+		existing.LLMProfiles = incoming.LLMProfiles
+		// 将第一个 profile 同步到单配置字段（向后兼容 CompleteLLM 等内部调用）
+		if len(incoming.LLMProfiles) > 0 {
+			p := incoming.LLMProfiles[0]
+			existing.LLMProvider = p.Provider
+			existing.LLMAPIKey = p.APIKey
+			existing.LLMBaseURL = p.BaseURL
+			existing.LLMModel = p.Model
+		} else {
+			existing.LLMProvider = incoming.LLMProvider
+			existing.LLMAPIKey = incoming.LLMAPIKey
+			existing.LLMBaseURL = incoming.LLMBaseURL
+			existing.LLMModel = incoming.LLMModel
+		}
 		existing.GeminiClientID = incoming.GeminiClientID
 		existing.GeminiClientSecret = incoming.GeminiClientSecret
 		existing.AIAnalysisDBPath = incoming.AIAnalysisDBPath
@@ -535,26 +548,41 @@ func serverMain() {
 	// 后端拉取聊天记录 → 构造 prompt → 流式转发 LLM 响应
 	api.POST("/ai/analyze", func(c *gin.Context) {
 		var body struct {
-			Username string       `json:"username"`
-			IsGroup  bool         `json:"is_group"`
-			From     int64        `json:"from"`
-			To       int64        `json:"to"`
-			Messages []LLMMessage `json:"messages"`
+			Username  string       `json:"username"`
+			IsGroup   bool         `json:"is_group"`
+			From      int64        `json:"from"`
+			To        int64        `json:"to"`
+			Messages  []LLMMessage `json:"messages"`
+			ProfileID string       `json:"profile_id"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 			return
 		}
 		prefs := loadPreferences()
-		if prefs.LLMProvider == "" {
+		cfg := llmConfigForProfile(body.ProfileID, prefs)
+		if cfg.provider == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
 			return
 		}
-		if prefs.LLMAPIKey == "" && !(prefs.LLMProvider == "gemini" && prefs.GeminiAccessToken != "") && prefs.LLMProvider != "ollama" {
+		if cfg.apiKey == "" && cfg.provider != "ollama" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
 			return
 		}
-		StreamLLM(c.Writer, body.Messages, prefs)
+		flusher, ok := c.Writer.(http.Flusher)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "不支持流式响应"})
+			return
+		}
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		c.Writer.Header().Set("Cache-Control", "no-cache")
+		c.Writer.Header().Set("X-Accel-Buffering", "no")
+		sendChunk := func(chunk StreamChunk) {
+			data, _ := json.Marshal(chunk)
+			fmt.Fprintf(c.Writer, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+		streamLLMCoreWithProfile(sendChunk, body.Messages, prefs, body.ProfileID)
 	})
 
 	// POST /api/ai/complete — 非流式单次补全（用于分段摘要）
@@ -657,11 +685,12 @@ func serverMain() {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"running":    !p.Done && p.Error == "",
+			"running":    !p.Done && p.Error == "" && !p.Paused,
 			"step":       p.Step,
 			"current":    p.Current,
 			"total":      p.Total,
 			"done":       p.Done,
+			"paused":     p.Paused,
 			"error":      p.Error,
 			"fact_count": p.FactCount,
 		})
@@ -679,15 +708,20 @@ func serverMain() {
 		c.JSON(http.StatusOK, gin.H{"ok": true, "provider": cfg.Provider, "model": cfg.Model})
 	})
 
-	// POST /api/ai/llm/test — 验证主 LLM 配置是否可用
+	// POST /api/ai/llm/test — 验证 LLM 配置是否可用（可指定 profile_id）
 	api.POST("/ai/llm/test", func(c *gin.Context) {
+		var body struct {
+			ProfileID string `json:"profile_id"`
+		}
+		_ = c.ShouldBindJSON(&body) // 允许空 body
 		prefs := loadPreferences()
-		model, err := testLLMConn(prefs)
+		model, err := testLLMConnProfile(body.ProfileID, prefs)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"ok": true, "provider": prefs.LLMProvider, "model": model})
+		cfg := llmConfigForProfile(body.ProfileID, prefs)
+		c.JSON(http.StatusOK, gin.H{"ok": true, "provider": cfg.provider, "model": model})
 	})
 
 	// POST /api/ai/mem/test — 验证记忆提炼本地模型配置是否可用
@@ -741,15 +775,18 @@ func serverMain() {
 		}
 		job := getOrCreateJob(key)
 		job.mu.Lock()
-		if job.Step != "" && !job.Done && job.Error == "" {
+		if job.Step != "" && !job.Done && job.Error == "" && !job.Paused {
 			job.mu.Unlock()
 			c.JSON(http.StatusOK, gin.H{"started": false, "reason": "already running"})
 			return
 		}
+		abortCh := make(chan struct{})
 		job.Step = "extracting"
 		job.Done = false
+		job.Paused = false
 		job.Error = ""
 		job.FactCount = 0
+		job.abort = abortCh
 		job.mu.Unlock()
 
 		prefs := loadPreferences()
@@ -828,7 +865,19 @@ func serverMain() {
 					db.Exec(`UPDATE vec_index_status SET extract_offset = ? WHERE contact_key = ?`,
 						chunkIdx, key)
 				},
+				abortCh,
 			)
+
+			if extractErr == ErrAborted {
+				// 暂停：保留检查点，等待用户继续
+				job.mu.Lock()
+				job.Step = "paused"
+				job.Paused = true
+				job.Done = false
+				job.Error = ""
+				job.mu.Unlock()
+				return
+			}
 
 			// 全部完成，清除检查点
 			db.Exec(`UPDATE vec_index_status SET extract_offset = -1 WHERE contact_key = ?`, key)
@@ -846,23 +895,51 @@ func serverMain() {
 		c.JSON(http.StatusOK, gin.H{"started": true})
 	})
 
+	// POST /api/ai/mem/pause?key= — 暂停正在运行的记忆提炼
+	api.POST("/ai/mem/pause", func(c *gin.Context) {
+		key := c.Query("key")
+		if key == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 key 参数"})
+			return
+		}
+		vecJobsMu.Lock()
+		job, ok := vecJobs[key]
+		vecJobsMu.Unlock()
+		if !ok {
+			c.JSON(http.StatusOK, gin.H{"paused": false, "reason": "no job"})
+			return
+		}
+		job.mu.Lock()
+		abortCh := job.abort
+		running := job.Step == "extracting" && !job.Done && !job.Paused
+		job.mu.Unlock()
+		if !running || abortCh == nil {
+			c.JSON(http.StatusOK, gin.H{"paused": false, "reason": "not running"})
+			return
+		}
+		close(abortCh)
+		c.JSON(http.StatusOK, gin.H{"paused": true})
+	})
+
 	// POST /api/ai/rag  body: {key, messages, search_query?}
 	api.POST("/ai/rag", func(c *gin.Context) {
 		var body struct {
 			Key         string       `json:"key"`
 			Messages    []LLMMessage `json:"messages"`
 			SearchQuery string       `json:"search_query"`
+			ProfileID   string       `json:"profile_id"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil || body.Key == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 			return
 		}
 		prefs := loadPreferences()
-		if prefs.LLMProvider == "" {
+		cfg := llmConfigForProfile(body.ProfileID, prefs)
+		if cfg.provider == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
 			return
 		}
-		if prefs.LLMAPIKey == "" && !(prefs.LLMProvider == "gemini" && prefs.GeminiAccessToken != "") && prefs.LLMProvider != "ollama" {
+		if cfg.apiKey == "" && cfg.provider != "ollama" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
 			return
 		}
@@ -949,7 +1026,7 @@ func serverMain() {
 			len(hitSeqs), len(results), ctxText, memSection,
 		)
 		llmMsgs := append([]LLMMessage{{Role: "system", Content: sysPrompt}}, body.Messages...)
-		streamLLMCore(sendChunk, llmMsgs, prefs)
+		streamLLMCoreWithProfile(sendChunk, llmMsgs, prefs, body.ProfileID)
 	})
 
 	// POST /api/ai/day-rag  body: {date, messages, search_query?}
@@ -1324,18 +1401,46 @@ func serverMain() {
 			c.Status(http.StatusBadRequest)
 			return
 		}
+
+		// Build a stable cache path: ~/.welink/avatar_cache/<md5(url)>
+		sum := md5.Sum([]byte(rawURL))
+		cacheKey := hex.EncodeToString(sum[:])
+		homeDir, _ := os.UserHomeDir()
+		cacheDir := filepath.Join(homeDir, ".welink", "avatar_cache")
+		cachePath := filepath.Join(cacheDir, cacheKey)
+
+		// Serve from disk cache if available
+		if data, readErr := os.ReadFile(cachePath); readErr == nil {
+			ct := http.DetectContentType(data)
+			c.Header("Cache-Control", "public, max-age=31536000, immutable")
+			c.Data(http.StatusOK, ct, data)
+			return
+		}
+
 		resp, err := http.Get(rawURL) // #nosec G107 — URL 来自受信任的数据库记录
 		if err != nil || resp.StatusCode != http.StatusOK {
 			c.Status(http.StatusBadGateway)
 			return
 		}
 		defer resp.Body.Close()
+
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			c.Status(http.StatusBadGateway)
+			return
+		}
+
+		// Persist to disk cache (best-effort, ignore errors)
+		if mkErr := os.MkdirAll(cacheDir, 0o755); mkErr == nil {
+			_ = os.WriteFile(cachePath, body, 0o644)
+		}
+
 		ct := resp.Header.Get("Content-Type")
 		if ct == "" {
-			ct = "image/jpeg"
+			ct = http.DetectContentType(body)
 		}
-		c.Header("Cache-Control", "public, max-age=86400")
-		c.DataFromReader(http.StatusOK, resp.ContentLength, ct, resp.Body, nil)
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		c.Data(http.StatusOK, ct, body)
 	})
 
 	// App 模式：用系统浏览器打开外部 URL（仅允许 https）

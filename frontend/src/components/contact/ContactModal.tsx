@@ -15,12 +15,14 @@ import { SentimentChart } from './SentimentChart';
 import { MessageTypePieChart } from '../common/MessageTypePieChart';
 import { useWordCloud } from '../../hooks/useContacts';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { avatarSrc } from '../../utils/avatar';
 
 interface ContactModalProps {
   contact: ContactStats | null;
   onClose: () => void;
   onGroupClick?: (group: GroupInfo) => void;
   onBlock?: (username: string) => void;
+  onOpenSettings?: () => void;
   initialTab?: ModalTab;
   initialQuery?: string;
 }
@@ -42,7 +44,7 @@ const exportPresets = [
   { label: '最近一年', from: shiftMonths(12),to: today },
 ];
 
-export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, onGroupClick, onBlock, initialTab, initialQuery }) => {
+export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, onGroupClick, onBlock, onOpenSettings, initialTab, initialQuery }) => {
   const { privacyMode } = usePrivacyMode();
   const { data: wordData, loading: isAnalysing, fetch: fetchWordCloud } = useWordCloud();
   const [tab, setTab] = useState<ModalTab>(initialTab ?? 'wordcloud');
@@ -69,6 +71,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [exportMsg, setExportMsg] = useState<{ ok: boolean; message: string } | null>(null);
   const [groupsReady, setGroupsReady] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
   const exportPanelRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -195,9 +198,10 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
       onClick={onClose}
     >
       <div
-        className="dk-card bg-white rounded-t-[32px] sm:rounded-[48px] w-full sm:max-w-5xl overflow-y-auto max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] shadow-2xl relative p-4 sm:p-8 lg:p-16 animate-in slide-in-from-bottom sm:zoom-in duration-300"
+        className="dk-card bg-white rounded-t-[32px] sm:rounded-[48px] w-full sm:max-w-5xl overflow-hidden max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] shadow-2xl relative animate-in slide-in-from-bottom sm:zoom-in duration-300"
         onClick={(e) => e.stopPropagation()}
       >
+      <div className="overflow-y-auto max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] p-4 sm:p-8 lg:p-16">
         {/* Top-right actions */}
         <div className="absolute top-5 right-5 sm:top-10 sm:right-10 flex items-center gap-2">
           {/* 导出 */}
@@ -211,7 +215,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
               {exporting ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} strokeWidth={2} />}
             </button>
             {showExportPanel && (
-              <div className="absolute right-0 top-full mt-1 flex flex-col bg-white border border-gray-100 rounded-2xl shadow-lg z-10 w-56 p-3 gap-2">
+              <div className="absolute right-0 top-full mt-1 flex flex-col dk-card bg-white border dk-border border-gray-100 rounded-2xl shadow-lg z-10 w-56 p-3 gap-2">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">日期范围（可选）</p>
                 {/* 快捷选项 */}
                 <div className="flex flex-wrap gap-1">
@@ -222,21 +226,21 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                       className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors
                         ${exportFrom === p.from && exportTo === p.to
                           ? 'bg-[#07c160] text-white border-[#07c160]'
-                          : 'text-gray-500 border-gray-200 hover:border-[#07c160] hover:text-[#07c160]'}`}
+                          : 'text-gray-500 dark:text-gray-400 border-gray-200 dark:border-white/15 hover:border-[#07c160] hover:text-[#07c160]'}`}
                     >{p.label}</button>
                   ))}
                 </div>
                 <input
                   type="date" value={exportFrom} onChange={e => setExportFrom(e.target.value)}
-                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160]"
+                  className="dk-input w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160]"
                 />
                 <input
                   type="date" value={exportTo} onChange={e => setExportTo(e.target.value)}
-                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160]"
+                  className="dk-input w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160]"
                 />
                 <div className="flex gap-1 mt-1">
-                  <button onClick={() => handleExport('csv')} disabled={exporting} className="flex-1 px-2 py-2 text-xs text-center text-gray-700 bg-gray-50 hover:bg-[#f0faf4] hover:text-[#07c160] rounded-xl transition-colors font-medium disabled:opacity-40">CSV</button>
-                  <button onClick={() => handleExport('txt')} disabled={exporting} className="flex-1 px-2 py-2 text-xs text-center text-gray-700 bg-gray-50 hover:bg-[#f0faf4] hover:text-[#07c160] rounded-xl transition-colors font-medium disabled:opacity-40">TXT</button>
+                  <button onClick={() => handleExport('csv')} disabled={exporting} className="flex-1 px-2 py-2 text-xs text-center text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-white/5 hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 hover:text-[#07c160] rounded-xl transition-colors font-medium disabled:opacity-40">CSV</button>
+                  <button onClick={() => handleExport('txt')} disabled={exporting} className="flex-1 px-2 py-2 text-xs text-center text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-white/5 hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 hover:text-[#07c160] rounded-xl transition-colors font-medium disabled:opacity-40">TXT</button>
                 </div>
                 {exportMsg && (
                   <p className={`text-[10px] mt-1.5 leading-tight ${exportMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
@@ -249,7 +253,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
           {onBlock && (
             <button
               onClick={() => { onBlock(contact.username); onClose(); }}
-              className="p-2 rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors duration-200"
+              className="p-2 rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors duration-200"
               title="屏蔽该联系人"
             >
               <EyeOff size={20} strokeWidth={2} />
@@ -257,7 +261,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
           )}
           <button
             onClick={onClose}
-            className="text-gray-300 hover:text-gray-900 transition-colors duration-200"
+            className="text-gray-300 hover:text-gray-900 dark:hover:text-gray-200 transition-colors duration-200"
           >
             <X size={28} strokeWidth={2} />
           </button>
@@ -275,12 +279,18 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         {/* Header */}
         <div className="mb-6 sm:mb-8 pr-10 sm:pr-0 flex items-center gap-4">
           {avatarUrl ? (
-            <img
-              src={avatarUrl}
-              alt={displayName}
-              className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl object-cover flex-shrink-0 shadow-md"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
+            <button
+              onClick={() => setLightbox(true)}
+              className="flex-shrink-0 rounded-2xl overflow-hidden shadow-md hover:opacity-90 hover:scale-105 transition-all duration-150 cursor-zoom-in"
+              title="查看大图"
+            >
+              <img
+                src={avatarSrc(avatarUrl)}
+                alt={displayName}
+                className="w-14 h-14 sm:w-20 sm:h-20 object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            </button>
           ) : (
             <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-2xl sm:text-3xl font-black flex-shrink-0 shadow-md">
               {displayName.charAt(0)}
@@ -342,7 +352,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f0fdf4] border border-[#07c16030] text-[#07c160] text-xs font-semibold hover:bg-[#07c16015] transition-colors"
               >
                 {g.small_head_url ? (
-                  <img src={g.small_head_url} alt="" className="w-4 h-4 rounded-sm object-cover"
+                  <img src={avatarSrc(g.small_head_url)} alt="" className="w-4 h-4 rounded-sm object-cover"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
                   <Users size={11} strokeWidth={2} />
@@ -385,7 +395,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
               className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border transition-all mb-1 ${
                 includeMine
                   ? 'bg-[#07c160] text-white border-[#07c160]'
-                  : 'bg-white text-gray-400 border-gray-200 hover:border-[#07c160] hover:text-[#07c160]'
+                  : 'bg-white dark:bg-white/5 text-gray-400 border-gray-200 dark:border-white/15 hover:border-[#07c160] hover:text-[#07c160]'
               }`}
             >
               <span className={`w-2 h-2 rounded-full ${includeMine ? 'bg-white' : 'bg-gray-300'}`} />
@@ -408,10 +418,10 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
 
             {/* Side Info */}
             <div className="space-y-4 sm:space-y-8">
-              <div className="bg-[#f8f9fb] border border-gray-100 p-5 rounded-[28px] flex flex-col gap-1">
+              <div className="dk-subtle dk-border bg-[#f8f9fb] border border-gray-100 p-5 rounded-[28px] flex flex-col gap-1">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">第一条消息</p>
                 <p className="text-[10px] text-gray-400">{contact.first_message_time}</p>
-                <p className="text-sm italic font-medium text-[#1d1d1f] leading-relaxed mt-1">
+                <p className="dk-text text-sm italic font-medium text-[#1d1d1f] leading-relaxed mt-1">
                   "{contact.first_msg || '穿越时空的信号...'}"
                 </p>
               </div>
@@ -462,6 +472,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
             isGroup={false}
             totalMessages={contact.total_messages}
             avatarUrl={avatarUrl || undefined}
+            onOpenSettings={onOpenSettings}
           />
         )}
 
@@ -480,7 +491,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="搜索聊天内容..."
-                  className="w-full pl-9 pr-4 py-2.5 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-[#07c160] transition-colors bg-gray-50"
+                  className="dk-input w-full pl-9 pr-4 py-2.5 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-[#07c160] transition-colors bg-gray-50"
                 />
               </div>
               <button
@@ -523,7 +534,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                       </div>
                       <div className={`flex flex-col gap-0.5 max-w-[72%] ${msg.is_mine ? 'items-end' : 'items-start'}`}>
                         <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words whitespace-pre-wrap
-                          ${msg.is_mine ? 'bg-[#07c160] text-white rounded-br-sm' : 'bg-[#f0f0f0] text-[#1d1d1f] rounded-bl-sm'}`}>
+                          ${msg.is_mine ? 'bg-[#07c160] text-white rounded-br-sm' : 'bg-[#f0f0f0] dark:bg-white/10 text-[#1d1d1f] dark:text-gray-100 rounded-bl-sm'}`}>
                           {msg.content}
                         </div>
                         <span className="text-[10px] text-gray-300 px-1">{msg.date} {msg.time}</span>
@@ -537,7 +548,8 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         )}
           </div>
         )}
-      </div>
+      </div>{/* end inner scroll div */}
+      </div>{/* end outer rounded clip div */}
     </div>
 
     {contextTarget && (
@@ -545,6 +557,31 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         {...contextTarget}
         onClose={() => setContextTarget(null)}
       />
+    )}
+
+    {/* 头像大图 Lightbox */}
+    {lightbox && avatarUrl && (
+      <div
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center animate-in fade-in duration-150"
+        onClick={() => setLightbox(false)}
+        onKeyDown={(e) => e.key === 'Escape' && setLightbox(false)}
+        role="dialog"
+        tabIndex={-1}
+      >
+        <img
+          src={avatarSrc(avatarUrl)}
+          alt={displayName}
+          className="max-w-[80vw] max-h-[80vh] rounded-2xl shadow-2xl object-contain"
+          onClick={(e) => e.stopPropagation()}
+        />
+        <button
+          onClick={() => setLightbox(false)}
+          className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+          title="关闭"
+        >
+          ✕
+        </button>
+      </div>
     )}
   </>
   );

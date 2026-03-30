@@ -8,9 +8,16 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"welink/backend/service"
+)
+
+// ftsJobs 记录正在构建中的 FTS 索引 key，防止并发重复构建。
+var (
+	ftsJobs   = make(map[string]bool)
+	ftsJobsMu sync.Mutex
 )
 
 // ─── 表初始化 ──────────────────────────────────────────────────────────────────
@@ -97,6 +104,21 @@ func BuildFTSIndex(w http.ResponseWriter, key, username string, isGroup bool, sv
 		fmt.Fprintf(w, "data: %s\n\n", b)
 		flusher.Flush()
 	}
+
+	// 防止同一 key 并发重复构建
+	ftsJobsMu.Lock()
+	if ftsJobs[key] {
+		ftsJobsMu.Unlock()
+		sendP(ragIndexProgress{Step: "error", Error: "索引正在构建中，请稍后再试"})
+		return
+	}
+	ftsJobs[key] = true
+	ftsJobsMu.Unlock()
+	defer func() {
+		ftsJobsMu.Lock()
+		delete(ftsJobs, key)
+		ftsJobsMu.Unlock()
+	}()
 
 	if svc == nil {
 		sendP(ragIndexProgress{Step: "error", Error: "服务不可用，请先配置数据目录"})

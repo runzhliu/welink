@@ -95,6 +95,7 @@ type vecIndexProgress struct {
 	Current   int    `json:"current,omitempty"`
 	Total     int    `json:"total,omitempty"`
 	Done      bool   `json:"done,omitempty"`
+	Paused    bool   `json:"paused,omitempty"`
 	Error     string `json:"error,omitempty"`
 	FactCount int    `json:"fact_count,omitempty"`
 }
@@ -106,8 +107,10 @@ type vecBuildJob struct {
 	Current   int    `json:"current"`
 	Total     int    `json:"total"`
 	Done      bool   `json:"done"`
+	Paused    bool   `json:"paused"`
 	Error     string `json:"error,omitempty"`
 	FactCount int    `json:"fact_count"`
+	abort     chan struct{} // 关闭此 channel 可中止正在运行的提炼
 }
 
 var (
@@ -142,6 +145,7 @@ func GetVecBuildProgress(key string) *vecIndexProgress {
 		Current:   j.Current,
 		Total:     j.Total,
 		Done:      j.Done,
+		Paused:    j.Paused,
 		Error:     j.Error,
 		FactCount: j.FactCount,
 	}
@@ -156,7 +160,7 @@ func StartVecIndexBackground(key, username string, isGroup bool, svc *service.Co
 	job := getOrCreateJob(key)
 	job.mu.Lock()
 	// 如果已在构建中，忽略重复请求
-	if job.Step != "" && !job.Done && job.Error == "" {
+	if job.Step != "" && !job.Done && job.Error == "" && !job.Paused {
 		job.mu.Unlock()
 		return
 	}
@@ -309,6 +313,7 @@ func buildVecIndexCore(key, username string, isGroup bool, svc *service.ContactS
 		return
 	}
 
+	invalidateVecCache(key) // 重建完成，清除旧缓存
 	sendP(vecIndexProgress{Step: "done", Done: true, Total: total})
 }
 
@@ -321,7 +326,84 @@ const (
 	vecChunkRows = 5000
 	// vecWindowSize：命中条目前后各扩展的消息数（比 FTS 小，因为语义命中更精准）
 	vecWindowSize = 3
+	// vecCacheMaxKeys：最多缓存多少个 key 的 embedding（超出时淘汰最久未用的）
+	vecCacheMaxKeys = 3
 )
+
+// vecEmbEntry 是单个 key 的 embedding 内存缓存条目。
+type vecEmbEntry struct {
+	seqs     []int
+	vecs     [][]float32
+	usedAt   time.Time
+}
+
+var (
+	vecEmbCache   = make(map[string]*vecEmbEntry)
+	vecEmbCacheMu sync.Mutex
+)
+
+// invalidateVecCache 在索引重建完成后清除指定 key 的缓存。
+func invalidateVecCache(key string) {
+	vecEmbCacheMu.Lock()
+	delete(vecEmbCache, key)
+	vecEmbCacheMu.Unlock()
+}
+
+// loadVecCache 从数据库加载指定 key 的全量 embedding 到内存缓存。
+// 若缓存已存在则直接返回（hit）；否则从 DB 加载（miss）。
+func loadVecCache(key string, db *sql.DB, maxKeys int) (*vecEmbEntry, error) {
+	if maxKeys <= 0 {
+		maxKeys = vecCacheMaxKeys
+	}
+	vecEmbCacheMu.Lock()
+	if e, ok := vecEmbCache[key]; ok {
+		e.usedAt = time.Now()
+		vecEmbCacheMu.Unlock()
+		return e, nil
+	}
+	vecEmbCacheMu.Unlock()
+
+	// Cache miss：从 DB 全量加载
+	rows, err := db.Query(
+		`SELECT seq, embedding FROM vec_messages WHERE contact_key = ? ORDER BY seq`, key)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var seqs []int
+	var vecs [][]float32
+	for rows.Next() {
+		var seq int
+		var blob []byte
+		rows.Scan(&seq, &blob)
+		v := decodeVec(blob)
+		if v != nil {
+			seqs = append(seqs, seq)
+			vecs = append(vecs, v)
+		}
+	}
+
+	entry := &vecEmbEntry{seqs: seqs, vecs: vecs, usedAt: time.Now()}
+
+	vecEmbCacheMu.Lock()
+	// 超出上限：淘汰最久未用的 key
+	if len(vecEmbCache) >= maxKeys {
+		var oldest string
+		var oldestTime time.Time
+		for k, e := range vecEmbCache {
+			if oldest == "" || e.usedAt.Before(oldestTime) {
+				oldest = k
+				oldestTime = e.usedAt
+			}
+		}
+		delete(vecEmbCache, oldest)
+	}
+	vecEmbCache[key] = entry
+	vecEmbCacheMu.Unlock()
+
+	return entry, nil
+}
 
 type vecCandidate struct {
 	seq        int
@@ -350,35 +432,19 @@ func SearchVec(key, query string, topK int, prefs Preferences) ([]RAGResult, map
 	}
 	queryVec := queryEmbs[0]
 
-	// 分块扫描：逐块加载 embedding，计算相似度，只保留 (seq, similarity)
+	// 从内存缓存加载 embedding（首次加载后后续查询直接走内存）
+	cache, err := loadVecCache(key, db, prefs.VecCacheMaxKeys)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	var candidates []vecCandidate
-	offset := 0
-	for {
-		rows, err := db.Query(
-			`SELECT seq, embedding FROM vec_messages WHERE contact_key = ? ORDER BY seq LIMIT ? OFFSET ?`,
-			key, vecChunkRows, offset,
-		)
-		if err != nil {
-			return nil, nil, err
+	for i, vec := range cache.vecs {
+		if len(vec) != len(queryVec) {
+			continue // 维度不匹配（索引用了不同模型），跳过
 		}
-		count := 0
-		for rows.Next() {
-			var seq int
-			var blob []byte
-			rows.Scan(&seq, &blob)
-			vec := decodeVec(blob)
-			if len(vec) != len(queryVec) {
-				continue // 维度不匹配（索引用了不同模型），跳过
-			}
-			sim := cosineSimilarity(queryVec, vec)
-			candidates = append(candidates, vecCandidate{seq, sim})
-			count++
-		}
-		rows.Close()
-		if count < vecChunkRows {
-			break
-		}
-		offset += vecChunkRows
+		sim := cosineSimilarity(queryVec, vec)
+		candidates = append(candidates, vecCandidate{cache.seqs[i], sim})
 	}
 
 	if len(candidates) == 0 {
