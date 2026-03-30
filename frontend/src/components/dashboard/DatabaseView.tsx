@@ -567,6 +567,7 @@ export const DatabaseView: React.FC = () => {
   const getTotalSize = () => databases.reduce((sum, db) => sum + db.size, 0);
   const contactDbs = databases.filter((db) => db.type === 'contact');
   const messageDbs = databases.filter((db) => db.type === 'message');
+  const aiDbs = databases.filter((db) => db.type === 'ai');
 
   if (loading) {
     return (
@@ -664,6 +665,13 @@ export const DatabaseView: React.FC = () => {
         '消息数据库',
         <Database size={20} className="text-white" strokeWidth={2.5} />,
         'bg-[#10aeff]'
+      )}
+
+      {renderDBSection(
+        aiDbs,
+        'AI 分析数据库',
+        <FileText size={20} className="text-white" strokeWidth={2.5} />,
+        'bg-[#576b95]'
       )}
 
       {databases.length === 0 && (

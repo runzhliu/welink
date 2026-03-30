@@ -48,3 +48,16 @@ SELECT rowid FROM Name2Id WHERE user_name = '<username>'
 -- real_sender_id == 上述 rowid → 对方发的
 -- real_sender_id != 上述 rowid → 我发的
 ```
+
+## 技术栈
+
+| 层次 | 技术 |
+|------|------|
+| 后端 | Go + Gin |
+| 前端 | React 18 + TypeScript + Tailwind CSS |
+| 数据库 | SQLite（modernc，纯 Go，无 CGO） |
+| 全文检索 | SQLite FTS5 |
+| 向量检索 | 余弦相似度（纯 Go，无外部依赖） |
+| AI / LLM | OpenAI / Ollama / Gemini / 自定义（兼容 OpenAI 接口） |
+| 中文分词 | go-ego/gse |
+| 部署 | Docker Compose |

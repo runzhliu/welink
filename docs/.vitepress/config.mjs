@@ -21,7 +21,6 @@ export default defineConfig({
 
     nav: [
       { text: '首页', link: '/' },
-      { text: 'AI 分析', link: '/ai-analysis' },
       { text: '下载安装', link: '/install' },
       { text: 'MCP Server', link: '/mcp-server' },
       { text: 'API 接口', link: '/api' },

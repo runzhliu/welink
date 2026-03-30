@@ -30,7 +30,7 @@
   <a href="https://demo.welink.click"><strong>在线 Demo</strong></a>
 </p>
 
-<https://github.com/user-attachments/assets/6964e121-c2a0-4595-8cb5-2f65dfa49420>
+[![产品演示视频](https://i0.hdslb.com/bfs/archive/259575508ba3554df77a49136e8ade74948dbdb1.jpg)](https://www.bilibili.com/video/BV1zCXDB6EiN/)
 
 你的微信聊天记录里，藏着你和每个人关系最真实的样子。WeLink 把这些数据交给 AI 来读——不只是统计图表，而是能让你直接提问、得到洞察：
 

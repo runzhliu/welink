@@ -5,7 +5,7 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-FROM --platform=linux/amd64 nginx:alpine
+FROM nginx:alpine
 COPY --from=builder /app/.vitepress/dist /usr/share/nginx/html
 COPY nginx/default.conf                  /etc/nginx/templates/default.conf
 COPY nginx/http-only.conf                /etc/nginx/templates/http-only.conf

@@ -102,3 +102,17 @@ html.dark .dk-thead {
 html.dark .dk-divide > * + * {
   border-color: var(--border) !important;
 }
+
+/* AI 回答 prose 暗黑模式：确保所有 markdown 元素文字可读 */
+html.dark .prose p,
+html.dark .prose h1,
+html.dark .prose h2,
+html.dark .prose h3,
+html.dark .prose h4,
+html.dark .prose li,
+html.dark .prose strong,
+html.dark .prose em,
+html.dark .prose blockquote,
+html.dark .prose code {
+  color: #f0f0f0 !important;
+}

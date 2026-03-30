@@ -4,14 +4,11 @@ layout: home
 hero:
   name: WeLink
   text: AI 驱动的微信聊天数据分析平台
-  tagline: 对你的聊天记录直接提问，让 AI 读懂每一段关系
+  tagline: 选择聊天记录直接提问，让 AI 读懂每一段关系
   image:
     src: /logo.svg
     alt: WeLink
   actions:
-    - theme: brand
-      text: AI 分析功能
-      link: /ai-analysis
     - theme: brand
       text: 在线 Demo
       link: https://demo.welink.click
@@ -52,7 +49,7 @@ features:
 
 <div style="position:relative;width:100%;padding-top:56.25%;margin:16px 0;">
   <iframe
-    src="//player.bilibili.com/player.html?isOutside=true&aid=116276223548755&bvid=BV1dmQ9B6ELE&cid=36902799165&p=1"
+    src="//player.bilibili.com/player.html?isOutside=true&bvid=BV1zCXDB6EiN&p=1"
     scrolling="no"
     frameborder="0"
     allowfullscreen="true"
@@ -151,31 +148,5 @@ docker compose up
 
 访问 [localhost:3000](http://localhost:3000) 开始分析。
 
-## 系统要求
-
-| 平台 | 要求 |
-|------|------|
-| macOS App | macOS 12（Monterey）及以上 |
-| Windows App | Windows 10 1903 及以上 |
-| Docker | 任意支持 Docker 的系统 |
-
-| 数据规模 | 消息量 | 推荐内存 |
-|----------|--------|----------|
-| 轻量 | 50 万条以下 | 2 GB |
-| 中等 | 50–200 万条 | 4 GB |
-| 重度 | 200 万条以上 | 8 GB+ |
-
-## 技术栈
-
-| 层次 | 技术 |
-|------|------|
-| 后端 | Go + Gin |
-| 前端 | React 18 + TypeScript + Tailwind CSS |
-| 数据库 | SQLite（modernc，纯 Go，无 CGO） |
-| 全文检索 | SQLite FTS5 |
-| 向量检索 | 余弦相似度（纯 Go，无外部依赖） |
-| AI / LLM | OpenAI / Ollama / Gemini / 自定义（兼容 OpenAI 接口） |
-| 中文分词 | go-ego/gse |
-| 部署 | Docker Compose |
 
 </div>

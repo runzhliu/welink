@@ -73,7 +73,7 @@ export interface DBInfo {
   name: string;
   path: string;
   size: number;
-  type: 'contact' | 'message';
+  type: 'contact' | 'message' | 'ai';
 }
 
 export interface TableInfo {

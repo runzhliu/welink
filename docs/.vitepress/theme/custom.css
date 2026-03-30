@@ -53,6 +53,20 @@ a.btn-download:hover {
   background-color: var(--vp-c-brand-2);
 }
 
+/* Hero text：缩小字号，防止换行 */
+.VPHero .text {
+  font-size: 36px !important;
+  line-height: 1.2 !important;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .VPHero .text {
+    font-size: 24px !important;
+    white-space: normal;
+  }
+}
+
 /* Hero 按钮 */
 .VPButton.brand {
   background-color: var(--vp-c-brand-1);
