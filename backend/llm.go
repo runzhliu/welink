@@ -20,6 +20,7 @@ type LLMMessage struct {
 // StreamChunk 是 SSE 推给前端的单次增量
 type StreamChunk struct {
 	Delta   string   `json:"delta,omitempty"`
+	Thinking string  `json:"thinking,omitempty"` // 思考型模型的推理过程增量（Ollama reasoning 字段）
 	Done    bool     `json:"done,omitempty"`
 	Error   string   `json:"error,omitempty"`
 	RagMeta *RagMeta `json:"rag_meta,omitempty"`
@@ -53,6 +54,7 @@ type llmConfig struct {
 	apiKey   string
 	baseURL  string
 	model    string
+	noThink  bool // Ollama 思考型模型专用，开启后请求前加 /no_think 前缀
 }
 
 // defaultsFor 为已知 provider 填充默认 baseURL 和 model（若用户未配置）
@@ -93,6 +95,13 @@ func defaultsFor(p *llmConfig) {
 		if p.model == "" {
 			p.model = "grok-3-mini"
 		}
+	case "minimax":
+		if p.baseURL == "" {
+			p.baseURL = "https://api.minimax.io/v1"
+		}
+		if p.model == "" {
+			p.model = "MiniMax-Text-01"
+		}
 	case "openai":
 		if p.baseURL == "" {
 			p.baseURL = "https://api.openai.com/v1"
@@ -113,6 +122,31 @@ func defaultsFor(p *llmConfig) {
 			p.model = "claude-haiku-4-5-20251001"
 		}
 	}
+}
+
+// ─── Profile 辅助 ──────────────────────────────────────────────────────────────
+
+// llmConfigForProfile 根据 profile_id 从 LLMProfiles 中查找配置；
+// 找不到或 profileID 为空时回退到单配置字段（向后兼容）。
+func llmConfigForProfile(profileID string, prefs Preferences) llmConfig {
+	var cfg llmConfig
+	if profileID != "" {
+		for _, p := range prefs.LLMProfiles {
+			if p.ID == profileID {
+				cfg = llmConfig{provider: p.Provider, apiKey: p.APIKey, baseURL: p.BaseURL, model: p.Model, noThink: p.NoThink}
+				goto applyGemini
+			}
+		}
+	}
+	cfg = llmConfig{provider: prefs.LLMProvider, apiKey: prefs.LLMAPIKey, baseURL: prefs.LLMBaseURL, model: prefs.LLMModel}
+applyGemini:
+	if cfg.provider == "gemini" && cfg.apiKey == "" && prefs.GeminiAccessToken != "" {
+		if token, err := geminiValidToken(&prefs); err == nil {
+			cfg.apiKey = token
+		}
+	}
+	defaultsFor(&cfg)
+	return cfg
 }
 
 // ─── 流式调用入口 ──────────────────────────────────────────────────────────────
@@ -167,12 +201,45 @@ func streamLLMCore(sendChunk func(StreamChunk), msgs []LLMMessage, prefs Prefere
 	sendChunk(StreamChunk{Done: true})
 }
 
+// streamLLMCoreWithProfile 与 streamLLMCore 相同，但通过 profileID 解析配置。
+func streamLLMCoreWithProfile(sendChunk func(StreamChunk), msgs []LLMMessage, prefs Preferences, profileID string) {
+	cfg := llmConfigForProfile(profileID, prefs)
+	var err error
+	if cfg.provider == "claude" {
+		err = streamClaude(sendChunk, msgs, cfg)
+	} else {
+		err = streamOpenAICompat(sendChunk, msgs, cfg)
+	}
+	if err != nil {
+		sendChunk(StreamChunk{Error: err.Error()})
+	}
+	sendChunk(StreamChunk{Done: true})
+}
+
+// testLLMConnProfile 测试指定 profile 的连接可用性，返回实际使用的模型名。
+func testLLMConnProfile(profileID string, prefs Preferences) (string, error) {
+	cfg := llmConfigForProfile(profileID, prefs)
+	if cfg.baseURL == "" || cfg.model == "" {
+		return "", fmt.Errorf("未配置 Base URL 或模型")
+	}
+	// 复用 testLLMConn 逻辑：构造临时 Preferences 只填 LLM 字段
+	tmp := Preferences{
+		LLMProvider: cfg.provider,
+		LLMAPIKey:   cfg.apiKey,
+		LLMBaseURL:  cfg.baseURL,
+		LLMModel:    cfg.model,
+	}
+	return testLLMConn(tmp)
+}
+
 // ─── OpenAI 兼容流式实现 ───────────────────────────────────────────────────────
 
 type openAIRequest struct {
 	Model    string       `json:"model"`
 	Messages []LLMMessage `json:"messages"`
 	Stream   bool         `json:"stream"`
+	Think    *bool        `json:"think,omitempty"`    // Ollama 专用：false = 禁用思考模式
+	Stop     []string     `json:"stop,omitempty"`     // 停止词，防止模型输出特殊 token
 }
 
 func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) error {
@@ -186,11 +253,15 @@ func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig
 		return fmt.Errorf("未配置模型")
 	}
 
-	body, _ := json.Marshal(openAIRequest{
-		Model:    cfg.model,
-		Messages: msgs,
-		Stream:   true,
-	})
+	reqBody := openAIRequest{Model: cfg.model, Messages: msgs, Stream: true}
+	if cfg.noThink {
+		f := false
+		reqBody.Think = &f
+	}
+	if cfg.provider == "ollama" {
+		reqBody.Stop = []string{"<|endoftext|>", "<|im_end|>", "<|im_start|>"}
+	}
+	body, _ := json.Marshal(reqBody)
 
 	req, err := http.NewRequest("POST", cfg.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
@@ -223,15 +294,22 @@ func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig
 		var chunk struct {
 			Choices []struct {
 				Delta struct {
-					Content string `json:"content"`
+					Content   string `json:"content"`
+					Reasoning string `json:"reasoning"` // Ollama 思考型模型的推理增量
 				} `json:"delta"`
 			} `json:"choices"`
 		}
 		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
 			continue
 		}
-		if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
-			send(StreamChunk{Delta: chunk.Choices[0].Delta.Content})
+		if len(chunk.Choices) > 0 {
+			d := chunk.Choices[0].Delta
+			if d.Reasoning != "" {
+				send(StreamChunk{Thinking: d.Reasoning})
+			}
+			if d.Content != "" {
+				send(StreamChunk{Delta: d.Content})
+			}
 		}
 	}
 	return scanner.Err()
@@ -355,21 +433,15 @@ func completeOpenAICompatSync(msgs []LLMMessage, cfg llmConfig) (string, error) 
 		return "", fmt.Errorf("未配置模型")
 	}
 
-	// Ollama 的 Qwen3+ 系列为思考型模型，非流式调用会等待完整推理链（可能数百 token）。
-	// 在第一条 user 消息前加 /no_think 可跳过推理阶段；非思考型模型忽略此前缀。
-	if cfg.provider == "ollama" {
-		patched := make([]LLMMessage, len(msgs))
-		copy(patched, msgs)
-		for i, m := range patched {
-			if m.Role == "user" {
-				patched[i].Content = "/no_think " + m.Content
-				break
-			}
-		}
-		msgs = patched
+	reqBody := openAIRequest{Model: cfg.model, Messages: msgs, Stream: false}
+	if cfg.noThink {
+		f := false
+		reqBody.Think = &f
 	}
-
-	body, _ := json.Marshal(openAIRequest{Model: cfg.model, Messages: msgs, Stream: false})
+	if cfg.provider == "ollama" {
+		reqBody.Stop = []string{"<|endoftext|>", "<|im_end|>", "<|im_start|>"}
+	}
+	body, _ := json.Marshal(reqBody)
 	req, err := http.NewRequest("POST", cfg.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", err

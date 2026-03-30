@@ -14,8 +14,13 @@ import (
 
 // AIMessage 与前端 AnalysisMessage 结构对应
 type AIMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role         string  `json:"role"`
+	Content      string  `json:"content"`
+	Provider     string  `json:"provider,omitempty"`
+	Model        string  `json:"model,omitempty"`
+	ElapsedSecs  float64 `json:"elapsedSecs,omitempty"`
+	TokensPerSec int     `json:"tokensPerSec,omitempty"`
+	CharCount    int     `json:"charCount,omitempty"`
 }
 
 var (
@@ -49,10 +54,14 @@ func InitAIDB() error {
 		return fmt.Errorf("ai_store: mkdir %s: %w", filepath.Dir(path), err)
 	}
 
-	db, err := sql.Open("sqlite", path)
+	// _busy_timeout 和 _journal_mode 写在 DSN 里，确保连接池中每条连接都继承该设置。
+	dsn := path + "?_journal_mode=WAL&_busy_timeout=10000"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return fmt.Errorf("ai_store: open %s: %w", path, err)
 	}
+	// 限制为单连接，避免 WAL 下多写连接争锁（读可并发）。
+	db.SetMaxOpenConns(1)
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS ai_conversations (
 		key        TEXT NOT NULL PRIMARY KEY,
 		messages   TEXT NOT NULL DEFAULT '[]',

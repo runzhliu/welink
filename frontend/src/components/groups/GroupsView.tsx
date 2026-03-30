@@ -19,6 +19,7 @@ import {
 } from '../common/SettingsPage';
 import { LLMAnalysisTab } from '../contact/LLMAnalysisTab';
 import { AIAnalysisBadge } from '../dashboard/ContactTable';
+import { avatarSrc } from '../../utils/avatar';
 
 // ─── 群详情弹窗 ───────────────────────────────────────────────────────────────
 
@@ -44,9 +45,10 @@ interface GroupDetailModalProps {
   allContacts: ContactStats[];
   onContactClick: (c: ContactStats) => void;
   onBlock?: (username: string) => void;
+  onOpenSettings?: () => void;
 }
 
-export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClose, allContacts, onContactClick, onBlock }) => {
+export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClose, allContacts, onContactClick, onBlock, onOpenSettings }) => {
   const { privacyMode } = usePrivacyMode();
 
   // 根据显示名（remark/nickname）查找联系人
@@ -212,22 +214,23 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
       onClick={onClose}
     >
       <div
-        className="dk-card bg-white rounded-t-[32px] sm:rounded-[48px] w-full sm:max-w-4xl overflow-y-auto max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] shadow-2xl relative p-4 sm:p-8 lg:p-12"
+        className="dk-card bg-white rounded-t-[32px] sm:rounded-[48px] w-full sm:max-w-4xl overflow-hidden max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
       >
+      <div className="overflow-y-auto max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] p-4 sm:p-8 lg:p-12">
         <div className="absolute top-5 right-5 flex items-center gap-2">
           {/* 导出 */}
           <div className="relative" ref={exportPanelRef}>
             <button
               disabled={exporting}
               onClick={() => setShowExportPanel(v => !v)}
-              className={`p-2 rounded-xl transition-colors duration-200 disabled:opacity-40 ${showExportPanel ? 'text-[#07c160] bg-[#e7f8f0]' : 'text-gray-300 hover:text-[#07c160] hover:bg-[#e7f8f0]'}`}
+              className={`p-2 rounded-xl transition-colors duration-200 disabled:opacity-40 ${showExportPanel ? 'text-[#07c160] bg-[#e7f8f0] dark:bg-[#07c160]/15' : 'text-gray-300 hover:text-[#07c160] hover:bg-[#e7f8f0] dark:hover:bg-[#07c160]/15'}`}
               title="导出聊天记录"
             >
               {exporting ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} strokeWidth={2} />}
             </button>
             {showExportPanel && (
-              <div className="absolute right-0 top-full mt-1 flex flex-col bg-white border border-gray-100 rounded-2xl shadow-lg z-10 w-56 p-3 gap-2">
+              <div className="absolute right-0 top-full mt-1 flex flex-col dk-card bg-white dk-border border border-gray-100 rounded-2xl shadow-lg z-10 w-56 p-3 gap-2">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">日期范围（可选）</p>
                 <div className="flex flex-wrap gap-1">
                   {exportPresets.map(p => (
@@ -237,21 +240,21 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                       className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors
                         ${exportFrom === p.from && exportTo === p.to
                           ? 'bg-[#07c160] text-white border-[#07c160]'
-                          : 'text-gray-500 border-gray-200 hover:border-[#07c160] hover:text-[#07c160]'}`}
+                          : 'text-gray-500 dark:text-gray-400 border-gray-200 hover:border-[#07c160] hover:text-[#07c160]'}`}
                     >{p.label}</button>
                   ))}
                 </div>
                 <input
                   type="date" value={exportFrom} onChange={e => setExportFrom(e.target.value)}
-                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160]"
+                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160] dk-input dk-border"
                 />
                 <input
                   type="date" value={exportTo} onChange={e => setExportTo(e.target.value)}
-                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160]"
+                  className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160] dk-input dk-border"
                 />
                 <div className="flex gap-1 mt-1">
-                  <button onClick={() => handleExport('csv')} disabled={exporting} className="flex-1 px-2 py-2 text-xs text-center text-gray-700 bg-gray-50 hover:bg-[#f0faf4] hover:text-[#07c160] rounded-xl transition-colors font-medium disabled:opacity-40">CSV</button>
-                  <button onClick={() => handleExport('txt')} disabled={exporting} className="flex-1 px-2 py-2 text-xs text-center text-gray-700 bg-gray-50 hover:bg-[#f0faf4] hover:text-[#07c160] rounded-xl transition-colors font-medium disabled:opacity-40">TXT</button>
+                  <button onClick={() => handleExport('csv')} disabled={exporting} className="flex-1 px-2 py-2 text-xs text-center text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-white/5 hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 hover:text-[#07c160] rounded-xl transition-colors font-medium disabled:opacity-40">CSV</button>
+                  <button onClick={() => handleExport('txt')} disabled={exporting} className="flex-1 px-2 py-2 text-xs text-center text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-white/5 hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 hover:text-[#07c160] rounded-xl transition-colors font-medium disabled:opacity-40">TXT</button>
                 </div>
                 {exportMsg && (
                   <p className={`text-[10px] mt-1.5 leading-tight ${exportMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
@@ -264,7 +267,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
           {onBlock && (
             <button
               onClick={() => { onBlock(group.username); onClose(); }}
-              className="p-2 rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors duration-200"
+              className="p-2 rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors duration-200"
               title="屏蔽该群聊"
             >
               <EyeOff size={20} strokeWidth={2} />
@@ -278,7 +281,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         {/* Header */}
         <div className="flex items-center gap-4 mb-6 pr-10">
           {group.small_head_url ? (
-            <img src={group.small_head_url} alt="" className="w-14 h-14 rounded-2xl object-cover flex-shrink-0"
+            <img src={avatarSrc(group.small_head_url)} alt="" className="w-14 h-14 rounded-2xl object-cover flex-shrink-0"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           ) : (
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#10aeff] to-[#0e8dd6] flex items-center justify-center text-white flex-shrink-0">
@@ -302,7 +305,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         </div>
 
         {/* Tab bar */}
-        <div className="flex gap-2 mb-6 border-b border-gray-100">
+        <div className="flex gap-2 mb-6 border-b border-gray-100 dk-border">
           {(['portrait', 'search', 'ai'] as const).map((t) => (
             <button
               key={t}
@@ -311,7 +314,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                 if (t === 'search') setTimeout(() => searchInputRef.current?.focus(), 50);
               }}
               className={`flex items-center gap-1 px-5 py-2 rounded-t-xl text-sm font-bold transition border-b-2 -mb-px ${
-                tab === t ? 'text-[#07c160] border-[#07c160]' : 'text-gray-400 border-transparent hover:text-gray-600'
+                tab === t ? 'text-[#07c160] border-[#07c160]' : 'text-gray-400 border-transparent hover:text-gray-600 dark:hover:text-gray-200'
               }`}
             >
               {t === 'ai' && <Bot size={13} className="flex-shrink-0" />}
@@ -327,6 +330,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             displayName={group.name}
             isGroup={true}
             totalMessages={group.total_messages}
+            onOpenSettings={onOpenSettings}
           />
         )}
 
@@ -341,7 +345,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="搜索群聊内容..."
-                  className="w-full pl-9 pr-4 py-2.5 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-[#07c160] transition-colors bg-gray-50"
+                  className="w-full pl-9 pr-4 py-2.5 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-[#07c160] transition-colors bg-gray-50 dk-subtle dk-border"
                 />
               </div>
               <button
@@ -366,7 +370,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                   {searchResults.map((msg, i) => (
                     <div
                       key={i}
-                      className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0 cursor-pointer hover:bg-[#f8f9fb] rounded-xl px-2 transition-colors"
+                      className="flex items-start gap-3 py-2 border-b border-gray-50 dark:border-white/5 last:border-0 cursor-pointer hover:bg-[#f8f9fb] dark:hover:bg-white/5 rounded-xl px-2 transition-colors"
                       onClick={() => msg.date && setContextTarget({
                         username: group.username,
                         displayName: group.name,
@@ -382,10 +386,10 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-2 mb-0.5">
-                          <span className="text-xs font-bold text-gray-600">{msg.speaker}</span>
+                          <span className="text-xs font-bold text-gray-600 dark:text-gray-300">{msg.speaker}</span>
                           <span className="text-[10px] text-gray-300">{msg.date} {msg.time}</span>
                         </div>
-                        <div className="text-sm text-[#1d1d1f] leading-relaxed break-words whitespace-pre-wrap bg-[#f0f0f0] rounded-2xl rounded-tl-sm px-3 py-2">
+                        <div className="text-sm text-[#1d1d1f] dark:text-gray-100 leading-relaxed break-words whitespace-pre-wrap bg-[#f0f0f0] dark:bg-white/10 rounded-2xl rounded-tl-sm px-3 py-2">
                           {msg.content}
                         </div>
                       </div>
@@ -407,7 +411,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             {(detail.member_rank?.length ?? 0) > 0 && (
               <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-black text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
                     <BarChart2 size={14} /> 成员发言排行 Top {Math.min(detail.member_rank.length, rankLimit)}
                   </h4>
                   <div className="flex items-center gap-1">
@@ -422,7 +426,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                         setRankLimit(v);
                         localStorage.setItem(MEMBER_RANK_LIMIT_KEY, String(v));
                       }}
-                      className="w-14 text-xs border border-gray-200 rounded-lg px-2 py-0.5 text-center focus:outline-none focus:border-[#07c160] bg-white"
+                      className="w-14 text-xs border border-gray-200 rounded-lg px-2 py-0.5 text-center focus:outline-none focus:border-[#07c160] bg-white dk-input dk-border"
                       title="修改显示人数（最多 500）"
                     />
                     <span className="text-[10px] text-gray-400">/ {detail.member_rank.length} 人</span>
@@ -479,7 +483,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             {/* 高频词 */}
             {(detail.top_words?.length ?? 0) > 0 && (
               <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
-                <h4 className="text-sm font-black text-gray-500 uppercase mb-1 tracking-wider">高频词汇</h4>
+                <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase mb-1 tracking-wider">高频词汇</h4>
                 <p className="text-xs text-gray-400 mb-3">全部文本消息分词统计，已过滤停用词与表情符号</p>
                 <div className="flex flex-wrap gap-2">
                   {detail.top_words.map((w, i) => {
@@ -511,7 +515,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
 
             {/* 24h 分布 */}
             <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
-              <h4 className="text-sm font-black text-gray-500 uppercase mb-1 tracking-wider">24 小时活跃分布</h4>
+              <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase mb-1 tracking-wider">24 小时活跃分布</h4>
               <p className="text-xs text-gray-400 mb-3">按消息发送时间（北京时间）统计各小时消息量，深色为深夜 0–5 点</p>
               <ResponsiveContainer width="100%" height={90}>
                 <BarChart data={hourlyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
@@ -529,7 +533,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
 
             {/* 周分布 */}
             <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
-              <h4 className="text-sm font-black text-gray-500 uppercase mb-1 tracking-wider">每周活跃分布</h4>
+              <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase mb-1 tracking-wider">每周活跃分布</h4>
               <p className="text-xs text-gray-400 mb-3">统计该群在一周各天的消息总量分布</p>
               <ResponsiveContainer width="100%" height={80}>
                 <BarChart data={weeklyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
@@ -545,7 +549,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             {Object.keys(detail.daily_heatmap).length > 0 && (
               <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-black text-gray-500 uppercase tracking-wider">聊天日历</h4>
+                  <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">聊天日历</h4>
                   {peakDay && (
                     <button
                       onClick={() => setDayPanel({ date: peakDay[0], count: peakDay[1] })}
@@ -575,7 +579,8 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         ) : tab === 'portrait' ? (
           <div className="text-center text-gray-300 py-12">暂无数据</div>
         ) : null}
-      </div>
+      </div>{/* end inner scroll div */}
+      </div>{/* end outer rounded clip div */}
 
       {dayPanel && (
         <GroupDayChatPanel
@@ -604,9 +609,10 @@ interface GroupsViewProps {
   onContactClick: (c: ContactStats) => void;
   blockedGroups?: string[];
   onBlockGroup?: (username: string) => void;
+  onOpenSettings?: () => void;
 }
 
-export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactClick, blockedGroups = [], onBlockGroup }) => {
+export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactClick, blockedGroups = [], onBlockGroup, onOpenSettings }) => {
   const { privacyMode } = usePrivacyMode();
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -671,7 +677,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
 
       {/* 群列表 */}
       <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="dk-thead bg-[#f8f9fb] dk-border border-b border-gray-100 px-5 py-3 hidden sm:grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 text-xs font-black text-gray-500 uppercase">
+        <div className="dk-thead bg-[#f8f9fb] dk-border border-b border-gray-100 px-5 py-3 hidden sm:grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 text-xs font-black text-gray-500 dark:text-gray-400 uppercase">
           <div />
           <div>群名</div>
           <div className="text-right w-24">消息数</div>
@@ -687,7 +693,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
               className="dk-row-hover flex items-center gap-4 px-5 py-4 hover:bg-[#f8f9fb] cursor-pointer transition-colors"
             >
               {group.small_head_url ? (
-                <img src={group.small_head_url} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0"
+                <img src={avatarSrc(group.small_head_url)} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               ) : (
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#10aeff] to-[#0e8dd6] flex items-center justify-center text-white flex-shrink-0">
@@ -721,6 +727,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
           allContacts={allContacts}
           onContactClick={(c) => { setSelected(null); onContactClick(c); }}
           onBlock={onBlockGroup ? (u) => { onBlockGroup(u); setSelected(null); } : undefined}
+          onOpenSettings={onOpenSettings ? () => { setSelected(null); onOpenSettings(); } : undefined}
         />
       )}
     </div>

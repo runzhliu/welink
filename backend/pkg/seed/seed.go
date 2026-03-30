@@ -6,16 +6,79 @@ package seed
 import (
 	"crypto/md5"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
+
+// demoAvatarDataURI generates a small SVG data URI with colored background + initials.
+// Colors cycle through a palette derived from the contact name so they're stable.
+func demoAvatarDataURI(displayName string, isGroup bool) string {
+	palette := []string{
+		"#EF0107", // Arsenal red
+		"#DB0007",
+		"#C0392B",
+		"#E74C3C",
+		"#9B59B6",
+		"#8E44AD",
+		"#2980B9",
+		"#16A085",
+		"#27AE60",
+		"#F39C12",
+		"#D35400",
+	}
+	groupColor := "#576b95"
+
+	var bg string
+	if isGroup {
+		bg = groupColor
+	} else {
+		h := 0
+		for _, r := range displayName {
+			h = h*31 + int(r)
+		}
+		if h < 0 {
+			h = -h
+		}
+		bg = palette[h%len(palette)]
+	}
+
+	// Compute initials: up to 2 chars from word boundaries
+	words := strings.Fields(displayName)
+	initials := ""
+	for _, w := range words {
+		runes := []rune(w)
+		if len(initials) < 2 && len(runes) > 0 {
+			initials += string(runes[0])
+		}
+	}
+	initials = strings.ToUpper(initials)
+	if initials == "" {
+		initials = "?"
+	}
+
+	fontSize := 24
+	if len([]rune(initials)) > 1 {
+		fontSize = 20
+	}
+
+	svg := fmt.Sprintf(
+		`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">`+
+			`<circle cx="32" cy="32" r="32" fill="%s"/>`+
+			`<text x="32" y="%d" font-family="Arial,Helvetica,sans-serif" font-size="%d" font-weight="700" fill="white" text-anchor="middle">%s</text>`+
+			`</svg>`,
+		bg, 32+fontSize/3, fontSize, initials,
+	)
+	return "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(svg))
+}
 
 // Contact represents a demo contact entry.
 type Contact struct {
@@ -133,11 +196,16 @@ func Generate(destDir string) error {
 		return err
 	}
 
-	// Remove stale files to prevent duplicate rows on repeated starts.
+	// Remove stale files (including WAL/SHM journals) to prevent duplicate rows
+	// and SQLITE_BUSY errors on repeated starts.
 	contactPath := filepath.Join(contactDir, "contact.db")
 	messagePath := filepath.Join(messageDir, "message_0.db")
-	_ = os.Remove(contactPath)
-	_ = os.Remove(messagePath)
+	for _, p := range []string{
+		contactPath, contactPath + "-wal", contactPath + "-shm",
+		messagePath, messagePath + "-wal", messagePath + "-shm",
+	} {
+		_ = os.Remove(p)
+	}
 
 	if err := createContactDB(contactPath); err != nil {
 		return fmt.Errorf("create contact db: %w", err)
@@ -151,7 +219,7 @@ func Generate(destDir string) error {
 }
 
 func createContactDB(path string) error {
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", path+"?_journal_mode=DELETE")
 	if err != nil {
 		return err
 	}
@@ -182,14 +250,19 @@ func createContactDB(path string) error {
 		return err
 	}
 
-	stmt, err := db.Prepare(`INSERT INTO contact (username, nick_name, remark, flag, verify_flag) VALUES (?, ?, ?, ?, 0)`)
+	stmt, err := db.Prepare(`INSERT INTO contact (username, nick_name, remark, flag, verify_flag, small_head_url, big_head_url) VALUES (?, ?, ?, ?, 0, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
 	for _, c := range demoContacts {
-		if _, err := stmt.Exec(c.Username, c.Nickname, c.Remark, c.Flag); err != nil {
+		displayName := c.Remark
+		if displayName == "" {
+			displayName = c.Nickname
+		}
+		avatar := demoAvatarDataURI(displayName, c.IsGroup)
+		if _, err := stmt.Exec(c.Username, c.Nickname, c.Remark, c.Flag, avatar, avatar); err != nil {
 			return err
 		}
 	}
@@ -197,7 +270,7 @@ func createContactDB(path string) error {
 }
 
 func createMessageDB(path string) error {
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", path+"?_journal_mode=DELETE")
 	if err != nil {
 		return err
 	}
