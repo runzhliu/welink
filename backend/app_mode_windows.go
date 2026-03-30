@@ -13,6 +13,9 @@ import (
 	webview "github.com/jchv/go-webview2"
 )
 
+// appVersion 由 Makefile 通过 -ldflags "-X main.appVersion=x.y.z" 注入。
+var appVersion = "dev"
+
 // openURL 用系统默认浏览器打开外部 URL（仅允许 https 协议）。
 func openURL(url string) error {
 	if !strings.HasPrefix(url, "https://") {
