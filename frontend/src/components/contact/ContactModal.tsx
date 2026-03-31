@@ -321,17 +321,23 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
               )}
             </p>
             {(contact.their_messages != null || contact.my_messages != null) && (
-              <div className="flex items-center gap-3 mt-1.5">
+              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                 {contact.their_messages != null && (
                   <span className="flex items-center gap-1 text-xs font-semibold text-gray-500">
                     <span className="w-2 h-2 rounded-full bg-[#07c160] inline-block" />
                     对方 {contact.their_messages.toLocaleString()} 条
+                    {(contact.their_chars ?? 0) > 0 && (
+                      <span className="text-gray-400 font-normal">/ {contact.their_chars!.toLocaleString()} 字</span>
+                    )}
                   </span>
                 )}
                 {contact.my_messages != null && (
                   <span className="flex items-center gap-1 text-xs font-semibold text-gray-400">
                     <span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />
                     我 {contact.my_messages.toLocaleString()} 条
+                    {(contact.my_chars ?? 0) > 0 && (
+                      <span className="text-gray-300 font-normal">/ {contact.my_chars!.toLocaleString()} 字</span>
+                    )}
                   </span>
                 )}
               </div>

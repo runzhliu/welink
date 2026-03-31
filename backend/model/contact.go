@@ -16,6 +16,8 @@ type ContactStats struct {
 	TotalMessages  int64  `json:"total_messages"`
 	TheirMessages  int64  `json:"their_messages"`
 	MyMessages     int64  `json:"my_messages"`
+	TheirChars     int64  `json:"their_chars"`
+	MyChars        int64  `json:"my_chars"`
 	FirstMessage   string `json:"first_message_time"`
 	LastMessage    string `json:"last_message_time"`
 }

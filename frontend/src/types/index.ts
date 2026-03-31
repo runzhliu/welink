@@ -17,6 +17,8 @@ export interface ContactStats extends Contact {
   total_messages: number;
   their_messages?: number;
   my_messages?: number;
+  their_chars?: number;
+  my_chars?: number;
   first_message_time: string;
   last_message_time: string;
   first_msg?: string;
@@ -56,6 +58,7 @@ export interface GlobalStats {
 export interface MoneyEvent {
   time: string;    // "2024-03-15 14:23"
   is_mine: boolean;
+  kind: string;    // "红包" | "转账"
 }
 
 export interface ContactDetail {
@@ -66,6 +69,8 @@ export interface ContactDetail {
   my_monthly_trend: Record<string, number>;
   late_night_count: number;
   money_count: number;
+  red_packet_count: number;
+  transfer_count: number;
   money_timeline?: MoneyEvent[];
   initiation_count: number;
   total_sessions: number;

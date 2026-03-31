@@ -13,6 +13,9 @@ import { avatarSrc } from '../../utils/avatar';
 interface ContactTableProps {
   contacts: ContactStats[];
   onContactClick: (contact: ContactStats) => void;
+  compareMode?: boolean;
+  compareSelected?: Set<string>;
+  onCompareToggle?: (username: string) => void;
 }
 
 type SortKey = 'name' | 'total_messages' | 'shared_groups' | 'last_message_time' | 'status' | 'peak_monthly' | 'recent_monthly' | 'avg_msg_len' | 'money_count';
@@ -64,7 +67,7 @@ export const AIAnalysisBadge: React.FC<{ username: string; isGroup?: boolean }> 
   );
 };
 
-export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactClick }) => {
+export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactClick, compareMode, compareSelected, onCompareToggle }) => {
   const { privacyMode } = usePrivacyMode();
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -140,6 +143,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
         <table className="w-full">
           <thead>
             <tr className="dk-thead bg-[#f8f9fb] dk-border border-b border-gray-100">
+              {compareMode && <th className="px-3 py-5 w-10" />}
               <th className={thClass} onClick={() => handleSort('name')}>
                 <div className="flex items-center">联系人<SortIcon col="name" /></div>
               </th>
@@ -173,9 +177,22 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
             {currentContacts.map((contact) => (
               <tr
                 key={contact.username}
-                onClick={() => onContactClick(contact)}
-                className="dk-row-hover hover:bg-[#f8f9fb] dark:hover:bg-white/5 cursor-pointer transition-colors duration-150"
+                onClick={() => compareMode ? onCompareToggle?.(contact.username) : onContactClick(contact)}
+                className={`dk-row-hover hover:bg-[#f8f9fb] dark:hover:bg-white/5 cursor-pointer transition-colors duration-150 ${
+                  compareMode && compareSelected?.has(contact.username) ? 'bg-[#f0fdf4] dark:bg-[#07c160]/10' : ''
+                }`}
               >
+                {compareMode && (
+                  <td className="px-3 py-5">
+                    <input
+                      type="checkbox"
+                      checked={compareSelected?.has(contact.username) ?? false}
+                      onChange={() => onCompareToggle?.(contact.username)}
+                      onClick={e => e.stopPropagation()}
+                      className="w-4 h-4 rounded accent-[#07c160]"
+                    />
+                  </td>
+                )}
                 <td className="px-8 py-5">
                   <div className="flex items-center gap-3">
                     {(contact.small_head_url || contact.big_head_url) ? (

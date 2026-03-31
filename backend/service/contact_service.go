@@ -62,6 +62,7 @@ type WordCount struct {
 type MoneyEvent struct {
 	Time   string `json:"time"`    // "2024-03-15 14:23"
 	IsMine bool   `json:"is_mine"` // true=我发的
+	Kind   string `json:"kind"`    // "红包" or "转账"
 }
 
 type ContactDetail struct {
@@ -71,7 +72,9 @@ type ContactDetail struct {
 	TheirMonthlyTrend map[string]int `json:"their_monthly_trend"` // "2024-01" -> count（对方）
 	MyMonthlyTrend    map[string]int `json:"my_monthly_trend"`    // "2024-01" -> count（我）
 	LateNightCount    int64          `json:"late_night_count"`
-	MoneyCount        int64          `json:"money_count"`
+	MoneyCount        int64          `json:"money_count"`         // 红包+转账总数
+	RedPacketCount    int64          `json:"red_packet_count"`    // 红包次数
+	TransferCount     int64          `json:"transfer_count"`      // 转账次数
 	MoneyTimeline     []MoneyEvent   `json:"money_timeline"`      // 红包/转账时间线
 	InitiationCnt     int64          `json:"initiation_count"`    // 主动发起对话次数（间隔>6h）
 	TotalSessions     int64          `json:"total_sessions"`
@@ -90,6 +93,55 @@ type ContactStatsExtended struct {
 	RecallCount   int64   `json:"recall_count"`
 	AvgMsgLen     float64 `json:"avg_msg_len"`
 	MoneyCount    int64   `json:"money_count"`
+}
+
+// classifyMsgType 统一消息类型分类（低 16 位为真实 local_type）
+// 返回类型名称；对 type 49 根据内容细分子类型
+func classifyMsgType(lt int, content string) string {
+	realType := lt & 0xFFFF
+	switch realType {
+	case 1:
+		return "文本"
+	case 3:
+		return "图片"
+	case 34:
+		return "语音"
+	case 43:
+		return "视频"
+	case 47:
+		return "表情"
+	case 42:
+		return "名片"
+	case 48:
+		return "位置"
+	case 50:
+		return "通话"
+	case 49:
+		// 应用消息细分
+		if strings.Contains(content, "wcpay") {
+			if strings.Contains(content, "redenvelope") {
+				return "红包"
+			}
+			return "转账"
+		}
+		if strings.Contains(content, "refermsg") {
+			return "引用"
+		}
+		if strings.Contains(content, "weappinfo") || strings.Contains(content, "miniprogram") {
+			return "小程序"
+		}
+		if strings.Contains(content, "<type>5</type>") || strings.Contains(content, "<type>4</type>") || strings.Contains(content, "<type>6</type>") {
+			return "链接/文件"
+		}
+		if strings.Contains(content, "<type>51</type>") || strings.Contains(content, "<type>63</type>") {
+			return "视频号"
+		}
+		return "其他"
+	case 10000, 11000:
+		return "系统"
+	default:
+		return "其他"
+	}
 }
 
 type ContactService struct {
@@ -309,14 +361,23 @@ func (s *ContactService) performAnalysis() {
 			var totalTextLen, textCount int64
 
 			for _, mdb := range s.dbMgr.MessageDBs {
-				mRows, err := mdb.Query(fmt.Sprintf("SELECT local_type, create_time, message_content, COALESCE(WCDB_CT_message_content,0) FROM [%s]%s", tableName, timeWhere))
+				var contactRowID int64 = -1
+				mdb.QueryRow(fmt.Sprintf("SELECT rowid FROM Name2Id WHERE user_name = %q", c.Username)).Scan(&contactRowID)
+
+				mRows, err := mdb.Query(fmt.Sprintf("SELECT local_type, create_time, message_content, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s", tableName, timeWhere))
 				if err != nil { continue }
 				for mRows.Next() {
-					var lt int; var ts int64; var rawContent []byte; var ct int64
-					mRows.Scan(&lt, &ts, &rawContent, &ct)
+					var lt int; var ts int64; var rawContent []byte; var ct int64; var senderID int64
+					mRows.Scan(&lt, &ts, &rawContent, &ct, &senderID)
 					content := decodeGroupContent(rawContent, ct)
 					if lt == 10000 { ext.RecallCount++; continue }
 					ext.TotalMessages++
+					isMine := contactRowID < 0 || senderID != contactRowID
+					if isMine {
+						ext.MyMessages++
+					} else {
+						ext.TheirMessages++
+					}
 
 					if ts < globalFirstTs { globalFirstTs = ts }
 					if ts > globalLastTs { globalLastTs = ts }
@@ -328,44 +389,33 @@ func (s *ContactService) performAnalysis() {
 					monthly[dt.Format("2006-01")]++
 					if ts >= recentCutoff.Unix() { ext.RecentMonthly++ }
 
-					typeName := "其他"
-					switch lt {
-					case 1:
-						typeName = "文本"
-						if content != "" && !s.isSys(content) { totalTextLen += int64(len([]rune(content))); textCount++ }
+					typeName := classifyMsgType(lt, content)
+					if typeName == "文本" {
+						if content != "" && !s.isSys(content) {
+							charLen := int64(len([]rune(content)))
+							totalTextLen += charLen; textCount++
+							if isMine {
+								ext.MyChars += charLen
+							} else {
+								ext.TheirChars += charLen
+							}
+						}
 						if ts < firstMsgTs && content != "" && !s.isSys(content) {
 							firstMsgTs = ts
 							ext.FirstMsg = content
 						}
-					case 3: typeName = "图片"
-					case 34: typeName = "语音"
-					case 47: typeName = "表情"; ext.EmojiCnt++
-					case 43: typeName = "视频"
-					}
-					// 红包 / 转账检测（低 16 位为 49，含 wcpay 或 redenvelope）
-					if (lt&0xFFFF) == 49 && (strings.Contains(content, "wcpay") || strings.Contains(content, "redenvelope")) {
+					} else if typeName == "表情" {
+						ext.EmojiCnt++
+					} else if typeName == "红包" || typeName == "转账" {
 						ext.MoneyCount++
 					}
 					typeCounts[typeName]++
 					mu.Lock(); globalTypeMix[typeName]++; mu.Unlock()
 				}
 				mRows.Close()
-
-				// 统计对方发送的消息数（their = sender is the contact）
-				theirTw := timeWhere
-				if theirTw == "" {
-					theirTw = fmt.Sprintf(" WHERE real_sender_id = (SELECT rowid FROM Name2Id WHERE user_name = %q)", c.Username)
-				} else {
-					theirTw += fmt.Sprintf(" AND real_sender_id = (SELECT rowid FROM Name2Id WHERE user_name = %q)", c.Username)
-				}
-				var theirCnt int64
-				row := mdb.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM [%s]%s", tableName, theirTw))
-				row.Scan(&theirCnt)
-				ext.TheirMessages += theirCnt
 			}
 			if ext.TotalMessages > 0 {
 				ext.FirstMessage = s.formatTime(globalFirstTs); ext.LastMessage = s.formatTime(globalLastTs)
-				ext.MyMessages = ext.TotalMessages - ext.TheirMessages
 				for m, cnt := range monthly {
 					if int64(cnt) > ext.PeakMonthly { ext.PeakMonthly = int64(cnt); ext.PeakPeriod = m }
 				}
@@ -526,18 +576,14 @@ func (s *ContactService) AnalyzeWithFilter(from, to int64) *FilteredStats {
 					if h >= s.cfg.LateNightStartHour && h < s.cfg.LateNightEndHour { lateNightCnt++ }
 					mu.Lock(); globalDaily[dt.Format("2006-01-02")]++; globalHourly[h]++; mu.Unlock()
 
-					typeName := "其他"
-					switch lt {
-					case 1:
-						typeName = "文本"
+					typeName := classifyMsgType(lt, content)
+					if typeName == "文本" {
 						if ts < firstMsgTs && content != "" && !s.isSys(content) {
 							firstMsgTs = ts
 							ext.FirstMsg = content
 						}
-					case 3: typeName = "图片"
-					case 34: typeName = "语音"
-					case 47: typeName = "表情"; ext.EmojiCnt++
-					case 43: typeName = "视频"
+					} else if typeName == "表情" {
+						ext.EmojiCnt++
 					}
 					typeCounts[typeName]++
 					mu.Lock(); globalTypeMix[typeName]++; mu.Unlock()
@@ -644,13 +690,19 @@ func (s *ContactService) GetContactDetail(username string) *ContactDetail {
 
 			if h >= s.cfg.LateNightStartHour && h < s.cfg.LateNightEndHour { detail.LateNightCount++ }
 
-			// 红包 / 转账检测 (type 49，含 wcpay 或 redenvelope)
-			// 注意：local_type 为 64 位整数，高位含额外标志，低 16 位才是真正的消息类型
-			if (lt&0xFFFF) == 49 && (strings.Contains(content, "wcpay") || strings.Contains(content, "redenvelope")) {
+			// 红包 / 转账检测
+			typeName := classifyMsgType(lt, content)
+			if typeName == "红包" {
 				detail.MoneyCount++
+				detail.RedPacketCount++
 				detail.MoneyTimeline = append(detail.MoneyTimeline, MoneyEvent{
-					Time:   dt.Format("2006-01-02 15:04"),
-					IsMine: isMineMsg,
+					Time: dt.Format("2006-01-02 15:04"), IsMine: isMineMsg, Kind: "红包",
+				})
+			} else if typeName == "转账" {
+				detail.MoneyCount++
+				detail.TransferCount++
+				detail.MoneyTimeline = append(detail.MoneyTimeline, MoneyEvent{
+					Time: dt.Format("2006-01-02 15:04"), IsMine: isMineMsg, Kind: "转账",
 				})
 			}
 
@@ -1394,25 +1446,20 @@ func (s *ContactService) computeGroupDetail(username string) {
 		}
 
 		rows, err := mdb.Query(fmt.Sprintf(
-			"SELECT create_time, real_sender_id, local_type FROM [%s]%s", tableName, twDetail))
+			"SELECT create_time, real_sender_id, local_type, message_content, COALESCE(WCDB_CT_message_content,0) FROM [%s]%s", tableName, twDetail))
 		if err != nil { continue }
 		for rows.Next() {
 			var ts, senderID int64
 			var lt int
-			rows.Scan(&ts, &senderID, &lt)
+			var rawContent []byte; var ct int64
+			rows.Scan(&ts, &senderID, &lt, &rawContent, &ct)
+			content := decodeGroupContent(rawContent, ct)
 			dt := time.Unix(ts, 0).In(s.tz)
 			detail.HourlyDist[dt.Hour()]++
 			detail.WeeklyDist[int(dt.Weekday())]++
 			detail.DailyHeatmap[dt.Format("2006-01-02")]++
-			typeName := "其他"
-			switch lt {
-			case 1:  typeName = "文本"
-			case 3:  typeName = "图片"
-			case 34: typeName = "语音"
-			case 47: typeName = "表情"
-			case 43: typeName = "视频"
-			}
-			if lt != 10000 { detail.TypeDist[typeName]++ }
+			typeName := classifyMsgType(lt, content)
+			if typeName != "系统" { detail.TypeDist[typeName]++ }
 			if wxid, ok := idToWxid[senderID]; ok && wxid != "" {
 				speaker := wxid
 				if name, ok2 := nameMap[wxid]; ok2 { speaker = name }

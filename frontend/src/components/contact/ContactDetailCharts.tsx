@@ -83,7 +83,7 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
     <div className="space-y-6">
       {/* 社交指纹卡片行 */}
       <p className="text-xs text-gray-400 -mb-3">与该联系人的互动特征统计</p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-[#1d1d1f] text-white rounded-2xl p-4 flex flex-col gap-2">
           <Moon size={18} className="text-blue-400" />
           <div className="text-2xl font-black">{detail.late_night_count.toLocaleString()}</div>
@@ -96,11 +96,17 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
           <div className="text-xs text-green-100">主动发起对话</div>
           <div className="text-xs text-green-200">{detail.initiation_count} 次 / {detail.total_sessions} 段，以你发出第一条消息为准</div>
         </div>
+        <div className="bg-gradient-to-br from-red-400 to-red-500 text-white rounded-2xl p-4 flex flex-col gap-2">
+          <Gift size={18} className="text-red-100" />
+          <div className="text-2xl font-black">{detail.red_packet_count ?? 0}</div>
+          <div className="text-xs text-red-100">红包</div>
+          <div className="text-xs text-red-200">双方合计次数</div>
+        </div>
         <div className="bg-gradient-to-br from-orange-400 to-orange-500 text-white rounded-2xl p-4 flex flex-col gap-2">
           <Gift size={18} className="text-orange-100" />
-          <div className="text-2xl font-black">{detail.money_count}</div>
-          <div className="text-xs text-orange-100">红包/转账</div>
-          <div className="text-xs text-orange-200">双方合计互动次数</div>
+          <div className="text-2xl font-black">{detail.transfer_count ?? 0}</div>
+          <div className="text-xs text-orange-100">转账</div>
+          <div className="text-xs text-orange-200">双方合计次数</div>
         </div>
         <div className="bg-[#576b95] text-white rounded-2xl p-4 flex flex-col gap-2">
           <MessageSquare size={18} className="text-purple-200" />
@@ -117,14 +123,23 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
             <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
               <Gift size={14} /> 红包/转账记录
             </h4>
-            <span className="text-xs text-gray-400">共 {detail.money_timeline!.length} 次</span>
+            <span className="text-xs text-gray-400">
+              红包 {detail.red_packet_count ?? 0} · 转账 {detail.transfer_count ?? 0}
+            </span>
           </div>
           <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
             {detail.money_timeline!.map((evt, i) => (
               <div key={i} className="flex items-center gap-3 text-xs">
                 <span className="text-gray-400 w-32 flex-shrink-0 font-mono">{evt.time}</span>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold ${
+                  evt.kind === '红包'
+                    ? 'bg-red-50 text-red-500 dark:bg-red-500/15 dark:text-red-400'
+                    : 'bg-orange-50 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400'
+                }`}>
+                  {evt.kind}
+                </span>
                 {evt.is_mine ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 font-bold dark:bg-orange-500/15 dark:text-orange-400">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-bold dark:bg-gray-800 dark:text-gray-400">
                     <ArrowUpRight size={10} />我发出
                   </span>
                 ) : (
