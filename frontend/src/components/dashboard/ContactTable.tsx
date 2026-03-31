@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react';
 import { useSyncExternalStore } from 'react';
-import { MessageCircle, Clock, TrendingUp, Users, ChevronUp, ChevronDown, Bot, Loader2, CheckCircle2 } from 'lucide-react';
+import { MessageCircle, Clock, TrendingUp, Users, ChevronUp, ChevronDown, Bot, Loader2, CheckCircle2, Gift } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { subscribeAnalysis, getAnalysisSnapshot } from '../../stores/llmAnalysisStore';
@@ -15,7 +15,7 @@ interface ContactTableProps {
   onContactClick: (contact: ContactStats) => void;
 }
 
-type SortKey = 'name' | 'total_messages' | 'shared_groups' | 'last_message_time' | 'status' | 'peak_monthly' | 'recent_monthly' | 'avg_msg_len';
+type SortKey = 'name' | 'total_messages' | 'shared_groups' | 'last_message_time' | 'status' | 'peak_monthly' | 'recent_monthly' | 'avg_msg_len' | 'money_count';
 type SortDir = 'asc' | 'desc';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
@@ -105,6 +105,9 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
       case 'avg_msg_len':
         cmp = (a.avg_msg_len ?? 0) - (b.avg_msg_len ?? 0);
         break;
+      case 'money_count':
+        cmp = (a.money_count ?? 0) - (b.money_count ?? 0);
+        break;
       case 'status':
         cmp = getStatusTier(a) - getStatusTier(b);
         break;
@@ -145,6 +148,9 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
               </th>
               <th className={thClass} onClick={() => handleSort('shared_groups')}>
                 <div className="flex items-center gap-1"><Users size={14} />共同群聊<SortIcon col="shared_groups" /></div>
+              </th>
+              <th className={thClass} onClick={() => handleSort('money_count')}>
+                <div className="flex items-center gap-1"><Gift size={14} />红包/转账<SortIcon col="money_count" /></div>
               </th>
               <th className={thClass} onClick={() => handleSort('peak_monthly')}>
                 <div className="flex items-center gap-1"><TrendingUp size={14} />历史峰值月<SortIcon col="peak_monthly" /></div>
@@ -194,6 +200,15 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                   {(contact.shared_groups_count ?? 0) > 0 ? (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600">
                       <Users size={11} />{contact.shared_groups_count}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-300">-</span>
+                  )}
+                </td>
+                <td className="px-8 py-5">
+                  {(contact.money_count ?? 0) > 0 ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-orange-600">
+                      <Gift size={11} />{contact.money_count}
                     </span>
                   ) : (
                     <span className="text-sm text-gray-300">-</span>

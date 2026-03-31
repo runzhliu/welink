@@ -59,6 +59,11 @@ type WordCount struct {
 }
 
 // ContactDetail 用于单个联系人的深度分析（按需查询，不在启动时计算）
+type MoneyEvent struct {
+	Time   string `json:"time"`    // "2024-03-15 14:23"
+	IsMine bool   `json:"is_mine"` // true=我发的
+}
+
 type ContactDetail struct {
 	HourlyDist        [24]int        `json:"hourly_dist"`
 	WeeklyDist        [7]int         `json:"weekly_dist"`
@@ -67,7 +72,8 @@ type ContactDetail struct {
 	MyMonthlyTrend    map[string]int `json:"my_monthly_trend"`    // "2024-01" -> count（我）
 	LateNightCount    int64          `json:"late_night_count"`
 	MoneyCount        int64          `json:"money_count"`
-	InitiationCnt     int64          `json:"initiation_count"`  // 主动发起对话次数（间隔>6h）
+	MoneyTimeline     []MoneyEvent   `json:"money_timeline"`      // 红包/转账时间线
+	InitiationCnt     int64          `json:"initiation_count"`    // 主动发起对话次数（间隔>6h）
 	TotalSessions     int64          `json:"total_sessions"`
 }
 
@@ -83,6 +89,7 @@ type ContactStatsExtended struct {
 	RecentMonthly int64   `json:"recent_monthly"`
 	RecallCount   int64   `json:"recall_count"`
 	AvgMsgLen     float64 `json:"avg_msg_len"`
+	MoneyCount    int64   `json:"money_count"`
 }
 
 type ContactService struct {
@@ -334,6 +341,10 @@ func (s *ContactService) performAnalysis() {
 					case 34: typeName = "语音"
 					case 47: typeName = "表情"; ext.EmojiCnt++
 					case 43: typeName = "视频"
+					}
+					// 红包 / 转账检测（低 16 位为 49，含 wcpay 或 redenvelope）
+					if (lt&0xFFFF) == 49 && (strings.Contains(content, "wcpay") || strings.Contains(content, "redenvelope")) {
+						ext.MoneyCount++
 					}
 					typeCounts[typeName]++
 					mu.Lock(); globalTypeMix[typeName]++; mu.Unlock()
@@ -609,11 +620,12 @@ func (s *ContactService) GetContactDetail(username string) *ContactDetail {
 		mdb.QueryRow(fmt.Sprintf("SELECT rowid FROM Name2Id WHERE user_name = %q", username)).Scan(&contactRowID)
 
 		rows, err := mdb.Query(fmt.Sprintf(
-			"SELECT create_time, local_type, message_content, COALESCE(real_sender_id,0) FROM [%s]%s%s", tableName, timeWhere, orderBy))
+			"SELECT create_time, local_type, message_content, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s%s", tableName, timeWhere, orderBy))
 		if err != nil { continue }
 		for rows.Next() {
-			var ts int64; var lt int; var content string; var senderID int64
-			rows.Scan(&ts, &lt, &content, &senderID)
+			var ts int64; var lt int; var rawContent []byte; var ct int64; var senderID int64
+			rows.Scan(&ts, &lt, &rawContent, &ct, &senderID)
+			content := decodeGroupContent(rawContent, ct)
 			dt := time.Unix(ts, 0).In(s.tz)
 			h := dt.Hour()
 			w := int(dt.Weekday()) // 0=Sunday
@@ -633,8 +645,13 @@ func (s *ContactService) GetContactDetail(username string) *ContactDetail {
 			if h >= s.cfg.LateNightStartHour && h < s.cfg.LateNightEndHour { detail.LateNightCount++ }
 
 			// 红包 / 转账检测 (type 49，含 wcpay 或 redenvelope)
-			if lt == 49 && (strings.Contains(content, "wcpay") || strings.Contains(content, "redenvelope")) {
+			// 注意：local_type 为 64 位整数，高位含额外标志，低 16 位才是真正的消息类型
+			if (lt&0xFFFF) == 49 && (strings.Contains(content, "wcpay") || strings.Contains(content, "redenvelope")) {
 				detail.MoneyCount++
+				detail.MoneyTimeline = append(detail.MoneyTimeline, MoneyEvent{
+					Time:   dt.Format("2006-01-02 15:04"),
+					IsMine: isMineMsg,
+				})
 			}
 
 			// 新对话段：与上条消息间隔 > session_gap_seconds

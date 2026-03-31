@@ -31,6 +31,7 @@ export interface ContactStats extends Contact {
   recent_monthly?: number;
   recall_count?: number;
   avg_msg_len?: number;
+  money_count?: number;
 }
 
 export interface LateNightEntry {
@@ -52,6 +53,11 @@ export interface GlobalStats {
   late_night_ranking: LateNightEntry[];
 }
 
+export interface MoneyEvent {
+  time: string;    // "2024-03-15 14:23"
+  is_mine: boolean;
+}
+
 export interface ContactDetail {
   hourly_dist: number[];      // [24]
   weekly_dist: number[];      // [7]
@@ -60,6 +66,7 @@ export interface ContactDetail {
   my_monthly_trend: Record<string, number>;
   late_night_count: number;
   money_count: number;
+  money_timeline?: MoneyEvent[];
   initiation_count: number;
   total_sessions: number;
 }

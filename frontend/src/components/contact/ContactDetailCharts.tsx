@@ -4,7 +4,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, Legend } from 'recharts';
-import { Moon, Gift, MessageSquare, Zap } from 'lucide-react';
+import { Moon, Gift, MessageSquare, Zap, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import type { ContactDetail } from '../../types';
 import { CalendarHeatmap } from './CalendarHeatmap';
 import { DayChatPanel } from './DayChatPanel';
@@ -109,6 +109,34 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
           <div className="text-xs text-purple-300">消息间隔 &gt; 6h 视为新段落</div>
         </div>
       </div>
+
+      {/* 红包/转账时间线 */}
+      {(detail.money_timeline?.length ?? 0) > 0 && (
+        <div className="bg-[#f8f9fb] dk-subtle rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
+              <Gift size={14} /> 红包/转账记录
+            </h4>
+            <span className="text-xs text-gray-400">共 {detail.money_timeline!.length} 次</span>
+          </div>
+          <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+            {detail.money_timeline!.map((evt, i) => (
+              <div key={i} className="flex items-center gap-3 text-xs">
+                <span className="text-gray-400 w-32 flex-shrink-0 font-mono">{evt.time}</span>
+                {evt.is_mine ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 font-bold dark:bg-orange-500/15 dark:text-orange-400">
+                    <ArrowUpRight size={10} />我发出
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 text-[#07c160] font-bold dark:bg-green-500/15 dark:text-green-400">
+                    <ArrowDownLeft size={10} />我收到
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 小时分布 */}
       <div className="bg-[#f8f9fb] rounded-2xl p-4">
