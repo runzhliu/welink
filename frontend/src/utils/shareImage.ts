@@ -130,6 +130,263 @@ function loadDataUrlAsImage(dataUrl: string): Promise<HTMLImageElement | null> {
 
 const GITHUB_SVG_SOURCE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#888" d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>`;
 
+// ─── 社交体检报告分享图 ─────────────────────────────────────────────────────
+
+export interface ReportImageOptions {
+  score: number;
+  scoreLabel: string;
+  stats: { label: string; value: string }[];
+  topContactName?: string;
+  topContactAvatar?: string;
+  topContactMessages?: number;
+  highlights: string[];
+}
+
+/** 生成社交体检报告分享图；全部 Canvas 2D 绘制，与 AI 分析共享 header/footer */
+export async function generateReportImage(options: ReportImageOptions): Promise<string> {
+  const FONT = "system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif";
+  const S = 2;
+  const W = 640;
+  const FF = FONT;
+
+  const [qrDataUrl, faviconImg, githubImg, avatarDataUrl] = await Promise.all([
+    QRCode.toDataURL('https://welink.click', { width: 96, margin: 1, color: { dark: '#1d1d1f', light: '#f8f9fb' } }),
+    fetch('/favicon.svg').then(r => r.text()).then(svg => loadSvgAsImage(svg, 42)).catch(() => null),
+    loadSvgAsImage(GITHUB_SVG_SOURCE, 12),
+    fetchAvatarDataUrl(options.topContactAvatar),
+  ]);
+  const qrImageEl = await loadDataUrlAsImage(qrDataUrl);
+  const avatarImageEl = avatarDataUrl ? await loadDataUrlAsImage(avatarDataUrl) : null;
+  const year = new Date().getFullYear();
+
+  // 计算内容高度
+  const HEADER_H = 84;
+  const FOOTER_H = 68;
+  const PAD = 36;
+  let bodyH = 0;
+  bodyH += 60;  // score
+  bodyH += 30;  // score label
+  bodyH += 30;  // gap
+  bodyH += 70;  // stat pills
+  bodyH += 24;  // gap
+  if (options.topContactName) bodyH += 60; // top contact
+  bodyH += 16; // gap
+  bodyH += options.highlights.length * 28 + 10; // highlights
+  bodyH += 20; // bottom pad
+
+  const totalH = HEADER_H + bodyH + FOOTER_H;
+  const cvs = document.createElement('canvas');
+  cvs.width = W * S;
+  cvs.height = totalH * S;
+  const ctx = cvs.getContext('2d')!;
+
+  // ── White background ──
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W * S, totalH * S);
+
+  // ── Header (same as AI share) ──
+  const hGrad = ctx.createLinearGradient(0, 0, W * S, 0);
+  hGrad.addColorStop(0, '#09d46a');
+  hGrad.addColorStop(1, '#06a850');
+  ctx.fillStyle = hGrad;
+  ctx.fillRect(0, 0, W * S, HEADER_H * S);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.beginPath();
+  ctx.arc((W - 15 + 55) * S, (6 + 55) * S, 55 * S, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.beginPath();
+  ctx.arc((W + 25 + 35) * S, (42 + 35) * S, 35 * S, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (faviconImg) {
+    ctx.save();
+    ctx.beginPath();
+    const [lx, ly, lw, lh, lr] = [36*S, 21*S, 42*S, 42*S, 10*S];
+    ctx.moveTo(lx+lr, ly);
+    ctx.lineTo(lx+lw-lr, ly); ctx.arcTo(lx+lw, ly, lx+lw, ly+lr, lr);
+    ctx.lineTo(lx+lw, ly+lh-lr); ctx.arcTo(lx+lw, ly+lh, lx+lw-lr, ly+lh, lr);
+    ctx.lineTo(lx+lr, ly+lh); ctx.arcTo(lx, ly+lh, lx, ly+lh-lr, lr);
+    ctx.lineTo(lx, ly+lr); ctx.arcTo(lx, ly, lx+lr, ly, lr);
+    ctx.closePath(); ctx.clip();
+    ctx.drawImage(faviconImg, lx, ly, lw, lh);
+    ctx.restore();
+  }
+
+  const TX = (faviconImg ? 90 : 36) * S;
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `900 ${20*S}px ${FF}`;
+  ctx.fillText('WeLink', TX, 32 * S);
+  ctx.fillStyle = 'rgba(255,255,255,0.78)';
+  ctx.font = `${12*S}px ${FF}`;
+  ctx.fillText('微信聊天记录 AI 助手', TX, 55 * S);
+
+  // ── Body ──
+  let y = HEADER_H + 40; // start y
+
+  // Score
+  ctx.textAlign = 'center';
+  const scoreColor = options.score >= 70 ? '#22c55e' : options.score >= 40 ? '#eab308' : '#f87171';
+  ctx.fillStyle = scoreColor;
+  ctx.font = `900 ${52*S}px ${FF}`;
+  ctx.fillText(String(options.score), (W / 2) * S, y * S);
+  y += 50;
+
+  // Score label
+  ctx.fillStyle = '#999999';
+  ctx.font = `${13*S}px ${FF}`;
+  ctx.fillText(`社交健康指数 · ${options.scoreLabel}`, (W / 2) * S, y * S);
+  y += 36;
+  ctx.textAlign = 'left';
+
+  // Stat pills (4 columns)
+  const pillW = (W - PAD * 2 - 12 * 3) / 4;
+  const pillH = 60;
+  for (let i = 0; i < options.stats.length && i < 4; i++) {
+    const px = PAD + i * (pillW + 12);
+    // pill background
+    ctx.fillStyle = '#f8f9fb';
+    const roundRect = (x: number, yy: number, w: number, h: number, r: number) => {
+      ctx.beginPath();
+      ctx.moveTo(x+r, yy); ctx.lineTo(x+w-r, yy); ctx.arcTo(x+w, yy, x+w, yy+r, r);
+      ctx.lineTo(x+w, yy+h-r); ctx.arcTo(x+w, yy+h, x+w-r, yy+h, r);
+      ctx.lineTo(x+r, yy+h); ctx.arcTo(x, yy+h, x, yy+h-r, r);
+      ctx.lineTo(x, yy+r); ctx.arcTo(x, yy, x+r, yy, r);
+      ctx.closePath();
+    };
+    roundRect(px*S, y*S, pillW*S, pillH*S, 10*S);
+    ctx.fill();
+
+    // value
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1d1d1f';
+    ctx.font = `700 ${16*S}px ${FF}`;
+    ctx.fillText(options.stats[i].value, (px + pillW/2)*S, (y + 24)*S);
+
+    // label
+    ctx.fillStyle = '#999999';
+    ctx.font = `${10*S}px ${FF}`;
+    ctx.fillText(options.stats[i].label, (px + pillW/2)*S, (y + 46)*S);
+    ctx.textAlign = 'left';
+  }
+  y += pillH + 24;
+
+  // Top contact
+  if (options.topContactName) {
+    // green bg
+    const tcX = PAD, tcW = W - PAD * 2, tcH = 52;
+    ctx.fillStyle = '#f0fdf4';
+    const roundRect = (x: number, yy: number, w: number, h: number, r: number) => {
+      ctx.beginPath();
+      ctx.moveTo(x+r, yy); ctx.lineTo(x+w-r, yy); ctx.arcTo(x+w, yy, x+w, yy+r, r);
+      ctx.lineTo(x+w, yy+h-r); ctx.arcTo(x+w, yy+h, x+w-r, yy+h, r);
+      ctx.lineTo(x+r, yy+h); ctx.arcTo(x, yy+h, x, yy+h-r, r);
+      ctx.lineTo(x, yy+r); ctx.arcTo(x, yy, x+r, yy, r);
+      ctx.closePath();
+    };
+    roundRect(tcX*S, y*S, tcW*S, tcH*S, 12*S);
+    ctx.fill();
+
+    // avatar circle
+    const avSize = 32;
+    const avX = tcX + 10;
+    const avY = y + (tcH - avSize) / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc((avX + avSize/2)*S, (avY + avSize/2)*S, (avSize/2)*S, 0, Math.PI*2);
+    ctx.clip();
+    if (avatarImageEl) {
+      ctx.drawImage(avatarImageEl, avX*S, avY*S, avSize*S, avSize*S);
+    } else {
+      ctx.fillStyle = '#07c160';
+      ctx.fillRect(avX*S, avY*S, avSize*S, avSize*S);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `700 ${14*S}px ${FF}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(options.topContactName.charAt(0), (avX+avSize/2)*S, (avY+avSize/2)*S);
+      ctx.textAlign = 'left';
+    }
+    ctx.restore();
+
+    // name
+    const nameX = avX + avSize + 10;
+    ctx.fillStyle = '#1d1d1f';
+    ctx.font = `600 ${14*S}px ${FF}`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(options.topContactName, nameX*S, (y + tcH/2 - 9)*S);
+
+    // subtitle
+    ctx.fillStyle = '#999999';
+    ctx.font = `${11*S}px ${FF}`;
+    ctx.fillText(
+      `${options.topContactMessages?.toLocaleString() ?? ''} 条消息 · 最佳拍档`,
+      nameX*S, (y + tcH/2 + 10)*S
+    );
+
+    y += tcH + 20;
+  }
+
+  // Highlights
+  for (const text of options.highlights) {
+    // green dot
+    ctx.fillStyle = '#07c160';
+    ctx.beginPath();
+    ctx.arc((PAD + 4)*S, (y + 2)*S, 3*S, 0, Math.PI*2);
+    ctx.fill();
+
+    // text
+    ctx.fillStyle = '#1d1d1f';
+    ctx.font = `${13*S}px ${FF}`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, (PAD + 16)*S, y*S);
+    y += 28;
+  }
+
+  // ── Footer (same as AI share) ──
+  const fY = (totalH - FOOTER_H) * S;
+  ctx.fillStyle = '#f8f9fb';
+  ctx.fillRect(0, fY, W*S, FOOTER_H*S);
+  ctx.fillStyle = '#ececec';
+  ctx.fillRect(0, fY, W*S, 1*S);
+
+  ctx.textBaseline = 'middle';
+
+  if (githubImg) {
+    ctx.drawImage(githubImg, 36*S, fY + (25-6)*S, 12*S, 12*S);
+  }
+  ctx.fillStyle = '#888888';
+  ctx.font = `${11*S}px ${FF}`;
+  ctx.fillText('https://github.com/runzhliu/welink', (githubImg ? 52 : 36)*S, fY + 25*S);
+
+  ctx.fillStyle = '#bbbbbb';
+  ctx.font = `${10*S}px ${FF}`;
+  ctx.fillText(`© ${year} @runzhliu · AGPL-3.0`, 36*S, fY + 43*S);
+
+  const QR_SIZE = 48, QR_R = 36, QR_TOP = (FOOTER_H-QR_SIZE)/2;
+  const QR_X = W - QR_R - QR_SIZE;
+  if (qrImageEl) {
+    ctx.drawImage(qrImageEl, QR_X*S, fY + QR_TOP*S, QR_SIZE*S, QR_SIZE*S);
+  }
+
+  ctx.textAlign = 'right';
+  const CX = (QR_X - 10) * S;
+  ctx.fillStyle = '#555555';
+  ctx.font = `700 ${11*S}px ${FF}`;
+  ctx.fillText('你也想分析微信聊天记录？', CX, fY + 26*S);
+  ctx.fillStyle = '#07c160';
+  ctx.font = `${10*S}px ${FF}`;
+  ctx.fillText('扫码免费体验 →', CX, fY + 43*S);
+  ctx.textAlign = 'left';
+
+  // ── Export ──
+  const dataUrl = cvs.toDataURL('image/png');
+  const filename = `welink-social-report-${Date.now()}.png`;
+  return downloadPng(dataUrl, filename);
+}
+
 // ─── 主函数 ───────────────────────────────────────────────────────────────────
 
 /** 生成并下载分享图片；返回保存路径（App 模式）或文件名（浏览器模式） */

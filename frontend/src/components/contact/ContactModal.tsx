@@ -2,8 +2,8 @@
  * 联系人详情弹窗组件
  */
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { X, Users, EyeOff, Search, Loader2, Download, Bot } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock } from 'lucide-react';
 import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
 import { contactsApi } from '../../services/api';
@@ -338,6 +338,70 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
             )}
           </div>
         </div>
+
+        {/* 聊天里程碑 */}
+        {contact.total_messages > 0 && (() => {
+          const milestones: { icon: React.ReactNode; label: string; detail: string }[] = [];
+
+          // 第一条消息
+          if (contact.first_message_time && contact.first_message_time !== '-') {
+            milestones.push({
+              icon: <Flag size={11} className="text-[#07c160]" />,
+              label: '初识',
+              detail: contact.first_msg
+                ? `${contact.first_message_time}「${contact.first_msg.length > 20 ? contact.first_msg.slice(0, 20) + '…' : contact.first_msg}」`
+                : contact.first_message_time,
+            });
+          }
+
+          // 消息量里程碑
+          const total = contact.total_messages;
+          const thresholds = [100, 500, 1000, 5000, 10000, 50000];
+          const reached = thresholds.filter(t => total >= t);
+          if (reached.length > 0) {
+            const highest = reached[reached.length - 1];
+            milestones.push({
+              icon: <MessageCircle size={11} className="text-[#10aeff]" />,
+              label: `${highest.toLocaleString()} 条`,
+              detail: `已累计 ${total.toLocaleString()} 条消息`,
+            });
+          }
+
+          // 峰值月
+          if (contact.peak_monthly && contact.peak_period) {
+            milestones.push({
+              icon: <Calendar size={11} className="text-[#ff9500]" />,
+              label: '最火月份',
+              detail: `${contact.peak_period} · ${contact.peak_monthly.toLocaleString()} 条/月`,
+            });
+          }
+
+          // 认识天数
+          if (contact.first_message_time && contact.first_message_time !== '-') {
+            const days = Math.floor((Date.now() - new Date(contact.first_message_time).getTime()) / 86400000);
+            if (days > 0) {
+              milestones.push({
+                icon: <Clock size={11} className="text-[#576b95]" />,
+                label: `${days} 天`,
+                detail: `认识已经 ${days} 天了`,
+              });
+            }
+          }
+
+          if (milestones.length === 0) return null;
+
+          return (
+            <div className="mb-5 flex flex-wrap gap-2">
+              {milestones.map((m, i) => (
+                <div key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#f8f9fb] dark:bg-white/5 text-[10px]">
+                  {m.icon}
+                  <span className={`font-bold text-[#1d1d1f] dk-text${privacyMode && i === 0 ? ' privacy-blur' : ''}`}>{m.label}</span>
+                  <span className={`text-gray-400${privacyMode && i === 0 ? ' privacy-blur' : ''}`}>{m.detail}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* 共同群聊 */}
         {commonGroups.length > 0 && (

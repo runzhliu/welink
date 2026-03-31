@@ -1201,6 +1201,7 @@ type GroupInfo struct {
 	Name          string `json:"name"`       // 群名（remark 或 nickname）
 	SmallHeadURL  string `json:"small_head_url"`
 	TotalMessages int64  `json:"total_messages"`
+	MemberCount   int    `json:"member_count"`
 	FirstMessage  string `json:"first_message_time"`
 	LastMessage   string `json:"last_message_time"`
 }
@@ -1263,11 +1264,28 @@ func (s *ContactService) GetGroups() []GroupInfo {
 			}
 			if total == 0 { return }
 			if firstTs == 9999999999 { firstTs = 0 }
+			// 统计群成员数（去重 real_sender_id）
+			senderSet := make(map[int64]struct{})
+			memberQuery := "SELECT DISTINCT real_sender_id FROM [%s] WHERE real_sender_id > 0"
+			if twGroups != "" {
+				memberQuery = "SELECT DISTINCT real_sender_id FROM [%s]" + twGroups + " AND real_sender_id > 0"
+			}
+			for _, mdb := range s.dbMgr.MessageDBs {
+				mrows, merr := mdb.Query(fmt.Sprintf(memberQuery, tableName))
+				if merr != nil { continue }
+				for mrows.Next() {
+					var sid int64
+					mrows.Scan(&sid)
+					senderSet[sid] = struct{}{}
+				}
+				mrows.Close()
+			}
 			name := g.remark; if name == "" { name = g.nick }; if name == "" { name = g.uname }
 			mu.Lock()
 			result = append(result, GroupInfo{
 				Username: g.uname, Name: name, SmallHeadURL: g.avatar,
-				TotalMessages: total, FirstMessage: s.formatTime(firstTs), LastMessage: s.formatTime(lastTs),
+				TotalMessages: total, MemberCount: len(senderSet),
+				FirstMessage: s.formatTime(firstTs), LastMessage: s.formatTime(lastTs),
 			})
 			mu.Unlock()
 		}(g)

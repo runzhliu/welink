@@ -142,6 +142,7 @@ export interface GroupInfo {
   name: string;
   small_head_url: string;
   total_messages: number;
+  member_count: number;
   first_message_time?: string;
   last_message_time: string;
 }

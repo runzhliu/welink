@@ -2,8 +2,8 @@
  * 全局跨联系人/群聊消息搜索
  */
 
-import React, { useState, useRef } from 'react';
-import { Search, Loader2, ChevronRight, Users, Download } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Search, Loader2, ChevronRight, Users, Download, Clock, X, Sparkles } from 'lucide-react';
 import type { GlobalSearchGroup, ContactStats } from '../../types';
 import { searchApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
@@ -18,6 +18,23 @@ interface Props {
   blockedGroups?: string[];
 }
 
+const HISTORY_KEY = 'welink_search_history';
+const MAX_HISTORY = 12;
+
+const HOT_KEYWORDS = [
+  '生日快乐', '在吗', '谢谢', '晚安', '红包', '哈哈哈',
+  '好的', '吃饭', '回家', '加班', '开会', '想你',
+];
+
+function loadHistory(): string[] {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveHistory(list: string[]) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, MAX_HISTORY)));
+}
+
 export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupClick, blockedGroups = [] }) => {
   const { privacyMode } = usePrivacyMode();
   const [query, setQuery] = useState('');
@@ -28,6 +45,7 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
   const [includeGroups, setIncludeGroups] = useState(true);
   const [contextTarget, setContextTarget] = useState<SearchContextTarget | null>(null);
   const [exportMsg, setExportMsg] = useState<{ ok: boolean; message: string } | null>(null);
+  const [history, setHistory] = useState<string[]>(loadHistory);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = async (format: 'csv' | 'txt') => {
@@ -42,12 +60,37 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
   const searchType = includeContacts && includeGroups ? 'all' : includeContacts ? 'contact' : 'group';
   const canSearch = query.trim() && (includeContacts || includeGroups);
 
+  const addToHistory = useCallback((q: string) => {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    setHistory(prev => {
+      const next = [trimmed, ...prev.filter(h => h !== trimmed)].slice(0, MAX_HISTORY);
+      saveHistory(next);
+      return next;
+    });
+  }, []);
+
+  const clearHistory = useCallback(() => {
+    setHistory([]);
+    saveHistory([]);
+  }, []);
+
+  const removeHistoryItem = useCallback((item: string) => {
+    setHistory(prev => {
+      const next = prev.filter(h => h !== item);
+      saveHistory(next);
+      return next;
+    });
+  }, []);
+
   const handleSearch = async (q: string) => {
-    if (!canSearch) return;
+    const trimmed = q.trim();
+    if (!trimmed || !(includeContacts || includeGroups)) return;
+    addToHistory(trimmed);
     setLoading(true);
     setSearched(false);
     try {
-      const data = await searchApi.global(q.trim(), searchType);
+      const data = await searchApi.global(trimmed, searchType);
       setResults(data ?? []);
       setSearched(true);
     } catch {
@@ -57,6 +100,26 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
       setLoading(false);
     }
   };
+
+  const quickSearch = useCallback((keyword: string) => {
+    setQuery(keyword);
+    // defer to next tick so query state is set
+    setTimeout(() => {
+      const trimmed = keyword.trim();
+      if (!trimmed) return;
+      addToHistory(trimmed);
+      setLoading(true);
+      setSearched(false);
+      const type = includeContacts && includeGroups ? 'all' : includeContacts ? 'contact' : 'group';
+      searchApi.global(trimmed, type).then(data => {
+        setResults(data ?? []);
+        setSearched(true);
+      }).catch(() => {
+        setResults([]);
+        setSearched(true);
+      }).finally(() => setLoading(false));
+    }, 0);
+  }, [includeContacts, includeGroups, addToHistory]);
 
   const findContact = (username: string) =>
     contacts.find((c) => c.username === username);
@@ -131,6 +194,67 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
           <span className="text-xs text-gray-400 ml-1">· 群聊数据量大，搜索可能需要较长时间</span>
         )}
       </div>
+
+      {/* 热门搜索 + 搜索历史（未搜索或无结果时显示） */}
+      {!loading && !searched && (
+        <div className="space-y-6">
+          {/* 搜索历史 */}
+          {history.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400">
+                  <Clock size={12} />
+                  搜索历史
+                </div>
+                <button
+                  onClick={clearHistory}
+                  className="text-[10px] text-gray-300 hover:text-red-400 transition-colors"
+                >
+                  清除全部
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {history.map(item => (
+                  <span key={item} className="group inline-flex items-center gap-1 pl-3 pr-1.5 py-1.5 rounded-full text-sm
+                    bg-white dark:bg-white/5 border border-gray-200 dark:border-gray-700
+                    hover:border-[#07c160] hover:text-[#07c160] transition-all cursor-pointer">
+                    <span onClick={() => quickSearch(item)}>{item}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeHistoryItem(item); }}
+                      className="p-0.5 rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 热门搜索词 */}
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400 mb-2.5">
+              <Sparkles size={12} />
+              试试搜索
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {HOT_KEYWORDS.map(kw => (
+                <button
+                  key={kw}
+                  onClick={() => quickSearch(kw)}
+                  className="px-3 py-1.5 rounded-full text-sm
+                    bg-[#f8f9fb] dark:bg-white/5 text-gray-500 dark:text-gray-400
+                    hover:bg-[#e7f8f0] hover:text-[#07c160] dark:hover:bg-[#07c160]/15
+                    border border-transparent hover:border-[#07c160]/30
+                    transition-all"
+                >
+                  {kw}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 状态 */}
       {loading && (

@@ -10,7 +10,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { Hourglass, MessageSquare, ChevronLeft, ChevronRight, X, Users, MessagesSquare, Bot, Send, Loader2, Square, Copy, Check, Share2 } from 'lucide-react';
+import { Hourglass, MessageSquare, ChevronLeft, ChevronRight, X, Users, MessagesSquare, Bot, Send, Loader2, Square, Copy, Check, Share2, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateShareImage } from '../../utils/shareImage';
@@ -866,6 +866,50 @@ export const ChatCalendarPage: React.FC<Props> = () => {
           <h1 className="dk-text text-3xl sm:text-5xl font-black tracking-tight text-[#1d1d1f] mb-1">时光机</h1>
           <p className="text-gray-400 text-sm">聊天足迹，点击日期查看当天记录</p>
         </div>
+
+        {/* 去年今天 */}
+        {(() => {
+          const today = new Date();
+          const lastYear = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+          const lastYearStr = isoDate(lastYear);
+          const lastYearCount = heatmap[lastYearStr] ?? 0;
+
+          // also check 2 years ago, 3 years ago
+          const memories: { year: number; date: string; count: number }[] = [];
+          for (let y = 1; y <= 5; y++) {
+            const d = new Date(today.getFullYear() - y, today.getMonth(), today.getDate());
+            const ds = isoDate(d);
+            const c = heatmap[ds] ?? 0;
+            if (c > 0) memories.push({ year: y, date: ds, count: c });
+          }
+
+          if (memories.length === 0) return null;
+
+          return (
+            <button
+              onClick={() => handleDayClick(memories[0].date)}
+              className="w-full dk-card bg-gradient-to-r from-[#f0faf4] to-[#e7f8f0] dark:from-[#07c160]/10 dark:to-[#07c160]/5
+                border border-[#07c160]/20 rounded-2xl px-5 py-3 flex items-center gap-3
+                hover:shadow-md hover:border-[#07c160]/40 transition-all text-left"
+            >
+              <div className="w-9 h-9 rounded-xl bg-[#07c160] flex items-center justify-center flex-shrink-0">
+                <Sparkles size={16} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-[#1d1d1f] dk-text">
+                  {memories.length === 1
+                    ? `${memories[0].year} 年前的今天`
+                    : `回忆：${memories.map(m => `${m.year}年前`).join('、')}的今天`
+                  }
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {memories.map(m => `${m.date}（${m.count} 条）`).join(' · ')}
+                </div>
+              </div>
+              <ChevronRight size={16} className="text-[#07c160] flex-shrink-0" />
+            </button>
+          );
+        })()}
 
         {/* 日历卡片 */}
         <div className="dk-card bg-white dark:bg-[#1c1c1e] border border-gray-100 dark:border-white/10 rounded-3xl p-5 shadow-sm">

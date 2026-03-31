@@ -3,8 +3,8 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Users, MessageSquare, ChevronRight, Loader2, X, BarChart2, EyeOff, Search, Download, Bot } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { Users, MessageSquare, MessageCircle, Clock, ChevronRight, ChevronUp, ChevronDown, Loader2, X, BarChart2, EyeOff, Search, Download, Bot, TrendingUp, Flame, Calendar } from 'lucide-react';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { GroupInfo, GroupDetail, ContactStats, GroupChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
 import { groupsApi } from '../../services/api';
@@ -480,6 +480,129 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
               </div>
             )}
 
+            {/* 群活跃趋势图（按月聚合 daily_heatmap） */}
+            {Object.keys(detail.daily_heatmap).length > 0 && (() => {
+              // 聚合为月度数据
+              const monthMap = new Map<string, number>();
+              for (const [date, count] of Object.entries(detail.daily_heatmap)) {
+                const month = date.slice(0, 7); // YYYY-MM
+                monthMap.set(month, (monthMap.get(month) ?? 0) + count);
+              }
+              const monthlyData = Array.from(monthMap.entries())
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([month, count]) => ({
+                  month,
+                  label: `${month.slice(2, 4)}/${month.slice(5)}`,
+                  count,
+                }));
+
+              if (monthlyData.length < 2) return null;
+
+              const maxMonth = monthlyData.reduce((best, cur) => cur.count > best.count ? cur : best);
+              const minMonth = monthlyData.reduce((best, cur) => cur.count < best.count ? cur : best);
+
+              return (
+                <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
+                  <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase mb-1 tracking-wider flex items-center gap-2">
+                    <TrendingUp size={14} /> 群活跃趋势
+                  </h4>
+                  <p className="text-xs text-gray-400 mb-1">按月统计消息量变化</p>
+                  <div className="flex flex-wrap gap-3 mb-3 text-[10px]">
+                    <span className="px-2 py-0.5 rounded-full bg-[#07c160]/10 text-[#07c160] font-bold">
+                      最活跃 {maxMonth.month}（{maxMonth.count.toLocaleString()} 条）
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-gray-200/60 text-gray-500 font-bold dark:bg-gray-700 dark:text-gray-400">
+                      最冷清 {minMonth.month}（{minMonth.count.toLocaleString()} 条）
+                    </span>
+                  </div>
+                  <ResponsiveContainer width="100%" height={120}>
+                    <AreaChart data={monthlyData} margin={{ top: 4, right: 4, bottom: 0, left: -30 }}>
+                      <defs>
+                        <linearGradient id="groupTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#07c160" stopOpacity={0.3} />
+                          <stop offset="100%" stopColor="#07c160" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 9, fill: '#bbb' }}
+                        tickLine={false}
+                        interval={Math.max(0, Math.floor(monthlyData.length / 8) - 1)}
+                      />
+                      <YAxis tick={false} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: 8, fontSize: 12 }}
+                        formatter={(v: number) => [`${v.toLocaleString()} 条`, '消息数']}
+                        labelFormatter={(l: string) => `20${l.replace('/', ' 年 ')} 月`}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="count"
+                        stroke="#07c160"
+                        strokeWidth={2}
+                        fill="url(#groupTrendGrad)"
+                        dot={false}
+                        activeDot={{ r: 4, fill: '#07c160' }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              );
+            })()}
+
+            {/* 高峰日 TOP 5 */}
+            {Object.keys(detail.daily_heatmap).length > 0 && (() => {
+              const topDays = Object.entries(detail.daily_heatmap)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 5);
+
+              if (topDays.length === 0) return null;
+              const topMax = topDays[0][1];
+
+              return (
+                <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
+                  <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase mb-1 tracking-wider flex items-center gap-2">
+                    <Flame size={14} /> 高峰日 TOP {topDays.length}
+                  </h4>
+                  <p className="text-xs text-gray-400 mb-3">消息量最多的日子，点击查看当天聊天记录</p>
+                  <div className="space-y-2">
+                    {topDays.map(([date, count], i) => {
+                      const weekday = ['日', '一', '二', '三', '四', '五', '六'][new Date(date).getDay()];
+                      return (
+                        <button
+                          key={date}
+                          onClick={() => setDayPanel({ date, count })}
+                          className="flex items-center gap-3 w-full text-left group rounded-xl p-2 -mx-2 hover:bg-white dark:hover:bg-white/5 transition-colors"
+                        >
+                          <span className={`w-5 text-xs font-black text-right flex-shrink-0 ${
+                            i === 0 ? 'text-red-500' : i === 1 ? 'text-orange-400' : i === 2 ? 'text-yellow-500' : 'text-gray-300'
+                          }`}>{i + 1}</span>
+                          <div className="flex items-center gap-2 w-36 flex-shrink-0">
+                            <Calendar size={12} className="text-gray-300" />
+                            <span className="text-sm font-bold dk-text text-[#1d1d1f]">{date}</span>
+                            <span className="text-[10px] text-gray-400">周{weekday}</span>
+                          </div>
+                          <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${(count / topMax) * 100}%`,
+                                background: i === 0 ? '#fa5151' : i === 1 ? '#ff9500' : i === 2 ? '#ffc300' : '#10aeff',
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-400 w-16 text-right flex-shrink-0 font-bold">
+                            {count.toLocaleString()} 条
+                          </span>
+                          <ChevronRight size={12} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* 高频词 */}
             {(detail.top_words?.length ?? 0) > 0 && (
               <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
@@ -612,12 +735,36 @@ interface GroupsViewProps {
   onOpenSettings?: () => void;
 }
 
+type GroupSortKey = 'name' | 'total_messages' | 'member_count' | 'last_message_time' | 'status';
+type SortDir = 'asc' | 'desc';
+
+const getGroupStatusTier = (g: GroupInfo): 0 | 1 | 2 | 3 => {
+  const days = (Date.now() - new Date(g.last_message_time).getTime()) / 86400000;
+  if (days < 7)   return 0;
+  if (days < 30)  return 1;
+  if (days < 180) return 2;
+  return 3;
+};
+
+const GROUP_STATUS_BADGES = [
+  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#e7f8f0] text-[#07c160]">活跃</span>,
+  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#f0fce8] text-[#7bc934]">温热</span>,
+  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-[#ff9500]">渐冷</span>,
+  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#eef1f7] text-[#576b95]">沉寂</span>,
+];
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
 export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactClick, blockedGroups = [], onBlockGroup, onOpenSettings }) => {
   const { privacyMode } = usePrivacyMode();
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<GroupInfo | null>(null);
+  const [sortKey, setSortKey] = useState<GroupSortKey>('total_messages');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     groupsApi.getList().then((data) => {
@@ -632,6 +779,51 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
       g.username.toLowerCase().includes(search.toLowerCase());
   });
 
+  const handleSort = (key: GroupSortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
+    setCurrentPage(1);
+  };
+
+  const sorted = [...filtered].sort((a, b) => {
+    let cmp = 0;
+    switch (sortKey) {
+      case 'name':
+        cmp = a.name.localeCompare(b.name, 'zh');
+        break;
+      case 'total_messages':
+        cmp = a.total_messages - b.total_messages;
+        break;
+      case 'member_count':
+        cmp = (a.member_count ?? 0) - (b.member_count ?? 0);
+        break;
+      case 'last_message_time':
+        cmp = (a.last_message_time || '').localeCompare(b.last_message_time || '');
+        break;
+      case 'status':
+        cmp = getGroupStatusTier(a) - getGroupStatusTier(b);
+        break;
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
+
+  const totalPages = Math.ceil(sorted.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentGroups = sorted.slice(startIndex, startIndex + itemsPerPage);
+
+  const SortIcon = ({ col }: { col: GroupSortKey }) => {
+    if (sortKey !== col) return <span className="opacity-20 ml-1"><ChevronUp size={11} /></span>;
+    return sortDir === 'asc'
+      ? <ChevronUp size={11} className="ml-1 text-[#07c160]" />
+      : <ChevronDown size={11} className="ml-1 text-[#07c160]" />;
+  };
+
+  const thClass = "px-8 py-5 text-left text-xs font-black text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-[#07c160] transition-colors";
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -639,6 +831,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
       </div>
     );
   }
+
+  const totalMembers = groups.reduce((s, g) => s + (g.member_count ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -653,14 +847,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
             type="text"
             placeholder="搜索群聊..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
             className="dk-input w-full pl-4 pr-4 py-2.5 bg-white border border-gray-200 rounded-2xl text-sm focus:outline-none focus:border-[#07c160]"
           />
         </div>
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl p-5">
           <Users size={20} className="text-[#10aeff] mb-2" strokeWidth={2.5} />
           <div className="dk-text text-2xl sm:text-3xl font-black text-[#1d1d1f]">{groups.length}</div>
@@ -673,51 +867,202 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
           </div>
           <div className="dk-text-muted text-xs text-gray-500 mt-1">群消息总量</div>
         </div>
+        <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl p-5">
+          <Users size={20} className="text-[#ff9500] mb-2" strokeWidth={2.5} />
+          <div className="dk-text text-2xl sm:text-3xl font-black text-[#1d1d1f]">
+            {totalMembers > 10000 ? `${(totalMembers / 10000).toFixed(1)}万` : totalMembers.toLocaleString()}
+          </div>
+          <div className="dk-text-muted text-xs text-gray-500 mt-1">群友总数</div>
+        </div>
       </div>
 
       {/* 群列表 */}
-      <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="dk-thead bg-[#f8f9fb] dk-border border-b border-gray-100 px-5 py-3 hidden sm:grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 text-xs font-black text-gray-500 dark:text-gray-400 uppercase">
-          <div />
-          <div>群名</div>
-          <div className="text-right w-24">消息数</div>
-          <div className="text-right w-28">最后消息</div>
-          <div className="w-6" />
+      <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl sm:rounded-3xl overflow-hidden">
+        {/* 桌面表格 */}
+        <div className="hidden sm:block overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="dk-thead bg-[#f8f9fb] dk-border border-b border-gray-100">
+                <th className={thClass} onClick={() => handleSort('name')}>
+                  <div className="flex items-center">群名<SortIcon col="name" /></div>
+                </th>
+                <th className={thClass} onClick={() => handleSort('member_count')}>
+                  <div className="flex items-center gap-1"><Users size={14} />群友数<SortIcon col="member_count" /></div>
+                </th>
+                <th className={thClass} onClick={() => handleSort('total_messages')}>
+                  <div className="flex items-center gap-1"><MessageCircle size={14} />消息数<SortIcon col="total_messages" /></div>
+                </th>
+                <th className={thClass} onClick={() => handleSort('last_message_time')}>
+                  <div className="flex items-center gap-1"><Clock size={14} />最后消息<SortIcon col="last_message_time" /></div>
+                </th>
+                <th className={thClass} onClick={() => handleSort('status')}>
+                  <div className="flex items-center gap-1">状态<SortIcon col="status" /></div>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+              {currentGroups.map((group) => (
+                <tr
+                  key={group.username}
+                  onClick={() => setSelected(group)}
+                  className="dk-row-hover hover:bg-[#f8f9fb] dark:hover:bg-white/5 cursor-pointer transition-colors duration-150"
+                >
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-3">
+                      {group.small_head_url ? (
+                        <img src={avatarSrc(group.small_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      ) : (
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#10aeff] to-[#0e8dd6] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
+                          <Users size={16} strokeWidth={2} />
+                        </div>
+                      )}
+                      <div className={`font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>{group.name}</div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    {(group.member_count ?? 0) > 0 ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+                        <Users size={11} />{group.member_count}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-300">-</span>
+                    )}
+                  </td>
+                  <td className="px-8 py-5">
+                    <span className="font-bold dk-text text-[#1d1d1f]">{group.total_messages.toLocaleString()}</span>
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="text-xs text-gray-400 leading-5">
+                      {group.first_message_time && <div>始于 {group.first_message_time}</div>}
+                      <div>最近 {group.last_message_time}</div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="flex flex-col gap-1.5 items-start">
+                      {GROUP_STATUS_BADGES[getGroupStatusTier(group)]}
+                      <AIAnalysisBadge username={group.username} isGroup />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        <div className="divide-y dk-divide divide-gray-100">
-          {filtered.map((group) => (
+        {/* 手机卡片列表 */}
+        <div className="sm:hidden divide-y divide-gray-100 dark:divide-white/5">
+          {currentGroups.map((group) => (
             <div
               key={group.username}
               onClick={() => setSelected(group)}
-              className="dk-row-hover flex items-center gap-4 px-5 py-4 hover:bg-[#f8f9fb] cursor-pointer transition-colors"
+              className="dk-row-hover flex items-center justify-between px-4 py-4 active:bg-[#f8f9fb] dark:active:bg-white/5 cursor-pointer"
             >
-              {group.small_head_url ? (
-                <img src={avatarSrc(group.small_head_url)} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-              ) : (
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#10aeff] to-[#0e8dd6] flex items-center justify-center text-white flex-shrink-0">
-                  <Users size={18} strokeWidth={2} />
+              <div className="flex items-center gap-3 min-w-0">
+                {group.small_head_url ? (
+                  <img src={avatarSrc(group.small_head_url)} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#10aeff] to-[#0e8dd6] flex items-center justify-center text-white flex-shrink-0">
+                    <Users size={18} strokeWidth={2} />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className={`font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>{group.name}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    {(group.member_count ?? 0) > 0 && <span>{group.member_count} 人 · </span>}
+                    {group.total_messages.toLocaleString()} 条 · {group.last_message_time}
+                  </div>
                 </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <div className={`dk-text font-bold text-[#1d1d1f] truncate${privacyMode ? ' privacy-blur' : ''}`}>{group.name}</div>
-                <div className="text-xs text-gray-400 mt-0.5 sm:hidden">{group.total_messages.toLocaleString()} 条 · {group.last_message_time}</div>
               </div>
-              <div className="hidden sm:block text-right w-24">
-                <span className="font-bold dk-text text-[#1d1d1f]">{group.total_messages.toLocaleString()}</span>
+              <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
+                <span className="text-sm font-bold text-[#1d1d1f] dk-text">{group.total_messages.toLocaleString()}</span>
+                {GROUP_STATUS_BADGES[getGroupStatusTier(group)]}
+                <AIAnalysisBadge username={group.username} isGroup />
               </div>
-              <div className="hidden sm:block text-right w-36 text-xs text-gray-400 leading-5">
-                {group.first_message_time && <div>始于 {group.first_message_time}</div>}
-                <div>最近 {group.last_message_time}</div>
-              </div>
-              <ChevronRight size={16} className="text-gray-300 flex-shrink-0" />
             </div>
           ))}
-          {filtered.length === 0 && (
-            <div className="text-center py-16 text-gray-300 font-semibold">无匹配群聊</div>
-          )}
         </div>
+
+        {filtered.length === 0 && (
+          <div className="text-center py-16 text-gray-300 font-semibold">无匹配群聊</div>
+        )}
+
+        {/* Pagination */}
+        {sorted.length > 0 && (
+          <div className="dk-thead dk-border px-4 sm:px-8 py-4 sm:py-5 bg-[#f8f9fb] border-t border-gray-100 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-xs sm:text-sm text-gray-600 font-medium">
+                {startIndex + 1}–{Math.min(startIndex + itemsPerPage, sorted.length)} / {sorted.length}
+              </span>
+              <div className="hidden sm:flex items-center gap-1">
+                {PAGE_SIZE_OPTIONS.map(size => (
+                  <button
+                    key={size}
+                    onClick={() => { setItemsPerPage(size); setCurrentPage(1); }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                      itemsPerPage === size
+                        ? 'bg-[#07c160] text-white'
+                        : 'text-gray-400 hover:bg-white dark:hover:bg-white/5 hover:text-gray-600'
+                    }`}
+                  >
+                    {size}
+                  </button>
+                ))}
+                <span className="text-xs text-gray-300 ml-1">条/页</span>
+              </div>
+            </div>
+
+            <div className="flex gap-1 sm:gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 sm:px-4 py-2 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-white/5"
+              >
+                上一页
+              </button>
+              <div className="hidden sm:flex items-center gap-1">
+                {(() => {
+                  const pages: (number | '...')[] = [];
+                  const delta = 2;
+                  const left = currentPage - delta;
+                  const right = currentPage + delta;
+                  let last = 0;
+                  for (let p = 1; p <= totalPages; p++) {
+                    if (p === 1 || p === totalPages || (p >= left && p <= right)) {
+                      if (last && p - last > 1) pages.push('...');
+                      pages.push(p);
+                      last = p;
+                    }
+                  }
+                  return pages.map((p, idx) =>
+                    p === '...' ? (
+                      <span key={`ellipsis-${idx}`} className="w-8 text-center text-gray-400 text-sm">…</span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setCurrentPage(p as number)}
+                        className={`w-10 h-10 rounded-xl font-bold text-sm transition-all ${
+                          currentPage === p ? 'bg-[#07c160] text-white shadow-lg shadow-green-100/50' : 'hover:bg-white dark:hover:bg-white/5 hover:shadow-sm'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  );
+                })()}
+              </div>
+              <span className="sm:hidden flex items-center text-sm text-gray-500 px-2">{currentPage}/{totalPages}</span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 sm:px-4 py-2 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-white/5"
+              >
+                下一页
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {selected && (

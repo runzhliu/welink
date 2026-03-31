@@ -11,6 +11,9 @@ import { MonthlyTrendChart } from './MonthlyTrendChart';
 import { HourlyHeatmap } from './HourlyHeatmap';
 import { LateNightRanking } from './LateNightRanking';
 import { ContactTable } from './ContactTable';
+import SocialReport from './SocialReport';
+import { DriftingApart } from './DriftingApart';
+import { LateNightGuard } from './LateNightGuard';
 import { formatCompactNumber } from '../../utils/formatters';
 
 interface StatsPageProps {
@@ -71,9 +74,16 @@ export const StatsPage: React.FC<StatsPageProps> = ({
         <HourlyHeatmap data={globalStats} />
       </div>
 
-      {/* Late Night Ranking */}
-      <div className="mb-6 sm:mb-8">
+      {/* Social Report + Drifting Apart */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-6 sm:mb-8">
+        <SocialReport contacts={contacts} globalStats={globalStats} healthStatus={healthStatus} />
+        <DriftingApart contacts={contacts} onContactClick={onContactClick} />
+      </div>
+
+      {/* Late Night Ranking + Late Night Guard */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-6 sm:mb-8">
         <LateNightRanking data={globalStats} contacts={contacts} onContactClick={onContactClick} />
+        <LateNightGuard globalStats={globalStats} contacts={contacts} onContactClick={onContactClick} />
       </div>
 
       {/* Contact Table */}
