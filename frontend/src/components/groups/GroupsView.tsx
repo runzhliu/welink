@@ -872,7 +872,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
           <div className="dk-text text-2xl sm:text-3xl font-black text-[#1d1d1f]">
             {totalMembers > 10000 ? `${(totalMembers / 10000).toFixed(1)}万` : totalMembers.toLocaleString()}
           </div>
-          <div className="dk-text-muted text-xs text-gray-500 mt-1">群友总数</div>
+          <div className="dk-text-muted text-xs text-gray-500 mt-1">发言人数</div>
         </div>
       </div>
 
@@ -887,7 +887,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
                   <div className="flex items-center">群名<SortIcon col="name" /></div>
                 </th>
                 <th className={thClass} onClick={() => handleSort('member_count')}>
-                  <div className="flex items-center gap-1"><Users size={14} />群友数<SortIcon col="member_count" /></div>
+                  <div className="flex items-center gap-1"><Users size={14} />发言人数<SortIcon col="member_count" /></div>
                 </th>
                 <th className={thClass} onClick={() => handleSort('total_messages')}>
                   <div className="flex items-center gap-1"><MessageCircle size={14} />消息数<SortIcon col="total_messages" /></div>
@@ -970,7 +970,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
                 <div className="min-w-0">
                   <div className={`font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>{group.name}</div>
                   <div className="text-xs text-gray-400 mt-0.5">
-                    {(group.member_count ?? 0) > 0 && <span>{group.member_count} 人 · </span>}
+                    {(group.member_count ?? 0) > 0 && <span>{group.member_count} 人发言 · </span>}
                     {group.total_messages.toLocaleString()} 条 · {group.last_message_time}
                   </div>
                 </div>

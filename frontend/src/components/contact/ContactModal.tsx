@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock } from 'lucide-react';
+import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame } from 'lucide-react';
 import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
 import { contactsApi } from '../../services/api';
@@ -347,64 +347,136 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
 
         {/* 聊天里程碑 */}
         {contact.total_messages > 0 && (() => {
-          const milestones: { icon: React.ReactNode; label: string; detail: string }[] = [];
-
-          // 第一条消息
-          if (contact.first_message_time && contact.first_message_time !== '-') {
-            milestones.push({
-              icon: <Flag size={11} className="text-[#07c160]" />,
-              label: '初识',
-              detail: contact.first_msg
-                ? `${contact.first_message_time}「${contact.first_msg.length > 20 ? contact.first_msg.slice(0, 20) + '…' : contact.first_msg}」`
-                : contact.first_message_time,
-            });
-          }
-
-          // 消息量里程碑
           const total = contact.total_messages;
-          const thresholds = [100, 500, 1000, 5000, 10000, 50000];
-          const reached = thresholds.filter(t => total >= t);
-          if (reached.length > 0) {
-            const highest = reached[reached.length - 1];
-            milestones.push({
-              icon: <MessageCircle size={11} className="text-[#10aeff]" />,
-              label: `${highest.toLocaleString()} 条`,
-              detail: `已累计 ${total.toLocaleString()} 条消息`,
-            });
-          }
 
-          // 峰值月
-          if (contact.peak_monthly && contact.peak_period) {
-            milestones.push({
-              icon: <Calendar size={11} className="text-[#ff9500]" />,
-              label: '最火月份',
-              detail: `${contact.peak_period} · ${contact.peak_monthly.toLocaleString()} 条/月`,
-            });
-          }
+          // 消息量里程碑阶梯
+          const msgThresholds = [100, 500, 1000, 5000, 10000, 50000, 100000, 200000, 500000];
+          const reached = msgThresholds.filter(t => total >= t);
+          // 下一个未达成的里程碑
+          const nextThreshold = msgThresholds.find(t => total < t);
+          const progress = nextThreshold ? Math.min(100, (total / nextThreshold) * 100) : 100;
 
           // 认识天数
+          let days = 0;
           if (contact.first_message_time && contact.first_message_time !== '-') {
-            const days = Math.floor((Date.now() - new Date(contact.first_message_time).getTime()) / 86400000);
-            if (days > 0) {
-              milestones.push({
-                icon: <Clock size={11} className="text-[#576b95]" />,
-                label: `${days} 天`,
-                detail: `认识已经 ${days} 天了`,
-              });
-            }
+            days = Math.floor((Date.now() - new Date(contact.first_message_time).getTime()) / 86400000);
           }
 
-          if (milestones.length === 0) return null;
+          // 高亮卡片数据
+          const cards: { icon: React.ReactNode; value: string; label: string; color: string; bg: string }[] = [];
+
+          if (contact.first_message_time && contact.first_message_time !== '-') {
+            cards.push({
+              icon: <Flag size={14} />,
+              value: contact.first_message_time.slice(0, 10),
+              label: '初识',
+              color: 'text-[#07c160]',
+              bg: 'bg-[#07c16010]',
+            });
+          }
+          if (days > 0) {
+            cards.push({
+              icon: <Clock size={14} />,
+              value: days >= 365 ? `${(days / 365).toFixed(1)} 年` : `${days} 天`,
+              label: '相识至今',
+              color: 'text-[#576b95]',
+              bg: 'bg-[#576b9510]',
+            });
+          }
+          if (contact.peak_monthly && contact.peak_period) {
+            cards.push({
+              icon: <Flame size={14} />,
+              value: `${contact.peak_monthly.toLocaleString()} 条`,
+              label: contact.peak_period,
+              color: 'text-[#ff9500]',
+              bg: 'bg-[#ff950010]',
+            });
+          }
 
           return (
-            <div className="mb-5 flex flex-wrap gap-2">
-              {milestones.map((m, i) => (
-                <div key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#f8f9fb] dark:bg-white/5 text-[10px]">
-                  {m.icon}
-                  <span className={`font-bold text-[#1d1d1f] dk-text${privacyMode && i === 0 ? ' privacy-blur' : ''}`}>{m.label}</span>
-                  <span className={`text-gray-400${privacyMode && i === 0 ? ' privacy-blur' : ''}`}>{m.detail}</span>
+            <div className="mb-5">
+              {/* 统计卡片 */}
+              {cards.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  {cards.map((c, i) => (
+                    <div key={i} className={`${c.bg} rounded-xl px-3 py-2.5 text-center`}>
+                      <div className={`${c.color} flex justify-center mb-1`}>{c.icon}</div>
+                      <div className={`text-sm font-bold text-[#1d1d1f] dk-text${privacyMode && i === 0 ? ' privacy-blur' : ''}`}>{c.value}</div>
+                      <div className={`text-[10px] text-gray-400 mt-0.5${privacyMode && i === 0 ? ' privacy-blur' : ''}`}>{c.label}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+
+              {/* 消息里程碑进度 */}
+              <div className="bg-[#f8f9fb] dark:bg-white/5 rounded-xl px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Trophy size={13} className="text-[#ff9500]" />
+                    <span className="text-xs font-bold text-[#1d1d1f] dk-text">消息里程碑</span>
+                  </div>
+                  <span className="text-xs text-gray-400 font-mono">
+                    累计 <span className="font-bold text-[#1d1d1f] dk-text">{total.toLocaleString()}</span> 条
+                  </span>
+                </div>
+
+                {/* 进度条 */}
+                {nextThreshold && (
+                  <div className="mb-2.5">
+                    <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${progress}%`,
+                          background: 'linear-gradient(90deg, #07c160, #10aeff)',
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[10px] text-gray-300">{(reached.length > 0 ? reached[reached.length - 1] : 0).toLocaleString()}</span>
+                      <span className="text-[10px] text-gray-400 font-medium">
+                        距下一里程碑 <span className="font-bold text-[#10aeff]">{nextThreshold.toLocaleString()}</span> 条还差 {(nextThreshold - total).toLocaleString()} 条
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 已达成里程碑节点 */}
+                {reached.length > 0 && (
+                  <div className="flex items-center gap-0.5 flex-wrap">
+                    {reached.map((t, i) => (
+                      <React.Fragment key={t}>
+                        <div
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
+                          style={{
+                            background: `linear-gradient(135deg, ${
+                              t >= 100000 ? '#ff6b35, #ff9500' :
+                              t >= 10000 ? '#10aeff, #576b95' :
+                              t >= 1000 ? '#07c160, #10aeff' :
+                              '#a0a0a0, #07c160'
+                            })`,
+                          }}
+                        >
+                          <MessageCircle size={9} />
+                          {t >= 10000 ? `${t / 10000}w` : t >= 1000 ? `${t / 1000}k` : t}
+                        </div>
+                        {i < reached.length - 1 && (
+                          <div className="w-2 h-px bg-gray-300 dark:bg-white/20" />
+                        )}
+                      </React.Fragment>
+                    ))}
+                    {nextThreshold && (
+                      <>
+                        <div className="w-2 h-px bg-gray-200" />
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium text-gray-300 border border-dashed border-gray-300 dark:border-white/20">
+                          <MessageCircle size={9} />
+                          {nextThreshold >= 10000 ? `${nextThreshold / 10000}w` : nextThreshold >= 1000 ? `${nextThreshold / 1000}k` : nextThreshold}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           );
         })()}

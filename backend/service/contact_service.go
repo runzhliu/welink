@@ -1333,7 +1333,7 @@ func (s *ContactService) GetGroups() []GroupInfo {
 			}
 			if total == 0 { return }
 			if firstTs == 9999999999 { firstTs = 0 }
-			// 统计群成员数（去重 real_sender_id）
+			// 统计群内发言人数（去重 real_sender_id，非群实际成员数）
 			senderSet := make(map[int64]struct{})
 			memberQuery := "SELECT DISTINCT real_sender_id FROM [%s] WHERE real_sender_id > 0"
 			if twGroups != "" {

@@ -70,11 +70,11 @@ DOCKER_USER   := runzhliu
 BUILD_PLATFORMS := linux/amd64,linux/arm64
 
 ## _server-build-push 对单个镜像分别 build amd64/arm64 后合并推送
-## 用法：$(call _server-build-push,<tag>,<context>)
+## 用法：$(call _server-build-push,<tag>,<context>[,extra-build-args])
 define _server-build-push
 	@echo "→ build $(1) amd64"; \
 	PROXY="$${HTTP_PROXY:-$${http_proxy:-$${ALL_PROXY:-$${all_proxy:-}}}}"; \
-	BARGS=""; [ -n "$$PROXY" ] && BARGS="--build-arg HTTP_PROXY=$$PROXY --build-arg HTTPS_PROXY=$$PROXY"; \
+	BARGS="$(3)"; [ -n "$$PROXY" ] && BARGS="$$BARGS --build-arg HTTP_PROXY=$$PROXY --build-arg HTTPS_PROXY=$$PROXY"; \
 	docker build $$BARGS --platform linux/amd64 -t $(1):amd64-tmp $(2); \
 	echo "→ build $(1) arm64"; \
 	docker build $$BARGS --platform linux/arm64 -t $(1):arm64-tmp $(2); \
@@ -90,7 +90,7 @@ endef
 server-push: ## 【本地执行】多平台构建并推送到 Docker Hub（amd64 + arm64，需已 docker login）
 	$(call _server-build-push,$(DOCKER_USER)/welink-website,docs/)
 	$(call _server-build-push,$(DOCKER_USER)/welink-frontend,frontend/)
-	$(call _server-build-push,$(DOCKER_USER)/welink-backend,backend/)
+	$(call _server-build-push,$(DOCKER_USER)/welink-backend,backend/,--build-arg APP_VERSION=$(APP_VERSION))
 
 server-up:   ## 【服务器执行】拉取最新镜像并启动官网 + Demo
 	docker compose -f server-compose.yml pull

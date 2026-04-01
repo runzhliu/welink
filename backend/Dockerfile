@@ -1,5 +1,6 @@
 # Build stage
 FROM golang:1.23-alpine AS builder
+ARG APP_VERSION=dev
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -8,7 +9,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux go build -o welink-backend .
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.appVersion=${APP_VERSION}" -o welink-backend .
 
 # Final stage
 FROM alpine:3.21
