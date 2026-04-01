@@ -17,6 +17,7 @@ import { DatabaseView } from './components/dashboard/DatabaseView';
 import { SearchView } from './components/search/SearchView';
 import { TimelineView } from './components/timeline/TimelineView';
 import { ChatCalendarPage } from './components/calendar/ChatCalendarPage';
+import { AnniversaryPage } from './components/anniversary/AnniversaryPage';
 import { GroupsView, GroupDetailModal } from './components/groups/GroupsView';
 import { useDarkMode } from './hooks/useDarkMode';
 
@@ -265,6 +266,8 @@ function App() {
           <TimelineView contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'calendar' ? (
           <ChatCalendarPage contacts={contacts} onContactClick={handleContactClick} />
+        ) : activeTab === 'anniversary' ? (
+          <AnniversaryPage contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'search' ? (
           <SearchView
             contacts={contacts}

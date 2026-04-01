@@ -114,7 +114,42 @@ export interface BackendStatus {
   total_cached: number;
 }
 
-export type TabType = 'dashboard' | 'stats' | 'db' | 'groups' | 'search' | 'timeline' | 'calendar' | 'settings';
+export type TabType = 'dashboard' | 'stats' | 'db' | 'groups' | 'search' | 'timeline' | 'calendar' | 'anniversary' | 'settings';
+
+export interface DetectedEvent {
+  type: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  date: string;        // MM-DD
+  years: number[];
+  evidence: string;
+}
+
+export interface FriendMilestone {
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  first_msg_date: string;
+  days_known: number;
+  next_milestone: number;
+  next_milestone_date: string;
+  days_until: number;
+}
+
+export interface CustomAnniversary {
+  id: string;
+  title: string;
+  date: string;        // YYYY-MM-DD
+  recurring: boolean;
+  username?: string;
+}
+
+export interface AnniversaryResponse {
+  detected: DetectedEvent[];
+  milestones: FriendMilestone[];
+  custom: CustomAnniversary[];
+}
 
 export interface CalendarDayEntry {
   username: string;

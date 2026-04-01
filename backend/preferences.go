@@ -56,12 +56,24 @@ type Preferences struct {
 	MemLLMBaseURL string `json:"mem_llm_base_url,omitempty"` // 默认 http://localhost:11434/v1
 	MemLLMModel   string `json:"mem_llm_model,omitempty"`    // 默认 qwen2.5:7b
 
+	// 自定义纪念日
+	CustomAnniversaries []CustomAnniversary `json:"custom_anniversaries,omitempty"`
+
 	// Gemini OAuth（可选，与 API Key 二选一）
 	GeminiClientID     string `json:"gemini_client_id,omitempty"`
 	GeminiClientSecret string `json:"gemini_client_secret,omitempty"`
 	GeminiAccessToken  string `json:"gemini_access_token,omitempty"`
 	GeminiRefreshToken string `json:"gemini_refresh_token,omitempty"`
 	GeminiTokenExpiry  int64  `json:"gemini_token_expiry,omitempty"` // Unix timestamp
+}
+
+// CustomAnniversary 用户自定义纪念日
+type CustomAnniversary struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Date      string `json:"date"`               // YYYY-MM-DD
+	Recurring bool   `json:"recurring"`           // 每年重复
+	Username  string `json:"username,omitempty"`   // 可选关联联系人
 }
 
 // preferencesPath 返回 preferences.json 的绝对路径。

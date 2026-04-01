@@ -221,4 +221,12 @@ export const calendarApi = {
     }),
 };
 
+export const anniversaryApi = {
+  getAll: () =>
+    api.get<void, import('../types').AnniversaryResponse>('/anniversaries'),
+
+  saveCustom: (anniversaries: import('../types').CustomAnniversary[]) =>
+    api.put<void, import('../types').CustomAnniversary[]>('/preferences/anniversaries', { custom_anniversaries: anniversaries }),
+};
+
 export default api;

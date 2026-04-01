@@ -127,26 +127,7 @@ export default function SocialReport({ contacts, globalStats, healthStatus }: Pr
   }, [sharing, score, scoreLabel, globalStats, totalContacts, activePct, bestMonth, nightOwl, topContact, highlights, privacyMode]);
 
   return (
-    <div className="relative">
-      {/* Share button */}
-      <button
-        onClick={handleShare}
-        disabled={sharing}
-        className="absolute top-3 right-3 z-10 p-2 rounded-xl transition-all
-          bg-white/80 dark:bg-black/30 backdrop-blur-sm
-          text-gray-400 hover:text-[#07c160] hover:bg-white
-          disabled:opacity-50"
-        title="保存为图片"
-      >
-        {sharing ? (
-          <Loader2 size={16} className="animate-spin" />
-        ) : shared ? (
-          <Check size={16} className="text-[#07c160]" />
-        ) : (
-          <Share2 size={16} />
-        )}
-      </button>
-
+    <div>
       <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl overflow-hidden">
         {/* Header */}
         <div
@@ -157,9 +138,25 @@ export default function SocialReport({ contacts, globalStats, healthStatus }: Pr
             <Heart className="w-5 h-5 text-white" />
             <span className="text-white font-bold text-base">社交体检报告</span>
           </div>
-          <span className="text-white/70 text-xs">
-            {new Date().getFullYear()}年{new Date().getMonth() + 1}月
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-white/70 text-xs">
+              {new Date().getFullYear()}年{new Date().getMonth() + 1}月
+            </span>
+            <button
+              onClick={handleShare}
+              disabled={sharing}
+              className="p-1.5 rounded-lg transition-all bg-white/20 hover:bg-white/30 text-white disabled:opacity-50"
+              title="保存为图片"
+            >
+              {sharing ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : shared ? (
+                <Check size={14} />
+              ) : (
+                <Share2 size={14} />
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="p-5 space-y-5">

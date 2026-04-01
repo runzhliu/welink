@@ -376,6 +376,24 @@ func serverMain() {
 		c.JSON(http.StatusOK, existing)
 	})
 
+	// 自定义纪念日保存
+	api.PUT("/preferences/anniversaries", func(c *gin.Context) {
+		var body struct {
+			CustomAnniversaries []CustomAnniversary `json:"custom_anniversaries"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		existing := loadPreferences()
+		existing.CustomAnniversaries = body.CustomAnniversaries
+		if err := savePreferences(existing); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, existing.CustomAnniversaries)
+	})
+
 	// LLM 配置单独保存，避免与屏蔽名单 PUT 冲突
 	api.PUT("/preferences/llm", func(c *gin.Context) {
 		// Demo 模式下禁止修改（防止 SSRF / API key 滥用）
@@ -1173,6 +1191,9 @@ func serverMain() {
 
 		// 时光轴（聊天日历）
 		registerCalendarRoutes(prot, getSvc)
+
+		// 纪念日 & 提醒
+		registerAnniversaryRoutes(prot, getSvc)
 
 		// 群聊某天聊天记录
 		prot.GET("/groups/messages", func(c *gin.Context) {

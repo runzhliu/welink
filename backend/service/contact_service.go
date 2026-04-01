@@ -2415,3 +2415,237 @@ func (s *ContactService) GetDayActivity(date string) (contacts []CalendarDayEntr
 	sort.Slice(groups, func(i, j int) bool { return groups[i].Count > groups[j].Count })
 	return contacts, groups
 }
+
+// ─── 纪念日检测 ──────────────────────────────────────────────────────────────
+
+// DetectedEvent 自动检测到的日期事件（生日等）
+type DetectedEvent struct {
+	Type        string `json:"type"`         // "birthday"
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
+	Date        string `json:"date"`         // "MM-DD"
+	Years       []int  `json:"years"`        // 在哪些年份检测到
+	Evidence    string `json:"evidence"`     // 触发检测的消息片段
+}
+
+// FriendMilestone 友谊里程碑
+type FriendMilestone struct {
+	Username          string `json:"username"`
+	DisplayName       string `json:"display_name"`
+	AvatarURL         string `json:"avatar_url"`
+	FirstMsgDate      string `json:"first_msg_date"`
+	DaysKnown         int    `json:"days_known"`
+	NextMilestone     int    `json:"next_milestone"`
+	NextMilestoneDate string `json:"next_milestone_date"`
+	DaysUntil         int    `json:"days_until"`
+}
+
+var birthdayPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`生日快乐`),
+	regexp.MustCompile(`(?i)happy\s*birthday`),
+	regexp.MustCompile(`祝你?生日`),
+	regexp.MustCompile(`生快`),
+}
+
+// DetectAnniversaries 检测生日事件和友谊里程碑
+func (s *ContactService) DetectAnniversaries() ([]DetectedEvent, []FriendMilestone) {
+	s.cacheMu.RLock()
+	contacts := s.cache
+	s.cacheMu.RUnlock()
+
+	now := time.Now().In(s.tz)
+	today := now.Format("2006-01-02")
+
+	// ── 1. 生日检测：扫描含"生日快乐"的消息 ──
+	// key = username + "|" + MM-DD
+	type bdKey struct {
+		username string
+		mmdd     string
+	}
+	type bdInfo struct {
+		years    map[int]bool
+		evidence string
+	}
+	bdMap := make(map[bdKey]*bdInfo)
+
+	for _, c := range contacts {
+		if c.TotalMessages == 0 {
+			continue
+		}
+		tableName := db.GetTableName(c.Username)
+		for _, mdb := range s.dbMgr.MessageDBs {
+			// 用 SQL LIKE 在数据库层过滤，避免全表扫描
+			rows, err := mdb.Query(fmt.Sprintf(
+				`SELECT create_time, message_content FROM [%s]
+				 WHERE local_type = 1
+				   AND (message_content LIKE '%%生日快乐%%'
+				     OR message_content LIKE '%%happy birthday%%'
+				     OR message_content LIKE '%%Happy Birthday%%'
+				     OR message_content LIKE '%%祝你生日%%'
+				     OR message_content LIKE '%%祝生日%%'
+				     OR message_content LIKE '%%生快%%')`,
+				tableName))
+			if err != nil {
+				continue
+			}
+			for rows.Next() {
+				var ts int64
+				var content string
+				rows.Scan(&ts, &content)
+				// 二次验证正则
+				matched := false
+				for _, p := range birthdayPatterns {
+					if p.MatchString(content) {
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					continue
+				}
+				dt := time.Unix(ts, 0).In(s.tz)
+				mmdd := dt.Format("01-02")
+				year := dt.Year()
+				key := bdKey{username: c.Username, mmdd: mmdd}
+				if bdMap[key] == nil {
+					snippet := content
+					if len([]rune(snippet)) > 40 {
+						snippet = string([]rune(snippet)[:40]) + "…"
+					}
+					bdMap[key] = &bdInfo{years: map[int]bool{year: true}, evidence: snippet}
+				} else {
+					bdMap[key].years[year] = true
+				}
+			}
+			rows.Close()
+		}
+	}
+
+	// 按 username 聚合：同一联系人取出现次数最多的 MM-DD 作为生日
+	type bdCandidate struct {
+		mmdd     string
+		count    int
+		evidence string
+		years    []int
+	}
+	bestBD := make(map[string]*bdCandidate)
+	for key, info := range bdMap {
+		years := make([]int, 0, len(info.years))
+		for y := range info.years {
+			years = append(years, y)
+		}
+		sort.Ints(years)
+		count := len(years)
+		if prev, ok := bestBD[key.username]; !ok || count > prev.count {
+			bestBD[key.username] = &bdCandidate{mmdd: key.mmdd, count: count, evidence: info.evidence, years: years}
+		}
+	}
+
+	// 构建联系人名称映射
+	nameMap := make(map[string]string)
+	avatarMap := make(map[string]string)
+	for _, c := range contacts {
+		name := c.Remark
+		if name == "" {
+			name = c.Nickname
+		}
+		if name == "" {
+			name = c.Username
+		}
+		nameMap[c.Username] = name
+		avatarMap[c.Username] = c.SmallHeadURL
+	}
+
+	var detected []DetectedEvent
+	for username, bd := range bestBD {
+		detected = append(detected, DetectedEvent{
+			Type:        "birthday",
+			Username:    username,
+			DisplayName: nameMap[username],
+			AvatarURL:   avatarMap[username],
+			Date:        bd.mmdd,
+			Years:       bd.years,
+			Evidence:    bd.evidence,
+		})
+	}
+	// 按距今天最近排序
+	sort.Slice(detected, func(i, j int) bool {
+		return daysUntilMMDD(detected[i].Date, today) < daysUntilMMDD(detected[j].Date, today)
+	})
+
+	// ── 2. 友谊里程碑 ──
+	milestoneValues := []int{100, 200, 365, 500, 730, 1000, 1095, 1500, 1825, 2000, 2555, 3650}
+	var milestones []FriendMilestone
+	for _, c := range contacts {
+		if c.FirstMessage == "" || c.FirstMessage == "-" || c.TotalMessages < 10 {
+			continue
+		}
+		firstDate, err := time.ParseInLocation("2006-01-02", c.FirstMessage, s.tz)
+		if err != nil {
+			continue
+		}
+		daysKnown := int(now.Sub(firstDate).Hours() / 24)
+		// 找下一个里程碑
+		nextMs := 0
+		for _, m := range milestoneValues {
+			if daysKnown < m {
+				nextMs = m
+				break
+			}
+		}
+		if nextMs == 0 {
+			continue // 已超过所有里程碑
+		}
+		daysUntil := nextMs - daysKnown
+		if daysUntil > 60 {
+			continue // 只显示 60 天内到达的里程碑
+		}
+		nextDate := firstDate.AddDate(0, 0, nextMs).Format("2006-01-02")
+		name := c.Remark
+		if name == "" {
+			name = c.Nickname
+		}
+		if name == "" {
+			name = c.Username
+		}
+		milestones = append(milestones, FriendMilestone{
+			Username:          c.Username,
+			DisplayName:       name,
+			AvatarURL:         c.SmallHeadURL,
+			FirstMsgDate:      c.FirstMessage,
+			DaysKnown:         daysKnown,
+			NextMilestone:     nextMs,
+			NextMilestoneDate: nextDate,
+			DaysUntil:         daysUntil,
+		})
+	}
+	sort.Slice(milestones, func(i, j int) bool { return milestones[i].DaysUntil < milestones[j].DaysUntil })
+	// 最多返回 20 条
+	if len(milestones) > 20 {
+		milestones = milestones[:20]
+	}
+
+	if detected == nil {
+		detected = []DetectedEvent{}
+	}
+	if milestones == nil {
+		milestones = []FriendMilestone{}
+	}
+	return detected, milestones
+}
+
+// daysUntilMMDD 计算从 today (YYYY-MM-DD) 到下一个 MM-DD 的天数
+func daysUntilMMDD(mmdd, today string) int {
+	year := today[:4]
+	target := year + "-" + mmdd
+	if target < today {
+		// 今年已过，算明年
+		y := 0
+		fmt.Sscanf(year, "%d", &y)
+		target = fmt.Sprintf("%04d-%s", y+1, mmdd)
+	}
+	t1, _ := time.Parse("2006-01-02", today)
+	t2, _ := time.Parse("2006-01-02", target)
+	return int(t2.Sub(t1).Hours() / 24)
+}

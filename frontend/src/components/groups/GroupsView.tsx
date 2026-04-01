@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Users, MessageSquare, MessageCircle, Clock, ChevronRight, ChevronUp, ChevronDown, Loader2, X, BarChart2, EyeOff, Search, Download, Bot, TrendingUp, Flame, Calendar } from 'lucide-react';
+import { Users, MessageSquare, MessageCircle, Clock, ChevronRight, ChevronUp, ChevronDown, Loader2, X, BarChart2, EyeOff, Search, Download, Bot, TrendingUp, Flame, Calendar, Crown } from 'lucide-react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { GroupInfo, GroupDetail, ContactStats, GroupChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
@@ -875,6 +875,84 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
           <div className="dk-text-muted text-xs text-gray-500 mt-1">发言人数</div>
         </div>
       </div>
+
+      {/* 最活跃群聊 Top 3 */}
+      {groups.length > 0 && (() => {
+        const top3 = [...groups].sort((a, b) => b.total_messages - a.total_messages).slice(0, 3);
+        const maxMsg = top3[0]?.total_messages || 1;
+        const activeCount = groups.filter(g => getGroupStatusTier(g) === 0).length;
+        const dormantCount = groups.filter(g => getGroupStatusTier(g) === 3).length;
+        const medals = ['🥇', '🥈', '🥉'];
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Top 3 */}
+            <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl p-5">
+              <div className="flex items-center gap-1.5 mb-3">
+                <Crown size={16} className="text-[#ff9500]" />
+                <span className="text-sm font-bold text-[#1d1d1f] dk-text">最活跃群聊</span>
+              </div>
+              <div className="space-y-2.5">
+                {top3.map((g, i) => (
+                  <div
+                    key={g.username}
+                    className="flex items-center gap-3 cursor-pointer hover:bg-[#f8f9fb] dark:hover:bg-white/5 rounded-xl px-2 py-1.5 -mx-2 transition-colors"
+                    onClick={() => setSelected(g)}
+                  >
+                    <span className="text-base flex-shrink-0">{medals[i]}</span>
+                    {g.small_head_url ? (
+                      <img src={avatarSrc(g.small_head_url)} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    ) : (
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#10aeff] to-[#0e8dd6] flex items-center justify-center text-white flex-shrink-0">
+                        <Users size={14} />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-sm font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>{g.name}</div>
+                      <div className="h-1.5 bg-gray-100 dark:bg-white/10 rounded-full mt-1 overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${(g.total_messages / maxMsg) * 100}%`,
+                            background: i === 0 ? '#07c160' : i === 1 ? '#10aeff' : '#ff9500',
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-gray-400 flex-shrink-0 tabular-nums">{g.total_messages.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* 群状态分布 */}
+            <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl p-5">
+              <div className="flex items-center gap-1.5 mb-3">
+                <BarChart2 size={16} className="text-[#10aeff]" />
+                <span className="text-sm font-bold text-[#1d1d1f] dk-text">群活跃分布</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: '活跃', desc: '7天内', count: activeCount, color: '#07c160', bg: 'bg-[#e7f8f0]' },
+                  { label: '温热', desc: '7-30天', count: groups.filter(g => getGroupStatusTier(g) === 1).length, color: '#7bc934', bg: 'bg-[#f0fce8]' },
+                  { label: '渐冷', desc: '1-6月', count: groups.filter(g => getGroupStatusTier(g) === 2).length, color: '#ff9500', bg: 'bg-orange-50' },
+                  { label: '沉寂', desc: '半年+', count: dormantCount, color: '#576b95', bg: 'bg-[#eef1f7]' },
+                ].map(s => (
+                  <div key={s.label} className={`${s.bg} rounded-xl px-3 py-2.5`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold" style={{ color: s.color }}>{s.label}</span>
+                      <span className="text-lg font-black text-[#1d1d1f] dk-text">{s.count}</span>
+                    </div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">{s.desc}</div>
+                    <div className="h-1 bg-white/50 dark:bg-white/10 rounded-full mt-1.5 overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${groups.length > 0 ? (s.count / groups.length) * 100 : 0}%`, background: s.color }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 群列表 */}
       <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl sm:rounded-3xl overflow-hidden">
