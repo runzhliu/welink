@@ -216,11 +216,13 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
       onClick={onClose}
     >
       <div
-        className="dk-card bg-white rounded-t-[20px] sm:rounded-[20px] w-full sm:max-w-4xl overflow-hidden max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] shadow-2xl relative"
+        className="dk-card bg-white rounded-t-[20px] sm:rounded-[20px] w-full sm:max-w-5xl overflow-hidden max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] shadow-2xl relative animate-in slide-in-from-bottom sm:zoom-in duration-300"
         onClick={(e) => e.stopPropagation()}
       >
-      <div className="overflow-y-auto max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4 pb-4 sm:pb-6 lg:pb-8">
-        <div className="absolute top-5 right-5 flex items-center gap-2">
+      <div className="overflow-y-auto max-h-[calc(100dvh-5rem)] sm:max-h-[92vh]">
+        {/* 固定顶部区域（不随内容滚动的视觉效果，通过 sticky 实现） */}
+        <div className="sticky top-0 z-10 bg-white dark:bg-[var(--bg-card)] px-4 sm:px-8 lg:px-10 pt-4 sm:pt-6">
+        <div className="absolute top-4 right-4 sm:top-6 sm:right-8 flex items-center gap-2">
           {/* 导出 */}
           <div className="relative" ref={exportPanelRef}>
             <button
@@ -307,7 +309,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         </div>
 
         {/* Tab bar */}
-        <div className="flex gap-2 mb-6 border-b border-gray-100 dk-border">
+        <div className="flex gap-2 border-b border-gray-100 dk-border">
           {(['portrait', 'relationships', 'search', 'ai', 'sim'] as const).map((t) => (
             <button
               key={t}
@@ -326,7 +328,9 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             </button>
           ))}
         </div>
+        </div>{/* end sticky header */}
 
+        <div className="px-4 sm:px-8 lg:px-10 pb-4 sm:pb-8 pt-4">
         {tab === 'relationships' && (
           <RelationshipGraphPanel username={group.username} />
         )}
@@ -647,36 +651,37 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
               />
             )}
 
-            {/* 24h 分布 */}
-            <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
-              <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase mb-1 tracking-wider">24 小时活跃分布</h4>
-              <p className="text-xs text-gray-400 mb-3">按消息发送时间（北京时间）统计各小时消息量，深色为深夜 0–5 点</p>
-              <ResponsiveContainer width="100%" height={90}>
-                <BarChart data={hourlyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#bbb' }} tickLine={false} interval={3} />
-                  <YAxis tick={false} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v) => [`${v} 条`, '']} labelFormatter={(l) => `${l}:00`} />
-                  <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={14}>
-                    {hourlyData.map((entry, i) => (
-                      <Cell key={i} fill={entry.isLateNight ? '#576b95' : '#10aeff'} opacity={0.8} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            {/* 24h + 周分布 并排 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
+                <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase mb-1 tracking-wider">24 小时活跃分布</h4>
+                <p className="text-xs text-gray-400 mb-3">按消息发送时间统计，深色为深夜 0–5 点</p>
+                <ResponsiveContainer width="100%" height={90}>
+                  <BarChart data={hourlyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
+                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#bbb' }} tickLine={false} interval={3} />
+                    <YAxis tick={false} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v) => [`${v} 条`, '']} labelFormatter={(l) => `${l}:00`} />
+                    <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={14}>
+                      {hourlyData.map((entry, i) => (
+                        <Cell key={i} fill={entry.isLateNight ? '#576b95' : '#10aeff'} opacity={0.8} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
 
-            {/* 周分布 */}
-            <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
-              <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase mb-1 tracking-wider">每周活跃分布</h4>
-              <p className="text-xs text-gray-400 mb-3">统计该群在一周各天的消息总量分布</p>
-              <ResponsiveContainer width="100%" height={80}>
-                <BarChart data={weeklyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#999' }} tickLine={false} />
-                  <YAxis tick={false} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v) => [`${v} 条`, '']} />
-                  <Bar dataKey="value" fill="#07c160" radius={[4, 4, 0, 0]} maxBarSize={28} opacity={0.8} />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
+                <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase mb-1 tracking-wider">每周活跃分布</h4>
+                <p className="text-xs text-gray-400 mb-3">一周各天的消息总量分布</p>
+                <ResponsiveContainer width="100%" height={90}>
+                  <BarChart data={weeklyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#999' }} tickLine={false} />
+                    <YAxis tick={false} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v) => [`${v} 条`, '']} />
+                    <Bar dataKey="value" fill="#07c160" radius={[4, 4, 0, 0]} maxBarSize={28} opacity={0.8} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
             {/* 日历热力图 */}
@@ -713,6 +718,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         ) : tab === 'portrait' ? (
           <div className="text-center text-gray-300 py-12">暂无数据</div>
         ) : null}
+      </div>{/* end content padding */}
       </div>{/* end inner scroll div */}
       </div>{/* end outer rounded clip div */}
 
@@ -741,6 +747,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
 interface GroupsViewProps {
   allContacts: ContactStats[];
   onContactClick: (c: ContactStats) => void;
+  onGroupClick: (g: GroupInfo) => void;
   blockedGroups?: string[];
   onBlockGroup?: (username: string) => void;
   onOpenSettings?: () => void;
@@ -766,12 +773,12 @@ const GROUP_STATUS_BADGES = [
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
-export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactClick, blockedGroups = [], onBlockGroup, onOpenSettings }) => {
+export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactClick, onGroupClick, blockedGroups = [], onBlockGroup, onOpenSettings }) => {
   const { privacyMode } = usePrivacyMode();
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<GroupInfo | null>(null);
+  // removed: selected state — modal now rendered at App.tsx top level via onGroupClick
   const [sortKey, setSortKey] = useState<GroupSortKey>('total_messages');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [currentPage, setCurrentPage] = useState(1);
@@ -907,7 +914,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
                   <div
                     key={g.username}
                     className="flex items-center gap-3 cursor-pointer hover:bg-[#f8f9fb] dark:hover:bg-white/5 rounded-xl px-2 py-1.5 -mx-2 transition-colors"
-                    onClick={() => setSelected(g)}
+                    onClick={() => onGroupClick(g)}
                   >
                     <span className="text-base flex-shrink-0">{medals[i]}</span>
                     {g.small_head_url ? (
@@ -993,7 +1000,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
               {currentGroups.map((group) => (
                 <tr
                   key={group.username}
-                  onClick={() => setSelected(group)}
+                  onClick={() => onGroupClick(group)}
                   className="dk-row-hover hover:bg-[#f8f9fb] dark:hover:bg-white/5 cursor-pointer transition-colors duration-150"
                 >
                   <td className="px-8 py-5">
@@ -1044,7 +1051,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
           {currentGroups.map((group) => (
             <div
               key={group.username}
-              onClick={() => setSelected(group)}
+              onClick={() => onGroupClick(group)}
               className="dk-row-hover flex items-center justify-between px-4 py-4 active:bg-[#f8f9fb] dark:active:bg-white/5 cursor-pointer"
             >
               <div className="flex items-center gap-3 min-w-0">
@@ -1154,16 +1161,6 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
         )}
       </div>
 
-      {selected && (
-        <GroupDetailModal
-          group={selected}
-          onClose={() => setSelected(null)}
-          allContacts={allContacts}
-          onContactClick={(c) => { setSelected(null); onContactClick(c); }}
-          onBlock={onBlockGroup ? (u) => { onBlockGroup(u); setSelected(null); } : undefined}
-          onOpenSettings={onOpenSettings ? () => { setSelected(null); onOpenSettings(); } : undefined}
-        />
-      )}
     </div>
   );
 };

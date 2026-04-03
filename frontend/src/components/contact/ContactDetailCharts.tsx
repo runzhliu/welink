@@ -153,47 +153,48 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
         </div>
       )}
 
-      {/* 小时分布 */}
-      <div className="bg-[#f8f9fb] rounded-2xl p-4">
-        <h4 className="text-sm font-black text-gray-600 uppercase mb-1 tracking-wider">24 小时分布</h4>
-        <p className="text-xs text-gray-400 mb-3">按消息发送时间（北京时间）统计各小时消息量，深色为深夜 0–5 点</p>
-        <ResponsiveContainer width="100%" height={100}>
-          <BarChart data={hourlyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#bbb' }} tickLine={false} interval={3} />
-            <YAxis tick={false} axisLine={false} tickLine={false} />
-            <Tooltip
-              contentStyle={{ borderRadius: 8, fontSize: 12, border: '1px solid #eee' }}
-              formatter={(v) => [`${v} 条`, '']}
-              labelFormatter={(l) => `${l}:00`}
-            />
-            <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={14}>
-              {hourlyData.map((entry, i) => (
-                <Cell key={i} fill={entry.isLateNight ? '#576b95' : HOUR_COLOR} opacity={entry.isLateNight ? 0.9 : 0.75} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-        <div className="flex gap-3 mt-1 text-xs text-gray-400">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[#576b95] inline-block" />深夜</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[#10aeff] inline-block" />白天</span>
+      {/* 小时 + 周分布 并排 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-[#f8f9fb] dk-subtle rounded-2xl p-4">
+          <h4 className="text-sm font-black text-gray-600 dark:text-gray-400 uppercase mb-1 tracking-wider">24 小时分布</h4>
+          <p className="text-xs text-gray-400 mb-3">按消息发送时间统计，深色为深夜 0–5 点</p>
+          <ResponsiveContainer width="100%" height={90}>
+            <BarChart data={hourlyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
+              <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#bbb' }} tickLine={false} interval={3} />
+              <YAxis tick={false} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ borderRadius: 8, fontSize: 12, border: '1px solid #eee' }}
+                formatter={(v) => [`${v} 条`, '']}
+                labelFormatter={(l) => `${l}:00`}
+              />
+              <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={14}>
+                {hourlyData.map((entry, i) => (
+                  <Cell key={i} fill={entry.isLateNight ? '#576b95' : HOUR_COLOR} opacity={entry.isLateNight ? 0.9 : 0.75} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="flex gap-3 mt-1 text-xs text-gray-400">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[#576b95] inline-block" />深夜</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[#10aeff] inline-block" />白天</span>
+          </div>
         </div>
-      </div>
 
-      {/* 周分布 */}
-      <div className="bg-[#f8f9fb] rounded-2xl p-4">
-        <h4 className="text-sm font-black text-gray-600 uppercase mb-1 tracking-wider">每周活跃分布</h4>
-        <p className="text-xs text-gray-400 mb-3">统计与该联系人一周各天的消息总量分布</p>
-        <ResponsiveContainer width="100%" height={90}>
-          <BarChart data={weeklyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#999' }} tickLine={false} />
-            <YAxis tick={false} axisLine={false} tickLine={false} />
-            <Tooltip
-              contentStyle={{ borderRadius: 8, fontSize: 12, border: '1px solid #eee' }}
-              formatter={(v) => [`${v} 条`, '']}
-            />
-            <Bar dataKey="value" fill={WEEK_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} opacity={0.8} />
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="bg-[#f8f9fb] dk-subtle rounded-2xl p-4">
+          <h4 className="text-sm font-black text-gray-600 dark:text-gray-400 uppercase mb-1 tracking-wider">每周活跃分布</h4>
+          <p className="text-xs text-gray-400 mb-3">一周各天的消息总量分布</p>
+          <ResponsiveContainer width="100%" height={90}>
+            <BarChart data={weeklyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#999' }} tickLine={false} />
+              <YAxis tick={false} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ borderRadius: 8, fontSize: 12, border: '1px solid #eee' }}
+                formatter={(v) => [`${v} 条`, '']}
+              />
+              <Bar dataKey="value" fill={WEEK_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} opacity={0.8} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* 日历热力图 */}

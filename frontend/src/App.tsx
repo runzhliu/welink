@@ -261,7 +261,7 @@ function App() {
             onContactClick={handleContactClick}
           />
         ) : activeTab === 'groups' ? (
-          <GroupsView allContacts={allContacts} onContactClick={handleContactClick} blockedGroups={blockedGroups} onBlockGroup={addBlockedGroup} onOpenSettings={() => setActiveTab('settings')} />
+          <GroupsView allContacts={allContacts} onContactClick={handleContactClick} onGroupClick={(g) => setSelectedGroup(g)} blockedGroups={blockedGroups} onBlockGroup={addBlockedGroup} onOpenSettings={() => setActiveTab('settings')} />
         ) : activeTab === 'timeline' ? (
           <TimelineView contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'calendar' ? (
