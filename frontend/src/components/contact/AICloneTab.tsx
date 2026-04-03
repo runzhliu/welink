@@ -112,7 +112,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
       deepseek: 'deepseek-chat', kimi: 'moonshot-v1-8k', gemini: 'gemini-2.0-flash',
       glm: 'glm-4-flash', grok: 'grok-3-mini', minimax: 'MiniMax-Text-01',
       'minimax-cn': 'MiniMax-Text-01', openai: 'gpt-4o-mini', claude: 'claude-haiku-4-5-20251001',
-      ollama: 'qwen2.5:3b',
+      ollama: 'llama3',
     };
     fetch('/api/preferences').then(r => r.json()).then((d: { llm_profiles?: { provider: string; model?: string }[]; llm_provider?: string; llm_model?: string }) => {
       let provider = '', model = '';

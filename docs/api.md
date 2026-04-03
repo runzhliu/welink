@@ -3,14 +3,26 @@
 > 后端基于 Go + Gin，默认监听 `:8080`，所有接口前缀 `/api`。
 > 在线文档：访问 `/swagger/` 可查看 Swagger UI。
 
-
 ## 目录
 
 - [初始化与状态](#初始化与状态)
 - [联系人分析](#联系人分析)
 - [群聊分析](#群聊分析)
+- [日历 / 时光机](#日历--时光机)
+- [全局搜索](#全局搜索)
+- [AI 分析](#ai-分析)
+- [AI 分身](#ai-分身)
+- [AI 群聊模拟](#ai-群聊模拟)
+- [RAG 检索](#rag-检索)
+- [向量检索](#向量检索)
+- [记忆提炼](#记忆提炼)
+- [AI 对话历史](#ai-对话历史)
+- [用户偏好](#用户偏好)
+- [Gemini OAuth](#gemini-oauth)
 - [数据库浏览器](#数据库浏览器)
-- [其他](#其他)
+- [App 管理（桌面版）](#app-管理桌面版)
+- [系统](#系统)
+- [错误响应格式](#错误响应格式)
 
 
 ## 初始化与状态
@@ -22,10 +34,7 @@
 **请求体**
 
 ```json
-{
-  "from": 1672531200,
-  "to":   1704067200
-}
+{ "from": 1672531200, "to": 1704067200 }
 ```
 
 | 字段 | 类型 | 说明 |
@@ -33,39 +42,19 @@
 | `from` | int64 | 开始时间（Unix 秒），`0` 表示不限 |
 | `to`   | int64 | 结束时间（Unix 秒），`0` 表示不限 |
 
-**响应**
-
-```json
-{ "status": "indexing" }
-```
-
-
 ### `GET /api/status`
 
-查询索引进度，前端用于轮询判断是否可以开始使用。
+查询索引进度。
 
 **响应**
 
 ```json
-{
-  "is_indexing":    false,
-  "is_initialized": true,
-  "total_cached":   312
-}
+{ "is_indexing": false, "is_initialized": true, "total_cached": 312 }
 ```
-
-| 字段 | 说明 |
-|------|------|
-| `is_indexing` | 是否正在索引 |
-| `is_initialized` | 是否已完成初始化（可正常使用） |
-| `total_cached` | 当前缓存的联系人数量 |
-
 
 ### `GET /api/health`
 
-健康检查，返回数据库连接数。
-
-**响应**
+健康检查。
 
 ```json
 { "status": "ok", "db_connected": 5 }
@@ -76,291 +65,316 @@
 
 ### `GET /api/contacts/stats`
 
-获取所有联系人的统计信息（从内存缓存返回，极速）。
-
-> 在 `/api/init` 完成前返回空数组。
-
-**响应** `[]ContactStatsExtended`
-
-```json
-[
-  {
-    "username":           "wxid_abc123",
-    "nickname":           "张三",
-    "remark":             "张三（同事）",
-    "alias":              "",
-    "flag":               3,
-    "description":        "",
-    "big_head_url":       "https://...",
-    "small_head_url":     "https://...",
-    "total_messages":     1234,
-    "their_messages":     700,
-    "my_messages":        534,
-    "first_message_time": "2020-03-01",
-    "last_message_time":  "2024-11-15",
-    "first_msg":          "你好呀",
-    "emoji_count":        42,
-    "type_pct": {
-      "文本": 80.5,
-      "图片": 12.3,
-      "语音": 5.0,
-      "表情": 1.5,
-      "视频": 0.5,
-      "其他": 0.2
-    },
-    "type_cnt": {
-      "文本": 993,
-      "图片": 152
-    }
-  }
-]
-```
-
+获取所有联系人的统计信息（从内存缓存返回）。返回 `[]ContactStatsExtended`，含消息数、字数、峰值月、红包/转账数等。
 
 ### `GET /api/global`
 
-获取全局聚合统计（所有联系人汇总）。
+获取全局聚合统计（所有联系人汇总），含 monthly_trend、hourly_heatmap、late_night_ranking 等。
 
-**响应** `GlobalStats`
+### `GET /api/contacts/detail?username=wxid`
 
-```json
-{
-  "total_friends":      312,
-  "zero_msg_friends":   28,
-  "total_messages":     186432,
-  "busiest_day":        "2023-02-05",
-  "busiest_day_count":  412,
-  "emoji_king":         "张三（同事）",
-  "monthly_trend": {
-    "2023-01": 1234,
-    "2023-02": 2100
-  },
-  "hourly_heatmap":     [12, 8, 3, 1, 0, 2, 15, 45, ...],
-  "type_mix": {
-    "文本": 150000,
-    "图片": 20000
-  },
-  "late_night_ranking": [
-    {
-      "name":             "李四",
-      "late_night_count": 342,
-      "total_messages":   2100,
-      "ratio":            16.3
-    }
-  ]
-}
-```
+单个联系人的深度分析（24h 分布、周分布、日历热力、深夜消息、红包/转账次数及时间线、主动率、对话段落）。
 
+### `GET /api/contacts/wordcloud?username=wxid&include_mine=true`
 
-### `GET /api/contacts/detail`
+词云数据（中文分词 + 停用词过滤，top 120）。
 
-获取单个联系人的深度分析（按需计算，非缓存）。
+### `GET /api/contacts/sentiment?username=wxid&include_mine=true`
 
-**Query 参数**
+按月情感分析（关键词评分，0~1 分）。
 
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `username` | 是 | 联系人 wxid |
+### `GET /api/contacts/common-groups?username=wxid`
 
-**响应** `ContactDetail`
+与指定联系人的共同群聊列表。
 
-```json
-{
-  "hourly_dist":     [5, 2, 1, 0, 0, 0, 8, 30, 55, ...],
-  "weekly_dist":     [10, 85, 92, 78, 88, 60, 20],
-  "daily_heatmap":   { "2023-01-15": 32, "2023-01-16": 18 },
-  "late_night_count": 342,
-  "money_count":      5,
-  "initiation_count": 180,
-  "total_sessions":   200
-}
-```
+### `GET /api/contacts/messages?username=wxid&date=2024-01-15`
 
-| 字段 | 说明 |
-|------|------|
-| `hourly_dist` | 长度 24，按小时统计消息数（索引 = 小时） |
-| `weekly_dist` | 长度 7，`[0]` = 周日，`[1]` = 周一 … `[6]` = 周六 |
-| `daily_heatmap` | `"YYYY-MM-DD"` → 当日消息数 |
-| `late_night_count` | 0~5 点消息数 |
-| `money_count` | 红包/转账次数（双方合计） |
-| `initiation_count` | 你主动发起的对话段数 |
-| `total_sessions` | 总对话段数（间隔 > 6h 视为新段） |
+指定联系人某天的完整聊天记录。
 
+### `GET /api/contacts/messages/month?username=wxid&month=2024-01`
 
-### `GET /api/contacts/wordcloud`
+指定联系人某月的聊天记录。
 
-获取联系人的词云数据（中文分词 + 停用词过滤，返回 top 120）。
+### `GET /api/contacts/search?username=wxid&q=关键词`
 
-**Query 参数**
+搜索指定联系人的消息记录（最多 200 条）。
 
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `username`    | 是 | 联系人 wxid |
-| `include_mine` | 否 | 值为 `"true"` 时包含双方消息，默认仅对方 |
+### `GET /api/contacts/export?username=wxid&from=0&to=0`
 
-**响应** `[]WordCount`
+导出联系人聊天记录（最多 50,000 条），from/to 为 Unix 秒。
 
-```json
-[
-  { "word": "哈哈", "count": 312 },
-  { "word": "知道", "count": 280 }
-]
-```
+### `GET /api/contacts/cooling`
 
+获取关系降温排行（近一月 vs 历史峰值下降最多的联系人）。
 
-### `GET /api/contacts/sentiment`
+### `GET /api/stats/filter?from=&to=`
 
-按月份进行情感分析（基于关键词词典评分）。
-
-**Query 参数**
-
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `username`    | 是 | 联系人 wxid |
-| `include_mine` | 否 | 值为 `"true"` 时包含双方消息，默认仅对方 |
-
-**响应** `SentimentResult`
-
-```json
-{
-  "monthly": [
-    { "month": "2023-01", "score": 0.72, "count": 134 },
-    { "month": "2023-02", "score": 0.58, "count": 98 }
-  ],
-  "overall":  0.68,
-  "positive": 420,
-  "negative": 85,
-  "neutral":  210
-}
-```
-
-| 字段 | 说明 |
-|------|------|
-| `score` | 0.0~1.0，0.5 为中性基线 |
-| `overall` | 全部参与评分消息的平均分 |
-| `positive` | score ≥ 0.6 的消息数 |
-| `negative` | score ≤ 0.4 的消息数 |
-| `neutral`  | 0.4 < score < 0.6 的消息数 |
-
-
-### `GET /api/contacts/common-groups`
-
-获取当前用户与指定联系人的共同群聊列表（在群消息表中查找对方是否有发言记录）。
-
-**Query 参数**
-
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `username` | 是 | 联系人 wxid |
-
-**响应** `[]GroupInfo`（结构同 `/api/groups`）
-
-```json
-[
-  {
-    "username":           "12345678@chatroom",
-    "name":               "工作群",
-    "small_head_url":     "https://...",
-    "total_messages":     8423,
-    "first_message_time": "2021-06-01",
-    "last_message_time":  "2024-11-15"
-  }
-]
-```
-
-> 返回空数组表示无共同群聊，而非错误。
-
-
-### `GET /api/contacts/messages`
-
-获取某一天与指定联系人的完整聊天记录（用于日历点击查看）。
-
-**Query 参数**
-
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `username` | 是 | 联系人 wxid |
-| `date`     | 是 | 日期，格式 `"YYYY-MM-DD"`（北京时间） |
-
-**响应** `[]ChatMessage`
-
-```json
-[
-  { "time": "09:12", "content": "早上好", "is_mine": false, "type": 1 },
-  { "time": "09:14", "content": "早！",   "is_mine": true,  "type": 1 },
-  { "time": "10:30", "content": "[图片]", "is_mine": false, "type": 3 }
-]
-```
-
-| 字段 | 说明 |
-|------|------|
-| `time` | HH:MM，北京时间 |
-| `content` | 文本内容，非文本类型为描述字符串（见下表） |
-| `is_mine` | `true` = 你发的 |
-| `type` | 消息类型（见消息类型说明） |
-
-**非文本消息内容映射**
-
-| type | content 值 |
-|------|-----------|
-| 3  | `[图片]` |
-| 34 | `[语音]` |
-| 43 | `[视频]` |
-| 47 | `[表情]` |
-| 49（含 wcpay/redenvelope） | `[红包/转账]` |
-| 49（其他） | `[链接/文件]` |
-| 其他 | `[消息类型 N]` |
+自定义时间范围统计（不更新缓存，即时计算返回）。
 
 
 ## 群聊分析
 
 ### `GET /api/groups`
 
-获取所有有消息记录的群聊列表。
+所有有消息记录的群聊列表，含 member_count（发言人数）。
 
-**响应** `[]GroupInfo`
+### `GET /api/groups/detail?username=xxx@chatroom`
 
-```json
-[
-  {
-    "username":           "12345678@chatroom",
-    "name":               "工作群",
-    "small_head_url":     "https://...",
-    "total_messages":     8423,
-    "first_message_time": "2021-06-01",
-    "last_message_time":  "2024-11-15"
-  }
-]
-```
+群聊深度分析（懒加载 + 缓存）：24h/周分布、成员排行、高频词、消息类型分布。
+
+### `GET /api/groups/messages?username=xxx@chatroom&date=2024-01-15`
+
+群聊某天的完整消息记录。
+
+### `GET /api/groups/search?username=xxx@chatroom&q=关键词`
+
+搜索群聊消息（最多 200 条）。
+
+### `GET /api/groups/export?username=xxx@chatroom&from=0&to=0`
+
+导出群聊记录（最多 50,000 条）。
+
+### `GET /api/groups/relationships?username=xxx@chatroom`
+
+群聊人物关系图（成员节点 + 交互边，含回复和提及权重）。
 
 
-### `GET /api/groups/detail`
+## 日历 / 时光机
 
-获取群聊深度分析（懒加载，首次计算后缓存内存）。
+### `GET /api/calendar/heatmap`
 
-**Query 参数**
+全历史日历热力图数据，返回 `{ heatmap: { "YYYY-MM-DD": count } }`。
 
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `username` | 是 | 群 @chatroom wxid |
+### `GET /api/calendar/trend`
 
-**响应** `GroupDetail`
+指定时间范围的每日消息趋势。
+
+### `GET /api/calendar/day?date=2024-01-15`
+
+某天的活跃联系人和群聊列表，返回 `{ contacts: [], groups: [] }`。
+
+### `GET /api/calendar/messages?date=2024-01-15&username=wxid&is_group=false`
+
+某天某联系人/群聊的消息记录。
+
+
+## 全局搜索
+
+### `GET /api/search?q=关键词&type=all`
+
+跨所有联系人和群聊搜索消息。`type` 可选 `all`/`contact`/`group`。每个联系人/群聊最多返回 5 条匹配。
+
+
+## AI 分析
+
+### `POST /api/ai/analyze`
+
+流式 AI 分析（SSE），前端发送预处理的消息 + LLM 历史。
+
+**请求体**
 
 ```json
 {
-  "hourly_dist":  [3, 1, 0, 0, 0, 1, 8, 45, ...],
-  "weekly_dist":  [5, 120, 135, 110, 125, 80, 25],
-  "daily_heatmap": { "2023-01-15": 48 },
-  "member_rank": [
-    { "speaker": "张三", "count": 1240 },
-    { "speaker": "李四", "count": 980 }
-  ],
-  "top_words": [
-    { "word": "明天", "count": 145 },
-    { "word": "会议", "count": 120 }
-  ]
+  "username": "wxid",
+  "is_group": false,
+  "from": 0,
+  "to": 0,
+  "messages": [{ "role": "user", "content": "分析一下我们的关系" }],
+  "profile_id": "uuid"
 }
 ```
+
+**SSE 响应**：每条 `data:` 为 `StreamChunk`（含 `delta`/`thinking`/`done`/`error` 字段）。
+
+### `POST /api/ai/complete`
+
+非流式单次 LLM 补全。
+
+### `POST /api/ai/llm/test`
+
+测试 LLM 连接是否正常。
+
+
+## AI 分身
+
+### `GET /api/ai/clone/session/:username`
+
+检查指定联系人是否有缓存的 AI 分身档案。
+
+**响应**
+
+```json
+{ "exists": true, "session_id": "uuid", "private_count": 300, "group_count": 1000, "has_profile": true }
+```
+
+### `POST /api/ai/clone/learn`
+
+学习联系人的聊天风格（SSE 多步进度推送）。
+
+**请求体**
+
+```json
+{
+  "username": "wxid",
+  "count": 300,
+  "groups": ["xxx@chatroom"],
+  "bio": "湖南人，在上海工作",
+  "extract_profile": true
+}
+```
+
+**SSE 响应**：每步推送 `{ step: "loading" | "analyzing" | "profile" | "building" }`，最后 `{ done: true, session_id: "..." }`。
+
+### `POST /api/ai/clone/chat`
+
+与 AI 分身对话（SSE 流式）。
+
+```json
+{
+  "session_id": "uuid",
+  "messages": [{ "role": "user", "content": "你好" }],
+  "profile_id": "uuid"
+}
+```
+
+
+## AI 群聊模拟
+
+### `POST /api/ai/group-sim`
+
+模拟群聊对话（SSE 流式）。
+
+**请求体**
+
+```json
+{
+  "group_username": "xxx@chatroom",
+  "message_count": 1000,
+  "profile_id": "uuid",
+  "user_message": "可选，用户的消息",
+  "history": [{ "speaker": "张三", "content": "之前的消息" }],
+  "rounds": 10,
+  "topic": "可选，话题设定",
+  "mood": "casual | heated | latenight | funny | serious",
+  "members": ["张三", "李四"]
+}
+```
+
+**SSE 响应**：每条 `data:` 为 `{ speaker, content }`，最后 `{ done: true }`。
+
+
+## RAG 检索
+
+### `GET /api/ai/rag/index-status?key=contact:wxid`
+
+查询 FTS5 全文索引状态。
+
+### `POST /api/ai/rag/build-index`
+
+构建 FTS5 全文索引（SSE 进度推送）。
+
+### `POST /api/ai/rag`
+
+混合检索 + LLM 流式分析（FTS5 + 向量检索 → LLM）。
+
+### `POST /api/ai/day-rag`
+
+跨联系人的单日聚合分析（时光机 AI）。
+
+
+## 向量检索
+
+### `GET /api/ai/vec/index-status?key=contact:wxid`
+
+查询向量索引状态。
+
+### `POST /api/ai/vec/build-index`
+
+构建向量嵌入索引（支持暂停/恢复）。
+
+### `GET /api/ai/vec/build-progress?key=contact:wxid`
+
+查询向量索引构建进度。
+
+### `POST /api/ai/vec/test-embedding`
+
+测试 Embedding 提供商连接。
+
+
+## 记忆提炼
+
+### `GET /api/ai/mem/status?key=contact:wxid`
+
+查询已提炼的记忆事实数量。
+
+### `GET /api/ai/mem/facts?key=contact:wxid`
+
+获取已提炼的所有记忆事实。
+
+### `POST /api/ai/mem/build?key=contact:wxid`
+
+开始/继续记忆提炼（带检查点，可恢复）。
+
+### `POST /api/ai/mem/pause?key=contact:wxid`
+
+暂停记忆提炼。
+
+### `POST /api/ai/mem/test`
+
+测试记忆提炼模型配置。
+
+
+## AI 对话历史
+
+### `GET /api/ai/conversations?key=contact:wxid`
+
+获取指定联系人/群聊的 AI 对话历史。
+
+### `PUT /api/ai/conversations`
+
+保存 AI 对话历史。
+
+### `DELETE /api/ai/conversations?key=contact:wxid`
+
+删除指定的 AI 对话历史。
+
+
+## 用户偏好
+
+### `GET /api/preferences`
+
+获取当前用户偏好设置（屏蔽列表、隐私模式、LLM 配置等）。
+
+### `PUT /api/preferences`
+
+更新屏蔽列表和隐私模式。
+
+### `PUT /api/preferences/llm`
+
+更新 LLM 配置（多 Profile 支持、Embedding 配置、记忆提炼配置）。
+
+### `PUT /api/preferences/anniversaries`
+
+保存自定义纪念日。
+
+
+## Gemini OAuth
+
+### `GET /api/auth/gemini/url`
+
+获取 Google Gemini OAuth 授权 URL。
+
+### `GET /api/auth/gemini/callback`
+
+OAuth 回调处理（交换 token）。
+
+### `GET /api/auth/gemini/status`
+
+检查 Gemini 授权状态。
+
+### `DELETE /api/auth/gemini`
+
+撤销 Gemini 授权。
 
 
 ## 数据库浏览器
@@ -369,93 +383,83 @@
 
 列出所有已加载的数据库文件。
 
-**响应** `[]DBInfo`
-
-```json
-[
-  { "name": "contact.db",   "path": "/data/contact/contact.db",   "size": 2097152, "type": "contact" },
-  { "name": "message_1.db", "path": "/data/message/message_1.db", "size": 52428800, "type": "message" }
-]
-```
-
-
 ### `GET /api/databases/:dbName/tables`
 
 列出指定数据库的所有表及行数。
 
-**响应** `[]TableInfo`
-
-```json
-[
-  { "name": "contact", "row_count": 512 },
-  { "name": "Msg_96e07f9a...", "row_count": 3420 }
-]
-```
-
-
 ### `GET /api/databases/:dbName/tables/:tableName/schema`
 
-查看表结构。
+查看表结构（列定义）。
 
-**响应** `[]ColumnInfo`
+### `GET /api/databases/:dbName/tables/:tableName/data?offset=0&limit=50`
 
-```json
-[
-  { "cid": 0, "name": "local_id", "type": "INTEGER", "not_null": false, "default_value": "", "primary_key": true },
-  { "cid": 5, "name": "create_time", "type": "INTEGER", "not_null": false, "default_value": "", "primary_key": false }
-]
-```
+分页获取表数据（limit 最大 200）。
 
+### `POST /api/databases/:dbName/query`
 
-### `GET /api/databases/:dbName/tables/:tableName/data`
-
-分页获取表数据。
-
-**Query 参数**
-
-| 参数 | 默认值 | 最大值 | 说明 |
-|------|--------|--------|------|
-| `offset` | 0 | - | 起始行偏移 |
-| `limit`  | 50 | 200 | 每页行数 |
-
-**响应** `TableData`
-
-```json
-{
-  "columns": ["local_id", "create_time", "message_content"],
-  "rows": [[1, 1627920012, "你好"], [2, 1627920100, null]],
-  "total": 3420
-}
-```
+执行只读 SQL（仅允许 SELECT / PRAGMA / EXPLAIN，最多 500 行）。
 
 
-## 其他
+## App 管理（桌面版）
 
-### `GET /api/stats/filter`
+以下接口仅在 macOS / Windows 桌面 App 模式下使用。
 
-用自定义时间范围计算统计（不更新缓存，即时返回）。
+### `GET /api/app/info`
 
-**Query 参数**
+获取 App 状态（版本号、是否需要配置向导、运行模式）。
 
-| 参数 | 说明 |
-|------|------|
-| `from` | 开始时间（Unix 秒），可省略 |
-| `to`   | 结束时间（Unix 秒），可省略 |
+### `POST /api/app/setup`
 
-**响应** `FilteredStats`
+保存 App 配置（数据目录、日志目录）并重新初始化服务。
 
-```json
-{
-  "contacts":    [ ...同 /api/contacts/stats... ],
-  "global_stats": { ...同 /api/global... }
-}
-```
+### `GET /api/app/config`
+
+读取当前 App 配置。
+
+### `POST /api/app/restart`
+
+重启 App 进程。
+
+### `GET /api/app/browse`
+
+弹出系统文件夹选择器（macOS/Windows 原生对话框）。
+
+### `POST /api/app/save-file`
+
+保存文件到 `~/Downloads`（WebView 模式下替代浏览器下载）。
+
+### `POST /api/app/frontend-log`
+
+接收前端日志（console.error/warn 等），写入 `frontend.log`。
+
+### `POST /api/app/bundle-logs`
+
+打包 `welink.log` + `frontend.log` 为 ZIP，API Key 自动脱敏为 `[REDACTED]`。
+
+
+## 系统
+
+### `GET /api/avatar?url=xxx`
+
+头像代理（缓存 + CORS 处理）。
+
+### `GET /api/open-url?url=xxx`
+
+用系统默认浏览器打开 URL（仅 App 模式，仅允许 https）。
+
+### `GET /api/swagger.json`
+
+Swagger/OpenAPI 规范文件。
+
+### `GET /api/anniversaries`
+
+获取纪念日数据（自动检测 + 好友里程碑 + 自定义纪念日）。
 
 
 ## 错误响应格式
 
 ```json
-{ "error": "username required" }
+{ "error": "错误描述" }
 ```
 
-HTTP 状态码：`400` Bad Request / `500` Internal Server Error。
+HTTP 状态码：`400` Bad Request / `500` Internal Server Error / `503` Service Unavailable（服务未初始化）。

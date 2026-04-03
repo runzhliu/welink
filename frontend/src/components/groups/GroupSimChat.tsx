@@ -395,7 +395,7 @@ export const GroupSimChat: React.FC<Props> = ({ group, onOpenSettings }) => {
               deepseek: 'deepseek-chat', kimi: 'moonshot-v1-8k', gemini: 'gemini-2.0-flash',
               glm: 'glm-4-flash', grok: 'grok-3-mini', minimax: 'MiniMax-Text-01',
               'minimax-cn': 'MiniMax-Text-01', openai: 'gpt-4o-mini', claude: 'claude-haiku-4-5-20251001',
-              ollama: 'qwen2.5:3b',
+              ollama: 'llama3',
             };
             const p = profiles.find(pp => pp.id === profileId);
             const modelName = p?.model || (p ? defaultModels[p.provider] : '') || '';

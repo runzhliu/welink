@@ -97,8 +97,8 @@ const PROVIDERS = [
   { value: 'minimax',     label: 'MiniMax（国际版）', defaultURL: 'https://api.minimax.io/v1', defaultModel: 'MiniMax-Text-01' },
   { value: 'minimax-cn', label: 'MiniMax（国内版）', defaultURL: 'https://api.minimaxi.com/v1', defaultModel: 'MiniMax-Text-01' },
   { value: 'openai',   label: 'OpenAI', defaultURL: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini' },
-  { value: 'claude',   label: 'Claude (Anthropic)', defaultURL: '', defaultModel: 'claude-haiku-4-5-20251001' },
-  { value: 'ollama',   label: 'Ollama（本地）', defaultURL: 'http://localhost:11434/v1', defaultModel: 'qwen2.5:3b' },
+  { value: 'claude',   label: 'Claude (Anthropic)', defaultURL: 'https://api.anthropic.com', defaultModel: 'claude-haiku-4-5-20251001' },
+  { value: 'ollama',   label: 'Ollama（本地）', defaultURL: 'http://localhost:11434/v1', defaultModel: 'llama3' },
   { value: 'custom',   label: '自定义 OpenAI 兼容接口', defaultURL: '', defaultModel: '' },
 ] as const;
 
