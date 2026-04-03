@@ -38,6 +38,8 @@ export default defineConfig({
         text: 'AI 功能',
         items: [
           { text: 'AI 分析功能', link: '/ai-analysis' },
+          { text: 'AI 群聊模拟', link: '/ai-group-sim' },
+          { text: 'AI 分身', link: '/ai-clone' },
           { text: 'Ollama 本地 AI 配置', link: '/ollama-setup' },
           { text: 'MCP Server', link: '/mcp-server' },
         ],
@@ -48,6 +50,7 @@ export default defineConfig({
           { text: '文档总览', link: '/README' },
           { text: 'API 接口文档', link: '/api' },
           { text: '数据库结构', link: '/database' },
+          { text: '消息类型说明', link: '/message-types' },
           { text: '索引与初始化', link: '/indexing' },
           { text: '情感分析', link: '/sentiment' },
           { text: '词云生成', link: '/wordcloud' },

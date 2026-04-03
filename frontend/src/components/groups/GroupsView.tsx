@@ -19,6 +19,7 @@ import {
   DEFAULT_RANK_LIMIT, DEFAULT_NAME_WIDTH,
 } from '../common/SettingsPage';
 import { LLMAnalysisTab } from '../contact/LLMAnalysisTab';
+import { GroupSimChat } from './GroupSimChat';
 import { AIAnalysisBadge } from '../dashboard/ContactTable';
 import { avatarSrc } from '../../utils/avatar';
 
@@ -60,7 +61,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
       c.username === displayName
     ) ?? null;
   };
-  const [tab, setTab] = useState<'portrait' | 'search' | 'ai' | 'relationships'>('portrait');
+  const [tab, setTab] = useState<'portrait' | 'search' | 'ai' | 'relationships' | 'sim'>('portrait');
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [dayPanel, setDayPanel] = useState<{ date: string; count: number } | null>(null);
@@ -307,7 +308,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
 
         {/* Tab bar */}
         <div className="flex gap-2 mb-6 border-b border-gray-100 dk-border">
-          {(['portrait', 'relationships', 'search', 'ai'] as const).map((t) => (
+          {(['portrait', 'relationships', 'search', 'ai', 'sim'] as const).map((t) => (
             <button
               key={t}
               onClick={() => {
@@ -319,7 +320,8 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
               }`}
             >
               {t === 'ai' && <Bot size={13} className="flex-shrink-0" />}
-              {t === 'portrait' ? '群聊画像' : t === 'relationships' ? '人物关系' : t === 'search' ? '搜索记录' : 'AI 分析'}
+              {t === 'sim' && <Users size={13} className="flex-shrink-0" />}
+              {t === 'portrait' ? '群聊画像' : t === 'relationships' ? '人物关系' : t === 'search' ? '搜索记录' : t === 'sim' ? 'AI 群聊' : 'AI 分析'}
               {t === 'ai' && <AIAnalysisBadge username={group.username} isGroup={true} />}
             </button>
           ))}
@@ -337,6 +339,10 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             totalMessages={group.total_messages}
             onOpenSettings={onOpenSettings}
           />
+        )}
+
+        {tab === 'sim' && (
+          <GroupSimChat group={group} onOpenSettings={onOpenSettings} />
         )}
 
         {tab === 'search' && (

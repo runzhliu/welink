@@ -28,8 +28,10 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
+	"sort"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -957,6 +959,276 @@ func serverMain() {
 			return
 		}
 		c.JSON(http.StatusOK, CompleteResponse{Content: content})
+	})
+
+	// ── AI 群聊模拟（SSE 流式）────────────────────────────────────────────
+	// POST /api/ai/group-sim — 模拟群聊：按成员发言比例和风格生成对话
+	api.POST("/ai/group-sim", func(c *gin.Context) {
+		var body struct {
+			GroupUsername string `json:"group_username"`
+			MessageCount int    `json:"message_count"`
+			ProfileID    string `json:"profile_id"`
+			UserMessage  string `json:"user_message"`
+			History      []struct {
+				Speaker string `json:"speaker"`
+				Content string `json:"content"`
+			} `json:"history"`
+			Rounds  int      `json:"rounds"`
+			Topic   string   `json:"topic"`   // 话题/场景设定
+			Mood    string   `json:"mood"`     // 聊天氛围
+			Members []string `json:"members"` // 指定参与成员（为空则自动选 top 10）
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		if body.MessageCount <= 0 { body.MessageCount = 1000 }
+		if body.Rounds <= 0 { body.Rounds = 5 }
+		if body.Rounds > 20 { body.Rounds = 20 }
+
+		prefs := loadPreferences()
+		cfg := llmConfigForProfile(body.ProfileID, prefs)
+		if cfg.provider == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
+			return
+		}
+
+		svc := getSvc()
+		if svc == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "服务未初始化"})
+			return
+		}
+
+		// 1. 加载最近 N 条群消息
+		msgs := svc.ExportGroupMessages(body.GroupUsername, 0, 0)
+		if len(msgs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "该群聊没有消息记录"})
+			return
+		}
+		// 取最后 N 条
+		if len(msgs) > body.MessageCount {
+			msgs = msgs[len(msgs)-body.MessageCount:]
+		}
+
+		// 2. 统计成员发言比例 + 风格特征
+		type memberInfo struct {
+			Name       string
+			Count      int
+			Samples    []string  // 文本消息样本
+			TotalChars int       // 总字符数
+			TextCount  int       // 文本消息数
+			EmojiCount int       // 含表情的消息数
+			QMarkCount int       // 含问号的消息数（爱提问）
+			ExclCount  int       // 含感叹号的消息数（情绪化）
+			ShortCount int       // <=5字的消息数（简短回复型）
+			LongCount  int       // >=50字的消息数（长篇大论型）
+		}
+		memberMap := make(map[string]*memberInfo)
+		for _, m := range msgs {
+			if m.Speaker == "" || m.Speaker == "未知" { continue }
+			mi, ok := memberMap[m.Speaker]
+			if !ok {
+				mi = &memberInfo{Name: m.Speaker}
+				memberMap[m.Speaker] = mi
+			}
+			mi.Count++
+			if m.Type == 1 && len(m.Content) > 0 {
+				mi.TextCount++
+				charLen := len([]rune(m.Content))
+				mi.TotalChars += charLen
+				if charLen <= 5 { mi.ShortCount++ }
+				if charLen >= 50 { mi.LongCount++ }
+				if strings.ContainsAny(m.Content, "？?") { mi.QMarkCount++ }
+				if strings.ContainsAny(m.Content, "！!") { mi.ExclCount++ }
+				if strings.ContainsAny(m.Content, "😂🤣😄😁😆😅😊😉😎🥰😍") || strings.Contains(m.Content, "[") { mi.EmojiCount++ }
+				// 保留样本（均匀抽样：前中后各取一些）
+				if len(mi.Samples) < 30 {
+					mi.Samples = append(mi.Samples, m.Content)
+				}
+			}
+		}
+
+		// 筛选参与成员（用户指定 or 自动取 top 10）
+		members := make([]*memberInfo, 0, len(memberMap))
+		if len(body.Members) > 0 {
+			allowed := make(map[string]bool)
+			for _, name := range body.Members { allowed[name] = true }
+			for _, mi := range memberMap {
+				if allowed[mi.Name] { members = append(members, mi) }
+			}
+		} else {
+			for _, mi := range memberMap { members = append(members, mi) }
+		}
+		sort.Slice(members, func(i, j int) bool { return members[i].Count > members[j].Count })
+		if len(members) > 10 { members = members[:10] }
+
+		totalCount := 0
+		for _, mi := range members { totalCount += mi.Count }
+
+		// 3. 构造系统 prompt（含风格特征画像）
+		var sb strings.Builder
+		sb.WriteString("你正在模拟一个微信群聊。每个成员有独特的说话风格，你必须严格区分不同成员的性格和表达方式。\n\n")
+
+		// 话题设定
+		if body.Topic != "" {
+			sb.WriteString(fmt.Sprintf("【话题/场景设定】\n群友们正在讨论：%s\n请围绕这个话题展开对话。\n\n", body.Topic))
+		}
+		// 氛围设定
+		if body.Mood != "" {
+			moodDesc := map[string]string{
+				"casual":    "日常闲聊，轻松随意，偶尔开玩笑",
+				"heated":    "激烈讨论，大家积极发表不同观点，可以有争论和反驳",
+				"latenight": "深夜吐槽模式，放松、随性、偶尔感性",
+				"funny":     "搞笑模式，大家互相调侃、发段子、斗图",
+				"serious":   "正经严肃的讨论，逻辑清晰、观点明确",
+			}
+			if desc, ok := moodDesc[body.Mood]; ok {
+				sb.WriteString(fmt.Sprintf("【聊天氛围】\n%s\n\n", desc))
+			}
+		}
+
+		sb.WriteString("【重要规则】\n")
+		sb.WriteString("1. 每个成员的说话风格差异很大，不能千篇一律\n")
+		sb.WriteString("2. 注意模仿每个人的用词习惯、语气、消息长度、是否用表情\n")
+		sb.WriteString("3. 承接上文话题，不要重复已说过的话\n")
+		sb.WriteString("4. 如果有人（包括「我」）刚说了话，后续成员应该自然回应\n\n")
+		sb.WriteString("【群成员画像】\n")
+		for _, mi := range members {
+			pct := float64(mi.Count) / float64(totalCount) * 100
+			sb.WriteString(fmt.Sprintf("\n## %s（发言占比 %.0f%%）\n", mi.Name, pct))
+
+			// 生成风格标签
+			sb.WriteString("性格特征：")
+			var traits []string
+			if mi.TextCount > 0 {
+				avgLen := mi.TotalChars / mi.TextCount
+				if avgLen <= 8 { traits = append(traits, "惜字如金，回复简短") }
+				if avgLen >= 30 { traits = append(traits, "话多，经常长篇大论") }
+				if avgLen > 8 && avgLen < 30 { traits = append(traits, fmt.Sprintf("消息平均%d字", avgLen)) }
+			}
+			if mi.TextCount > 0 {
+				emojiPct := float64(mi.EmojiCount) / float64(mi.TextCount) * 100
+				if emojiPct > 30 { traits = append(traits, "爱用表情") }
+				if emojiPct < 5 { traits = append(traits, "很少用表情") }
+			}
+			if mi.TextCount > 0 {
+				qPct := float64(mi.QMarkCount) / float64(mi.TextCount) * 100
+				if qPct > 20 { traits = append(traits, "爱提问") }
+			}
+			if mi.TextCount > 0 {
+				exclPct := float64(mi.ExclCount) / float64(mi.TextCount) * 100
+				if exclPct > 25 { traits = append(traits, "语气强烈，常用感叹号") }
+			}
+			if mi.TextCount > 0 {
+				shortPct := float64(mi.ShortCount) / float64(mi.TextCount) * 100
+				if shortPct > 40 { traits = append(traits, "经常几个字就回复") }
+			}
+			if len(traits) == 0 { traits = append(traits, "风格中等") }
+			sb.WriteString(strings.Join(traits, "、") + "\n")
+
+			// 样本消息
+			sb.WriteString("说话样本：\n")
+			sampleCount := len(mi.Samples)
+			if sampleCount > 10 { sampleCount = 10 }
+			for _, s := range mi.Samples[:sampleCount] {
+				if len(s) > 100 { s = s[:100] + "…" }
+				sb.WriteString(fmt.Sprintf("- 「%s」\n", s))
+			}
+		}
+		sb.WriteString("\n【最近的群聊记录】\n")
+		recentStart := len(msgs) - 50
+		if recentStart < 0 { recentStart = 0 }
+		for _, m := range msgs[recentStart:] {
+			if m.Content != "" {
+				sb.WriteString(fmt.Sprintf("%s：%s\n", m.Speaker, m.Content))
+			}
+		}
+
+		systemPrompt := sb.String()
+
+		// 4. SSE 流式输出
+		flusher, ok := c.Writer.(http.Flusher)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "不支持流式响应"})
+			return
+		}
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		c.Writer.Header().Set("Cache-Control", "no-cache")
+		c.Writer.Header().Set("X-Accel-Buffering", "no")
+
+		type SimMessage struct {
+			Speaker string `json:"speaker"`
+			Content string `json:"content"`
+			Done    bool   `json:"done"`
+			Error   string `json:"error,omitempty"`
+		}
+		sendSim := func(msg SimMessage) {
+			data, _ := json.Marshal(msg)
+			fmt.Fprintf(c.Writer, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+
+		// 构建对话上下文
+		var simContext strings.Builder
+		// 已有历史
+		for _, h := range body.History {
+			simContext.WriteString(fmt.Sprintf("%s：%s\n", h.Speaker, h.Content))
+		}
+		// 用户插入的消息（只加入上下文，不重复推送——前端已展示）
+		if body.UserMessage != "" {
+			simContext.WriteString(fmt.Sprintf("我：%s\n", body.UserMessage))
+		}
+
+		// 5. 用多轮对话方式逐轮生成（LLM 能"记住"已生成内容，避免重复）
+		llmMsgs := []LLMMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: "以下是最近的群聊对话，请在此基础上继续模拟：\n\n" + simContext.String()},
+		}
+
+		for round := 0; round < body.Rounds; round++ {
+			// 按概率随机选成员
+			r := rand.Intn(totalCount)
+			var chosen *memberInfo
+			cumulative := 0
+			for _, mi := range members {
+				cumulative += mi.Count
+				if r < cumulative {
+					chosen = mi
+					break
+				}
+			}
+			if chosen == nil { chosen = members[0] }
+
+			// 追加指令到对话历史
+			instruction := fmt.Sprintf(
+				"现在请以【%s】的身份和风格，生成一条自然的群聊消息。\n"+
+					"要求：只输出消息内容本身，不加角色前缀或引号；模仿该成员的用词和语气；承接上文不要重复已说过的话；长度适中。",
+				chosen.Name,
+			)
+			llmMsgs = append(llmMsgs, LLMMessage{Role: "user", Content: instruction})
+
+			// 收集完整回复
+			var reply strings.Builder
+			streamLLMCoreWithProfile(func(chunk StreamChunk) {
+				if chunk.Delta != "" {
+					reply.WriteString(chunk.Delta)
+				}
+			}, llmMsgs, prefs, body.ProfileID)
+
+			content := strings.TrimSpace(reply.String())
+			if content == "" { continue }
+
+			// 清理可能的角色前缀
+			content = strings.TrimPrefix(content, chosen.Name+"：")
+			content = strings.TrimPrefix(content, chosen.Name+":")
+
+			// 将生成结果作为 assistant 回复加入对话历史，LLM 下一轮能看到
+			llmMsgs = append(llmMsgs, LLMMessage{Role: "assistant", Content: content})
+
+			sendSim(SimMessage{Speaker: chosen.Name, Content: content})
+		}
+
+		sendSim(SimMessage{Done: true})
 	})
 
 	// ── RAG 索引（需要服务层） ────────────────────────────────────────────
