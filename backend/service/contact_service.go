@@ -156,6 +156,8 @@ type ContactService struct {
 	cacheMu          sync.RWMutex
 	isIndexing       bool
 	isInitialized    bool // 标记初始化是否完成
+	groupListCache       []GroupInfo                      // 群聊列表缓存
+	groupListReady       bool
 	groupDetailCache     map[string]*GroupDetail          // 群聊详情内存缓存（lazy load）
 	groupDetailMu        sync.RWMutex
 	groupDetailComputing map[string]bool                  // 正在后台计算中的群聊
@@ -267,6 +269,8 @@ func (s *ContactService) Reinitialize(from, to int64) {
 
 	// 清空群聊缓存
 	s.groupDetailMu.Lock()
+	s.groupListCache = nil
+	s.groupListReady = false
 	s.groupDetailCache = make(map[string]*GroupDetail)
 	s.groupDetailComputing = make(map[string]bool)
 	s.groupRelCache = make(map[string]*RelationshipGraph)
@@ -1366,6 +1370,20 @@ type GroupDetail struct {
 
 // GetGroups 返回所有群聊列表（含消息量），只返回有消息的群
 func (s *ContactService) GetGroups() []GroupInfo {
+	s.groupDetailMu.Lock()
+	if !s.groupListReady {
+		s.groupDetailMu.Unlock()
+		list := s.loadGroups()
+		s.groupDetailMu.Lock()
+		s.groupListCache = list
+		s.groupListReady = true
+	}
+	result := s.groupListCache
+	s.groupDetailMu.Unlock()
+	return result
+}
+
+func (s *ContactService) loadGroups() []GroupInfo {
 	rows, err := s.dbMgr.ContactDB.Query(
 		`SELECT username, nick_name, remark, COALESCE(small_head_url,'') FROM contact WHERE username LIKE '%@chatroom'`)
 	if err != nil { return nil }

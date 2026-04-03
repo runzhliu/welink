@@ -885,29 +885,52 @@ export const ChatCalendarPage: React.FC<Props> = () => {
 
           if (memories.length === 0) return null;
 
+          // 跳转日历到指定日期所在的月份组
+          const jumpToDate = (dateStr: string) => {
+            handleDayClick(dateStr);
+            // 找到该日期所在月份在 monthGroups 中的组索引
+            const [y, m] = dateStr.split('-').map(Number);
+            const targetIdx = monthGroups.findIndex(group =>
+              group.some(g => g.year === y && g.month === m - 1)
+            );
+            if (targetIdx >= 0 && targetIdx !== currentGroupIdx) {
+              setCurrentGroupIdx(targetIdx);
+              requestAnimationFrame(() => {
+                const el = scrollRef.current;
+                if (el) el.scrollTo({ left: targetIdx * el.clientWidth, behavior: 'smooth' });
+              });
+            }
+          };
+
           return (
-            <button
-              onClick={() => handleDayClick(memories[0].date)}
-              className="w-full dk-card bg-gradient-to-r from-[#f0faf4] to-[#e7f8f0] dark:from-[#07c160]/10 dark:to-[#07c160]/5
-                border border-[#07c160]/20 rounded-2xl px-5 py-3 flex items-center gap-3
-                hover:shadow-md hover:border-[#07c160]/40 transition-all text-left"
-            >
-              <div className="w-9 h-9 rounded-xl bg-[#07c160] flex items-center justify-center flex-shrink-0">
-                <Sparkles size={16} className="text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
+            <div className="w-full dk-card bg-gradient-to-r from-[#f0faf4] to-[#e7f8f0] dark:from-[#07c160]/10 dark:to-[#07c160]/5
+              border border-[#07c160]/20 rounded-2xl px-5 py-3">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-xl bg-[#07c160] flex items-center justify-center flex-shrink-0">
+                  <Sparkles size={16} className="text-white" />
+                </div>
                 <div className="text-sm font-bold text-[#1d1d1f] dk-text">
                   {memories.length === 1
                     ? `${memories[0].year} 年前的今天`
                     : `回忆：${memories.map(m => `${m.year}年前`).join('、')}的今天`
                   }
                 </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {memories.map(m => `${m.date}（${m.count} 条）`).join(' · ')}
-                </div>
               </div>
-              <ChevronRight size={16} className="text-[#07c160] flex-shrink-0" />
-            </button>
+              <div className="flex flex-wrap gap-2 ml-12">
+                {memories.map(m => (
+                  <button
+                    key={m.date}
+                    onClick={() => jumpToDate(m.date)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold
+                      bg-white/70 dark:bg-white/10 text-[#07c160] hover:bg-white hover:shadow-sm transition-all"
+                  >
+                    <span>{m.date}</span>
+                    <span className="text-gray-400 font-normal">{m.count} 条</span>
+                    <ChevronRight size={12} />
+                  </button>
+                ))}
+              </div>
+            </div>
           );
         })()}
 
