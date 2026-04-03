@@ -3,13 +3,14 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame } from 'lucide-react';
+import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame, Sparkles } from 'lucide-react';
 import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
 import { contactsApi } from '../../services/api';
 import { exportContactCsv, exportContactTxt, EXPORT_LIMIT, parseExportResult } from '../../utils/exportChat';
 import { WordCloudCanvas } from './WordCloudCanvas';
 import { LLMAnalysisTab } from './LLMAnalysisTab';
+import { AICloneTab } from './AICloneTab';
 import { ContactDetailCharts } from './ContactDetailCharts';
 import { SentimentChart } from './SentimentChart';
 import { MessageTypePieChart } from '../common/MessageTypePieChart';
@@ -27,7 +28,7 @@ interface ContactModalProps {
   initialQuery?: string;
 }
 
-type ModalTab = 'wordcloud' | 'detail' | 'sentiment' | 'search' | 'ai';
+type ModalTab = 'wordcloud' | 'detail' | 'sentiment' | 'search' | 'ai' | 'clone';
 
 function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
 function shiftDays(n: number) {
@@ -508,7 +509,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         {/* Tabs + 消息范围切换 */}
         <div className="flex items-center justify-between mb-6 dk-border border-b border-gray-100">
           <div className="flex gap-2">
-            {(['wordcloud', 'detail', 'sentiment', 'search', 'ai'] as ModalTab[]).map((t) => (
+            {(['wordcloud', 'detail', 'sentiment', 'search', 'ai', 'clone'] as ModalTab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => {
@@ -525,7 +526,8 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                 }`}
               >
                 {t === 'ai' && <Bot size={13} className="flex-shrink-0" />}
-                {t === 'wordcloud' ? '词云分析' : t === 'detail' ? '深度画像' : t === 'sentiment' ? '情感分析' : t === 'search' ? '搜索记录' : 'AI 分析'}
+                {t === 'clone' && <Sparkles size={13} className="flex-shrink-0" />}
+                {t === 'wordcloud' ? '词云分析' : t === 'detail' ? '深度画像' : t === 'sentiment' ? '情感分析' : t === 'search' ? '搜索记录' : t === 'ai' ? 'AI 分析' : 'AI 分身'}
               </button>
             ))}
           </div>
@@ -613,6 +615,15 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
             displayName={displayName}
             isGroup={false}
             totalMessages={contact.total_messages}
+            avatarUrl={avatarUrl || undefined}
+            onOpenSettings={onOpenSettings}
+          />
+        )}
+
+        {tab === 'clone' && (
+          <AICloneTab
+            username={contact.username}
+            displayName={displayName}
             avatarUrl={avatarUrl || undefined}
             onOpenSettings={onOpenSettings}
           />

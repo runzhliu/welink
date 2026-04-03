@@ -151,6 +151,25 @@ export interface AnniversaryResponse {
   custom: CustomAnniversary[];
 }
 
+export interface RelationshipNode {
+  id: string;
+  name: string;
+  messages: number;
+}
+
+export interface RelationshipEdge {
+  source: string;
+  target: string;
+  weight: number;
+  replies: number;
+  mentions: number;
+}
+
+export interface RelationshipGraph {
+  nodes: RelationshipNode[];
+  edges: RelationshipEdge[];
+}
+
 export interface CalendarDayEntry {
   username: string;
   display_name: string;

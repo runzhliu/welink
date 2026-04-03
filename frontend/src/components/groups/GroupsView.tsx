@@ -13,6 +13,7 @@ import { CalendarHeatmap } from '../contact/CalendarHeatmap';
 import { GroupDayChatPanel } from './GroupDayChatPanel';
 import { MessageTypePieChart } from '../common/MessageTypePieChart';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { RelationshipGraphPanel } from './RelationshipGraphPanel';
 import {
   MEMBER_RANK_LIMIT_KEY, MEMBER_NAME_WIDTH_KEY,
   DEFAULT_RANK_LIMIT, DEFAULT_NAME_WIDTH,
@@ -59,7 +60,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
       c.username === displayName
     ) ?? null;
   };
-  const [tab, setTab] = useState<'portrait' | 'search' | 'ai'>('portrait');
+  const [tab, setTab] = useState<'portrait' | 'search' | 'ai' | 'relationships'>('portrait');
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [dayPanel, setDayPanel] = useState<{ date: string; count: number } | null>(null);
@@ -214,10 +215,10 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
       onClick={onClose}
     >
       <div
-        className="dk-card bg-white rounded-t-[32px] sm:rounded-[48px] w-full sm:max-w-4xl overflow-hidden max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] shadow-2xl relative"
+        className="dk-card bg-white rounded-t-[20px] sm:rounded-[20px] w-full sm:max-w-4xl overflow-hidden max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
       >
-      <div className="overflow-y-auto max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] p-4 sm:p-8 lg:p-12">
+      <div className="overflow-y-auto max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4 pb-4 sm:pb-6 lg:pb-8">
         <div className="absolute top-5 right-5 flex items-center gap-2">
           {/* 导出 */}
           <div className="relative" ref={exportPanelRef}>
@@ -306,7 +307,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
 
         {/* Tab bar */}
         <div className="flex gap-2 mb-6 border-b border-gray-100 dk-border">
-          {(['portrait', 'search', 'ai'] as const).map((t) => (
+          {(['portrait', 'relationships', 'search', 'ai'] as const).map((t) => (
             <button
               key={t}
               onClick={() => {
@@ -318,11 +319,15 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
               }`}
             >
               {t === 'ai' && <Bot size={13} className="flex-shrink-0" />}
-              {t === 'portrait' ? '群聊画像' : t === 'search' ? '搜索记录' : 'AI 分析'}
+              {t === 'portrait' ? '群聊画像' : t === 'relationships' ? '人物关系' : t === 'search' ? '搜索记录' : 'AI 分析'}
               {t === 'ai' && <AIAnalysisBadge username={group.username} isGroup={true} />}
             </button>
           ))}
         </div>
+
+        {tab === 'relationships' && (
+          <RelationshipGraphPanel username={group.username} />
+        )}
 
         {tab === 'ai' && (
           <LLMAnalysisTab

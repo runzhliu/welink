@@ -43,6 +43,28 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// safePercent 安全计算百分比，避免除零
+func safePercent(part, total int) int {
+	if total == 0 {
+		return 0
+	}
+	return part * 100 / total
+}
+
+// sampleEvenly 从切片中均匀采样 n 个元素（保持原始顺序）
+func sampleEvenly(items []string, n int) []string {
+	if len(items) <= n {
+		return items
+	}
+	result := make([]string, 0, n)
+	step := float64(len(items)) / float64(n)
+	for i := 0; i < n; i++ {
+		idx := int(float64(i) * step)
+		result = append(result, items[idx])
+	}
+	return result
+}
+
 func main() {
 	if hasFrontend {
 		// App 模式：webview 必须在进程启动后立刻创建，否则 macOS 报「没有响应」。
@@ -622,6 +644,293 @@ func serverMain() {
 			flusher.Flush()
 		}
 		streamLLMCoreWithProfile(sendChunk, body.Messages, prefs, body.ProfileID)
+	})
+
+	// ── AI 分身：三层记忆 + session 机制 ──
+	var (
+		cloneCache   = make(map[string]string) // session_id → system prompt
+		cloneCacheMu sync.RWMutex
+		cloneSeq     int64
+	)
+
+	// GET /api/ai/clone/session/:username — 检查是否有缓存的分身档案
+	api.GET("/ai/clone/session/:username", func(c *gin.Context) {
+		uname := c.Param("username")
+		p, err := GetCloneProfile(uname)
+		if err != nil || p == nil {
+			c.JSON(http.StatusOK, gin.H{"exists": false})
+			return
+		}
+		// 恢复到内存缓存
+		cloneCacheMu.Lock()
+		cloneSeq++
+		sid := fmt.Sprintf("clone-%s-%d", uname, cloneSeq)
+		cloneCache[sid] = p.Prompt
+		cloneCacheMu.Unlock()
+
+		c.JSON(http.StatusOK, gin.H{
+			"exists":        true,
+			"session_id":    sid,
+			"private_count": p.PrivateCount,
+			"group_count":   p.GroupCount,
+			"has_profile":   p.HasProfile,
+			"has_recent":    p.HasRecent,
+			"avg_msg_len":   p.AvgMsgLen,
+			"emoji_pct":     p.EmojiPct,
+			"updated_at":    p.UpdatedAt,
+		})
+	})
+
+	// POST /api/ai/clone/learn — 多步学习（SSE 进度推送）
+	// 步骤: 加载消息 → 统计分析 → LLM提炼长期档案 → LLM提炼中期近况 → 组装prompt
+	api.POST("/ai/clone/learn", func(c *gin.Context) {
+		var body struct {
+			Username string   `json:"username"`
+			Count    int      `json:"count"`
+			Groups         []string `json:"groups"`
+			Bio            string   `json:"bio"`
+			ExtractProfile bool     `json:"extract_profile"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+
+		prefs := loadPreferences()
+		hasLLM := prefs.LLMProvider != "" && (prefs.LLMAPIKey != "" || prefs.LLMProvider == "ollama")
+
+		// SSE 进度推送
+		flusher, fOk := c.Writer.(http.Flusher)
+		if !fOk {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "不支持流式响应"})
+			return
+		}
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		c.Writer.Header().Set("Cache-Control", "no-cache")
+		c.Writer.Header().Set("X-Accel-Buffering", "no")
+		sendProgress := func(step string, detail string) {
+			data, _ := json.Marshal(gin.H{"step": step, "detail": detail})
+			fmt.Fprintf(c.Writer, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+
+		// ─── Step 1: 加载消息 ───
+		sendProgress("loading", "正在加载聊天记录...")
+
+		limit := body.Count
+		if limit <= 0 {
+			limit = 0
+		}
+
+		allMsgs := getSvc().ExportContactMessages(body.Username, 0, 0)
+
+		// 对方文本消息——全量加载，用户选多少给多少
+		var theirTexts []string
+		for _, m := range allMsgs {
+			if !m.IsMine && m.Type == 1 && m.Content != "" {
+				theirTexts = append(theirTexts, m.Content)
+			}
+		}
+		if limit > 0 && len(theirTexts) > limit {
+			theirTexts = theirTexts[len(theirTexts)-limit:]
+		}
+		if limit <= 0 && len(theirTexts) > 2000 {
+			theirTexts = theirTexts[len(theirTexts)-2000:]
+		}
+
+		// 群聊发言（每个群各取最近 limit 条）
+		var groupSamples []string
+		if len(body.Groups) > 0 {
+			groupLimit := limit
+			if groupLimit <= 0 {
+				groupLimit = 500 // "全部"模式下每个群兜底 500 条
+			}
+			groupSamples = getSvc().ExtractContactGroupMessages(body.Username, body.Groups, groupLimit)
+		}
+
+		// 获取显示名
+		displayName := body.Username
+		for _, s := range getSvc().GetCachedStats() {
+			if s.Username == body.Username {
+				if s.Remark != "" {
+					displayName = s.Remark
+				} else if s.Nickname != "" {
+					displayName = s.Nickname
+				}
+				break
+			}
+		}
+
+		// ─── Step 2: 统计分析 ───
+		sendProgress("analyzing", "正在分析聊天特征...")
+
+		allTheirTexts := theirTexts
+		if len(groupSamples) > 0 {
+			allTheirTexts = append(append([]string{}, theirTexts...), groupSamples...)
+		}
+		var totalLen int
+		for _, t := range allTheirTexts {
+			totalLen += len([]rune(t))
+		}
+		avgLen := 0
+		if len(allTheirTexts) > 0 {
+			avgLen = totalLen / len(allTheirTexts)
+		}
+		msgWithEmoji := 0
+		for _, t := range allTheirTexts {
+			for _, r := range t {
+				if r >= 0x1F600 && r <= 0x1FAF8 || r >= 0x2600 && r <= 0x27BF || r >= 0xFE00 && r <= 0xFEFF {
+					msgWithEmoji++
+					break
+				}
+			}
+		}
+		emojiPct := 0
+		if len(allTheirTexts) > 0 {
+			emojiPct = msgWithEmoji * 100 / len(allTheirTexts)
+		}
+
+		// ─── Step 3: LLM 提炼人物特征（用户可选） ───
+		var profileText string
+		if body.ExtractProfile && hasLLM && len(allTheirTexts) >= 50 {
+			sendProgress("profile", "AI 正在提炼人物特征...")
+			profileSamples := sampleEvenly(allTheirTexts, 200)
+			profilePrompt := fmt.Sprintf(`请用 3-5 句话简要概括「%s」的说话风格特点（口头禅、语气、性格）。
+
+消息样本：
+%s
+
+直接输出，不要分点、不要标题。`, displayName, strings.Join(profileSamples, "\n"))
+
+			result, err := CompleteLLM([]LLMMessage{
+				{Role: "user", Content: profilePrompt},
+			}, prefs)
+			if err == nil && result != "" {
+				profileText = result
+			}
+		}
+
+		// ─── Step 4: 组装 prompt ───
+		sendProgress("building", "正在构建 AI 分身...")
+
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("你现在要扮演「%s」，完全模拟 TA 的说话风格与我对话。\n", displayName))
+		sb.WriteString(fmt.Sprintf("当前时间：%s\n\n", time.Now().Format("2006年1月2日")))
+
+		// 背景（用户填写）
+		if bio := strings.TrimSpace(body.Bio); bio != "" {
+			sb.WriteString("背景：" + bio + "\n\n")
+		}
+
+		// LLM 提炼的简短风格总结（辅助）
+		if profileText != "" {
+			sb.WriteString("风格总结：" + profileText + "\n\n")
+		}
+
+		// 核心：用户选的全部原始消息，不做裁剪
+		if len(theirTexts) > 0 {
+			sb.WriteString(fmt.Sprintf("以下是「%s」最近的 %d 条真实私聊消息，这是你模仿的核心依据——逐条感受 TA 的用词、断句、语气、长度、emoji 习惯：\n\n", displayName, len(theirTexts)))
+			sb.WriteString(strings.Join(theirTexts, "\n"))
+			sb.WriteString("\n\n")
+		}
+		if len(groupSamples) > 0 {
+			sb.WriteString(fmt.Sprintf("TA 在群聊中的 %d 条发言：\n\n", len(groupSamples)))
+			sb.WriteString(strings.Join(groupSamples, "\n"))
+			sb.WriteString("\n\n")
+		}
+
+		// 精简规则
+		sb.WriteString(fmt.Sprintf(`规则：
+1. 你的每条回复必须读起来和上面的真实消息一模一样——相同的长度、断句、语气词、标点
+2. TA 平均每条 %d 字，严格保持这个长度
+3. TA %d%% 的消息含 emoji，按这个频率用，不多不少
+4. 绝对不暴露你是 AI
+5. 保持 TA 原本的交流温度，不要更热情或更客套`, avgLen, emojiPct))
+
+		sysPrompt := sb.String()
+
+		cloneCacheMu.Lock()
+		cloneSeq++
+		sessionID := fmt.Sprintf("clone-%s-%d", body.Username, cloneSeq)
+		cloneCache[sessionID] = sysPrompt
+		cloneCacheMu.Unlock()
+
+		// 持久化到数据库
+		_ = PutCloneProfile(&CloneProfile{
+			Username:     body.Username,
+			Prompt:       sysPrompt,
+			PrivateCount: len(theirTexts),
+			GroupCount:   len(groupSamples),
+			HasProfile:   profileText != "",
+			HasRecent:    false,
+			AvgMsgLen:    avgLen,
+			EmojiPct:     emojiPct,
+			UpdatedAt:    time.Now().Unix(),
+		})
+
+		// 最终结果
+		result, _ := json.Marshal(gin.H{
+			"done":           true,
+			"session_id":     sessionID,
+			"sample_count":   len(theirTexts) + len(groupSamples),
+			"private_count":  len(theirTexts),
+			"group_count":    len(groupSamples),
+			"has_profile":    profileText != "",
+			"has_recent":     false,
+			"avg_msg_len":    avgLen,
+			"emoji_pct":      emojiPct,
+		})
+		fmt.Fprintf(c.Writer, "data: %s\n\n", result)
+		flusher.Flush()
+	})
+
+	// POST /api/ai/clone/chat — 对话：通过 session_id 复用缓存的 system prompt
+	api.POST("/ai/clone/chat", func(c *gin.Context) {
+		var body struct {
+			SessionID string       `json:"session_id"`
+			Messages  []LLMMessage `json:"messages"`
+			ProfileID string       `json:"profile_id"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		prefs := loadPreferences()
+		cfg := llmConfigForProfile(body.ProfileID, prefs)
+		if cfg.provider == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
+			return
+		}
+		if cfg.apiKey == "" && cfg.provider != "ollama" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+			return
+		}
+
+		cloneCacheMu.RLock()
+		sysPrompt, ok := cloneCache[body.SessionID]
+		cloneCacheMu.RUnlock()
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "会话已过期，请重新学习"})
+			return
+		}
+
+		llmMessages := []LLMMessage{{Role: "system", Content: sysPrompt}}
+		llmMessages = append(llmMessages, body.Messages...)
+
+		flusher, fOk := c.Writer.(http.Flusher)
+		if !fOk {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "不支持流式响应"})
+			return
+		}
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		c.Writer.Header().Set("Cache-Control", "no-cache")
+		c.Writer.Header().Set("X-Accel-Buffering", "no")
+		sendChunk := func(chunk StreamChunk) {
+			data, _ := json.Marshal(chunk)
+			fmt.Fprintf(c.Writer, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+		streamLLMCoreWithProfile(sendChunk, llmMessages, prefs, body.ProfileID)
 	})
 
 	// POST /api/ai/complete — 非流式单次补全（用于分段摘要）
@@ -1225,6 +1534,16 @@ func serverMain() {
 				return
 			}
 			c.JSON(http.StatusOK, getSvc().GetGroupDetail(uname))
+		})
+
+		// 群聊人物关系
+		prot.GET("/groups/relationships", func(c *gin.Context) {
+			uname := c.Query("username")
+			if uname == "" {
+				c.JSON(400, gin.H{"error": "username required"})
+				return
+			}
+			c.JSON(http.StatusOK, getSvc().GetGroupRelationships(uname))
 		})
 
 		// 获取与联系人的共同群聊

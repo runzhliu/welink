@@ -196,6 +196,9 @@ export const groupsApi = {
 
   exportMessages: (username: string, from?: number, to?: number) =>
     api.get<void, GroupChatMessage[]>('/groups/export', { params: { username, ...(from ? { from } : {}), ...(to ? { to } : {}) } }),
+
+  getRelationships: (username: string) =>
+    api.get<void, import('../types').RelationshipGraph | null>('/groups/relationships', { params: { username } }),
 };
 
 export const calendarApi = {

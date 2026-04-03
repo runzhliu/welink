@@ -156,9 +156,11 @@ type ContactService struct {
 	cacheMu          sync.RWMutex
 	isIndexing       bool
 	isInitialized    bool // 标记初始化是否完成
-	groupDetailCache     map[string]*GroupDetail // 群聊详情内存缓存（lazy load）
+	groupDetailCache     map[string]*GroupDetail          // 群聊详情内存缓存（lazy load）
 	groupDetailMu        sync.RWMutex
-	groupDetailComputing map[string]bool // 正在后台计算中的群聊
+	groupDetailComputing map[string]bool                  // 正在后台计算中的群聊
+	groupRelCache        map[string]*RelationshipGraph    // 群聊人物关系缓存
+	groupRelComputing    map[string]bool
 	filterFrom       int64 // 全局时间范围过滤（Unix 秒，0=不限）
 	filterTo         int64
 	calendarHeatmap  map[string]int // 全局每日消息量（联系人+群聊），performAnalysis 后可读
@@ -241,6 +243,8 @@ func NewContactService(mgr *db.DBManager, cfg *config.Config) *ContactService {
 		tz:               loc,
 		groupDetailCache:     make(map[string]*GroupDetail),
 		groupDetailComputing: make(map[string]bool),
+		groupRelCache:        make(map[string]*RelationshipGraph),
+		groupRelComputing:    make(map[string]bool),
 	}
 	svc.segmenter.LoadDict()
 
@@ -265,6 +269,8 @@ func (s *ContactService) Reinitialize(from, to int64) {
 	s.groupDetailMu.Lock()
 	s.groupDetailCache = make(map[string]*GroupDetail)
 	s.groupDetailComputing = make(map[string]bool)
+	s.groupRelCache = make(map[string]*RelationshipGraph)
+	s.groupRelComputing = make(map[string]bool)
 	s.groupDetailMu.Unlock()
 
 	go func() {
@@ -1158,6 +1164,75 @@ func (s *ContactService) exportGroupMessages(username string, from, to int64, li
 		msgs = msgs[len(msgs)-limit:]
 	}
 	return msgs
+}
+
+// ExtractContactGroupMessages 从指定群聊中提取某联系人的文本发言（取最近 limit 条）
+// contactUsername 为联系人的 wxid，groupUsernames 为群聊 username 列表
+// limit <= 0 表示不限条数
+func (s *ContactService) ExtractContactGroupMessages(contactUsername string, groupUsernames []string, limit int) []string {
+	type timedText struct {
+		ts   int64
+		text string
+	}
+	var items []timedText
+	tw := s.timeWhere()
+
+	for _, groupUname := range groupUsernames {
+		tableName := db.GetTableName(groupUname)
+
+		// 收集该群中联系人的全部发言
+		var groupItems []timedText
+		for _, mdb := range s.dbMgr.MessageDBs {
+			var contactRowID int64 = -1
+			mdb.QueryRow("SELECT rowid FROM Name2Id WHERE user_name = ?", contactUsername).Scan(&contactRowID)
+			if contactRowID < 0 {
+				continue
+			}
+
+			whereClause := tw
+			if whereClause == "" {
+				whereClause = fmt.Sprintf(" WHERE real_sender_id = %d AND local_type = 1", contactRowID)
+			} else {
+				whereClause += fmt.Sprintf(" AND real_sender_id = %d AND local_type = 1", contactRowID)
+			}
+
+			rows, err := mdb.Query(fmt.Sprintf(
+				"SELECT create_time, message_content, COALESCE(WCDB_CT_message_content,0) FROM [%s]%s ORDER BY create_time ASC",
+				tableName, whereClause,
+			))
+			if err != nil {
+				continue
+			}
+			for rows.Next() {
+				var ts int64
+				var rawContent []byte
+				var ct int64
+				rows.Scan(&ts, &rawContent, &ct)
+				text := decodeGroupContent(rawContent, ct)
+				text = strings.TrimSpace(text)
+				if idx := strings.Index(text, ":\n"); idx > 0 && idx < 80 {
+					text = strings.TrimSpace(text[idx+2:])
+				}
+				if text != "" {
+					groupItems = append(groupItems, timedText{ts, text})
+				}
+			}
+			rows.Close()
+		}
+		// 每个群按时间排序，取最近 limit 条
+		sort.Slice(groupItems, func(i, j int) bool { return groupItems[i].ts < groupItems[j].ts })
+		if limit > 0 && len(groupItems) > limit {
+			groupItems = groupItems[len(groupItems)-limit:]
+		}
+		items = append(items, groupItems...)
+	}
+	// 全局按时间排序
+	sort.Slice(items, func(i, j int) bool { return items[i].ts < items[j].ts })
+	samples := make([]string, len(items))
+	for i, it := range items {
+		samples[i] = it.text
+	}
+	return samples
 }
 
 func (s *ContactService) GetWordCloud(username string, includeMine bool) []WordCount {
@@ -2648,4 +2723,215 @@ func daysUntilMMDD(mmdd, today string) int {
 	t1, _ := time.Parse("2006-01-02", today)
 	t2, _ := time.Parse("2006-01-02", target)
 	return int(t2.Sub(t1).Hours() / 24)
+}
+
+// ─── 群聊人物关系挖掘 ────────────────────────────────────────────────────────
+
+// RelationshipNode 群内成员节点
+type RelationshipNode struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Messages int64  `json:"messages"`
+}
+
+// RelationshipEdge 成员间互动边
+type RelationshipEdge struct {
+	Source   string `json:"source"`
+	Target   string `json:"target"`
+	Weight   int    `json:"weight"`
+	Replies  int    `json:"replies"`
+	Mentions int    `json:"mentions"`
+}
+
+// RelationshipGraph 完整关系图
+type RelationshipGraph struct {
+	Nodes []RelationshipNode `json:"nodes"`
+	Edges []RelationshipEdge `json:"edges"`
+}
+
+// GetGroupRelationships 群聊人物关系（lazy load + 缓存，异步计算）
+func (s *ContactService) GetGroupRelationships(username string) *RelationshipGraph {
+	s.groupDetailMu.RLock()
+	cached, inCache := s.groupRelCache[username]
+	computing := s.groupRelComputing[username]
+	s.groupDetailMu.RUnlock()
+
+	if inCache {
+		return cached
+	}
+	if computing {
+		return nil
+	}
+
+	s.groupDetailMu.Lock()
+	if s.groupRelComputing[username] || s.groupRelCache[username] != nil {
+		s.groupDetailMu.Unlock()
+		return nil
+	}
+	s.groupRelComputing[username] = true
+	s.groupDetailMu.Unlock()
+
+	go s.computeGroupRelationships(username)
+	return nil
+}
+
+func (s *ContactService) computeGroupRelationships(username string) {
+	tableName := db.GetTableName(username)
+	nameMap := s.loadContactNameMap()
+	tw := s.timeWhere()
+
+	// 收集所有消息的 (timestamp, senderName, content) 按时间排序
+	type msgEntry struct {
+		ts     int64
+		sender string
+		content string
+	}
+	var allMsgs []msgEntry
+	memberMsgs := make(map[string]int64)
+
+	for _, mdb := range s.dbMgr.MessageDBs {
+		idToWxid := make(map[int64]string)
+		if nrows, nerr := mdb.Query("SELECT rowid, user_name FROM Name2Id"); nerr == nil {
+			for nrows.Next() {
+				var rid int64
+				var uname string
+				nrows.Scan(&rid, &uname)
+				idToWxid[rid] = uname
+			}
+			nrows.Close()
+		}
+
+		rows, err := mdb.Query(fmt.Sprintf(
+			"SELECT create_time, real_sender_id, local_type, message_content, COALESCE(WCDB_CT_message_content,0) FROM [%s]%s ORDER BY create_time ASC",
+			tableName, tw))
+		if err != nil {
+			continue
+		}
+		for rows.Next() {
+			var ts, senderID int64
+			var lt int
+			var rawContent []byte
+			var ct int64
+			rows.Scan(&ts, &senderID, &lt, &rawContent, &ct)
+			if senderID <= 0 {
+				continue
+			}
+			wxid, ok := idToWxid[senderID]
+			if !ok || wxid == "" {
+				continue
+			}
+			speaker := wxid
+			if name, ok2 := nameMap[wxid]; ok2 {
+				speaker = name
+			}
+			memberMsgs[speaker]++
+
+			content := ""
+			if lt == 1 {
+				content = decodeGroupContent(rawContent, ct)
+				// 去掉群聊消息的 "wxid:\n" 前缀
+				if idx := strings.Index(content, ":\n"); idx > 0 && idx < 80 {
+					content = content[idx+2:]
+				}
+			}
+			allMsgs = append(allMsgs, msgEntry{ts: ts, sender: speaker, content: content})
+		}
+		rows.Close()
+	}
+
+	// 按时间排序（跨 DB 合并后可能乱序）
+	sort.Slice(allMsgs, func(i, j int) bool { return allMsgs[i].ts < allMsgs[j].ts })
+
+	// 建立所有已知成员名集合（用于 @mention 匹配）
+	memberNames := make(map[string]bool)
+	for name := range memberMsgs {
+		memberNames[name] = true
+	}
+
+	// 互动检测
+	type edgeKey struct{ a, b string }
+	makeKey := func(a, b string) edgeKey {
+		if a > b {
+			a, b = b, a
+		}
+		return edgeKey{a, b}
+	}
+	type edgeData struct {
+		replies  int
+		mentions int
+	}
+	edgeMap := make(map[edgeKey]*edgeData)
+	getEdge := func(a, b string) *edgeData {
+		k := makeKey(a, b)
+		if edgeMap[k] == nil {
+			edgeMap[k] = &edgeData{}
+		}
+		return edgeMap[k]
+	}
+
+	// 连续消息互动检测（2 分钟内的不同发言人视为互动）
+	for i := 1; i < len(allMsgs); i++ {
+		prev := allMsgs[i-1]
+		curr := allMsgs[i]
+		if curr.sender != prev.sender && curr.ts-prev.ts <= 120 {
+			getEdge(prev.sender, curr.sender).replies++
+		}
+	}
+
+	// @mention 检测
+	atRe := regexp.MustCompile(`@([^\s@]{1,20})`)
+	for _, m := range allMsgs {
+		if m.content == "" {
+			continue
+		}
+		matches := atRe.FindAllStringSubmatch(m.content, -1)
+		for _, match := range matches {
+			mentioned := match[1]
+			if memberNames[mentioned] && mentioned != m.sender {
+				getEdge(m.sender, mentioned).mentions++
+			}
+		}
+	}
+
+	// 构建结果（过滤弱关系）
+	var edges []RelationshipEdge
+	nodeInEdge := make(map[string]bool)
+	for k, e := range edgeMap {
+		weight := e.replies + e.mentions*2
+		if weight < 3 {
+			continue
+		}
+		edges = append(edges, RelationshipEdge{
+			Source: k.a, Target: k.b,
+			Weight: weight, Replies: e.replies, Mentions: e.mentions,
+		})
+		nodeInEdge[k.a] = true
+		nodeInEdge[k.b] = true
+	}
+	sort.Slice(edges, func(i, j int) bool { return edges[i].Weight > edges[j].Weight })
+	if len(edges) > 200 {
+		edges = edges[:200]
+	}
+
+	// 只保留出现在边中的节点
+	var nodes []RelationshipNode
+	for name, cnt := range memberMsgs {
+		if nodeInEdge[name] {
+			nodes = append(nodes, RelationshipNode{ID: name, Name: name, Messages: cnt})
+		}
+	}
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Messages > nodes[j].Messages })
+
+	if nodes == nil {
+		nodes = []RelationshipNode{}
+	}
+	if edges == nil {
+		edges = []RelationshipEdge{}
+	}
+
+	graph := &RelationshipGraph{Nodes: nodes, Edges: edges}
+	s.groupDetailMu.Lock()
+	s.groupRelCache[username] = graph
+	delete(s.groupRelComputing, username)
+	s.groupDetailMu.Unlock()
 }
