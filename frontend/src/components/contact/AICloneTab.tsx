@@ -4,10 +4,11 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, Sparkles, RotateCcw, Users, Brain, BarChart3, MessageSquare, CheckCircle2 } from 'lucide-react';
+import { Send, Loader2, Sparkles, RotateCcw, Users, Brain, BarChart3, MessageSquare, CheckCircle2, Share2, Check } from 'lucide-react';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { avatarSrc } from '../../utils/avatar';
 import { contactsApi } from '../../services/api';
+import { generateCloneChatImage } from '../../utils/shareImage';
 import type { GroupInfo } from '../../types';
 
 interface Props {
@@ -63,6 +64,10 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [llmInfo, setLlmInfo] = useState<{ provider: string; model: string }>({ provider: '', model: '' });
+  const [profiles, setProfiles] = useState<{ id: string; provider: string; model?: string }[]>([]);
+  const [profileId, setProfileId] = useState('');
+  const [sharing, setSharing] = useState(false);
+  const [shared, setShared] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -109,16 +114,19 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
   // 获取当前 LLM 配置信息（没填模型名时用 provider 默认模型）
   useEffect(() => {
     const defaultModels: Record<string, string> = {
-      deepseek: 'deepseek-chat', kimi: 'moonshot-v1-8k', gemini: 'gemini-2.0-flash',
+      deepseek: 'deepseek-chat', kimi: 'kimi-k2.5', gemini: 'gemini-2.0-flash',
       glm: 'glm-4-flash', grok: 'grok-3-mini', minimax: 'MiniMax-Text-01',
       'minimax-cn': 'MiniMax-Text-01', openai: 'gpt-4o-mini', claude: 'claude-haiku-4-5-20251001',
       ollama: 'llama3',
     };
-    fetch('/api/preferences').then(r => r.json()).then((d: { llm_profiles?: { provider: string; model?: string }[]; llm_provider?: string; llm_model?: string }) => {
+    fetch('/api/preferences').then(r => r.json()).then((d: { llm_profiles?: { id: string; provider: string; model?: string }[]; llm_provider?: string; llm_model?: string }) => {
+      const ps = d.llm_profiles ?? [];
+      setProfiles(ps);
+      if (ps.length > 0 && !profileId) setProfileId(ps[0].id);
       let provider = '', model = '';
-      if (d.llm_profiles?.length) {
-        provider = d.llm_profiles[0].provider;
-        model = d.llm_profiles[0].model || '';
+      if (ps.length) {
+        provider = ps[0].provider;
+        model = ps[0].model || '';
       } else if (d.llm_provider) {
         provider = d.llm_provider;
         model = d.llm_model || '';
@@ -127,6 +135,22 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
       setLlmInfo({ provider, model });
     }).catch(() => {});
   }, []);
+
+  // 切换 profile 时更新 llmInfo
+  useEffect(() => {
+    if (!profileId || profiles.length === 0) return;
+    const defaultModels: Record<string, string> = {
+      deepseek: 'deepseek-chat', kimi: 'kimi-k2.5', gemini: 'gemini-2.0-flash',
+      glm: 'glm-4-flash', grok: 'grok-3-mini', minimax: 'MiniMax-Text-01',
+      'minimax-cn': 'MiniMax-Text-01', openai: 'gpt-4o-mini', claude: 'claude-haiku-4-5-20251001',
+      ollama: 'llama3',
+    };
+    const p = profiles.find(pp => pp.id === profileId);
+    if (p) {
+      const model = p.model || defaultModels[p.provider] || '';
+      setLlmInfo({ provider: p.provider, model });
+    }
+  }, [profileId, profiles]);
 
   const toggleGroup = (groupUsername: string) => {
     setSelectedGroups(prev => {
@@ -164,6 +188,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
           groups: Array.from(selectedGroups),
           bio: bio.trim(),
           extract_profile: extractProfile,
+          profile_id: profileId,
         }),
       });
       if (!resp.ok) {
@@ -241,6 +266,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
         body: JSON.stringify({
           session_id: sessionId,
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          profile_id: profileId,
         }),
         signal: abort.signal,
       });
@@ -514,20 +540,57 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
                 {r.has_profile ? ' · 档案' : ''}{r.has_recent ? ' · 近况' : ''}
               </span>
             )}
-            {llmInfo.provider && (
+            {profiles.length > 1 ? (
+              <select
+                value={profileId}
+                onChange={e => setProfileId(e.target.value)}
+                className="text-[10px] text-purple-500 bg-purple-50 dark:bg-purple-500/10 px-2 py-0.5 rounded-full font-medium border-0 outline-none cursor-pointer"
+              >
+                {profiles.map(p => (
+                  <option key={p.id} value={p.id}>{p.provider}{p.model ? ` · ${p.model}` : ''}</option>
+                ))}
+              </select>
+            ) : llmInfo.provider ? (
               <span className="text-[10px] text-purple-500 bg-purple-50 dark:bg-purple-500/10 px-2 py-0.5 rounded-full font-medium">
                 {llmInfo.provider}{llmInfo.model ? ` · ${llmInfo.model}` : ''}
               </span>
-            )}
+            ) : null}
           </div>
         </div>
-        <button
-          onClick={handleReset}
-          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1 flex-shrink-0"
-          title="重新学习"
-        >
-          <RotateCcw size={16} />
-        </button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {messages.length >= 2 && (
+            <button
+              onClick={async () => {
+                if (sharing) return;
+                setSharing(true);
+                try {
+                  await generateCloneChatImage({
+                    contactName: displayName,
+                    avatarUrl,
+                    messages: messages.map(m => ({ role: m.role, content: m.content })),
+                    provider: llmInfo.provider,
+                    model: llmInfo.model,
+                  });
+                  setShared(true);
+                  setTimeout(() => setShared(false), 2000);
+                } catch (e) { console.error('Share failed', e); }
+                finally { setSharing(false); }
+              }}
+              disabled={sharing}
+              className="text-gray-400 hover:text-[#07c160] transition-colors p-1"
+              title="保存聊天截图"
+            >
+              {sharing ? <Loader2 size={16} className="animate-spin" /> : shared ? <Check size={16} className="text-[#07c160]" /> : <Share2 size={16} />}
+            </button>
+          )}
+          <button
+            onClick={handleReset}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1"
+            title="重新学习"
+          >
+            <RotateCcw size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}

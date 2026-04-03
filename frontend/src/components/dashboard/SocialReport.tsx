@@ -69,6 +69,21 @@ export default function SocialReport({ contacts, globalStats, healthStatus }: Pr
     return contacts.reduce((a, b) => (b.total_messages > a.total_messages ? b : a));
   }, [contacts]);
 
+  // ─── Extra stats ───────────────────────────────────────────────────
+  const totalMessages = globalStats?.total_messages ?? 0;
+
+  const recallKing = useMemo(() => {
+    const withRecall = contacts.filter(c => (c.recall_count ?? 0) > 0);
+    if (withRecall.length === 0) return null;
+    return withRecall.reduce((a, b) => (b.recall_count ?? 0) > (a.recall_count ?? 0) ? b : a);
+  }, [contacts]);
+
+  const longestFriend = useMemo(() => {
+    const valid = contacts.filter(c => c.first_message_time && c.first_message_time !== '-');
+    if (valid.length === 0) return null;
+    return valid.reduce((a, b) => a.first_message_time < b.first_message_time ? a : b);
+  }, [contacts]);
+
   // ─── Highlights ───────────────────────────────────────────────────
   const highlights = useMemo(() => {
     const items: string[] = [];
@@ -79,7 +94,22 @@ export default function SocialReport({ contacts, globalStats, healthStatus }: Pr
     }
 
     if (bestMonth) {
-      items.push(`你最活跃的月份是 ${bestMonth.month}，发了 ${bestMonth.count.toLocaleString()} 条消息`);
+      items.push(`最活跃月份 ${bestMonth.month}，发了 ${bestMonth.count.toLocaleString()} 条消息`);
+    }
+
+    if (totalMessages > 0) {
+      items.push(`累计发送 ${totalMessages.toLocaleString()} 条消息`);
+    }
+
+    if (longestFriend) {
+      const name = privacyMode ? '***' : contactName(longestFriend);
+      const days = Math.floor((Date.now() - new Date(longestFriend.first_message_time).getTime()) / 86400000);
+      items.push(`和 ${name} 认识最久，已经 ${days.toLocaleString()} 天`);
+    }
+
+    if (recallKing) {
+      const name = privacyMode ? '***' : contactName(recallKing);
+      items.push(`撤回王：${name}，撤回了 ${recallKing.recall_count} 次`);
     }
 
     if (globalStats && globalStats.zero_msg_friends > 0) {
@@ -88,11 +118,11 @@ export default function SocialReport({ contacts, globalStats, healthStatus }: Pr
     }
 
     if (nightOwl.count > 0) {
-      items.push(`深夜 0-5 点你发了约 ${nightOwl.count.toLocaleString()} 条消息`);
+      items.push(`深夜 0-5 点发了约 ${nightOwl.count.toLocaleString()} 条消息`);
     }
 
     return items;
-  }, [topContact, bestMonth, globalStats, nightOwl, privacyMode]);
+  }, [topContact, bestMonth, globalStats, nightOwl, privacyMode, totalMessages, longestFriend, recallKing]);
 
   // ─── Score color ──────────────────────────────────────────────────
   const scoreColor = score >= 70 ? 'text-green-500' : score >= 40 ? 'text-yellow-500' : 'text-red-400';
@@ -127,8 +157,8 @@ export default function SocialReport({ contacts, globalStats, healthStatus }: Pr
   }, [sharing, score, scoreLabel, globalStats, totalContacts, activePct, bestMonth, nightOwl, topContact, highlights, privacyMode]);
 
   return (
-    <div>
-      <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl overflow-hidden">
+    <div className="h-full">
+      <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl overflow-hidden h-full flex flex-col">
         {/* Header */}
         <div
           className="px-5 py-4 flex items-center justify-between"
@@ -212,11 +242,6 @@ export default function SocialReport({ contacts, globalStats, healthStatus }: Pr
             </ul>
           )}
 
-          {/* Footer watermark for share image */}
-          <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-white/10">
-            <span className="text-[10px] text-gray-300">WeLink · 微信聊天数据分析</span>
-            <span className="text-[10px] text-gray-300">welink.click</span>
-          </div>
         </div>
       </div>
     </div>

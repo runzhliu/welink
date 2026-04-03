@@ -90,7 +90,7 @@ const AddInput: React.FC<{
 
 const PROVIDERS = [
   { value: 'deepseek', label: 'DeepSeek', defaultURL: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat' },
-  { value: 'kimi',     label: 'Kimi (Moonshot)', defaultURL: 'https://api.moonshot.cn/v1', defaultModel: 'moonshot-v1-8k' },
+  { value: 'kimi',     label: 'Kimi (Moonshot)', defaultURL: 'https://api.moonshot.cn/v1', defaultModel: 'kimi-k2.5' },
   { value: 'gemini',   label: 'Gemini', defaultURL: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-2.0-flash' },
   { value: 'glm',      label: 'GLM（智谱 AI）', defaultURL: 'https://open.bigmodel.cn/api/paas/v4', defaultModel: 'glm-4-flash' },
   { value: 'grok',     label: 'Grok (xAI)', defaultURL: 'https://api.x.ai/v1', defaultModel: 'grok-3-mini' },
@@ -174,7 +174,16 @@ const ProfileCard: React.FC<{
         <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wide">AI 提供商</label>
         <select
           value={profile.provider}
-          onChange={e => set('provider', e.target.value)}
+          onChange={e => {
+            const newProvider = e.target.value as ProviderValue;
+            const oldProviderNames: string[] = PROVIDERS.map(p => p.value as string);
+            const shouldAutoRename = !profile.name || oldProviderNames.includes(profile.name);
+            onChange({
+              ...profile,
+              provider: newProvider,
+              ...(shouldAutoRename ? { name: newProvider } : {}),
+            });
+          }}
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white dk-input"
         >
           {PROVIDERS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}

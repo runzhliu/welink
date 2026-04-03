@@ -43,7 +43,7 @@ WeLink 提供两种 AI 分析模式，适用于不同规模的聊天记录和不
 | Provider | 说明 | 默认 Base URL | 默认模型 |
 |----------|------|---------------|---------|
 | `deepseek` | DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
-| `kimi` | 月之暗面 Kimi（超长上下文） | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
+| `kimi` | 月之暗面 Kimi（超长上下文） | `https://api.moonshot.cn/v1` | `kimi-k2.5` |
 | `gemini` | Google Gemini（支持 API Key 或 OAuth） | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash` |
 | `glm` | 智谱 AI（GLM，OpenAI 兼容） | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash` |
 | `grok` | xAI Grok | `https://api.x.ai/v1` | `grok-3-mini` |

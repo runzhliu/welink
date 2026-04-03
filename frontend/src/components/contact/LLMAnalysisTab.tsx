@@ -81,7 +81,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   grok: 'Grok', openai: 'OpenAI', claude: 'Claude', ollama: 'Ollama', custom: '自定义',
 };
 const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
-  deepseek: 'deepseek-chat', kimi: 'moonshot-v1-8k', gemini: 'gemini-2.0-flash',
+  deepseek: 'deepseek-chat', kimi: 'kimi-k2.5', gemini: 'gemini-2.0-flash',
   glm: 'glm-4-flash', grok: 'grok-3-mini', openai: 'gpt-4o-mini',
   claude: 'claude-haiku-4-5-20251001', ollama: 'llama3',
 };
@@ -1708,21 +1708,19 @@ ${effectiveCtx}
             <span className="font-mono">{llmModel || PROVIDER_DEFAULT_MODELS[provider] || provider}</span>
           </div>
         ) : (
-          <div className="flex items-center gap-1 flex-wrap">
+          <div className="flex items-center gap-1">
             <Bot size={9} className="text-gray-400 flex-shrink-0" />
-            {profiles.map(p => (
-              <button
-                key={p.id}
-                onClick={() => setSelectedProfileId(p.id)}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
-                  selectedProfileId === p.id
-                    ? 'bg-[#576b95] text-white border-[#576b95]'
-                    : 'bg-white dark:bg-white/5 text-gray-400 dark:text-gray-400 border-gray-200 dark:border-white/15 hover:border-[#576b95] hover:text-[#576b95]'
-                }`}
-              >
-                {`${PROVIDER_LABELS[p.provider] ?? p.provider}${p.model ? ` · ${p.model}` : ''}`}
-              </button>
-            ))}
+            <select
+              value={selectedProfileId}
+              onChange={e => setSelectedProfileId(e.target.value)}
+              className="text-[10px] text-[#576b95] bg-[#576b95]/10 px-2 py-0.5 rounded-full font-semibold border-0 outline-none cursor-pointer dark:bg-[#576b95]/20"
+            >
+              {profiles.map(p => (
+                <option key={p.id} value={p.id}>
+                  {`${PROVIDER_LABELS[p.provider] ?? p.provider}${p.model ? ` · ${p.model}` : ''}`}
+                </option>
+              ))}
+            </select>
           </div>
         )}
         <div className="flex items-end gap-2">

@@ -707,28 +707,25 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         </div>
         {/* 底栏：模型切换 + 发送按钮 */}
         <div className="px-3 pb-3 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1 flex-wrap min-h-[28px]">
-            {profiles.length > 1
-              ? profiles.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => setSelectedProfileId(p.id)}
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
-                      selectedProfileId === p.id
-                        ? 'bg-[#576b95] text-white border-[#576b95]'
-                        : 'bg-white dark:bg-white/5 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-white/10 hover:border-[#576b95] hover:text-[#576b95]'
-                    }`}
-                  >
+          <div className="flex items-center gap-1 min-h-[28px]">
+            {profiles.length > 1 ? (
+              <select
+                value={selectedProfileId}
+                onChange={e => setSelectedProfileId(e.target.value)}
+                className="text-[10px] text-[#576b95] bg-[#576b95]/10 px-2 py-0.5 rounded-full font-semibold border-0 outline-none cursor-pointer dark:bg-[#576b95]/20"
+              >
+                {profiles.map(p => (
+                  <option key={p.id} value={p.id}>
                     {`${PROVIDER_LABELS[p.provider] ?? p.provider}${p.model ? ` · ${p.model}` : ''}`}
-                  </button>
-                ))
-              : selectedProfile && (
-                  <span className="text-[10px] text-gray-300 font-medium">
-                    {PROVIDER_LABELS[selectedProfile.provider] ?? selectedProfile.provider}
-                    {selectedProfile.model ? ` · ${selectedProfile.model}` : ''}
-                  </span>
-                )
-            }
+                  </option>
+                ))}
+              </select>
+            ) : selectedProfile && (
+              <span className="text-[10px] text-gray-300 font-medium">
+                {PROVIDER_LABELS[selectedProfile.provider] ?? selectedProfile.provider}
+                {selectedProfile.model ? ` · ${selectedProfile.model}` : ''}
+              </span>
+            )}
           </div>
           {loading ? (
             <button

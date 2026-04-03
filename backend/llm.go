@@ -72,7 +72,7 @@ func defaultsFor(p *llmConfig) {
 			p.baseURL = "https://api.moonshot.cn/v1"
 		}
 		if p.model == "" {
-			p.model = "moonshot-v1-8k"
+			p.model = "kimi-k2.5"
 		}
 	case "gemini":
 		if p.baseURL == "" {
@@ -289,6 +289,10 @@ func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
+	// 用于检测 <think>...</think> 标签（MiniMax / DeepSeek-R1 等思考模型）
+	inThinkTag := false
+	thinkBuf := ""
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "data: ") {
@@ -311,13 +315,60 @@ func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig
 		}
 		if len(chunk.Choices) > 0 {
 			d := chunk.Choices[0].Delta
+			// Ollama 专用 reasoning 字段
 			if d.Reasoning != "" {
 				send(StreamChunk{Thinking: d.Reasoning})
 			}
 			if d.Content != "" {
-				send(StreamChunk{Delta: d.Content})
+				// 解析 <think>...</think> 标签（流式逐 chunk 拼接）
+				text := d.Content
+				for len(text) > 0 {
+					if inThinkTag {
+						// 在思考标签内，寻找 </think>
+						endIdx := strings.Index(text, "</think>")
+						if endIdx >= 0 {
+							// 思考结束
+							thinkBuf += text[:endIdx]
+							if thinkBuf != "" {
+								send(StreamChunk{Thinking: thinkBuf})
+								thinkBuf = ""
+							}
+							inThinkTag = false
+							text = strings.TrimLeft(text[endIdx+8:], "\n\r ") // 去掉 </think> 后的换行空白
+						} else {
+							// 还没结束，继续积累
+							thinkBuf += text
+							// 定期 flush 思考内容（避免长思考时前端无反馈）
+							if len(thinkBuf) > 50 {
+								send(StreamChunk{Thinking: thinkBuf})
+								thinkBuf = ""
+							}
+							text = ""
+						}
+					} else {
+						// 不在思考标签内，寻找 <think>
+						startIdx := strings.Index(text, "<think>")
+						if startIdx >= 0 {
+							// <think> 之前的内容是正文
+							if startIdx > 0 {
+								send(StreamChunk{Delta: text[:startIdx]})
+							}
+							inThinkTag = true
+							thinkBuf = ""
+							text = text[startIdx+7:] // len("<think>") = 7
+						} else {
+							// 没有 <think>，全部是正文
+							send(StreamChunk{Delta: text})
+							text = ""
+						}
+					}
+				}
 			}
 		}
+	}
+	// 如果流结束时还有未 flush 的思考内容
+	if thinkBuf != "" {
+		send(StreamChunk{Thinking: thinkBuf})
 	}
 	return scanner.Err()
 }
