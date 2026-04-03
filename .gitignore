@@ -64,3 +64,8 @@ docs/.vitepress/dist/
 docs/.vitepress/cache/
 docs/certs/
 ai_analysis.db
+
+# ===========================
+# 服务器本地配置（访问统计等，不提交）
+# ===========================
+.server-local/

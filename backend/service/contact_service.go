@@ -1408,19 +1408,31 @@ func (s *ContactService) GetGroups() []GroupInfo {
 			}
 			if total == 0 { return }
 			if firstTs == 9999999999 { firstTs = 0 }
-			// 统计群内发言人数（去重 real_sender_id，非群实际成员数）
-			senderSet := make(map[int64]struct{})
+			// 统计群内发言人数（通过 Name2Id 映射到 wxid 后去重，避免跨 DB rowid 重复）
+			wxidSet := make(map[string]struct{})
 			memberQuery := "SELECT DISTINCT real_sender_id FROM [%s] WHERE real_sender_id > 0"
 			if twGroups != "" {
 				memberQuery = "SELECT DISTINCT real_sender_id FROM [%s]" + twGroups + " AND real_sender_id > 0"
 			}
 			for _, mdb := range s.dbMgr.MessageDBs {
+				// 加载本 DB 的 rowid → wxid 映射
+				id2wxid := make(map[int64]string)
+				if nrows, nerr := mdb.Query("SELECT rowid, user_name FROM Name2Id"); nerr == nil {
+					for nrows.Next() {
+						var rid int64; var uname string
+						nrows.Scan(&rid, &uname)
+						id2wxid[rid] = uname
+					}
+					nrows.Close()
+				}
 				mrows, merr := mdb.Query(fmt.Sprintf(memberQuery, tableName))
 				if merr != nil { continue }
 				for mrows.Next() {
 					var sid int64
 					mrows.Scan(&sid)
-					senderSet[sid] = struct{}{}
+					if wxid, ok := id2wxid[sid]; ok && wxid != "" {
+						wxidSet[wxid] = struct{}{}
+					}
 				}
 				mrows.Close()
 			}
@@ -1428,7 +1440,7 @@ func (s *ContactService) GetGroups() []GroupInfo {
 			mu.Lock()
 			result = append(result, GroupInfo{
 				Username: g.uname, Name: name, SmallHeadURL: g.avatar,
-				TotalMessages: total, MemberCount: len(senderSet),
+				TotalMessages: total, MemberCount: len(wxidSet),
 				FirstMessage: s.formatTime(firstTs), LastMessage: s.formatTime(lastTs),
 			})
 			mu.Unlock()
