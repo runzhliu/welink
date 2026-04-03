@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 // appPreferencesDir 返回 macOS 上持久化偏好文件所在目录。
@@ -55,7 +57,11 @@ func saveAppConfig(cfg *Preferences) error {
 }
 
 // setupLogFile 将日志输出重定向到指定目录下的 welink.log。
+// 同时重定向 Gin 的请求日志（DefaultWriter / DefaultErrorWriter）。
 func setupLogFile(logDir string) {
+	if logDir == "" {
+		logDir = defaultLogDir()
+	}
 	if logDir == "" {
 		return
 	}
@@ -67,8 +73,12 @@ func setupLogFile(logDir string) {
 	if err != nil {
 		return
 	}
+	// Go 标准 log
 	log.SetOutput(f)
-	log.Printf("日志已重定向到 %s/welink.log", logDir)
+	// Gin 请求日志 + 错误日志
+	gin.DefaultWriter = f
+	gin.DefaultErrorWriter = f
+	log.Printf("日志已重定向到 %s", filepath.Join(logDir, "welink.log"))
 }
 
 // browseFolder 通过 osascript 弹出系统文件夹选择器，返回所选路径。

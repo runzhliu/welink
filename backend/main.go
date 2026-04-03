@@ -300,11 +300,6 @@ func serverMain() {
 				return
 			}
 		}
-		entries, err := os.ReadDir(logDir)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "读取日志目录失败: " + err.Error()})
-			return
-		}
 		zipPath := filepath.Join(logDir, fmt.Sprintf("welink-logs-%s.zip", time.Now().Format("20060102-150405")))
 		zf, err := os.Create(zipPath)
 		if err != nil {
@@ -323,14 +318,14 @@ func serverMain() {
 			if p.APIKey != "" { sensitiveKeys = append(sensitiveKeys, p.APIKey) }
 		}
 
+		// 只打包 WeLink 自己的日志文件，不包含目录下的其他无关日志
+		welinkLogFiles := []string{"welink.log", "frontend.log"}
+
 		zw := zip.NewWriter(zf)
-		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".log") {
-				continue
-			}
-			raw, err := os.ReadFile(filepath.Join(logDir, e.Name()))
+		for _, name := range welinkLogFiles {
+			raw, err := os.ReadFile(filepath.Join(logDir, name))
 			if err != nil {
-				continue
+				continue // 文件不存在则跳过
 			}
 			// 脱敏：将所有 API Key 替换为 [REDACTED]
 			content := string(raw)
@@ -339,7 +334,7 @@ func serverMain() {
 					content = strings.ReplaceAll(content, key, "[REDACTED]")
 				}
 			}
-			w, err := zw.Create(e.Name())
+			w, err := zw.Create(name)
 			if err != nil {
 				continue
 			}

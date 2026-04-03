@@ -1327,6 +1327,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 {bundling ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
                 一键打包日志
               </button>
+              <p className="text-[10px] text-gray-400 max-w-xs text-right">API Key 等敏感信息会自动脱敏，可放心分享</p>
               {bundlePath && (
                 <p className="text-xs text-[#07c160] font-mono break-all max-w-xs text-right">
                   ✓ 已保存至：{bundlePath}
