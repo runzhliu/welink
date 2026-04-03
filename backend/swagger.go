@@ -1,26 +1,37 @@
 package main
 
+import "strings"
+
 // swaggerSpec returns the OpenAPI 3.0 JSON specification for the WeLink API.
+// appVersion 由 -ldflags 注入（有 tag 时为 tag，否则为 commit hash）。
 func swaggerSpec() []byte {
 	spec := `{
   "openapi": "3.0.3",
   "info": {
     "title": "WeLink API",
     "description": "微信聊天数据分析平台后端接口文档",
-    "version": "0.0.2"
+    "version": "{{VERSION}}"
   },
   "servers": [
     { "url": "/api", "description": "WeLink Backend" }
   ],
   "tags": [
     { "name": "初始化", "description": "索引与状态" },
-    { "name": "应用管理", "description": "App 模式配置与日志（macOS/Windows 桌面端）" },
-    { "name": "偏好设置", "description": "用户偏好（屏蔽名单等）" },
     { "name": "联系人", "description": "好友统计与分析" },
     { "name": "群聊", "description": "群聊分析" },
+    { "name": "日历", "description": "时光机 / 日历 / 纪念日" },
     { "name": "搜索", "description": "消息全文搜索" },
-    { "name": "分析", "description": "情感分析与关系统计" },
-    { "name": "数据库", "description": "原始数据库管理与 SQL 查询" }
+    { "name": "AI", "description": "AI 对话分析与补全" },
+    { "name": "AI 分身", "description": "学习联系人风格并模拟对话" },
+    { "name": "AI 群聊模拟", "description": "按群友风格模拟群聊" },
+    { "name": "RAG", "description": "FTS5 全文检索 + 向量混合检索" },
+    { "name": "向量检索", "description": "语义向量嵌入与相似度搜索" },
+    { "name": "记忆提炼", "description": "LLM 提炼关键事实并持久化" },
+    { "name": "认证", "description": "Gemini OAuth 等第三方认证" },
+    { "name": "偏好设置", "description": "用户偏好（LLM 配置、屏蔽名单等）" },
+    { "name": "应用管理", "description": "App 模式配置与日志（macOS/Windows 桌面端）" },
+    { "name": "数据库", "description": "原始数据库管理与 SQL 查询" },
+    { "name": "系统", "description": "头像代理、健康检查等" }
   ],
   "paths": {
     "/init": {
@@ -618,6 +629,272 @@ func swaggerSpec() []byte {
         }
       }
     },
+    "/calendar/heatmap": {
+      "get": {
+        "tags": ["日历"],
+        "summary": "全历史日历热力图",
+        "responses": { "200": { "description": "日期→消息数映射" } }
+      }
+    },
+    "/calendar/day": {
+      "get": {
+        "tags": ["日历"],
+        "summary": "某天的活跃联系人和群聊",
+        "parameters": [{ "name": "date", "in": "query", "required": true, "schema": { "type": "string" }, "example": "2024-01-15" }],
+        "responses": { "200": { "description": "返回 contacts 和 groups 数组" } }
+      }
+    },
+    "/anniversaries": {
+      "get": {
+        "tags": ["日历"],
+        "summary": "纪念日数据（自动检测 + 好友里程碑 + 自定义）",
+        "responses": { "200": { "description": "detected/milestones/custom 三个数组" } }
+      }
+    },
+    "/ai/analyze": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "流式 AI 分析（SSE）",
+        "description": "前端发送消息历史，后端转发 LLM 并流式返回。",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "username": { "type": "string" }, "is_group": { "type": "boolean" }, "messages": { "type": "array", "items": { "type": "object" } }, "profile_id": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "SSE 流，每条 data: 为 StreamChunk JSON" } }
+      }
+    },
+    "/ai/complete": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "非流式单次 LLM 补全",
+        "responses": { "200": { "description": "返回 content 和 error 字段" } }
+      }
+    },
+    "/ai/llm/test": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "测试 LLM 连接",
+        "responses": { "200": { "description": "测试结果" } }
+      }
+    },
+    "/ai/clone/session/{username}": {
+      "get": {
+        "tags": ["AI 分身"],
+        "summary": "检查是否有缓存的 AI 分身档案",
+        "parameters": [{ "name": "username", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "exists/session_id/private_count/group_count 等" } }
+      }
+    },
+    "/ai/clone/learn": {
+      "post": {
+        "tags": ["AI 分身"],
+        "summary": "学习联系人聊天风格（SSE 多步进度）",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "username": { "type": "string" }, "count": { "type": "integer" }, "groups": { "type": "array", "items": { "type": "string" } }, "bio": { "type": "string" }, "extract_profile": { "type": "boolean" } } } } } },
+        "responses": { "200": { "description": "SSE 流，推送 step 进度和最终 session_id" } }
+      }
+    },
+    "/ai/clone/chat": {
+      "post": {
+        "tags": ["AI 分身"],
+        "summary": "与 AI 分身对话（SSE 流式）",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "session_id": { "type": "string" }, "messages": { "type": "array", "items": { "type": "object" } }, "profile_id": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "SSE 流式响应" } }
+      }
+    },
+    "/ai/group-sim": {
+      "post": {
+        "tags": ["AI 群聊模拟"],
+        "summary": "模拟群聊对话（SSE 流式）",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "group_username": { "type": "string" }, "message_count": { "type": "integer" }, "profile_id": { "type": "string" }, "user_message": { "type": "string" }, "rounds": { "type": "integer" }, "topic": { "type": "string" }, "mood": { "type": "string" }, "members": { "type": "array", "items": { "type": "string" } } } } } } },
+        "responses": { "200": { "description": "SSE 流，每条 data: 为 {speaker, content}，最后 {done: true}" } }
+      }
+    },
+    "/ai/conversations": {
+      "get": {
+        "tags": ["AI"],
+        "summary": "获取 AI 对话历史",
+        "parameters": [{ "name": "key", "in": "query", "required": true, "schema": { "type": "string" }, "example": "contact:wxid" }],
+        "responses": { "200": { "description": "对话历史 JSON" } }
+      },
+      "put": {
+        "tags": ["AI"],
+        "summary": "保存 AI 对话历史",
+        "responses": { "200": { "description": "保存成功" } }
+      },
+      "delete": {
+        "tags": ["AI"],
+        "summary": "删除 AI 对话历史",
+        "parameters": [{ "name": "key", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "删除成功" } }
+      }
+    },
+    "/ai/rag/index-status": {
+      "get": {
+        "tags": ["RAG"],
+        "summary": "查询 FTS5 全文索引状态",
+        "parameters": [{ "name": "key", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "索引状态" } }
+      }
+    },
+    "/ai/rag/build-index": {
+      "post": {
+        "tags": ["RAG"],
+        "summary": "构建 FTS5 全文索引（SSE 进度）",
+        "responses": { "200": { "description": "SSE 进度流" } }
+      }
+    },
+    "/ai/rag": {
+      "post": {
+        "tags": ["RAG"],
+        "summary": "混合检索 + LLM 流式分析",
+        "responses": { "200": { "description": "SSE 流式响应" } }
+      }
+    },
+    "/ai/day-rag": {
+      "post": {
+        "tags": ["RAG"],
+        "summary": "跨联系人单日聚合分析（时光机 AI）",
+        "responses": { "200": { "description": "SSE 流式响应" } }
+      }
+    },
+    "/ai/vec/index-status": {
+      "get": {
+        "tags": ["向量检索"],
+        "summary": "查询向量索引状态",
+        "parameters": [{ "name": "key", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "索引状态" } }
+      }
+    },
+    "/ai/vec/build-index": {
+      "post": {
+        "tags": ["向量检索"],
+        "summary": "构建向量嵌入索引",
+        "responses": { "200": { "description": "构建结果" } }
+      }
+    },
+    "/ai/vec/build-progress": {
+      "get": {
+        "tags": ["向量检索"],
+        "summary": "向量索引构建进度",
+        "parameters": [{ "name": "key", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "进度信息" } }
+      }
+    },
+    "/ai/vec/test-embedding": {
+      "post": {
+        "tags": ["向量检索"],
+        "summary": "测试 Embedding 提供商连接",
+        "responses": { "200": { "description": "测试结果" } }
+      }
+    },
+    "/ai/mem/status": {
+      "get": {
+        "tags": ["记忆提炼"],
+        "summary": "查询已提炼的记忆事实数量",
+        "parameters": [{ "name": "key", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "fact_count 等" } }
+      }
+    },
+    "/ai/mem/facts": {
+      "get": {
+        "tags": ["记忆提炼"],
+        "summary": "获取所有记忆事实",
+        "parameters": [{ "name": "key", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "facts 数组" } }
+      }
+    },
+    "/ai/mem/build": {
+      "post": {
+        "tags": ["记忆提炼"],
+        "summary": "开始/继续记忆提炼",
+        "parameters": [{ "name": "key", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "提炼进度" } }
+      }
+    },
+    "/ai/mem/pause": {
+      "post": {
+        "tags": ["记忆提炼"],
+        "summary": "暂停记忆提炼",
+        "parameters": [{ "name": "key", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "暂停成功" } }
+      }
+    },
+    "/ai/mem/test": {
+      "post": {
+        "tags": ["记忆提炼"],
+        "summary": "测试记忆提炼模型配置",
+        "responses": { "200": { "description": "测试结果" } }
+      }
+    },
+    "/auth/gemini/url": {
+      "get": {
+        "tags": ["认证"],
+        "summary": "获取 Gemini OAuth 授权 URL",
+        "responses": { "200": { "description": "url 字段" } }
+      }
+    },
+    "/auth/gemini/callback": {
+      "get": {
+        "tags": ["认证"],
+        "summary": "Gemini OAuth 回调",
+        "responses": { "200": { "description": "授权成功" } }
+      }
+    },
+    "/auth/gemini/status": {
+      "get": {
+        "tags": ["认证"],
+        "summary": "检查 Gemini 授权状态",
+        "responses": { "200": { "description": "authorized 布尔值" } }
+      }
+    },
+    "/auth/gemini": {
+      "delete": {
+        "tags": ["认证"],
+        "summary": "撤销 Gemini 授权",
+        "responses": { "200": { "description": "撤销成功" } }
+      }
+    },
+    "/preferences/llm": {
+      "put": {
+        "tags": ["偏好设置"],
+        "summary": "更新 LLM 配置（多 Profile、Embedding、记忆提炼）",
+        "responses": { "200": { "description": "保存成功" } }
+      }
+    },
+    "/preferences/anniversaries": {
+      "put": {
+        "tags": ["偏好设置"],
+        "summary": "保存自定义纪念日",
+        "responses": { "200": { "description": "保存成功" } }
+      }
+    },
+    "/app/save-file": {
+      "post": {
+        "tags": ["应用管理"],
+        "summary": "保存文件到 ~/Downloads（App 模式）",
+        "responses": { "200": { "description": "path 字段" } }
+      }
+    },
+    "/app/frontend-log": {
+      "post": {
+        "tags": ["应用管理"],
+        "summary": "接收前端日志写入 frontend.log",
+        "responses": { "200": { "description": "ok" } }
+      }
+    },
+    "/groups/relationships": {
+      "get": {
+        "tags": ["群聊"],
+        "summary": "群聊人物关系图",
+        "parameters": [{ "name": "username", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "nodes + edges 图结构" } }
+      }
+    },
+    "/avatar": {
+      "get": {
+        "tags": ["系统"],
+        "summary": "头像代理（缓存 + CORS）",
+        "parameters": [{ "name": "url", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "图片数据" } }
+      }
+    },
     "/databases/{dbName}/query": {
       "post": {
         "tags": ["数据库"],
@@ -793,6 +1070,7 @@ func swaggerSpec() []byte {
     }
   }
 }`
+	spec = strings.Replace(spec, "{{VERSION}}", appVersion, 1)
 	return []byte(spec)
 }
 
