@@ -55,61 +55,110 @@ features:
 
 <div class="vp-doc" style="max-width:900px;margin:0 auto;padding:48px 24px;">
 
-## 产品演示
+## 功能示例
 
-<div style="position:relative;width:100%;padding-top:56.25%;margin:16px 0;">
-  <iframe
-    src="//player.bilibili.com/player.html?isOutside=true&bvid=BV1zCXDB6EiN&p=1"
-    scrolling="no"
-    frameborder="0"
-    allowfullscreen="true"
-    style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:12px;"
-  ></iframe>
+> 点击下方示例可放大查看
+
+<!-- 视频点击放大遮罩 -->
+<div id="video-overlay" onclick="this.style.display='none';this.querySelector('video').src=''" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.85);cursor:zoom-out;justify-content:center;align-items:center;">
+  <video autoplay loop muted playsinline style="max-width:92vw;max-height:92vh;border-radius:12px;"></video>
 </div>
 
-## 功能截图
+<script setup>
+import { onMounted } from 'vue'
+onMounted(() => {
+  window.zoomVideo = (src) => {
+    const overlay = document.getElementById('video-overlay')
+    const video = overlay.querySelector('video')
+    video.src = src
+    overlay.style.display = 'flex'
+  }
+})
+</script>
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0;">
 <div>
 
+**AI 分身**
+
+<video src="/pics/1-AI分身.mp4" autoplay loop muted playsinline onclick="zoomVideo(this.src)" style="cursor:zoom-in;width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);"></video>
+
+</div>
+<div>
+
+**AI 分析**
+
+<video src="/pics/2-AI分析.mp4" autoplay loop muted playsinline onclick="zoomVideo(this.src)" style="cursor:zoom-in;width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);"></video>
+
+</div>
+<div>
+
+**AI 群聊**
+
+<video src="/pics/3-AI群聊.mp4" autoplay loop muted playsinline onclick="zoomVideo(this.src)" style="cursor:zoom-in;width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);"></video>
+
+</div>
+<div>
+
+**AI 首页**
+
+<video src="/pics/4-AI首页.mp4" autoplay loop muted playsinline onclick="zoomVideo(this.src)" style="cursor:zoom-in;width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);"></video>
+
+</div>
+<div>
+
 **快速入门引导**
 
-<img :src="'/pics/1.png'" alt="快速入门引导" style="width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);" />
+<video src="/pics/5-快速入门引导.mp4" autoplay loop muted playsinline onclick="zoomVideo(this.src)" style="cursor:zoom-in;width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);"></video>
 
 </div>
 <div>
 
-**好友总览 Dashboard**
+**好友总览**
 
-<img :src="'/pics/2.png'" alt="好友总览" style="width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);" />
-
-</div>
-<div>
-
-**联系人排行榜**
-
-<img :src="'/pics/3.png'" alt="联系人排行" style="width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);" />
+<video src="/pics/6-好友总览.mp4" autoplay loop muted playsinline onclick="zoomVideo(this.src)" style="cursor:zoom-in;width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);"></video>
 
 </div>
 <div>
 
-**联系人深度画像**
+**好友深度画像**
 
-<img :src="'/pics/4.png'" alt="联系人详情" style="width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);" />
-
-</div>
-<div>
-
-**情感分析**
-
-<img :src="'/pics/5.png'" alt="情感分析" style="width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);" />
+<video src="/pics/7-好友深度画像.mp4" autoplay loop muted playsinline onclick="zoomVideo(this.src)" style="cursor:zoom-in;width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);"></video>
 
 </div>
 <div>
 
 **群聊画像**
 
-<img :src="'/pics/6.png'" alt="群聊画像" style="width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);" />
+<video src="/pics/8-群聊画像.mp4" autoplay loop muted playsinline onclick="zoomVideo(this.src)" style="cursor:zoom-in;width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);"></video>
+
+</div>
+<div>
+
+**全局搜索**
+
+<video src="/pics/9-全局搜索.mp4" autoplay loop muted playsinline onclick="zoomVideo(this.src)" style="cursor:zoom-in;width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);"></video>
+
+</div>
+<div>
+
+**时间线**
+
+<video src="/pics/10-时间线.mp4" autoplay loop muted playsinline onclick="zoomVideo(this.src)" style="cursor:zoom-in;width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);"></video>
+
+</div>
+<div>
+
+**时光机**
+
+<video src="/pics/11-时光机.mp4" autoplay loop muted playsinline onclick="zoomVideo(this.src)" style="cursor:zoom-in;width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);"></video>
+
+</div>
+<div>
+
+**纪念日**
+
+<video src="/pics/12-纪念日.mp4" autoplay loop muted playsinline onclick="zoomVideo(this.src)" style="cursor:zoom-in;width:100%;border-radius:8px;border:1px solid var(--vp-c-divider);"></video>
 
 </div>
 </div>
