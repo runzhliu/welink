@@ -29,5 +29,5 @@
     }
   },
   "IconPath": "../assets/welink.ico",
-  "ManifestPath": ""
+  "ManifestPath": "welink.manifest"
 }

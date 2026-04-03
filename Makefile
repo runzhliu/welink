@@ -41,11 +41,17 @@ demo-logs:   ## 跟踪 Demo 容器日志
 ## 本地开发：make docs-build && make docs-up
 ## CI 发布： make docs-build-push（需已登录 ghcr.io，使用 buildx 多平台）
 
+# 官网版本号：有精确 tag 用 tag（含 v 前缀），否则用 commit 短 hash
+_DOCS_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
+_DOCS_SHA := $(shell git rev-parse --short=6 HEAD 2>/dev/null)
+DOCS_VERSION := $(if $(_DOCS_TAG),$(_DOCS_TAG),$(_DOCS_SHA))
+
 docs-build:  ## 构建官网镜像（当前机器平台）
-	docker compose -f docs/docker-compose.yml build
+	docker compose -f docs/docker-compose.yml build --build-arg VERSION=$(DOCS_VERSION)
 
 docs-build-push: ## 跨平台构建官网镜像并推送（linux/amd64 + linux/arm64）
 	docker buildx build --platform linux/amd64,linux/arm64 \
+	  --build-arg VERSION=$(DOCS_VERSION) \
 	  -t ghcr.io/runzhliu/welink/website:main \
 	  --push docs/
 
@@ -88,7 +94,7 @@ define _server-build-push
 endef
 
 server-push: ## 【本地执行】多平台构建并推送到 Docker Hub（amd64 + arm64，需已 docker login）
-	$(call _server-build-push,$(DOCKER_USER)/welink-website,docs/)
+	$(call _server-build-push,$(DOCKER_USER)/welink-website,docs/,--build-arg VERSION=$(DOCS_VERSION))
 	$(call _server-build-push,$(DOCKER_USER)/welink-frontend,frontend/)
 	$(call _server-build-push,$(DOCKER_USER)/welink-backend,backend/,--build-arg APP_VERSION=$(APP_VERSION))
 

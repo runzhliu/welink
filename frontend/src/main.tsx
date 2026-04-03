@@ -20,6 +20,10 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
+import { initFrontendLogger } from './utils/frontendLogger'
+
+// 初始化前端日志收集（捕获 console.error、未捕获异常，批量上报后端）
+initFrontendLogger()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

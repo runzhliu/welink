@@ -1,8 +1,15 @@
 FROM node:20-alpine AS builder
+
+ARG VERSION=dev
+
 WORKDIR /app
 COPY package.json ./
 RUN npm install
 COPY . .
+
+# 将版本号注入到文档中（替换占位符 {{VERSION}}）
+RUN sed -i "s/{{VERSION}}/${VERSION}/g" install.md
+
 RUN npm run build
 
 FROM nginx:alpine

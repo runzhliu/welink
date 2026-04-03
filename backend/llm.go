@@ -102,6 +102,13 @@ func defaultsFor(p *llmConfig) {
 		if p.model == "" {
 			p.model = "MiniMax-Text-01"
 		}
+	case "minimax-cn":
+		if p.baseURL == "" {
+			p.baseURL = "https://api.minimaxi.com/v1"
+		}
+		if p.model == "" {
+			p.model = "MiniMax-Text-01"
+		}
 	case "openai":
 		if p.baseURL == "" {
 			p.baseURL = "https://api.openai.com/v1"

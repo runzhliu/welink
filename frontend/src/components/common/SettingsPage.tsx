@@ -94,7 +94,8 @@ const PROVIDERS = [
   { value: 'gemini',   label: 'Gemini', defaultURL: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-2.0-flash' },
   { value: 'glm',      label: 'GLM（智谱 AI）', defaultURL: 'https://open.bigmodel.cn/api/paas/v4', defaultModel: 'glm-4-flash' },
   { value: 'grok',     label: 'Grok (xAI)', defaultURL: 'https://api.x.ai/v1', defaultModel: 'grok-3-mini' },
-  { value: 'minimax',  label: 'MiniMax', defaultURL: 'https://api.minimax.io/v1', defaultModel: 'MiniMax-Text-01' },
+  { value: 'minimax',     label: 'MiniMax（国际版）', defaultURL: 'https://api.minimax.io/v1', defaultModel: 'MiniMax-Text-01' },
+  { value: 'minimax-cn', label: 'MiniMax（国内版）', defaultURL: 'https://api.minimaxi.com/v1', defaultModel: 'MiniMax-Text-01' },
   { value: 'openai',   label: 'OpenAI', defaultURL: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini' },
   { value: 'claude',   label: 'Claude (Anthropic)', defaultURL: '', defaultModel: 'claude-haiku-4-5-20251001' },
   { value: 'ollama',   label: 'Ollama（本地）', defaultURL: 'http://localhost:11434/v1', defaultModel: 'qwen2.5:3b' },
@@ -257,6 +258,17 @@ const ProfileCard: React.FC<{
           placeholder={provInfo.defaultModel ? `默认：${provInfo.defaultModel}` : '请输入模型名'}
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white font-mono dk-input" />
       </div>
+
+      {/* MiniMax 思考模型提示 */}
+      {(profile.provider === 'minimax' || profile.provider === 'minimax-cn') && (profile.model ?? '').toLowerCase().includes('m2') && (
+        <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/30 text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+          <AlertCircle size={13} className="flex-shrink-0 mt-0.5 text-amber-500" />
+          <div>
+            <strong>MiniMax-M2 系列是思考模型</strong>，会输出推理过程，响应较慢且 token 消耗大。
+            如不需要深度推理，建议使用 <button type="button" onClick={() => onChange({ ...profile, model: 'MiniMax-Text-01' })} className="text-[#07c160] font-bold underline">MiniMax-Text-01</button> 或 <button type="button" onClick={() => onChange({ ...profile, model: 'MiniMax-Text-01-128k' })} className="text-[#07c160] font-bold underline">MiniMax-Text-01-128k</button>。
+          </div>
+        </div>
+      )}
 
       {/* Ollama no_think 开关 */}
       {profile.provider === 'ollama' && (

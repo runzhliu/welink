@@ -43,10 +43,12 @@ WeLink 提供两种 AI 分析模式，适用于不同规模的聊天记录和不
 | Provider | 说明 | 默认 Base URL | 默认模型 |
 |----------|------|---------------|---------|
 | `deepseek` | DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
-| `kimi` | 月之暗面 Kimi | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
+| `kimi` | 月之暗面 Kimi（超长上下文） | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
 | `gemini` | Google Gemini（支持 API Key 或 OAuth） | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash` |
 | `glm` | 智谱 AI（GLM，OpenAI 兼容） | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash` |
 | `grok` | xAI Grok | `https://api.x.ai/v1` | `grok-3-mini` |
+| `minimax` | MiniMax（国际版） | `https://api.minimax.io/v1` | `MiniMax-Text-01` |
+| `minimax-cn` | MiniMax（国内版） | `https://api.minimaxi.com/v1` | `MiniMax-Text-01` |
 | `openai` | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
 | `claude` | Anthropic Claude（原生 API） | `https://api.anthropic.com` | `claude-haiku-4-5-20251001` |
 | `ollama` | 本地 Ollama（无需 API Key） | `http://localhost:11434/v1` | `llama3` |

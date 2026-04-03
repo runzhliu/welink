@@ -4,6 +4,7 @@ package main
 
 func appPreferencesDir() string     { return "" }
 func demoDataDir() string           { return "" }
+func defaultLogDir() string         { return "" }
 
 func loadAppConfig() (*Preferences, bool)  { return nil, false }
 func saveAppConfig(_ *Preferences) error   { return nil }

@@ -23,6 +23,14 @@ func demoDataDir() string {
 	return filepath.Join(home, "Library", "Application Support", "WeLink", "demo")
 }
 
+// defaultLogDir 返回 App 模式默认日志目录（LogDir 为空时的 fallback）。
+func defaultLogDir() string {
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, "Library", "Logs", "WeLink")
+	os.MkdirAll(dir, 0700)
+	return dir
+}
+
 // loadAppConfig 读取持久化配置中的 App 配置部分。
 // DemoMode=true 时 DataDir 可以为空，视为有效配置。
 func loadAppConfig() (*Preferences, bool) {

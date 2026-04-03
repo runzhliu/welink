@@ -252,13 +252,53 @@ func serverMain() {
 		c.JSON(http.StatusOK, gin.H{"path": savePath})
 	})
 
+	// 前端日志收集：接收前端 console.error / window.onerror 等日志
+	api.POST("/app/frontend-log", func(c *gin.Context) {
+		var body struct {
+			Logs []struct {
+				Level   string `json:"level"`
+				Message string `json:"message"`
+				Time    string `json:"time"`
+			} `json:"logs"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || len(body.Logs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的日志数据"})
+			return
+		}
+		pref := loadPreferences()
+		logDir := pref.LogDir
+		if logDir == "" {
+			logDir = defaultLogDir()
+		}
+		if logDir == "" {
+			c.JSON(http.StatusOK, gin.H{"ok": true}) // 非 App 模式且没配目录，静默丢弃
+			return
+		}
+		_ = os.MkdirAll(logDir, 0700)
+		f, err := os.OpenFile(filepath.Join(logDir, "frontend.log"),
+			os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "写入日志失败"})
+			return
+		}
+		defer f.Close()
+		for _, entry := range body.Logs {
+			fmt.Fprintf(f, "[%s] [%s] %s\n", entry.Time, entry.Level, entry.Message)
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
 	// 日志打包：把 log_dir 下的 *.log 文件打成 zip 返回路径
 	api.POST("/app/bundle-logs", func(c *gin.Context) {
 		pref := loadPreferences()
 		logDir := pref.LogDir
 		if logDir == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "未配置日志目录"})
-			return
+			// 未配置日志目录时使用默认路径
+			logDir = defaultLogDir()
+			if logDir == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置日志目录"})
+				return
+			}
 		}
 		entries, err := os.ReadDir(logDir)
 		if err != nil {
@@ -272,22 +312,38 @@ func serverMain() {
 			return
 		}
 		defer zf.Close()
+
+		// 收集需要脱敏的 API Key（防止日志中泄露）
+		var sensitiveKeys []string
+		if pref.LLMAPIKey != "" { sensitiveKeys = append(sensitiveKeys, pref.LLMAPIKey) }
+		if pref.GeminiAccessToken != "" { sensitiveKeys = append(sensitiveKeys, pref.GeminiAccessToken) }
+		if pref.GeminiRefreshToken != "" { sensitiveKeys = append(sensitiveKeys, pref.GeminiRefreshToken) }
+		if pref.EmbeddingAPIKey != "" { sensitiveKeys = append(sensitiveKeys, pref.EmbeddingAPIKey) }
+		for _, p := range pref.LLMProfiles {
+			if p.APIKey != "" { sensitiveKeys = append(sensitiveKeys, p.APIKey) }
+		}
+
 		zw := zip.NewWriter(zf)
 		for _, e := range entries {
 			if e.IsDir() || !strings.HasSuffix(e.Name(), ".log") {
 				continue
 			}
-			src, err := os.Open(filepath.Join(logDir, e.Name()))
+			raw, err := os.ReadFile(filepath.Join(logDir, e.Name()))
 			if err != nil {
 				continue
+			}
+			// 脱敏：将所有 API Key 替换为 [REDACTED]
+			content := string(raw)
+			for _, key := range sensitiveKeys {
+				if len(key) > 0 {
+					content = strings.ReplaceAll(content, key, "[REDACTED]")
+				}
 			}
 			w, err := zw.Create(e.Name())
 			if err != nil {
-				src.Close()
 				continue
 			}
-			io.Copy(w, src)
-			src.Close()
+			w.Write([]byte(content))
 		}
 		zw.Close()
 		c.JSON(http.StatusOK, gin.H{"path": zipPath})

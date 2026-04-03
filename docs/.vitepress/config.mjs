@@ -1,8 +1,26 @@
 import { defineConfig } from 'vitepress'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { execSync } from 'child_process'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// 获取版本号：有精确 tag 则用 tag，否则用 commit 短 hash
+function getVersion() {
+  try {
+    // 检查是否有精确匹配的 tag（如 v0.1.0）
+    const tag = execSync('git describe --tags --exact-match 2>/dev/null', { encoding: 'utf-8' }).trim()
+    if (tag) return tag
+  } catch {}
+  try {
+    // 没有 tag，用 commit 短 hash
+    return execSync('git rev-parse --short=6 HEAD', { encoding: 'utf-8' }).trim()
+  } catch {}
+  // 都失败了（比如 Docker 构建时没有 .git），读环境变量
+  return process.env.WELINK_VERSION || 'dev'
+}
+
+const version = getVersion()
 
 export default defineConfig({
   title: 'WeLink',
@@ -37,9 +55,9 @@ export default defineConfig({
       {
         text: 'AI 功能',
         items: [
-          { text: 'AI 分析功能', link: '/ai-analysis' },
+          { text: 'AI 分身（核心功能）', link: '/ai-clone' },
           { text: 'AI 群聊模拟', link: '/ai-group-sim' },
-          { text: 'AI 分身', link: '/ai-clone' },
+          { text: 'AI 分析功能', link: '/ai-analysis' },
           { text: 'Ollama 本地 AI 配置', link: '/ollama-setup' },
           { text: 'MCP Server', link: '/mcp-server' },
         ],

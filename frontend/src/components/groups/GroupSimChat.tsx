@@ -385,11 +385,26 @@ export const GroupSimChat: React.FC<Props> = ({ group, onOpenSettings }) => {
     <div className="flex flex-col" style={{ height: 'calc(70vh - 100px)', minHeight: 400 }}>
       {/* 顶部控制栏 */}
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
           <Users size={12} />
           <span>{selectedMembers.size} 人参与</span>
           {topic && <><span className="text-gray-200">·</span><span>话题: {topic.length > 15 ? topic.slice(0, 15) + '…' : topic}</span></>}
           {mood && <><span className="text-gray-200">·</span><span>{MOOD_OPTIONS.find(m => m.value === mood)?.label}</span></>}
+          {profileId && profiles.length > 0 && (() => {
+            const defaultModels: Record<string, string> = {
+              deepseek: 'deepseek-chat', kimi: 'moonshot-v1-8k', gemini: 'gemini-2.0-flash',
+              glm: 'glm-4-flash', grok: 'grok-3-mini', minimax: 'MiniMax-Text-01',
+              'minimax-cn': 'MiniMax-Text-01', openai: 'gpt-4o-mini', claude: 'claude-haiku-4-5-20251001',
+              ollama: 'qwen2.5:3b',
+            };
+            const p = profiles.find(pp => pp.id === profileId);
+            const modelName = p?.model || (p ? defaultModels[p.provider] : '') || '';
+            return p ? (
+              <span className="text-[10px] text-[#07c160] bg-[#e7f8f0] dark:bg-[#07c160]/10 px-2 py-0.5 rounded-full font-medium">
+                {p.provider}{modelName ? ` · ${modelName}` : ''}
+              </span>
+            ) : null;
+          })()}
         </div>
         <div className="flex gap-1.5">
           <button
