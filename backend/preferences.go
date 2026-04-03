@@ -108,6 +108,40 @@ func loadPreferences() Preferences {
 	return p
 }
 
+// sanitizeForResponse 返回去除敏感字段的 Preferences 副本，用于 API 响应。
+func sanitizeForResponse(p Preferences) Preferences {
+	mask := func(s string) string {
+		if len(s) <= 4 {
+			return "****"
+		}
+		return s[:2] + "****" + s[len(s)-2:]
+	}
+	out := p
+	if out.LLMAPIKey != "" {
+		out.LLMAPIKey = mask(out.LLMAPIKey)
+	}
+	if out.EmbeddingAPIKey != "" {
+		out.EmbeddingAPIKey = mask(out.EmbeddingAPIKey)
+	}
+	if out.GeminiClientSecret != "" {
+		out.GeminiClientSecret = mask(out.GeminiClientSecret)
+	}
+	out.GeminiAccessToken = ""
+	out.GeminiRefreshToken = ""
+	// LLMProfiles 中的 APIKey 也需要脱敏
+	if len(out.LLMProfiles) > 0 {
+		sanitized := make([]LLMProfile, len(out.LLMProfiles))
+		copy(sanitized, out.LLMProfiles)
+		for i := range sanitized {
+			if sanitized[i].APIKey != "" {
+				sanitized[i].APIKey = mask(sanitized[i].APIKey)
+			}
+		}
+		out.LLMProfiles = sanitized
+	}
+	return out
+}
+
 // savePreferences 将偏好写入磁盘。
 func savePreferences(p Preferences) error {
 	path := preferencesPath()

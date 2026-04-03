@@ -228,6 +228,12 @@ func serverMain() {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少参数"})
 			return
 		}
+		// 安全校验：防止路径穿越
+		cleanName := filepath.Base(body.Filename)
+		if cleanName == "." || cleanName == ".." || cleanName != body.Filename {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "文件名不合法"})
+			return
+		}
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "无法获取用户目录"})
@@ -244,7 +250,7 @@ func serverMain() {
 		} else {
 			fileBytes = []byte(body.Content)
 		}
-		savePath := filepath.Join(homeDir, "Downloads", body.Filename)
+		savePath := filepath.Join(homeDir, "Downloads", cleanName)
 		if err := os.WriteFile(savePath, fileBytes, 0644); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "写入文件失败: " + err.Error()})
 			return
@@ -429,7 +435,7 @@ func serverMain() {
 	// ── 用户偏好（两种模式通用） ────────────────────────────────────────────
 
 	api.GET("/preferences", func(c *gin.Context) {
-		c.JSON(http.StatusOK, loadPreferences())
+		c.JSON(http.StatusOK, sanitizeForResponse(loadPreferences()))
 	})
 
 	api.PUT("/preferences", func(c *gin.Context) {
@@ -448,7 +454,7 @@ func serverMain() {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
 			return
 		}
-		c.JSON(http.StatusOK, existing)
+		c.JSON(http.StatusOK, sanitizeForResponse(existing))
 	})
 
 	// 自定义纪念日保存
