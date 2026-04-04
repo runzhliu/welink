@@ -67,7 +67,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
   const [profiles, setProfiles] = useState<{ id: string; provider: string; model?: string }[]>([]);
   const [profileId, setProfileId] = useState('');
   const [sharing, setSharing] = useState(false);
-  const [shared, setShared] = useState(false);
+  const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -563,24 +563,30 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
               onClick={async () => {
                 if (sharing) return;
                 setSharing(true);
+                setShareMsg(null);
                 try {
-                  await generateCloneChatImage({
+                  const savedPath = await generateCloneChatImage({
                     contactName: displayName,
                     avatarUrl,
                     messages: messages.map(m => ({ role: m.role, content: m.content })),
                     provider: llmInfo.provider,
                     model: llmInfo.model,
                   });
-                  setShared(true);
-                  setTimeout(() => setShared(false), 2000);
-                } catch (e) { console.error('Share failed', e); }
-                finally { setSharing(false); }
+                  const isAppMode = savedPath.startsWith('/') || /^[A-Z]:\\/i.test(savedPath);
+                  setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载' });
+                } catch (e) {
+                  setShareMsg({ ok: false, text: `生成失败：${(e as Error).message}` });
+                }
+                finally {
+                  setSharing(false);
+                  setTimeout(() => setShareMsg(null), 4000);
+                }
               }}
               disabled={sharing}
               className="text-gray-400 hover:text-[#07c160] transition-colors p-1"
               title="保存聊天截图"
             >
-              {sharing ? <Loader2 size={16} className="animate-spin" /> : shared ? <Check size={16} className="text-[#07c160]" /> : <Share2 size={16} />}
+              {sharing ? <Loader2 size={16} className="animate-spin" /> : shareMsg?.ok ? <Check size={16} className="text-[#07c160]" /> : <Share2 size={16} />}
             </button>
           )}
           <button
@@ -592,6 +598,13 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
           </button>
         </div>
       </div>
+
+      {/* 分享提示 */}
+      {shareMsg && (
+        <div className={`text-xs px-3 py-1.5 rounded-lg ${shareMsg.ok ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300'}`}>
+          {shareMsg.text}
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0">

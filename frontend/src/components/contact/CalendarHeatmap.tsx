@@ -34,7 +34,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ data, onDayCli
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { weeks, months } = useMemo(() => {
-    if (!Object.keys(data).length) return { weeks: [], months: [] };
+    if (!data || !Object.keys(data).length) return { weeks: [], months: [] };
 
     const dates = Object.keys(data).sort();
     const start = new Date(dates[0]);
