@@ -7,6 +7,17 @@ import (
 	"path/filepath"
 )
 
+// migrateConfigYAML 一次性迁移：仅 App 模式下，如果 config.yaml 存在，打印警告提示迁移。
+// Docker 模式下 config.yaml 仍然被正常使用，不打印迁移提示。
+func migrateConfigYAML() {
+	if appPreferencesDir() == "" {
+		return // 非 App 模式（Docker/CLI），config.yaml 正常使用，不提示迁移
+	}
+	if _, err := os.Stat("config.yaml"); err == nil {
+		log.Printf("[MIGRATE] Found config.yaml — please migrate settings to the Settings page. config.yaml is no longer used.")
+	}
+}
+
 // LLMProfile 单个 LLM 配置项，支持多 provider 并行配置与一键切换。
 type LLMProfile struct {
 	ID       string `json:"id"`
@@ -26,6 +37,24 @@ type Preferences struct {
 	DataDir  string `json:"data_dir,omitempty"`
 	LogDir   string `json:"log_dir,omitempty"`
 	DemoMode bool   `json:"demo_mode,omitempty"`
+
+	// 服务器配置（修改后需重启）
+	Port    string `json:"port,omitempty"`     // 默认 8080，环境变量 PORT 覆盖
+	GinMode string `json:"gin_mode,omitempty"` // debug / release
+
+	// 分析参数（支持热加载）
+	Timezone             string `json:"timezone,omitempty"`                // 默认 Asia/Shanghai
+	LateNightStartHour   int    `json:"late_night_start_hour,omitempty"`   // 默认 0
+	LateNightEndHour     int    `json:"late_night_end_hour,omitempty"`     // 默认 5
+	SessionGapSeconds    int64  `json:"session_gap_seconds,omitempty"`     // 默认 21600（6 小时）
+	WorkerCount          int    `json:"worker_count,omitempty"`            // 默认 4
+	LateNightMinMessages int64  `json:"late_night_min_messages,omitempty"` // 默认 100
+	LateNightTopN        int    `json:"late_night_top_n,omitempty"`        // 默认 20
+	DefaultInitFrom      int64  `json:"default_init_from,omitempty"`
+	DefaultInitTo        int64  `json:"default_init_to,omitempty"`
+
+	// 日志配置（支持热加载）
+	LogLevel string `json:"log_level,omitempty"` // debug / info / warn / error，默认 info
 
 	// 两种模式通用
 	BlockedUsers  []string `json:"blocked_users"`
@@ -104,6 +133,45 @@ func loadPreferences() Preferences {
 	}
 	if p.BlockedGroups == nil {
 		p.BlockedGroups = []string{}
+	}
+	return p
+}
+
+// effectiveConfig 返回合并了默认值和环境变量覆盖的 Preferences。
+func effectiveConfig(p Preferences) Preferences {
+	if p.Port == "" {
+		p.Port = "8080"
+	}
+	if p.Timezone == "" {
+		p.Timezone = "Asia/Shanghai"
+	}
+	if p.LateNightEndHour == 0 {
+		p.LateNightEndHour = 5
+	}
+	if p.SessionGapSeconds == 0 {
+		p.SessionGapSeconds = 21600
+	}
+	if p.WorkerCount == 0 {
+		p.WorkerCount = 4
+	}
+	if p.LateNightMinMessages == 0 {
+		p.LateNightMinMessages = 100
+	}
+	if p.LateNightTopN == 0 {
+		p.LateNightTopN = 20
+	}
+	if p.LogLevel == "" {
+		p.LogLevel = "info"
+	}
+	if p.GinMode == "" {
+		p.GinMode = "debug"
+	}
+	// 环境变量覆盖
+	if v := os.Getenv("DATA_DIR"); v != "" {
+		p.DataDir = v
+	}
+	if v := os.Getenv("PORT"); v != "" {
+		p.Port = v
 	}
 	return p
 }

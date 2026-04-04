@@ -1,13 +1,16 @@
 services:
   backend:
     image: ghcr.io/runzhliu/welink/backend:main
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: welink-backend
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
       - ./decrypted:/app/data
-      - ./config.yaml:/app/config.yaml:ro
       - welink-prefs:/app/prefs
     environment:
       - GIN_MODE=release

@@ -36,8 +36,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	_ "time/tzdata" // 嵌入时区数据库，确保 App 打包后 LoadLocation 正常工作
 
-	"welink/backend/config"
 	"welink/backend/pkg/db"
 	"welink/backend/pkg/seed"
 	"welink/backend/service"
@@ -67,6 +67,22 @@ func sampleEvenly(items []string, n int) []string {
 	return result
 }
 
+// gitCommit 由 -ldflags "-X main.gitCommit=abc123" 注入，用于启动日志和调试。
+var gitCommit = "unknown"
+
+// analysisParamsFromPrefs 从 Preferences 提取分析参数。
+func analysisParamsFromPrefs(p Preferences) service.AnalysisParams {
+	return service.AnalysisParams{
+		Timezone:             p.Timezone,
+		LateNightStartHour:   p.LateNightStartHour,
+		LateNightEndHour:     p.LateNightEndHour,
+		SessionGapSeconds:    p.SessionGapSeconds,
+		WorkerCount:          p.WorkerCount,
+		LateNightMinMessages: p.LateNightMinMessages,
+		LateNightTopN:        p.LateNightTopN,
+	}
+}
+
 func main() {
 	if hasFrontend {
 		// App 模式：webview 必须在进程启动后立刻创建，否则 macOS 报「没有响应」。
@@ -79,8 +95,10 @@ func main() {
 }
 
 func serverMain() {
-	// 1. 加载配置（config.yaml > 环境变量 > 默认值）
-	cfg := config.Load("")
+	// 1. 加载配置（preferences.json > 环境变量 > 默认值）
+	prefs := effectiveConfig(loadPreferences())
+	// 检查是否有旧 config.yaml 需要迁移
+	migrateConfigYAML()
 
 	// 服务层：受 svcMu 保护，支持运行时热替换
 	var (
@@ -90,12 +108,12 @@ func serverMain() {
 	)
 
 	// reinitSvc 用新数据目录替换数据库连接和服务层（线程安全）。
-	reinitSvc := func(dataDir string) error {
+	reinitSvc := func(dataDir string, params service.AnalysisParams, initFrom, initTo int64) error {
 		newMgr, err := db.NewDBManager(dataDir)
 		if err != nil {
 			return err
 		}
-		newSvc := service.NewContactService(newMgr, cfg)
+		newSvc := service.NewContactService(newMgr, params, initFrom, initTo)
 		svcMu.Lock()
 		if dbMgr != nil {
 			dbMgr.Close()
@@ -111,39 +129,44 @@ func serverMain() {
 		if appCfg, ok := loadAppConfig(); ok {
 			if appCfg.DemoMode {
 				os.Setenv("DEMO_MODE", "true")
-				cfg.Data.Dir = demoDataDir()
+				prefs.DataDir = demoDataDir()
 			} else {
-				cfg.Data.Dir = appCfg.DataDir
+				prefs.DataDir = appCfg.DataDir
 			}
 			setupLogFile(appCfg.LogDir)
 		} else if dir := appDataDir(); dir != "" {
-			cfg.Data.Dir = dir
+			prefs.DataDir = dir
 		}
 	}
 
-	dataLabel := cfg.Data.Dir
+	dataLabel := prefs.DataDir
 	if dataLabel == "" {
 		dataLabel = "(demo)"
 	} else {
 		dataLabel = "(configured)"
 	}
+	log.Printf("WeLink %s (commit %s) starting...", appVersion, gitCommit)
 	log.Printf("WeLink config: data_dir=%s port=%s timezone=%s workers=%d",
-		dataLabel, cfg.Server.Port, cfg.Analysis.Timezone, cfg.Analysis.WorkerCount)
+		dataLabel, prefs.Port, prefs.Timezone, prefs.WorkerCount)
 
 	// 2. 初始化数据库管理器（DEMO_MODE 时先生成示例数据）
 	isDemoMode := os.Getenv("DEMO_MODE") == "true"
 	if isDemoMode {
-		demoDir := cfg.Data.Dir
+		demoDir := prefs.DataDir
 		log.Printf("[DEMO] Demo mode enabled, generating sample databases")
 		if err := seed.Generate(demoDir); err != nil {
 			log.Fatalf("Failed to generate demo databases: %v", err)
 		}
 		// Demo 模式自动全量索引（无时间限制），用非零 to 触发 NewContactService 自动初始化
-		cfg.Analysis.DefaultInitFrom = 0
-		cfg.Analysis.DefaultInitTo = time.Now().Unix() + 365*24*3600*10 // 10年后
+		prefs.DefaultInitFrom = 0
+		prefs.DefaultInitTo = time.Now().Unix() + 365*24*3600*10 // 10年后
 	}
 
-	if err := reinitSvc(cfg.Data.Dir); err != nil {
+	if prefs.GinMode == "release" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	if err := reinitSvc(prefs.DataDir, analysisParamsFromPrefs(prefs), prefs.DefaultInitFrom, prefs.DefaultInitTo); err != nil {
 		// App 模式或数据目录无效时：服务层保持 nil，前端会收到 503 并提示用户
 		// Docker 模式下请检查 volumes 中 decrypted/ 目录是否挂载正确
 		log.Printf("[WARN] Init DB failed: %v — service unavailable until data is ready", err)
@@ -210,6 +233,94 @@ func serverMain() {
 			"ready":       ready,
 			"version":     appVersion,
 		})
+	})
+
+	// 检查更新：调 GitHub API 获取最新 release，与当前版本比较
+	var (
+		updateCache     gin.H
+		updateCacheTime time.Time
+		updateCacheMu   sync.Mutex
+	)
+	api.GET("/app/check-update", func(c *gin.Context) {
+		updateCacheMu.Lock()
+		if updateCache != nil && time.Since(updateCacheTime) < time.Hour {
+			cached := updateCache
+			updateCacheMu.Unlock()
+			c.JSON(http.StatusOK, cached)
+			return
+		}
+		updateCacheMu.Unlock()
+
+		client := &http.Client{Timeout: 15 * time.Second}
+		resp, err := client.Get("https://api.github.com/repos/runzhliu/welink/releases/latest")
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"error": "无法连接 GitHub，请检查网络", "current": appVersion})
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			c.JSON(http.StatusOK, gin.H{"error": "GitHub API 请求失败", "current": appVersion})
+			return
+		}
+		var release struct {
+			TagName string `json:"tag_name"`
+			Body    string `json:"body"`
+			HTMLURL string `json:"html_url"`
+			Assets  []struct {
+				Name               string `json:"name"`
+				BrowserDownloadURL string `json:"browser_download_url"`
+				Size               int64  `json:"size"`
+			} `json:"assets"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+			c.JSON(http.StatusOK, gin.H{"error": "解析 GitHub 响应失败", "current": appVersion})
+			return
+		}
+
+		// 构建资产下载链接（含 GitHub 直链和镜像加速）
+		type assetInfo struct {
+			Name      string `json:"name"`
+			Size      int64  `json:"size"`
+			URL       string `json:"url"`
+			MirrorURL string `json:"mirror_url"`
+		}
+		var assets []assetInfo
+		for _, a := range release.Assets {
+			assets = append(assets, assetInfo{
+				Name:      a.Name,
+				Size:      a.Size,
+				URL:       a.BrowserDownloadURL,
+				MirrorURL: "https://ghfast.top/" + a.BrowserDownloadURL,
+			})
+		}
+
+		// 判断是否有新版本
+		latestTag := strings.TrimPrefix(release.TagName, "v")
+		currentTag := strings.TrimPrefix(appVersion, "v")
+		currentTag = strings.TrimPrefix(currentTag, "dev-")
+		hasUpdate := release.TagName != "" && latestTag != currentTag && !strings.HasPrefix(currentTag, latestTag)
+
+		// changelog 截取前 500 字符
+		changelog := release.Body
+		if len([]rune(changelog)) > 500 {
+			changelog = string([]rune(changelog)[:500]) + "…"
+		}
+
+		result := gin.H{
+			"current":    appVersion,
+			"latest":     release.TagName,
+			"has_update": hasUpdate,
+			"changelog":  changelog,
+			"url":        release.HTMLURL,
+			"assets":     assets,
+		}
+
+		updateCacheMu.Lock()
+		updateCache = result
+		updateCacheTime = time.Now()
+		updateCacheMu.Unlock()
+
+		c.JSON(http.StatusOK, result)
 	})
 
 	// 保存文件到 ~/Downloads（供 App 模式下的前端调用，绕过 WebView 的 blob 下载限制）
@@ -363,14 +474,15 @@ func serverMain() {
 			body.DemoMode = false
 			os.Unsetenv("DEMO_MODE")
 		}
-		if err := reinitSvc(body.DataDir); err != nil {
+		merged := effectiveConfig(body)
+		if err := reinitSvc(merged.DataDir, analysisParamsFromPrefs(merged), merged.DefaultInitFrom, merged.DefaultInitTo); err != nil {
 			return fmt.Errorf("无效的数据库目录：%w", err)
 		}
 		if err := saveAppConfig(&body); err != nil {
 			log.Printf("[APP] Failed to save config: %v", err)
 		}
 		setupLogFile(body.LogDir)
-		cfg.Data.Dir = body.DataDir
+		prefs.DataDir = body.DataDir
 		return nil
 	}
 
@@ -544,6 +656,78 @@ func serverMain() {
 			}
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	// ── 配置热加载 ──────────────────────────────────────────────────────────
+	api.PUT("/preferences/config", func(c *gin.Context) {
+		var incoming struct {
+			Timezone             string `json:"timezone"`
+			LateNightStartHour   int    `json:"late_night_start_hour"`
+			LateNightEndHour     int    `json:"late_night_end_hour"`
+			SessionGapSeconds    int64  `json:"session_gap_seconds"`
+			WorkerCount          int    `json:"worker_count"`
+			LateNightMinMessages int64  `json:"late_night_min_messages"`
+			LateNightTopN        int    `json:"late_night_top_n"`
+			LogLevel             string `json:"log_level"`
+			GinMode              string `json:"gin_mode"`
+			Port                 string `json:"port"`
+		}
+		if err := c.ShouldBindJSON(&incoming); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		existing := loadPreferences()
+		needsRestart := false
+		if incoming.Port != "" && incoming.Port != existing.Port {
+			needsRestart = true
+		}
+		if incoming.GinMode != "" && incoming.GinMode != existing.GinMode {
+			needsRestart = true
+		}
+		// 更新字段
+		if incoming.Timezone != "" {
+			existing.Timezone = incoming.Timezone
+		}
+		if incoming.LateNightStartHour != 0 || incoming.LateNightEndHour != 0 {
+			existing.LateNightStartHour = incoming.LateNightStartHour
+			existing.LateNightEndHour = incoming.LateNightEndHour
+		}
+		if incoming.SessionGapSeconds != 0 {
+			existing.SessionGapSeconds = incoming.SessionGapSeconds
+		}
+		if incoming.WorkerCount != 0 {
+			existing.WorkerCount = incoming.WorkerCount
+		}
+		if incoming.LateNightMinMessages != 0 {
+			existing.LateNightMinMessages = incoming.LateNightMinMessages
+		}
+		if incoming.LateNightTopN != 0 {
+			existing.LateNightTopN = incoming.LateNightTopN
+		}
+		if incoming.LogLevel != "" {
+			existing.LogLevel = incoming.LogLevel
+		}
+		if incoming.GinMode != "" {
+			existing.GinMode = incoming.GinMode
+		}
+		if incoming.Port != "" {
+			existing.Port = incoming.Port
+		}
+		if err := savePreferences(existing); err != nil {
+			log.Printf("[PREFS] Failed to save config preferences: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
+			return
+		}
+		// 热加载分析参数并重新索引
+		svcMu.RLock()
+		svc := contactSvc
+		svcMu.RUnlock()
+		if svc != nil {
+			svc.UpdateParams(analysisParamsFromPrefs(effectiveConfig(existing)))
+			// 参数变更后需要重新索引才能让深夜时段、时区等变化生效
+			go svc.Reinitialize(0, 0)
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "needs_restart": needsRestart})
 	})
 
 	// ── AI 分析历史持久化 ──────────────────────────────────────────────────
@@ -2221,14 +2405,14 @@ func serverMain() {
 		})
 	}
 
-	log.Printf("WeLink Backend serving on :%s", cfg.Server.Port)
+	log.Printf("WeLink Backend serving on :%s", prefs.Port)
 
 	if hasFrontend {
 		// App 模式：通知 webview 服务器已就绪，然后阻塞
-		go r.Run(":" + cfg.Server.Port) //nolint:errcheck
-		signalServerReady(cfg.Server.Port)
+		go r.Run(":" + prefs.Port) //nolint:errcheck
+		signalServerReady(prefs.Port)
 		select {} // 等 webview 窗口关闭后 os.Exit
 	}
 
-	r.Run(":" + cfg.Server.Port) //nolint:errcheck
+	r.Run(":" + prefs.Port) //nolint:errcheck
 }
