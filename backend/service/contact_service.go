@@ -10,7 +10,6 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
-	"welink/backend/config"
 	"welink/backend/model"
 	"welink/backend/pkg/db"
 	"welink/backend/repository"
@@ -144,10 +143,22 @@ func classifyMsgType(lt int, content string) string {
 	}
 }
 
+// AnalysisParams 分析参数，支持运行时热加载。
+type AnalysisParams struct {
+	Timezone             string
+	LateNightStartHour   int
+	LateNightEndHour     int
+	SessionGapSeconds    int64
+	WorkerCount          int
+	LateNightMinMessages int64
+	LateNightTopN        int
+}
+
 type ContactService struct {
 	dbMgr            *db.DBManager
 	msgRepo          *repository.MessageRepository
-	cfg              *config.AnalysisConfig
+	params           AnalysisParams
+	paramsMu         sync.RWMutex
 	tz               *time.Location
 	segmenter        gse.Segmenter
 	segmenterMu      sync.Mutex // 保护 segmenter 不被并发调用（gse 非线程安全）
@@ -163,6 +174,10 @@ type ContactService struct {
 	groupDetailComputing map[string]bool                  // 正在后台计算中的群聊
 	groupRelCache        map[string]*RelationshipGraph    // 群聊人物关系缓存
 	groupRelComputing    map[string]bool
+	anniversaryDetected  []DetectedEvent                  // 纪念日缓存
+	anniversaryMilestones []FriendMilestone
+	anniversaryCacheDay  string                           // 缓存日期（当天有效）
+	anniversaryMu        sync.RWMutex
 	filterFrom       int64 // 全局时间范围过滤（Unix 秒，0=不限）
 	filterTo         int64
 	calendarHeatmap  map[string]int // 全局每日消息量（联系人+群聊），performAnalysis 后可读
@@ -232,30 +247,45 @@ var STOP_WORDS = map[string]bool{
 	"…": true, "～": true, "/": true, "、": true,
 }
 
-func NewContactService(mgr *db.DBManager, cfg *config.Config) *ContactService {
-	loc, err := time.LoadLocation(cfg.Analysis.Timezone)
+func NewContactService(mgr *db.DBManager, params AnalysisParams, defaultInitFrom, defaultInitTo int64) *ContactService {
+	loc, err := time.LoadLocation(params.Timezone)
 	if err != nil {
-		log.Printf("[CONFIG] Unknown timezone %q, falling back to Asia/Shanghai: %v", cfg.Analysis.Timezone, err)
+		log.Printf("[CONFIG] Unknown timezone %q, falling back to Asia/Shanghai: %v", params.Timezone, err)
 		loc = time.FixedZone("CST", 8*3600)
 	}
 	svc := &ContactService{
 		dbMgr:            mgr,
 		msgRepo:          repository.NewMessageRepository(mgr),
-		cfg:              &cfg.Analysis,
+		params:           params,
 		tz:               loc,
 		groupDetailCache:     make(map[string]*GroupDetail),
 		groupDetailComputing: make(map[string]bool),
 		groupRelCache:        make(map[string]*RelationshipGraph),
 		groupRelComputing:    make(map[string]bool),
 	}
-	svc.segmenter.LoadDict()
+	if err := svc.segmenter.LoadDictEmbed(); err != nil {
+		log.Printf("[WARN] Failed to load embedded gse dict, falling back: %v", err)
+		svc.segmenter.LoadDict()
+	}
 
 	// 如果配置了自动初始化时间范围，启动后立即开始索引
-	if cfg.Analysis.DefaultInitFrom != 0 || cfg.Analysis.DefaultInitTo != 0 {
-		log.Printf("[CONFIG] Auto-init with from=%d to=%d", cfg.Analysis.DefaultInitFrom, cfg.Analysis.DefaultInitTo)
-		svc.Reinitialize(cfg.Analysis.DefaultInitFrom, cfg.Analysis.DefaultInitTo)
+	if defaultInitFrom != 0 || defaultInitTo != 0 {
+		log.Printf("[CONFIG] Auto-init with from=%d to=%d", defaultInitFrom, defaultInitTo)
+		svc.Reinitialize(defaultInitFrom, defaultInitTo)
 	}
 	return svc
+}
+
+// UpdateParams 热加载分析参数。
+func (s *ContactService) UpdateParams(p AnalysisParams) {
+	s.paramsMu.Lock()
+	defer s.paramsMu.Unlock()
+	if p.Timezone != s.params.Timezone {
+		if loc, err := time.LoadLocation(p.Timezone); err == nil {
+			s.tz = loc
+		}
+	}
+	s.params = p
 }
 
 // Reinitialize 用新的时间范围重新索引（前端调用）
@@ -351,7 +381,7 @@ func (s *ContactService) performAnalysis() {
 	globalTypeMix := make(map[string]int)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, s.cfg.WorkerCount)
+	sem := make(chan struct{}, s.params.WorkerCount)
 
 	for i := range contacts {
 		wg.Add(1)
@@ -394,7 +424,7 @@ func (s *ContactService) performAnalysis() {
 
 					dt := time.Unix(ts, 0).In(s.tz)
 					h := dt.Hour()
-					if h >= s.cfg.LateNightStartHour && h < s.cfg.LateNightEndHour { lateNightCnt++ }
+					if h >= s.params.LateNightStartHour && h < s.params.LateNightEndHour { lateNightCnt++ }
 					mu.Lock(); globalDaily[dt.Format("2006-01-02")]++; globalHourly[h]++; mu.Unlock()
 					monthly[dt.Format("2006-01")]++
 					if ts >= recentCutoff.Unix() { ext.RecentMonthly++ }
@@ -458,12 +488,12 @@ func (s *ContactService) performAnalysis() {
 	sort.Slice(lateNightData, func(i, j int) bool { return lateNightData[i].lateNightCount > lateNightData[j].lateNightCount })
 	var lateNightRanking []LateNightEntry
 	for _, e := range lateNightData {
-		if e.totalMessages < s.cfg.LateNightMinMessages || e.lateNightCount == 0 { continue }
+		if e.totalMessages < s.params.LateNightMinMessages || e.lateNightCount == 0 { continue }
 		ratio := float64(e.lateNightCount) / float64(e.totalMessages) * 100
 		lateNightRanking = append(lateNightRanking, LateNightEntry{
 			Name: e.name, LateNightCount: e.lateNightCount, TotalMessages: e.totalMessages, Ratio: ratio,
 		})
-		if len(lateNightRanking) >= s.cfg.LateNightTopN { break }
+		if len(lateNightRanking) >= s.params.LateNightTopN { break }
 	}
 
 	s.cacheMu.Lock()
@@ -552,7 +582,7 @@ func (s *ContactService) AnalyzeWithFilter(from, to int64) *FilteredStats {
 	globalTypeMix := make(map[string]int)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, s.cfg.WorkerCount)
+	sem := make(chan struct{}, s.params.WorkerCount)
 
 	for i := range contacts {
 		wg.Add(1)
@@ -583,7 +613,7 @@ func (s *ContactService) AnalyzeWithFilter(from, to int64) *FilteredStats {
 
 					dt := time.Unix(ts, 0).In(s.tz)
 					h := dt.Hour()
-					if h >= s.cfg.LateNightStartHour && h < s.cfg.LateNightEndHour { lateNightCnt++ }
+					if h >= s.params.LateNightStartHour && h < s.params.LateNightEndHour { lateNightCnt++ }
 					mu.Lock(); globalDaily[dt.Format("2006-01-02")]++; globalHourly[h]++; mu.Unlock()
 
 					typeName := classifyMsgType(lt, content)
@@ -622,12 +652,12 @@ func (s *ContactService) AnalyzeWithFilter(from, to int64) *FilteredStats {
 	sort.Slice(lateNightData, func(i, j int) bool { return lateNightData[i].lateNightCount > lateNightData[j].lateNightCount })
 	var lateNightRanking []LateNightEntry
 	for _, e := range lateNightData {
-		if e.totalMessages < s.cfg.LateNightMinMessages || e.lateNightCount == 0 { continue }
+		if e.totalMessages < s.params.LateNightMinMessages || e.lateNightCount == 0 { continue }
 		ratio := float64(e.lateNightCount) / float64(e.totalMessages) * 100
 		lateNightRanking = append(lateNightRanking, LateNightEntry{
 			Name: e.name, LateNightCount: e.lateNightCount, TotalMessages: e.totalMessages, Ratio: ratio,
 		})
-		if len(lateNightRanking) >= s.cfg.LateNightTopN { break }
+		if len(lateNightRanking) >= s.params.LateNightTopN { break }
 	}
 
 	var totalMessages int64 = 0
@@ -698,7 +728,7 @@ func (s *ContactService) GetContactDetail(username string) *ContactDetail {
 				detail.TheirMonthlyTrend[month]++
 			}
 
-			if h >= s.cfg.LateNightStartHour && h < s.cfg.LateNightEndHour { detail.LateNightCount++ }
+			if h >= s.params.LateNightStartHour && h < s.params.LateNightEndHour { detail.LateNightCount++ }
 
 			// 红包 / 转账检测
 			typeName := classifyMsgType(lt, content)
@@ -717,7 +747,7 @@ func (s *ContactService) GetContactDetail(username string) *ContactDetail {
 			}
 
 			// 新对话段：与上条消息间隔 > session_gap_seconds
-			if prevTs == 0 || ts-prevTs > s.cfg.SessionGapSeconds {
+			if prevTs == 0 || ts-prevTs > s.params.SessionGapSeconds {
 				detail.TotalSessions++
 				if isMineMsg {
 					detail.InitiationCnt++
@@ -1400,7 +1430,7 @@ func (s *ContactService) loadGroups() []GroupInfo {
 	result := make([]GroupInfo, 0, len(groups))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, s.cfg.WorkerCount)
+	sem := make(chan struct{}, s.params.WorkerCount)
 
 	for _, g := range groups {
 		wg.Add(1)
@@ -2555,12 +2585,21 @@ var birthdayPatterns = []*regexp.Regexp{
 
 // DetectAnniversaries 检测生日事件和友谊里程碑
 func (s *ContactService) DetectAnniversaries() ([]DetectedEvent, []FriendMilestone) {
+	now := time.Now().In(s.tz)
+	today := now.Format("2006-01-02")
+
+	// 当天缓存命中直接返回
+	s.anniversaryMu.RLock()
+	if s.anniversaryCacheDay == today && s.anniversaryDetected != nil {
+		d, m := s.anniversaryDetected, s.anniversaryMilestones
+		s.anniversaryMu.RUnlock()
+		return d, m
+	}
+	s.anniversaryMu.RUnlock()
+
 	s.cacheMu.RLock()
 	contacts := s.cache
 	s.cacheMu.RUnlock()
-
-	now := time.Now().In(s.tz)
-	today := now.Format("2006-01-02")
 
 	// ── 1. 生日检测：扫描含"生日快乐"的消息 ──
 	// key = username + "|" + MM-DD
@@ -2737,6 +2776,13 @@ func (s *ContactService) DetectAnniversaries() ([]DetectedEvent, []FriendMilesto
 	if milestones == nil {
 		milestones = []FriendMilestone{}
 	}
+	// 缓存结果（当天有效）
+	s.anniversaryMu.Lock()
+	s.anniversaryDetected = detected
+	s.anniversaryMilestones = milestones
+	s.anniversaryCacheDay = today
+	s.anniversaryMu.Unlock()
+
 	return detected, milestones
 }
 

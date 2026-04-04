@@ -99,8 +99,12 @@ export const AnniversaryPage: React.FC<Props> = ({ contacts, onContactClick }) =
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
         <Loader2 size={40} className="text-[#07c160] animate-spin" />
+        <div className="text-center">
+          <p className="text-sm font-semibold text-gray-500 dk-text">正在检测纪念日...</p>
+          <p className="text-xs text-gray-400 mt-1">首次加载需要扫描聊天记录，请稍候</p>
+        </div>
       </div>
     );
   }

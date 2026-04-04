@@ -844,8 +844,12 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
         <Loader2 size={40} className="text-[#07c160] animate-spin" />
+        <div className="text-center">
+          <p className="text-sm font-semibold text-gray-500 dk-text">正在加载群聊数据...</p>
+          <p className="text-xs text-gray-400 mt-1">群聊较多时首次加载可能需要几秒</p>
+        </div>
       </div>
     );
   }

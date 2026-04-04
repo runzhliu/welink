@@ -1,0 +1,9 @@
+welink-backend
+welink-arm64
+welink-amd64
+WeLink
+WeLink.exe
+static/
+*.syso
+versioninfo_build.json
+.DS_Store
