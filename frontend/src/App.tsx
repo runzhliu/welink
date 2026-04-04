@@ -3,7 +3,7 @@
  * 重构版本 - 组件化 + 微信风格设计
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PrivacyModeContext } from './contexts/PrivacyModeContext';
 
 // Layout Components
@@ -50,8 +50,24 @@ const ALL_TIME: TimeRange = { from: null, to: null, label: '全部' };
 function App() {
   const { dark, toggle: toggleDark } = useDarkMode();
 
-  // State — 从 localStorage 恢复，刷新不回到欢迎页
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  // State — 从 URL hash 恢复当前 tab，支持刷新保持、前进后退、分享链接
+  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'settings'];
+  const tabFromHash = (): TabType => {
+    const hash = window.location.hash.replace('#/', '').replace('#', '');
+    return VALID_TABS.includes(hash as TabType) ? hash as TabType : 'dashboard';
+  };
+  const [activeTab, setActiveTabRaw] = useState<TabType>(tabFromHash);
+  const setActiveTab = useCallback((tab: TabType) => {
+    setActiveTabRaw(tab);
+    window.history.pushState(null, '', `#/${tab}`);
+  }, []);
+
+  // 监听浏览器前进/后退
+  useEffect(() => {
+    const onPop = () => setActiveTabRaw(tabFromHash());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
   const [search, setSearch] = useState('');
   const [selectedContact, setSelectedContact] = useState<ContactStats | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<GroupInfo | null>(null);
