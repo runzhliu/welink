@@ -236,7 +236,7 @@ const AssistantMessage: React.FC<{
           timestamp: msg.timestamp,
         } : undefined,
       });
-      const isAppMode = savedPath.startsWith('/');
+      const isAppMode = savedPath.startsWith('/') || /^[A-Z]:\\/i.test(savedPath);
       setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载' });
     } catch (err) {
       setShareMsg({ ok: false, text: `生成失败：${(err as Error).message}` });
@@ -444,8 +444,8 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
   // 隐私脱敏开关
   const [privacyMask, setPrivacyMask] = useState(true);
 
-  // 混合检索模式（quickMode 强制全量）
-  const [ragMode, setRagMode] = useState<'full' | 'hybrid'>(quickMode ? 'full' : 'hybrid');
+  // 分析模式：默认全量分析
+  const [ragMode, setRagMode] = useState<'full' | 'hybrid'>('full');
   const [ragIndexStatus, setRagIndexStatus] = useState<{
     built: boolean; msg_count: number; built_at: number;
   } | null>(null);

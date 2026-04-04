@@ -41,7 +41,7 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
   const { privacyMode } = usePrivacyMode();
   const [dayPanel, setDayPanel] = useState<{ date: string; count: number } | null>(null);
   const [trendMode, setTrendMode] = useState<TrendMode>('total');
-  const hourlyData = detail.hourly_dist.map((v, h) => ({
+  const hourlyData = (detail.hourly_dist ?? []).map((v, h) => ({
     label: `${h.toString().padStart(2, '0')}`,
     value: v,
     isLateNight: h < 5,
@@ -49,7 +49,7 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
 
   const weeklyData = WEEK_ORDER.map((i, idx) => ({
     label: WEEK_LABELS[idx],
-    value: detail.weekly_dist[i],
+    value: (detail.weekly_dist ?? [])[i] ?? 0,
   }));
 
   const monthlyChartData = useMemo(() => {

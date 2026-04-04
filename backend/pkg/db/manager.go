@@ -396,7 +396,12 @@ func NewDBManager(dataDir string) (*DBManager, error) {
 
 	db, err := sql.Open("sqlite", contactPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open contact db: %v", err)
+		// 读写失败，尝试只读模式
+		db, err = sql.Open("sqlite", contactPath+"?mode=ro&_pragma=journal_mode(OFF)")
+		if err != nil {
+			return nil, fmt.Errorf("failed to open contact db: %v", err)
+		}
+		log.Printf("Opened contact.db in read-only mode")
 	}
 	mgr.ContactDB = db
 
@@ -416,14 +421,31 @@ func NewDBManager(dataDir string) (*DBManager, error) {
 		   !strings.Contains(file.Name(), "fts") && !strings.Contains(file.Name(), "resource") {
 
 			dbPath := filepath.Join(msgDir, file.Name())
+			// 先尝试读写模式打开（可创建优化索引，加速后续查询）
 			mdb, err := sql.Open("sqlite", dbPath)
+			readOnly := false
 			if err != nil {
 				log.Printf("Warn: failed to open %s: %v", file.Name(), err)
 				continue
 			}
+			// 检测是否只读：尝试执行轻量写操作
+			if _, testErr := mdb.Exec("CREATE TABLE IF NOT EXISTS _welink_rw_test_(x INTEGER); DROP TABLE IF EXISTS _welink_rw_test_"); testErr != nil {
+				// 只读文件系统，关闭后以只读模式重新打开
+				mdb.Close()
+				// 使用 immutable=1 避免 SQLite 尝试创建 WAL/journal 文件
+				mdb, err = sql.Open("sqlite", dbPath+"?immutable=1")
+				if err != nil {
+					log.Printf("Warn: failed to open %s in readonly: %v", file.Name(), err)
+					continue
+				}
+				readOnly = true
+				log.Printf("Opened %s in read-only mode (immutable)", file.Name())
+			}
 
-			// 创建性能优化索引
-			createOptimizationIndexes(mdb, file.Name())
+			// 创建性能优化索引（只读时跳过）
+			if !readOnly {
+				createOptimizationIndexes(mdb, file.Name())
+			}
 
 			mgr.MessageDBs = append(mgr.MessageDBs, mdb)
 		}
