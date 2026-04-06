@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame, Sparkles } from 'lucide-react';
+import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame, Sparkles, Maximize2, Minimize2 } from 'lucide-react';
 import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
 import { contactsApi } from '../../services/api';
@@ -11,6 +11,7 @@ import { exportContactCsv, exportContactTxt, EXPORT_LIMIT, parseExportResult } f
 import { WordCloudCanvas } from './WordCloudCanvas';
 import { LLMAnalysisTab } from './LLMAnalysisTab';
 import { AICloneTab } from './AICloneTab';
+import { AIInsights } from './AIInsights';
 import { ContactDetailCharts } from './ContactDetailCharts';
 import { SentimentChart } from './SentimentChart';
 import { MessageTypePieChart } from '../common/MessageTypePieChart';
@@ -28,7 +29,7 @@ interface ContactModalProps {
   initialQuery?: string;
 }
 
-type ModalTab = 'wordcloud' | 'detail' | 'sentiment' | 'search' | 'ai' | 'clone';
+type ModalTab = 'wordcloud' | 'detail' | 'sentiment' | 'search' | 'ai' | 'clone' | 'insights';
 
 function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
 function shiftDays(n: number) {
@@ -49,6 +50,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
   const { privacyMode } = usePrivacyMode();
   const { data: wordData, loading: isAnalysing, fetch: fetchWordCloud } = useWordCloud();
   const [tab, setTab] = useState<ModalTab>(initialTab ?? 'wordcloud');
+  const [fullscreen, setFullscreen] = useState(false);
 
   // 联系人切换时重置到指定 tab（支持从首页跳转到 AI 分析）
   useEffect(() => {
@@ -195,14 +197,20 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
   return (
     <>
     <div
-      className="fixed inset-0 bg-[#1d1d1f]/90 backdrop-blur-md z-50 flex items-end sm:items-center justify-center sm:p-8 animate-in fade-in duration-200"
-      onClick={onClose}
+      className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-in fade-in duration-200 ${
+        fullscreen ? 'bg-white dark:bg-[var(--bg-page)]' : 'bg-[#1d1d1f]/90 backdrop-blur-md sm:p-8'
+      }`}
+      onClick={fullscreen ? undefined : onClose}
     >
       <div
-        className="dk-card bg-white rounded-t-[32px] sm:rounded-[48px] w-full sm:max-w-5xl overflow-hidden max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] shadow-2xl relative animate-in slide-in-from-bottom sm:zoom-in duration-300"
+        className={`dk-card bg-white overflow-hidden shadow-2xl relative transition-all duration-300 ${
+          fullscreen
+            ? 'w-full h-full rounded-none'
+            : 'rounded-t-[32px] sm:rounded-[48px] w-full sm:max-w-5xl max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
-      <div className="overflow-y-auto max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] p-4 sm:p-8 lg:p-16">
+      <div className={`overflow-y-auto p-4 sm:p-8 lg:p-16 ${fullscreen ? 'h-full' : 'max-h-[calc(100dvh-5rem)] sm:max-h-[92vh]'}`}>
         {/* Top-right actions */}
         <div className="absolute top-5 right-5 sm:top-10 sm:right-10 flex items-center gap-2">
           {/* 导出 */}
@@ -251,6 +259,13 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
               </div>
             )}
           </div>
+          <button
+            onClick={() => setFullscreen(v => !v)}
+            className="p-2 rounded-xl text-gray-300 hover:text-[#07c160] hover:bg-[#e7f8f0] dark:hover:bg-[#07c160]/15 transition-colors duration-200"
+            title={fullscreen ? '退出全屏' : '全屏'}
+          >
+            {fullscreen ? <Minimize2 size={20} strokeWidth={2} /> : <Maximize2 size={20} strokeWidth={2} />}
+          </button>
           {onBlock && (
             <button
               onClick={() => { onBlock(contact.username); onClose(); }}
@@ -509,7 +524,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         {/* Tabs + 消息范围切换 */}
         <div className="flex items-center justify-between mb-6 dk-border border-b border-gray-100">
           <div className="flex gap-2">
-            {(['wordcloud', 'detail', 'sentiment', 'search', 'ai', 'clone'] as ModalTab[]).map((t) => (
+            {(['wordcloud', 'detail', 'sentiment', 'search', 'ai', 'clone', 'insights'] as ModalTab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => {
@@ -527,7 +542,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
               >
                 {t === 'ai' && <Bot size={13} className="flex-shrink-0" />}
                 {t === 'clone' && <Sparkles size={13} className="flex-shrink-0" />}
-                {t === 'wordcloud' ? '词云分析' : t === 'detail' ? '深度画像' : t === 'sentiment' ? '情感分析' : t === 'search' ? '搜索记录' : t === 'ai' ? 'AI 分析' : 'AI 分身'}
+                {t === 'wordcloud' ? '词云分析' : t === 'detail' ? '深度画像' : t === 'sentiment' ? '情感分析' : t === 'search' ? '搜索记录' : t === 'ai' ? 'AI 分析' : t === 'clone' ? 'AI 分身' : 'AI 洞察'}
               </button>
             ))}
           </div>
@@ -622,6 +637,15 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
 
         {tab === 'clone' && (
           <AICloneTab
+            username={contact.username}
+            displayName={displayName}
+            avatarUrl={avatarUrl || undefined}
+            onOpenSettings={onOpenSettings}
+          />
+        )}
+
+        {tab === 'insights' && (
+          <AIInsights
             username={contact.username}
             displayName={displayName}
             avatarUrl={avatarUrl || undefined}

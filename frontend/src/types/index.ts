@@ -216,6 +216,7 @@ export interface GroupInfo {
 export interface MemberStat {
   speaker: string;
   count: number;
+  last_message_time?: string;
 }
 
 export interface GroupDetail {

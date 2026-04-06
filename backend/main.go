@@ -160,6 +160,10 @@ func serverMain() {
 		// Demo 模式自动全量索引（无时间限制），用非零 to 触发 NewContactService 自动初始化
 		prefs.DefaultInitFrom = 0
 		prefs.DefaultInitTo = time.Now().Unix() + 365*24*3600*10 // 10年后
+
+		if DemoAIDisabled() {
+			log.Printf("[DEMO] AI configuration disabled via DEMO_DISABLE_AI=true")
+		}
 	}
 
 	if prefs.GinMode == "release" {
@@ -587,10 +591,28 @@ func serverMain() {
 		c.JSON(http.StatusOK, existing.CustomAnniversaries)
 	})
 
+	// Prompt 模板保存
+	api.PUT("/preferences/prompts", func(c *gin.Context) {
+		var body struct {
+			PromptTemplates map[string]string `json:"prompt_templates"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		existing := loadPreferences()
+		existing.PromptTemplates = body.PromptTemplates
+		if err := savePreferences(existing); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
 	// LLM 配置单独保存，避免与屏蔽名单 PUT 冲突
 	api.PUT("/preferences/llm", func(c *gin.Context) {
-		// Demo 模式下禁止修改（防止 SSRF / API key 滥用）
-		if isDemoMode {
+		// 公有云 Demo 模式下禁止修改（防止 SSRF / API key 滥用）
+		if isDemoMode && DemoAIDisabled() {
 			demoBlockLLMWrite(c)
 			return
 		}
@@ -1176,6 +1198,76 @@ func serverMain() {
 		streamLLMCoreWithProfile(sendChunk, llmMessages, prefs, body.ProfileID)
 	})
 
+	// POST /api/ai/clone/continue — 对话续写：AI 模拟双方继续聊天
+	api.POST("/ai/clone/continue", func(c *gin.Context) {
+		var body struct {
+			SessionID string `json:"session_id"`
+			ProfileID string `json:"profile_id"`
+			Rounds    int    `json:"rounds"`
+			Topic     string `json:"topic"`
+			MyName    string `json:"my_name"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		if body.Rounds <= 0 { body.Rounds = 10 }
+		if body.Rounds > 30 { body.Rounds = 30 }
+		if body.MyName == "" { body.MyName = "我" }
+
+		prefs := loadPreferences()
+		cfg := llmConfigForProfile(body.ProfileID, prefs)
+		if cfg.provider == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
+			return
+		}
+
+		cloneCacheMu.RLock()
+		sysPrompt, ok := cloneCache[body.SessionID]
+		cloneCacheMu.RUnlock()
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "会话已过期，请重新学习"})
+			return
+		}
+
+		// 构造续写 prompt
+		continuePrompt := fmt.Sprintf(`基于你已经学习的这个人的聊天风格，现在请模拟「%s」和「TA」之间的一段自然对话。
+
+要求：
+1. 交替生成双方的消息，共 %d 轮（每轮一问一答）
+2.「TA」的风格严格按照你学习到的说话习惯（用词、语气、长度、表情）
+3.「%s」的风格也要自然，像真实的微信聊天
+4. 每条消息单独一行，格式严格为：
+   %s：消息内容
+   TA：消息内容
+5. 不要加任何其他说明文字、括号注释或旁白
+6. 内容要自然流畅，承接上下文`, body.MyName, body.Rounds, body.MyName, body.MyName)
+
+		if body.Topic != "" {
+			continuePrompt += fmt.Sprintf("\n7. 话题从「%s」开始", body.Topic)
+		}
+
+		llmMessages := []LLMMessage{
+			{Role: "system", Content: sysPrompt},
+			{Role: "user", Content: continuePrompt},
+		}
+
+		flusher, fOk := c.Writer.(http.Flusher)
+		if !fOk {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "不支持流式响应"})
+			return
+		}
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		c.Writer.Header().Set("Cache-Control", "no-cache")
+		c.Writer.Header().Set("X-Accel-Buffering", "no")
+		sendChunk := func(chunk StreamChunk) {
+			data, _ := json.Marshal(chunk)
+			fmt.Fprintf(c.Writer, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+		streamLLMCoreWithProfile(sendChunk, llmMessages, prefs, body.ProfileID)
+	})
+
 	// POST /api/ai/complete — 非流式单次补全（用于分段摘要）
 	api.POST("/ai/complete", func(c *gin.Context) {
 		var body struct {
@@ -1559,7 +1651,7 @@ func serverMain() {
 
 	// POST /api/ai/vec/test-embedding — 验证 embedding 配置是否可用
 	api.POST("/ai/vec/test-embedding", func(c *gin.Context) {
-		if isDemoMode {
+		if isDemoMode && DemoAIDisabled() {
 			demoBlockLLMWrite(c)
 			return
 		}
@@ -1575,7 +1667,7 @@ func serverMain() {
 
 	// POST /api/ai/llm/test — 验证 LLM 配置是否可用（可指定 profile_id）
 	api.POST("/ai/llm/test", func(c *gin.Context) {
-		if isDemoMode {
+		if isDemoMode && DemoAIDisabled() {
 			demoBlockLLMWrite(c)
 			return
 		}
@@ -2115,6 +2207,131 @@ func serverMain() {
 			c.JSON(http.StatusOK, getSvc().ExportContactMessages(uname, from, to))
 		})
 
+		// AI 摘要数据（统计特征 + 采样消息，用于生成 AI 报告/日记/画像卡）
+		prot.GET("/contacts/ai-summary", func(c *gin.Context) {
+			uname := c.Query("username")
+			if uname == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 username 参数"})
+				return
+			}
+			svc := getSvc()
+
+			// 1. 从缓存获取基础统计
+			var stats *service.ContactStatsExtended
+			for _, s := range svc.GetCachedStats() {
+				if s.Username == uname {
+					stats = &s
+					break
+				}
+			}
+			if stats == nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "联系人不存在"})
+				return
+			}
+
+			// 2. 获取详情（会懒加载）
+			detail := svc.GetContactDetail(uname)
+
+			// 3. 采样消息：每月取最多 3 条代表性消息（低 token 消耗）
+			msgs := svc.ExportContactMessages(uname, 0, 0)
+			type sampledMsg struct {
+				Date    string `json:"date"`
+				Time    string `json:"time"`
+				Content string `json:"content"`
+				IsMine  bool   `json:"is_mine"`
+			}
+			monthSamples := make(map[string][]sampledMsg)
+			for _, m := range msgs {
+				if m.Type != 1 || m.Content == "" { continue } // 只要文本
+				month := ""
+				if m.Date != "" { month = m.Date[:7] } else { continue }
+				if len(monthSamples[month]) >= 3 { continue }
+				content := m.Content
+				if len([]rune(content)) > 80 {
+					content = string([]rune(content)[:80]) + "…"
+				}
+				monthSamples[month] = append(monthSamples[month], sampledMsg{
+					Date: m.Date, Time: m.Time, Content: content, IsMine: m.IsMine,
+				})
+			}
+
+			// 4. 构造月度摘要
+			type monthSummary struct {
+				Month   string       `json:"month"`
+				Their   int          `json:"their"`
+				Mine    int          `json:"mine"`
+				Total   int          `json:"total"`
+				Samples []sampledMsg `json:"samples"`
+			}
+			var monthly []monthSummary
+			if detail != nil {
+				months := make(map[string]bool)
+				for m := range detail.TheirMonthlyTrend { months[m] = true }
+				for m := range detail.MyMonthlyTrend { months[m] = true }
+				for m := range months {
+					their := detail.TheirMonthlyTrend[m]
+					mine := detail.MyMonthlyTrend[m]
+					monthly = append(monthly, monthSummary{
+						Month: m, Their: their, Mine: mine, Total: their + mine,
+						Samples: monthSamples[m],
+					})
+				}
+				sort.Slice(monthly, func(i, j int) bool { return monthly[i].Month < monthly[j].Month })
+			}
+
+			// 5. 计算额外特征
+			displayName := stats.Remark
+			if displayName == "" { displayName = stats.Nickname }
+			if displayName == "" { displayName = stats.Username }
+			daysKnown := 0
+			if stats.FirstMessage != "" && stats.FirstMessage != "-" {
+				if t, err := time.Parse("2006-01-02", stats.FirstMessage); err == nil {
+					daysKnown = int(time.Since(t).Hours() / 24)
+				}
+			}
+			initiationPct := 0
+			if detail != nil && detail.TotalSessions > 0 {
+				initiationPct = int(detail.InitiationCnt * 100 / detail.TotalSessions)
+			}
+			lateNightPct := 0
+			if detail != nil && stats.TotalMessages > 0 {
+				lateNightPct = int(detail.LateNightCount * 100 / stats.TotalMessages)
+			}
+
+			// token 预估
+			tokenEstimate := len(monthly)*50 + 500 // 粗略估算
+
+			c.JSON(http.StatusOK, gin.H{
+				"display_name":    displayName,
+				"username":        uname,
+				"first_message":   stats.FirstMessage,
+				"last_message":    stats.LastMessage,
+				"first_msg":       stats.FirstMsg,
+				"days_known":      daysKnown,
+				"total_messages":  stats.TotalMessages,
+				"their_messages":  stats.TheirMessages,
+				"my_messages":     stats.MyMessages,
+				"their_chars":     stats.TheirChars,
+				"my_chars":        stats.MyChars,
+				"avg_msg_len":     stats.AvgMsgLen,
+				"peak_monthly":    stats.PeakMonthly,
+				"peak_period":     stats.PeakPeriod,
+				"recent_monthly":  stats.RecentMonthly,
+				"recall_count":    stats.RecallCount,
+				"money_count":     stats.MoneyCount,
+				"emoji_count":     stats.EmojiCnt,
+				"shared_groups":   stats.SharedGroupsCount,
+				"type_cnt":        stats.TypeCnt,
+				"initiation_pct":  initiationPct,
+				"late_night_pct":  lateNightPct,
+				"late_night_count": func() int64 { if detail != nil { return detail.LateNightCount }; return 0 }(),
+				"total_sessions":  func() int64 { if detail != nil { return detail.TotalSessions }; return 0 }(),
+				"hourly_dist":     func() [24]int { if detail != nil { return detail.HourlyDist }; return [24]int{} }(),
+				"monthly":         monthly,
+				"token_estimate":  tokenEstimate,
+			})
+		})
+
 		// 导出群聊全量聊天记录（最多 50000 条）
 		prot.GET("/groups/export", func(c *gin.Context) {
 			uname := c.Query("username")
@@ -2288,8 +2505,13 @@ func serverMain() {
 			c.Status(http.StatusBadRequest)
 			return
 		}
-		// Demo 模式：只允许白名单域名，防止 SSRF 探测内网
+		// Demo 模式：只允许白名单域名
 		if isDemoMode && !demoAvatarURLAllowed(rawURL) {
+			c.Status(http.StatusForbidden)
+			return
+		}
+		// 所有模式：阻止请求内网地址（防止 SSRF）
+		if isPrivateURL(rawURL) {
 			c.Status(http.StatusForbidden)
 			return
 		}
