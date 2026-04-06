@@ -17,13 +17,18 @@ const MAX_BUFFER = 100;
 
 // 敏感信息脱敏模式
 const SENSITIVE_PATTERNS = [
-  // API Key 格式：sk-xxx, eyJxxx（JWT），长度 > 20 的连续字母数字
-  /\b(sk-[a-zA-Z0-9]{20,})\b/g,
+  // API Key 格式：sk-xxx（OpenAI/Anthropic）、gsk_（Groq）等，长度 > 15
+  /\b(sk-[a-zA-Z0-9_-]{15,})\b/g,
+  /\b(sk-ant-[a-zA-Z0-9_-]{15,})\b/g,
+  /\b(gsk_[a-zA-Z0-9_-]{15,})\b/g,
+  // JWT token（eyJxxx）
   /\b(eyJ[a-zA-Z0-9._-]{20,})\b/g,
   // Bearer token
-  /Bearer\s+([a-zA-Z0-9._-]{20,})/gi,
+  /Bearer\s+([a-zA-Z0-9._-]{15,})/gi,
   // 常见 key 字段值
-  /("(?:api_key|apiKey|api-key|token|secret|password)":\s*")([^"]{8,})(")/gi,
+  /("(?:api_key|apiKey|api-key|token|secret|password|access_token|refresh_token)":\s*")([^"]{8,})(")/gi,
+  // 长连续密钥（40+ 字符的纯字母数字串，可能是 API key）
+  /\b([a-zA-Z0-9]{40,})\b/g,
 ];
 
 function redactSensitive(msg: string): string {

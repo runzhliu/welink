@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -21,7 +22,14 @@ import (
 
 // ── 1. 禁止写入 LLM 配置 ────────────────────────────────────────────────────
 
-// demoBlockLLMWrite 在 DEMO_MODE 下拒绝 PUT /preferences/llm 等配置写入。
+// DemoAIDisabled 返回 Demo 模式下是否禁用 AI 配置。
+// 通过环境变量 DEMO_DISABLE_AI=true 禁用（默认不禁用，即 AI 可用）。
+// 用于公有云部署时防止用户误配置 API Key。
+func DemoAIDisabled() bool {
+	return strings.EqualFold(os.Getenv("DEMO_DISABLE_AI"), "true")
+}
+
+// demoBlockLLMWrite 在 DEMO_MODE + DEMO_DISABLE_AI 下拒绝 AI 配置写入。
 func demoBlockLLMWrite(c *gin.Context) {
 	c.JSON(http.StatusForbidden, gin.H{"error": "Demo 模式下不允许修改 AI 配置"})
 	c.Abort()
@@ -60,7 +68,38 @@ func demoAvatarURLAllowed(rawURL string) bool {
 	return false
 }
 
-// ── 3. 全局限速（令牌桶，按 IP） ────────────────────────────────────────────
+// ── 3. SSRF 防护：阻止请求内网地址 ────────────────────────────────────────────
+
+// isPrivateURL 检查 URL 是否指向私有/内网地址。
+func isPrivateURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return true // 解析失败视为不安全
+	}
+	host := u.Hostname()
+	// 阻止常见内网地址
+	if host == "localhost" || host == "127.0.0.1" || host == "0.0.0.0" || host == "::1" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false // 域名，允许
+	}
+	// RFC 1918 + 链路本地 + 环回
+	privateRanges := []string{
+		"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+		"169.254.0.0/16", "127.0.0.0/8", "::1/128", "fc00::/7",
+	}
+	for _, cidr := range privateRanges {
+		_, network, _ := net.ParseCIDR(cidr)
+		if network != nil && network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// ── 4. 全局限速（令牌桶，按 IP） ────────────────────────────────────────────
 
 const (
 	rateLimitPerSec = 20   // 每秒允许的最大请求数

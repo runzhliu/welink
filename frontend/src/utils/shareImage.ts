@@ -593,7 +593,13 @@ export async function generateShareImage(options: ShareImageOptions): Promise<st
     const metaDiv = document.createElement('div');
     metaDiv.style.cssText = 'text-align:right;font-size:10px;color:#bbb;margin-top:10px;padding-top:8px;border-top:1px solid #f0f0f0;font-family:' + FONT;
     if (timeStr) {
-      metaDiv.innerHTML = `<div style="margin-bottom:3px;">${perfParts.join('  ·  ')}</div><div>${timeStr}</div>`;
+      const line1 = document.createElement('div');
+      line1.style.marginBottom = '3px';
+      line1.textContent = perfParts.join('  ·  ');
+      const line2 = document.createElement('div');
+      line2.textContent = timeStr;
+      metaDiv.appendChild(line1);
+      metaDiv.appendChild(line2);
     } else {
       metaDiv.textContent = perfParts.join('  ·  ');
     }
