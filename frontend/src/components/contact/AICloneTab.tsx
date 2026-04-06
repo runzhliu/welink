@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, Sparkles, RotateCcw, Users, Brain, BarChart3, MessageSquare, CheckCircle2, Share2, Check } from 'lucide-react';
+import { Send, Loader2, Sparkles, RotateCcw, Users, Brain, BarChart3, MessageSquare, CheckCircle2, Share2, Check, Play, Square } from 'lucide-react';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { avatarSrc } from '../../utils/avatar';
 import { contactsApi } from '../../services/api';
@@ -68,6 +68,13 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
   const [profileId, setProfileId] = useState('');
   const [sharing, setSharing] = useState(false);
   const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // 对话续写
+  const [continueMode, setContinueMode] = useState(false);
+  const [continueLoading, setContinueLoading] = useState(false);
+  const [continueTopic, setContinueTopic] = useState('');
+  const [continueRounds, setContinueRounds] = useState(10);
+  const [continueMessages, setContinueMessages] = useState<{ speaker: string; content: string }[]>([]);
+  const continueAbortRef = useRef<AbortController | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -243,6 +250,74 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
   };
 
   // 对话
+  // 对话续写
+  const handleContinue = useCallback(async () => {
+    if (continueLoading || !sessionId) return;
+    setContinueLoading(true);
+    setContinueMessages([]);
+    continueAbortRef.current = new AbortController();
+
+    try {
+      const resp = await fetch('/api/ai/clone/continue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          profile_id: profileId,
+          rounds: continueRounds,
+          topic: continueTopic.trim(),
+          my_name: '我',
+        }),
+        signal: continueAbortRef.current.signal,
+      });
+
+      const reader = resp.body?.getReader();
+      if (!reader) throw new Error('无法读取');
+      const decoder = new TextDecoder();
+      let buf = '';
+      let full = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const chunk = JSON.parse(line.slice(6)) as { delta?: string; thinking?: string; done?: boolean };
+            if (chunk.delta) {
+              full += chunk.delta;
+              // 实时解析已有的完整行
+              const parsed: { speaker: string; content: string }[] = [];
+              for (const l of full.split('\n')) {
+                const m = l.match(/^(我|TA)：(.+)$/);
+                if (m) parsed.push({ speaker: m[1], content: m[2] });
+              }
+              if (parsed.length > 0) setContinueMessages(parsed);
+              scrollToBottom();
+            }
+          } catch {}
+        }
+      }
+      // 最终解析
+      const finalParsed: { speaker: string; content: string }[] = [];
+      for (const l of full.split('\n')) {
+        const m = l.match(/^(我|TA)：(.+)$/);
+        if (m) finalParsed.push({ speaker: m[1], content: m[2] });
+      }
+      if (finalParsed.length > 0) setContinueMessages(finalParsed);
+    } catch (e: unknown) {
+      if ((e as Error).name !== 'AbortError') {
+        console.error('Continue failed', e);
+      }
+    } finally {
+      setContinueLoading(false);
+      continueAbortRef.current = null;
+    }
+  }, [continueLoading, sessionId, profileId, continueRounds, continueTopic, scrollToBottom]);
+
   const handleSend = async () => {
     const text = input.trim();
     if (!text || loading) return;
@@ -655,8 +730,77 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
 
       {error && <div className="text-xs text-red-500 mt-2 text-center">{error}</div>}
 
+      {/* 对话续写模式 */}
+      {continueMode && (
+        <div className="mt-3 pt-3 border-t border-gray-100 dk-border space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#576b95]">对话续写 — AI 模拟你们继续聊天</span>
+            <button onClick={() => { setContinueMode(false); setContinueMessages([]); }} className="text-xs text-gray-400 hover:text-red-400">关闭</button>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={continueTopic}
+              onChange={e => setContinueTopic(e.target.value)}
+              placeholder="起始话题（选填，如：聊聊最近的工作）"
+              className="flex-1 px-3 py-1.5 text-xs bg-gray-50 dark:bg-white/5 rounded-xl outline-none focus:ring-1 focus:ring-[#576b95]/30 dk-text placeholder:text-gray-300"
+            />
+            <select value={continueRounds} onChange={e => setContinueRounds(Number(e.target.value))}
+              className="text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 dk-input">
+              {[5, 10, 15, 20].map(n => <option key={n} value={n}>{n} 轮</option>)}
+            </select>
+            {continueLoading ? (
+              <button onClick={() => continueAbortRef.current?.abort()}
+                className="px-3 py-1.5 bg-red-500 text-white rounded-xl text-xs font-bold">
+                <Square size={12} />
+              </button>
+            ) : (
+              <button onClick={handleContinue}
+                className="px-3 py-1.5 bg-[#576b95] text-white rounded-xl text-xs font-bold hover:bg-[#4a5d82] transition-colors flex items-center gap-1">
+                <Play size={12} /> 开始
+              </button>
+            )}
+          </div>
+          {/* 续写结果 */}
+          {(continueMessages.length > 0 || continueLoading) && (
+            <div className="space-y-2 max-h-[40vh] overflow-y-auto bg-[#f0f0f0] dark:bg-gray-900/50 rounded-2xl p-3">
+              {continueMessages.map((m, i) => (
+                <div key={i} className={`flex gap-2 ${m.speaker === '我' ? 'flex-row-reverse' : ''}`}>
+                  <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold ${
+                    m.speaker === '我' ? 'bg-[#07c160]' : 'bg-gradient-to-br from-purple-500 to-pink-500'
+                  }`}>
+                    {m.speaker === '我' ? '我' : displayName[0]}
+                  </div>
+                  <div className={`max-w-[70%] px-3 py-2 rounded-2xl text-sm ${
+                    m.speaker === '我'
+                      ? 'bg-[#07c160] text-white rounded-br-sm'
+                      : 'bg-white dark:bg-gray-800 text-[#1d1d1f] dark:text-gray-100 rounded-bl-sm shadow-sm'
+                  }`}>
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+              {continueLoading && continueMessages.length === 0 && (
+                <div className="flex items-center gap-2 text-gray-400 text-xs py-2">
+                  <Loader2 size={14} className="animate-spin" /> 正在续写...
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Input */}
       <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100 dk-border">
+        <button
+          onClick={() => setContinueMode(v => !v)}
+          className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-2xl transition-all ${
+            continueMode ? 'bg-[#576b95] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-400 hover:text-[#576b95] hover:bg-gray-200'
+          }`}
+          title="对话续写 — AI 模拟你们继续聊天"
+        >
+          <Play size={16} />
+        </button>
         <input
           ref={inputRef}
           value={input}

@@ -88,6 +88,9 @@ type Preferences struct {
 	// 自定义纪念日
 	CustomAnniversaries []CustomAnniversary `json:"custom_anniversaries,omitempty"`
 
+	// 自定义 Prompt 模板（key → prompt 文本，为空则用默认值）
+	PromptTemplates map[string]string `json:"prompt_templates,omitempty"`
+
 	// Gemini OAuth（可选，与 API Key 二选一）
 	GeminiClientID     string `json:"gemini_client_id,omitempty"`
 	GeminiClientSecret string `json:"gemini_client_secret,omitempty"`

@@ -18,8 +18,6 @@
 - [数据流与隐私边界](#数据流与隐私边界)
 - [分析历史持久化](#分析历史持久化)
 - [API 端点汇总](#api-端点汇总)
-
-
 ## AI 分析概览
 
 WeLink 提供两种 AI 分析模式，适用于不同规模的聊天记录和不同的问题类型：
@@ -34,29 +32,67 @@ WeLink 提供两种 AI 分析模式，适用于不同规模的聊天记录和不
 | 结果可溯源性 | 不显式标注来源 | 展示命中消息片段（含 `is_hit` 标记）和提炼事实 |
 
 两种模式均通过 SSE（Server-Sent Events）流式返回 LLM 的增量响应，前端实时渲染。
+## 自定义 Prompt 模板
 
+WeLink 所有 AI 功能的系统提示词（System Prompt）完全透明，用户可以查看和自定义。
 
+### 查看 Prompt
+
+每个 AI 功能旁边都有 **「查看 Prompt」** 按钮，点击展示当前使用的完整 System Prompt，变量已替换为实际值。
+
+### 编辑 Prompt
+
+在 **设置 → Prompt 模板** 中，可以编辑以下功能的 Prompt：
+
+| 模板 ID | 功能 | 说明 |
+|---------|------|------|
+| `insight_report` | 关系报告 | 分析关系发展阶段、沟通特点 |
+| `insight_profile` | 风格画像 | 提炼性格标签、口头禅、聊天习惯 |
+| `insight_diary` | AI 日记 | 根据当天记录写第一人称日记 |
+| `cross_qa_intent` | 跨联系人问答 · 意图解析 | 解析用户问题为结构化 JSON |
+| `cross_qa_answer` | 跨联系人问答 · 汇总回答 | 基于搜索结果生成回答 |
+| `group_sim` | AI 群聊模拟 | 模拟群友风格继续聊天 |
+| `clone_continue` | AI 对话续写 | 模拟双方继续聊天 |
+
+### 变量
+
+Prompt 中可以使用以下变量，运行时自动替换：
+
+| 变量 | 说明 |
+|------|------|
+| `{{name}}` | 联系人显示名 |
+| `{{today}}` | 当天日期（YYYY-MM-DD） |
+| `{{rounds}}` | 对话续写/群聊模拟轮数 |
+| `{{my_name}}` | 用户自己的称呼 |
+
+### 恢复默认
+
+编辑页面清空文本框并保存，即恢复为内置默认 Prompt。已自定义的模板会标记紫色「已自定义」标签。
+
+自定义 Prompt 存储在 `preferences.json` 的 `prompt_templates` 字段中。
 ## LLM 配置
 
 ### 支持的 Provider
 
-| Provider | 说明 | 默认 Base URL | 默认模型 |
-|----------|------|---------------|---------|
-| `deepseek` | DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
-| `kimi` | 月之暗面 Kimi（超长上下文） | `https://api.moonshot.cn/v1` | `kimi-k2.5` |
-| `gemini` | Google Gemini（支持 API Key 或 OAuth） | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash` |
-| `glm` | 智谱 AI（GLM，OpenAI 兼容） | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash` |
-| `grok` | xAI Grok | `https://api.x.ai/v1` | `grok-3-mini` |
-| `minimax` | MiniMax（国际版） | `https://api.minimax.io/v1` | `MiniMax-Text-01` |
-| `minimax-cn` | MiniMax（国内版） | `https://api.minimaxi.com/v1` | `MiniMax-Text-01` |
-| `openai` | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
-| `claude` | Anthropic Claude（原生 API） | `https://api.anthropic.com` | `claude-haiku-4-5-20251001` |
-| `ollama` | 本地 Ollama（无需 API Key） | `http://localhost:11434/v1` | `llama3` |
-| `custom` | 自定义 OpenAI 兼容接口 | 用户指定 | 用户指定 |
+| Provider | 说明 | 默认模型 |
+|----------|------|---------|
+| `deepseek` | DeepSeek | `deepseek-chat` |
+| `kimi` | Kimi（月之暗面） | `kimi-k2.5` |
+| `gemini` | Google Gemini | `gemini-2.0-flash` |
+| `glm` | 智谱 AI | `glm-4-flash` |
+| `grok` | xAI Grok | `grok-3-mini` |
+| `minimax` | MiniMax 国际版 | `MiniMax-Text-01` |
+| `minimax-cn` | MiniMax 国内版 | `MiniMax-Text-01` |
+| `openai` | OpenAI | `gpt-4o-mini` |
+| `claude` | Anthropic Claude | `claude-haiku-4-5-20251001` |
+| `ollama` | 本地 Ollama | `llama3` |
+| `custom` | 自定义 | 用户指定 |
 
-> GLM（智谱 AI）使用 OpenAI 兼容接口，无需特殊适配，直接填写 API Key 即可。
-> Claude 使用原生 Anthropic API，鉴权方式为 `x-api-key` 请求头，与其他 provider 的 `Authorization: Bearer` 不同。
-> Ollama 本地模式无需 API Key。
+::: tip 说明
+- Base URL 留空自动使用各 Provider 的默认地址，无需手动填写
+- Claude 使用原生 API（`x-api-key` 鉴权），其他 Provider 均为 OpenAI 兼容格式
+- Ollama 本地模式无需 API Key
+:::
 
 ### 配置存储
 
@@ -125,8 +161,6 @@ WeLink 提供两种 AI 分析模式，适用于不同规模的聊天记录和不
 ```json
 { "ok": true, "provider": "ollama", "model": "qwen2.5:7b" }
 ```
-
-
 ## Embedding 配置
 
 语义向量索引和记忆提炼依赖 Embedding 模型将文本转换为向量。WeLink 支持本地和云端两种方案。
@@ -184,8 +218,6 @@ Embedding 配置与 LLM 配置共同持久化在 `preferences.json` 中：
 ```
 
 > 三个配置区块均有「测试连接」按钮，点击后先保存当前填写的配置，再发一次测试请求，成功时显示实际生效的 provider 和 model 名称。
-
-
 ## Gemini OAuth 2.0 授权
 
 Gemini provider 支持两种鉴权方式，二选一：
@@ -241,8 +273,6 @@ Gemini provider 支持两种鉴权方式，二选一：
 ```json
 { "ok": true }
 ```
-
-
 ## 全量分析模式
 
 ### 工作流程
@@ -355,8 +385,6 @@ data: {"done":true}
 ```json
 { "content": "摘要文本..." }
 ```
-
-
 ## 混合检索模式（RAG）
 
 混合检索模式由三层索引构成，相互补充，显著提升对自然语言问题的理解和回答准确度：
@@ -380,8 +408,6 @@ data: {"done":true}
 ```
 
 示例：`contact:wxid_abc123`、`group:12345678@chatroom`
-
-
 ### 关键词索引（FTS5）
 
 基于 SQLite FTS5 的全文检索，适合精确关键词匹配。
@@ -431,8 +457,6 @@ data: {"step":"done","total":12500,"done":true}
 | `情感升温降温的转折点` | `"情感升温 OR 降温 OR 转折点"` |
 
 命中后扩展 ±5 条上下文窗口，相邻区间自动合并。
-
-
 ### 语义向量索引
 
 基于 Embedding 模型的余弦相似度检索，弥补关键词检索的语义盲区（如"爱好"↔"喜欢"、"工作"↔"职业"）。
@@ -493,8 +517,6 @@ CREATE TABLE IF NOT EXISTS vec_messages (
 - 每条消息向量化前截断至 400 个 Unicode 字符，避免超出 Embedding 模型上下文长度
 - 大群聊分块加载（5000 条/批），峰值内存 ≤ 30 MB（1536 维）或 ≤ 15 MB（768 维）
 - 检索时取 top-20，再扩展 ±3 条上下文窗口
-
-
 ### 记忆事实提炼（mem0 风格）
 
 > **无需安装任何额外服务。** 这是 WeLink 内置的功能，参考 [mem0](https://github.com/mem0ai/mem0) 的思路自行实现，数据存在本地 SQLite 中。
@@ -627,8 +649,6 @@ CREATE TABLE IF NOT EXISTS mem_facts (
 [2024-03-01] 对方：周末去爬香山了，累死了
 ...
 ```
-
-
 ### 混合检索流程
 
 **`POST /api/ai/rag`** — 混合检索并流式回答（SSE）
@@ -682,8 +702,6 @@ data: {"done":true}
 | `is_hit` | `true` = 直接命中；`false` = 上下文窗口扩展补入 |
 
 > 若所有索引均无匹配内容，接口返回提示文本后结束流，建议切换全量分析模式。
-
-
 ### 完整 Prompt 结构（示例）
 
 以用户问「我和他关系怎么样？」、已提炼 38 条事实、检索到 52 条相关片段为例，后端构建的完整 LLM 请求如下。
@@ -709,9 +727,9 @@ LLM 返回示例：`关系 感情 交流 熟悉 互动 沟通`
 System: 你是一个聊天记录分析助手。以下是从聊天记录中混合检索（语义向量 + 关键词）到
         的相关片段（命中 8 条，含上下文共 52 条）：
 
-        [2024-03-01 10:23] 刘洪添：最近怎么样
+        [2024-03-01 10:23] 厄德高：最近怎么样
         [2024-03-01 10:25] 我：还行，你呢
-        [2024-03-01 10:26] 刘洪添：最近有点忙，北京这边项目压力大
+        [2024-03-01 10:26] 厄德高：最近有点忙，北京这边项目压力大
         ……（约 50 条检索片段，非全量聊天记录）
 
         【关于对方的已知事实（由 AI 从历史聊天中提炼）】
@@ -730,8 +748,6 @@ User:   我和他关系怎么样？
 > - 发给 LLM 的聊天片段来自双路检索（向量 + 关键词），**不是全量聊天记录**，通常只有几十条。
 > - 记忆事实部分最多注入 top-10 条（按语义相关性从已提炼事实中选取），**不是全部事实**。
 > - 多轮对话时，历史问答也会追加在 User/Assistant 位置之后，模型具备上下文感知。
-
-
 ## 数据流与隐私边界
 
 ### 混合检索模式下的两次 LLM 调用
@@ -775,8 +791,6 @@ mem_llm_base_url / mem_llm_model 均留空？
 > **结论**：若对隐私有顾虑，最关键的两个设置是：
 > 1. 「记忆提炼模型」配置为本地 Ollama，防止全量聊天外发。
 > 2. 日常 Q&A 优先使用「混合检索」而非「全量分析」，LLM 只看到片段。
-
-
 ## 分析历史持久化
 
 ### 存储机制
@@ -843,8 +857,6 @@ CREATE TABLE IF NOT EXISTS ai_conversations (
 ```json
 { "ok": true }
 ```
-
-
 ## API 端点汇总
 
 | 方法 | 路径 | 说明 | 响应类型 |
