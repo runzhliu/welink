@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Users, MessageSquare, MessageCircle, Clock, ChevronRight, ChevronUp, ChevronDown, Loader2, X, BarChart2, EyeOff, Search, Download, Bot, TrendingUp, Flame, Calendar, Crown } from 'lucide-react';
+import { Users, MessageSquare, MessageCircle, Clock, ChevronRight, ChevronUp, ChevronDown, Loader2, X, BarChart2, EyeOff, Search, Download, Bot, TrendingUp, Flame, Calendar, Crown, Maximize2, Minimize2 } from 'lucide-react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { GroupInfo, GroupDetail, ContactStats, GroupChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
@@ -62,6 +62,8 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
     ) ?? null;
   };
   const [tab, setTab] = useState<'portrait' | 'search' | 'ai' | 'relationships' | 'sim'>('portrait');
+  const [fullscreen, setFullscreen] = useState(false);
+  const [memberSort, setMemberSort] = useState<'count' | 'last' | 'name'>('count');
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [dayPanel, setDayPanel] = useState<{ date: string; count: number } | null>(null);
@@ -201,6 +203,17 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
     value: detail?.weekly_dist[i] ?? 0,
   }));
 
+  const sortedMembers = useMemo(() => {
+    if (!detail?.member_rank) return [];
+    const list = [...detail.member_rank];
+    switch (memberSort) {
+      case 'count': list.sort((a, b) => b.count - a.count); break;
+      case 'last': list.sort((a, b) => (a.last_message_time ?? '').localeCompare(b.last_message_time ?? '')); break;
+      case 'name': list.sort((a, b) => a.speaker.localeCompare(b.speaker, 'zh')); break;
+    }
+    return list;
+  }, [detail?.member_rank, memberSort]);
+
   const maxMember = detail?.member_rank?.[0]?.count ?? 1;
 
   const peakDay = useMemo(() => {
@@ -212,14 +225,20 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
 
   return (
     <div
-      className="fixed inset-0 bg-[#1d1d1f]/90 backdrop-blur-md z-50 flex items-end sm:items-center justify-center sm:p-8 animate-in fade-in duration-200"
-      onClick={onClose}
+      className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-in fade-in duration-200 ${
+        fullscreen ? 'bg-white dark:bg-[var(--bg-page)]' : 'bg-[#1d1d1f]/90 backdrop-blur-md sm:p-8'
+      }`}
+      onClick={fullscreen ? undefined : onClose}
     >
       <div
-        className="dk-card bg-white rounded-t-[20px] sm:rounded-[20px] w-full sm:max-w-5xl overflow-hidden max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] shadow-2xl relative animate-in slide-in-from-bottom sm:zoom-in duration-300"
+        className={`dk-card bg-white overflow-hidden shadow-2xl relative transition-all duration-300 ${
+          fullscreen
+            ? 'w-full h-full rounded-none'
+            : 'rounded-t-[32px] sm:rounded-[48px] w-full sm:max-w-5xl max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
-      <div className="overflow-y-auto max-h-[calc(100dvh-5rem)] sm:max-h-[92vh]">
+      <div className={`overflow-y-auto ${fullscreen ? 'h-full' : 'max-h-[calc(100dvh-5rem)] sm:max-h-[92vh]'}`}>
         {/* 固定顶部区域（不随内容滚动的视觉效果，通过 sticky 实现） */}
         <div className="sticky top-0 z-10 bg-white dark:bg-[var(--bg-card)] px-4 sm:px-8 lg:px-10 pt-4 sm:pt-6">
         <div className="absolute top-4 right-4 sm:top-6 sm:right-8 flex items-center gap-2">
@@ -268,6 +287,13 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
               </div>
             )}
           </div>
+          <button
+            onClick={() => setFullscreen(v => !v)}
+            className="p-2 rounded-xl text-gray-300 hover:text-[#07c160] hover:bg-[#e7f8f0] dark:hover:bg-[#07c160]/15 transition-colors duration-200"
+            title={fullscreen ? '退出全屏' : '全屏'}
+          >
+            {fullscreen ? <Minimize2 size={20} strokeWidth={2} /> : <Maximize2 size={20} strokeWidth={2} />}
+          </button>
           {onBlock && (
             <button
               onClick={() => { onBlock(group.username); onClose(); }}
@@ -447,11 +473,32 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                     <span className="text-[10px] text-gray-400">/ {detail.member_rank.length} 人</span>
                   </div>
                 </div>
-                <p className="text-xs text-gray-400 mb-4">
-                  按总消息条数排序 · 拖动名字列右侧边缘可调整列宽
-                </p>
+                {/* 快捷选项 + 排序 */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-1">
+                    {[3, 10, 50, detail.member_rank.length].map(n => (
+                      <button key={n} onClick={() => { setRankLimit(n); localStorage.setItem(MEMBER_RANK_LIMIT_KEY, String(n)); }}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                          rankLimit === n ? 'bg-[#07c160] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-400 hover:bg-gray-200'
+                        }`}>
+                        {n === detail.member_rank.length ? '全部' : `Top ${n}`}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                    <span>排序:</span>
+                    {([['count', '消息数'], ['last', '最后发言'], ['name', '名字']] as const).map(([key, label]) => (
+                      <button key={key} onClick={() => setMemberSort(key)}
+                        className={`px-1.5 py-0.5 rounded transition-all ${
+                          memberSort === key ? 'bg-[#07c160] text-white font-bold' : 'hover:bg-gray-100'
+                        }`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  {detail.member_rank.slice(0, rankLimit).map((m, i) => {
+                  {sortedMembers.slice(0, rankLimit).map((m, i) => {
                     const contact = findContact(m.speaker);
                     return (
                     <div key={m.speaker} className="flex items-center gap-3">
@@ -488,6 +535,16 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                       <span className="text-xs text-gray-400 w-12 text-right flex-shrink-0">
                         {m.count.toLocaleString()}
                       </span>
+                      {m.last_message_time && (
+                        <span className={`text-[10px] w-20 text-right flex-shrink-0 ${
+                          (() => {
+                            const days = Math.floor((Date.now() - new Date(m.last_message_time).getTime()) / 86400000);
+                            return days > 180 ? 'text-red-400 font-bold' : days > 30 ? 'text-orange-400' : 'text-gray-300';
+                          })()
+                        }`}>
+                          {m.last_message_time.slice(5)}
+                        </span>
+                      )}
                     </div>
                     );
                   })}

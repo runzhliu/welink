@@ -1385,8 +1385,9 @@ type GroupInfo struct {
 }
 
 type MemberStat struct {
-	Speaker string `json:"speaker"`
-	Count   int64  `json:"count"`
+	Speaker        string `json:"speaker"`
+	Count          int64  `json:"count"`
+	LastMessageTime string `json:"last_message_time,omitempty"` // "2024-03-15"
 }
 
 type GroupDetail struct {
@@ -1561,6 +1562,7 @@ func (s *ContactService) computeGroupDetail(username string) {
 	tableName := db.GetTableName(username)
 	detail := &GroupDetail{DailyHeatmap: make(map[string]int), TypeDist: make(map[string]int), MemberRank: []MemberStat{}, TopWords: []WordCount{}}
 	memberMap := make(map[string]int64)
+	memberLastTs := make(map[string]int64) // speaker → 最后发言 Unix 时间戳
 	wordCounts := make(map[string]int)
 
 	nameMap := s.loadContactNameMap()
@@ -1599,6 +1601,7 @@ func (s *ContactService) computeGroupDetail(username string) {
 				speaker := wxid
 				if name, ok2 := nameMap[wxid]; ok2 { speaker = name }
 				memberMap[speaker]++
+				if ts > memberLastTs[speaker] { memberLastTs[speaker] = ts }
 			}
 		}
 		rows.Close()
@@ -1647,9 +1650,13 @@ func (s *ContactService) computeGroupDetail(username string) {
 	}
 	s.segmenterMu.Unlock()
 
-	// 成员排行 top 500
+	// 成员排行 top 500（含最后发言时间）
 	for speaker, cnt := range memberMap {
-		detail.MemberRank = append(detail.MemberRank, MemberStat{Speaker: speaker, Count: cnt})
+		lastTime := ""
+		if ts, ok := memberLastTs[speaker]; ok && ts > 0 {
+			lastTime = time.Unix(ts, 0).In(s.tz).Format("2006-01-02")
+		}
+		detail.MemberRank = append(detail.MemberRank, MemberStat{Speaker: speaker, Count: cnt, LastMessageTime: lastTime})
 	}
 	sort.Slice(detail.MemberRank, func(i, j int) bool { return detail.MemberRank[i].Count > detail.MemberRank[j].Count })
 	if len(detail.MemberRank) > 500 { detail.MemberRank = detail.MemberRank[:500] }
