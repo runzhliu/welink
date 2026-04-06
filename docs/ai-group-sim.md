@@ -78,11 +78,11 @@ WeLink 从历史消息中提取每个成员的**量化风格特征**：
 [规则] 区分成员风格、承接上文、回应用户消息、避免重复
 
 [成员画像]
-## 张三（发言占比 35%）
+## Saka（发言占比 35%）
 性格特征：话多、爱用表情、语气强烈
 说话样本：「xxx」「yyy」...
 
-## 李四（发言占比 20%）
+## Ødegaard（发言占比 20%）
 性格特征：惜字如金、很少用表情
 说话样本：「xxx」...
 
@@ -112,12 +112,12 @@ WeLink 从历史消息中提取每个成员的**量化风格特征**：
   "profile_id": "profile-uuid",
   "user_message": "可选，用户加入群聊的消息",
   "history": [
-    { "speaker": "张三", "content": "之前模拟的消息" }
+    { "speaker": "Saka", "content": "之前模拟的消息" }
   ],
   "rounds": 10,
   "topic": "可选，话题/场景设定，如：讨论周末去哪吃饭",
   "mood": "可选，聊天氛围：casual / heated / latenight / funny / serious",
-  "members": ["张三", "李四", "王五"]
+  "members": ["Saka", "Ødegaard", "Saliba"]
 }
 ```
 
@@ -138,7 +138,7 @@ WeLink 从历史消息中提取每个成员的**量化风格特征**：
 每条 `data:` 为一个 JSON 对象：
 
 ```json
-{"speaker": "张三", "content": "模拟的消息内容"}
+{"speaker": "Saka", "content": "模拟的消息内容"}
 ```
 
 最后一条：

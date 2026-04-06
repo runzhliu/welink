@@ -237,6 +237,20 @@
 }
 ```
 
+### `POST /api/ai/clone/continue`
+
+AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
+
+```json
+{
+  "session_id": "uuid",
+  "profile_id": "uuid",
+  "rounds": 10,
+  "topic": "可选，起始话题",
+  "my_name": "我"
+}
+```
+
 
 ## AI 群聊模拟
 
@@ -252,11 +266,11 @@
   "message_count": 1000,
   "profile_id": "uuid",
   "user_message": "可选，用户的消息",
-  "history": [{ "speaker": "张三", "content": "之前的消息" }],
+  "history": [{ "speaker": "Saka", "content": "之前的消息" }],
   "rounds": 10,
   "topic": "可选，话题设定",
   "mood": "casual | heated | latenight | funny | serious",
-  "members": ["张三", "李四"]
+  "members": ["Saka", "Ødegaard"]
 }
 ```
 

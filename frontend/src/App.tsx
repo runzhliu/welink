@@ -3,7 +3,7 @@
  * 重构版本 - 组件化 + 微信风格设计
  */
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { PrivacyModeContext } from './contexts/PrivacyModeContext';
 
 // Layout Components
@@ -50,13 +50,23 @@ const ALL_TIME: TimeRange = { from: null, to: null, label: '全部' };
 function App() {
   const { dark, toggle: toggleDark } = useDarkMode();
 
-  // State — 从 URL hash 恢复当前 tab，支持刷新保持、前进后退、分享链接
+  // State — 从 URL hash 恢复当前 tab + 联系人/群聊弹窗
+  // hash 格式：#/stats  #/stats/contact/wxid_abc  #/groups/group/xxx@chatroom
   const VALID_TABS: TabType[] = ['dashboard', 'stats', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'settings'];
-  const tabFromHash = (): TabType => {
-    const hash = window.location.hash.replace('#/', '').replace('#', '');
-    return VALID_TABS.includes(hash as TabType) ? hash as TabType : 'dashboard';
+
+  const parseHash = (): { tab: TabType; contactId?: string; groupId?: string } => {
+    const raw = window.location.hash.replace('#/', '').replace('#', '');
+    const parts = raw.split('/');
+    const tab = VALID_TABS.includes(parts[0] as TabType) ? parts[0] as TabType : 'dashboard';
+    let contactId: string | undefined;
+    let groupId: string | undefined;
+    if (parts[1] === 'contact' && parts[2]) contactId = decodeURIComponent(parts[2]);
+    if (parts[1] === 'group' && parts[2]) groupId = decodeURIComponent(parts[2]);
+    return { tab, contactId, groupId };
   };
-  const [activeTab, setActiveTabRaw] = useState<TabType>(tabFromHash);
+
+  const [activeTab, setActiveTabRaw] = useState<TabType>(() => parseHash().tab);
+
   const setActiveTab = useCallback((tab: TabType) => {
     setActiveTabRaw(tab);
     window.history.pushState(null, '', `#/${tab}`);
@@ -64,13 +74,37 @@ function App() {
 
   // 监听浏览器前进/后退
   useEffect(() => {
-    const onPop = () => setActiveTabRaw(tabFromHash());
+    const onPop = () => {
+      const { tab } = parseHash();
+      setActiveTabRaw(tab);
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
   const [search, setSearch] = useState('');
-  const [selectedContact, setSelectedContact] = useState<ContactStats | null>(null);
-  const [selectedGroup, setSelectedGroup] = useState<GroupInfo | null>(null);
+  const [selectedContact, setSelectedContactRaw] = useState<ContactStats | null>(null);
+  const [selectedGroup, setSelectedGroupRaw] = useState<GroupInfo | null>(null);
+
+  // 打开联系人弹窗时写入 hash
+  const setSelectedContact = useCallback((contact: ContactStats | null) => {
+    setSelectedContactRaw(contact);
+    if (contact) {
+      window.history.pushState(null, '', `#/${activeTab}/contact/${encodeURIComponent(contact.username)}`);
+    } else {
+      window.history.pushState(null, '', `#/${activeTab}`);
+    }
+  }, [activeTab]);
+
+  // 打开群聊弹窗时写入 hash
+  const setSelectedGroup = useCallback((group: GroupInfo | null) => {
+    setSelectedGroupRaw(group);
+    if (group) {
+      window.history.pushState(null, '', `#/${activeTab}/group/${encodeURIComponent(group.username)}`);
+    } else {
+      window.history.pushState(null, '', `#/${activeTab}`);
+    }
+  }, [activeTab]);
   const [timeRange, setTimeRange] = useState<TimeRange>(() => {
     try {
       const saved = localStorage.getItem('welink_timeRange');
@@ -119,6 +153,30 @@ function App() {
       )
     );
   }, [allContacts, blockedUsers]);
+
+  // 从 URL hash 恢复联系人弹窗
+  const contactRestoredRef = useRef(false);
+  useEffect(() => {
+    if (contactRestoredRef.current || allContacts.length === 0) return;
+    const { contactId } = parseHash();
+    if (contactId) {
+      const c = allContacts.find(cc => cc.username === contactId);
+      if (c) setSelectedContactRaw(c);
+    }
+    contactRestoredRef.current = true;
+  }, [allContacts]);
+
+  // 从 URL hash 恢复群聊弹窗
+  const groupRestoredRef = useRef(false);
+  useEffect(() => {
+    if (groupRestoredRef.current || allGroups.length === 0) return;
+    const { groupId } = parseHash();
+    if (groupId) {
+      const g = allGroups.find(gg => gg.username === groupId);
+      if (g) setSelectedGroupRaw(g);
+    }
+    groupRestoredRef.current = true;
+  }, [allGroups]);
 
   // 被屏蔽联系人的显示名集合（用于过滤深夜排行，排行只有 name 无 username）
   const blockedDisplayNames = useMemo(() => {
