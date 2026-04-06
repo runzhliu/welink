@@ -3,7 +3,8 @@
  */
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Bot, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, Share2, Users, Plus, ChevronDown, ChevronRight, BrainCircuit } from 'lucide-react';
+import { Bot, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, Share2, Users, Plus, ChevronDown, ChevronRight, BrainCircuit, Globe } from 'lucide-react';
+import { CrossContactQA } from './CrossContactQA';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateShareImage } from '../../utils/shareImage';
@@ -407,6 +408,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   onGroupClick,
 }) => {
   const { privacyMode } = usePrivacyMode();
+  const [mode, setMode] = useState<'contact' | 'cross'>('contact');
   const [selectedItems, setSelectedItems] = useState<SelectableItem[]>([]);
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [input, setInput] = useState('');
@@ -873,6 +875,43 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         </div>
       </div>
 
+      {/* 模式切换 */}
+      <div className="flex items-center gap-2 mb-6">
+        <button
+          onClick={() => setMode('contact')}
+          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+            mode === 'contact' ? 'bg-[#07c160] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-500 hover:bg-gray-200'
+          }`}
+        >
+          联系人/群聊分析
+        </button>
+        <button
+          onClick={() => setMode('cross')}
+          className={`flex items-center gap-1 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+            mode === 'cross' ? 'bg-[#576b95] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-500 hover:bg-gray-200'
+          }`}
+        >
+          <Globe size={12} />
+          跨联系人问答
+        </button>
+      </div>
+
+      {mode === 'cross' ? (
+        <div className="w-full max-w-xl mx-auto" style={{ minHeight: 400 }}>
+          <CrossContactQA
+            onOpenSettings={onReselect}
+            onContactClick={uname => {
+              const c = contacts.find(cc => cc.username === uname);
+              if (c) onContactClick?.(c);
+            }}
+            onGroupClick={uname => {
+              const g = groups.find(gg => gg.username === uname);
+              if (g) onGroupClick?.(g);
+            }}
+          />
+        </div>
+      ) : (
+      <>
       {/* 输入卡片 */}
       {inputCard}
 
@@ -941,6 +980,8 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
             </p>
           )}
         </div>
+      )}
+      </>
       )}
     </div>
   );

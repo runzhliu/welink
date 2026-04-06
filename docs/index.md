@@ -27,6 +27,12 @@ features:
     details: AI 按群友的发言比例和说话风格模拟群聊对话，你也可以随时加入。支持自定义话题、氛围和参与成员。
     link: /ai-group-sim
     linkText: 了解更多
+  - icon: 🌐
+    title: 跨联系人 AI 问答
+    details: 不限于单个联系人——问「谁聊过旅行」「去年国庆和谁聊天了」，AI 自动搜索所有记录并汇总回答。Agent 模式，低 token 消耗。
+  - icon: 📝
+    title: AI 洞察（报告/画像/日记）
+    details: 一键生成关系发展报告、性格风格画像卡、任意一天的 AI 日记。基于统计摘要+采样，每次仅消耗约 5k token。
   - icon: 🤖
     title: AI 对话分析
     details: 针对任意联系人或群聊直接提问。「我们最常聊什么话题？」「这段关系经历了哪些阶段？」AI 读完聊天记录再回答，不是搜索框。

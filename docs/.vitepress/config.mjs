@@ -57,6 +57,7 @@ export default defineConfig({
         items: [
           { text: 'AI 分身（核心功能）', link: '/ai-clone' },
           { text: 'AI 群聊模拟', link: '/ai-group-sim' },
+          { text: '跨联系人 AI 问答', link: '/cross-contact-qa' },
           { text: 'AI 分析功能', link: '/ai-analysis' },
           { text: 'Ollama 本地 AI 配置', link: '/ollama-setup' },
           { text: 'MCP Server', link: '/mcp-server' },
