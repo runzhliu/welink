@@ -566,13 +566,17 @@ export async function generateShareImage(options: ShareImageOptions): Promise<st
     body.appendChild(qBox);
   }
 
-  // AI 回复（Markdown 渲染）
+  // AI 回复（Markdown 渲染，消毒后设置）
   const styleEl = document.createElement('style');
   styleEl.textContent = MARKDOWN_CSS;
   const answerDiv = document.createElement('div');
   answerDiv.className = 'sa';
   answerDiv.style.cssText = 'font-size:14px;color:#1d1d1f;line-height:1.7;';
-  answerDiv.innerHTML = answerHtml;
+  // 基础消毒：移除 script 标签和事件处理器属性
+  const sanitized = answerHtml
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
+  answerDiv.innerHTML = sanitized;
   body.appendChild(styleEl);
   body.appendChild(answerDiv);
 
