@@ -109,8 +109,10 @@ export const AnniversaryPage: React.FC<Props> = ({ contacts, onContactClick }) =
     );
   }
 
-  const detected = data?.detected || [];
-  const milestones = data?.milestones || [];
+  // 过滤掉被屏蔽的联系人（contacts 已经过屏蔽过滤）
+  const allowedUsernames = new Set(contacts.map(c => c.username));
+  const detected = (data?.detected || []).filter((e: { username: string }) => allowedUsernames.has(e.username));
+  const milestones = (data?.milestones || []).filter((m: { username: string }) => allowedUsernames.has(m.username));
 
   // 构建"即将到来"的合并时间线
   type UpcomingItem = { type: string; title: string; subtitle: string; daysUntil: number; avatar?: string; username?: string };
