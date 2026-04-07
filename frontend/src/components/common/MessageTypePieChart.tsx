@@ -47,17 +47,17 @@ export const MessageTypePieChart: React.FC<Props> = ({ typeData, totalMessages }
       <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase mb-1 tracking-wider">消息类型分布</h4>
       <p className="text-xs text-gray-400 mb-3">各类型消息占比</p>
       {/* 饼图居中 + 图例右侧 */}
-      <div className="flex items-center justify-center gap-6">
+      <div className="flex items-center justify-center gap-4">
         {/* 饼图 */}
-        <div className="flex-shrink-0" style={{ width: 140, height: 140 }}>
+        <div className="flex-shrink-0" style={{ width: 120, height: 120 }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={data}
                 cx="50%"
                 cy="50%"
-                innerRadius={36}
-                outerRadius={60}
+                innerRadius={30}
+                outerRadius={52}
                 dataKey="pct"
                 stroke="none"
               >
@@ -76,19 +76,18 @@ export const MessageTypePieChart: React.FC<Props> = ({ typeData, totalMessages }
           </ResponsiveContainer>
         </div>
         {/* 图例 */}
-        <div className="space-y-1.5">
+        <div className="flex-1 min-w-0 space-y-1">
           {data.map((entry) => (
-            <div key={entry.name} className="flex items-center gap-2">
+            <div key={entry.name} className="flex items-center gap-1.5 text-[11px]">
               <span
                 className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ background: TYPE_COLORS[entry.name] ?? '#d1d1d6' }}
               />
-              <span className="text-xs text-gray-600 dark:text-gray-300 font-semibold whitespace-nowrap">{entry.name}</span>
-              <span className="flex-1 border-b border-dotted border-gray-200 dark:border-gray-700 mx-1" />
+              <span className="text-gray-600 dark:text-gray-300 font-semibold truncate">{entry.name}</span>
               {entry.count > 0 && (
-                <span className="text-[10px] text-gray-400 whitespace-nowrap">{entry.count.toLocaleString()}</span>
+                <span className="text-gray-400 flex-shrink-0 ml-auto tabular-nums">{entry.count.toLocaleString()}</span>
               )}
-              <span className="text-xs font-black text-gray-700 dark:text-gray-200 w-7 text-right flex-shrink-0">{entry.pct}%</span>
+              <span className="font-black text-gray-700 dark:text-gray-200 flex-shrink-0 w-7 text-right tabular-nums">{entry.pct}%</span>
             </div>
           ))}
         </div>
