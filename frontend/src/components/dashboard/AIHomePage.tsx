@@ -415,6 +415,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   const [noSelectionHint, setNoSelectionHint] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [loading, setLoading] = useState(false);
+  const [homeMsgLimit, setHomeMsgLimit] = useState<number | null>(200); // null = 全部
   const [ctxLoading, setCtxLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -508,7 +509,8 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
     setInput('');
 
     // 加载所有选中对象的消息
-    const perItem = Math.max(50, Math.floor(200 / selectedItems.length));
+    const totalLimit = homeMsgLimit;
+    const perItem = totalLimit != null ? Math.max(50, Math.floor(totalLimit / selectedItems.length)) : undefined;
     const sections: string[] = [];
 
     try {
@@ -516,12 +518,12 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         const name = itemName(item);
         if (item.kind === 'contact') {
           const msgs: ChatMessage[] = await contactsApi.exportMessages(item.data.username) ?? [];
-          const recent = msgs.slice(-perItem);
+          const recent = perItem && msgs.length > perItem ? msgs.slice(-perItem) : msgs;
           const lines = recent.map(m => `[${m.date ?? ''} ${m.time}] ${m.is_mine ? '我' : name}：${m.content}`);
           sections.push(`=== 与「${name}」的聊天记录 ===\n${lines.map(l => maskPrivacy(l, name)).join('\n')}`);
         } else {
           const msgs: GroupChatMessage[] = await groupsApi.exportMessages(item.data.username) ?? [];
-          const recent = msgs.slice(-perItem);
+          const recent = perItem && msgs.length > perItem ? msgs.slice(-perItem) : msgs;
           const lines = recent.map(m => `[${m.date ?? ''} ${m.time}] ${m.speaker || '成员'}：${m.content}`);
           sections.push(`=== 「${name}」群聊记录 ===\n${lines.map(l => maskPrivacy(l)).join('\n')}`);
         }
@@ -748,8 +750,32 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
           )}
         </div>
       </div>
-      <p className="mt-2 text-center text-[10px] text-gray-300 font-medium">
-        优先使用最近 200 条聊天记录 · 手机号等敏感信息自动脱敏
+      {/* 消息条数选择 */}
+      <div className="mt-3 flex items-center justify-center gap-1.5 flex-wrap">
+        <span className="text-[10px] text-gray-300">消息量:</span>
+        {([100, 500, 1000] as const).map(n => (
+          <button key={n} onClick={() => setHomeMsgLimit(n)}
+            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+              homeMsgLimit === n ? 'bg-[#07c160] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-400 hover:bg-gray-200 dark:hover:bg-white/20'
+            }`}>
+            最近 {n} 条
+          </button>
+        ))}
+        <button onClick={() => setHomeMsgLimit(null)}
+          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+            homeMsgLimit === null ? 'bg-[#ff9500] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-400 hover:bg-gray-200 dark:hover:bg-white/20'
+          }`}>
+          全部
+        </button>
+      </div>
+      <p className="mt-1.5 text-center text-[10px] text-gray-300 font-medium">
+        {homeMsgLimit === null
+          ? '将使用时间范围内全部记录，消息量大时 token 消耗较高'
+          : `每个联系人/群取最近 ${homeMsgLimit} 条`}
+        {' · '}手机号等敏感信息自动脱敏
+        {homeMsgLimit === null && (
+          <span className="text-orange-400"> · 大量消息建议去联系人页面用混合检索分析</span>
+        )}
       </p>
     </div>
   );

@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"log"
+	"math"
 	"regexp"
 	"sort"
 	"strings"
@@ -64,6 +65,23 @@ type MoneyEvent struct {
 	Kind   string `json:"kind"`    // "红包" or "转账"
 }
 
+// ReplyRhythm 回复节奏统计
+type ReplyRhythm struct {
+	MyAvgSeconds    float64 `json:"my_avg_seconds"`    // 我的平均回复时间（秒）
+	TheirAvgSeconds float64 `json:"their_avg_seconds"` // 对方的平均回复时间（秒）
+	MyMedianSeconds float64 `json:"my_median_seconds"`
+	TheirMedianSeconds float64 `json:"their_median_seconds"`
+	MyQuickReplies  int     `json:"my_quick_replies"`  // 我 60 秒内回复次数
+	TheirQuickReplies int   `json:"their_quick_replies"`
+	MySlowReplies   int     `json:"my_slow_replies"`   // 我 1 小时以上回复次数
+	TheirSlowReplies int    `json:"their_slow_replies"`
+	MyTotalReplies  int     `json:"my_total_replies"`
+	TheirTotalReplies int   `json:"their_total_replies"`
+	// 按时段统计平均回复秒数（0-23h）
+	MyHourlyAvg     [24]float64 `json:"my_hourly_avg"`
+	TheirHourlyAvg  [24]float64 `json:"their_hourly_avg"`
+}
+
 type ContactDetail struct {
 	HourlyDist        [24]int        `json:"hourly_dist"`
 	WeeklyDist        [7]int         `json:"weekly_dist"`
@@ -77,6 +95,7 @@ type ContactDetail struct {
 	MoneyTimeline     []MoneyEvent   `json:"money_timeline"`      // 红包/转账时间线
 	InitiationCnt     int64          `json:"initiation_count"`    // 主动发起对话次数（间隔>6h）
 	TotalSessions     int64          `json:"total_sessions"`
+	ReplyRhythm       *ReplyRhythm   `json:"reply_rhythm,omitempty"`
 }
 
 type ContactStatsExtended struct {
@@ -697,6 +716,16 @@ func (s *ContactService) GetContactDetail(username string) *ContactDetail {
 	}
 
 	var prevTs int64
+	var prevIsMine bool
+	var prevMsgTs int64
+	var myReplyDelays []int64   // 我的回复间隔（秒）
+	var theirReplyDelays []int64 // 对方的回复间隔（秒）
+	type hourlyDelay struct {
+		total int64
+		count int
+	}
+	myHourly := [24]hourlyDelay{}
+	theirHourly := [24]hourlyDelay{}
 
 	timeWhere := s.timeWhere()
 	orderBy := " ORDER BY create_time ASC"
@@ -746,6 +775,22 @@ func (s *ContactService) GetContactDetail(username string) *ContactDetail {
 				})
 			}
 
+			// 回复节奏：发送方切换时记录回复间隔（限 6 小时内，排除新对话）
+			if prevMsgTs > 0 && prevIsMine != isMineMsg {
+				delay := ts - prevMsgTs
+				if delay > 0 && delay <= 21600 { // <= 6h 才算回复
+					if isMineMsg {
+						myReplyDelays = append(myReplyDelays, delay)
+						myHourly[h] = hourlyDelay{myHourly[h].total + delay, myHourly[h].count + 1}
+					} else {
+						theirReplyDelays = append(theirReplyDelays, delay)
+						theirHourly[h] = hourlyDelay{theirHourly[h].total + delay, theirHourly[h].count + 1}
+					}
+				}
+			}
+			prevMsgTs = ts
+			prevIsMine = isMineMsg
+
 			// 新对话段：与上条消息间隔 > session_gap_seconds
 			if prevTs == 0 || ts-prevTs > s.params.SessionGapSeconds {
 				detail.TotalSessions++
@@ -757,6 +802,45 @@ func (s *ContactService) GetContactDetail(username string) *ContactDetail {
 		}
 		rows.Close()
 	}
+	// 计算回复节奏统计
+	if len(myReplyDelays) > 0 || len(theirReplyDelays) > 0 {
+		rr := &ReplyRhythm{
+			MyTotalReplies:    len(myReplyDelays),
+			TheirTotalReplies: len(theirReplyDelays),
+		}
+		calcStats := func(delays []int64) (avg, median float64, quick, slow int) {
+			if len(delays) == 0 {
+				return
+			}
+			var sum int64
+			for _, d := range delays {
+				sum += d
+				if d <= 60 {
+					quick++
+				} else if d >= 3600 {
+					slow++
+				}
+			}
+			avg = float64(sum) / float64(len(delays))
+			sorted := make([]int64, len(delays))
+			copy(sorted, delays)
+			sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+			median = float64(sorted[len(sorted)/2])
+			return
+		}
+		rr.MyAvgSeconds, rr.MyMedianSeconds, rr.MyQuickReplies, rr.MySlowReplies = calcStats(myReplyDelays)
+		rr.TheirAvgSeconds, rr.TheirMedianSeconds, rr.TheirQuickReplies, rr.TheirSlowReplies = calcStats(theirReplyDelays)
+		for h := 0; h < 24; h++ {
+			if myHourly[h].count > 0 {
+				rr.MyHourlyAvg[h] = float64(myHourly[h].total) / float64(myHourly[h].count)
+			}
+			if theirHourly[h].count > 0 {
+				rr.TheirHourlyAvg[h] = float64(theirHourly[h].total) / float64(theirHourly[h].count)
+			}
+		}
+		detail.ReplyRhythm = rr
+	}
+
 	return detail
 }
 
@@ -1333,6 +1417,193 @@ func (s *ContactService) isSys(c string) bool {
 	return false
 }
 
+// ─── 联系人相似度分析（谁最像谁）─────────────────────────────────────────────
+
+// SimilarityPair 两个联系人之间的相似度
+type SimilarityPair struct {
+	User1       string  `json:"user1"`
+	Name1       string  `json:"name1"`
+	Avatar1     string  `json:"avatar1"`
+	User2       string  `json:"user2"`
+	Name2       string  `json:"name2"`
+	Avatar2     string  `json:"avatar2"`
+	Score       float64 `json:"score"`       // 0~1
+	TopShared   []string `json:"top_shared"` // 共同高频词 Top5
+}
+
+// SimilarityResult 完整结果
+type SimilarityResult struct {
+	Pairs []SimilarityPair `json:"pairs"`
+	Total int              `json:"total"` // 参与对比的联系人数
+}
+
+// GetContactSimilarity 基于聊天风格特征计算联系人间相似度，返回最相似的 Top N 对。
+// 特征向量：消息类型分布(归一化) + 平均消息长度(归一化) + 24h 活跃分布(归一化)
+func (s *ContactService) GetContactSimilarity(topN int) *SimilarityResult {
+	s.cacheMu.RLock()
+	stats := s.cache
+	s.cacheMu.RUnlock()
+
+	if len(stats) < 2 {
+		return &SimilarityResult{Pairs: []SimilarityPair{}, Total: 0}
+	}
+
+	// 只对消息量 >= 50 的联系人做对比，否则统计不可靠
+	var candidates []ContactStatsExtended
+	for _, st := range stats {
+		if st.TotalMessages >= 50 {
+			candidates = append(candidates, st)
+		}
+	}
+	if len(candidates) < 2 {
+		return &SimilarityResult{Pairs: []SimilarityPair{}, Total: 0}
+	}
+	// 最多取 Top 100 个联系人（避免 O(n^2) 爆炸）
+	if len(candidates) > 100 {
+		candidates = candidates[:100]
+	}
+
+	// 构建特征向量
+	type featureVec struct {
+		vec  []float64
+		words map[string]int // 高频词（用于计算共同词）
+	}
+	features := make([]featureVec, len(candidates))
+
+	// 消息类型列表（固定顺序）
+	typeKeys := []string{"文本", "图片", "语音", "视频", "表情", "红包", "转账", "链接/文件", "小程序", "引用", "名片", "位置", "通话", "视频号", "其他"}
+
+	// 预计算 24h 活跃分布（需要查 detail，但太慢了，这里用 type + avgLen 就够）
+	// 实际使用消息类型分布（15维）+ avgMsgLen（1维）+ emoji比例（1维）+ 主被动比（用 my/their 比例, 1维）= 18维
+	maxAvgLen := 1.0
+	for _, c := range candidates {
+		if c.AvgMsgLen > maxAvgLen {
+			maxAvgLen = c.AvgMsgLen
+		}
+	}
+
+	for i, c := range candidates {
+		vec := make([]float64, 0, 18)
+
+		// 消息类型分布（归一化百分比 → 0~1）
+		for _, tk := range typeKeys {
+			vec = append(vec, c.TypePct[tk]/100.0)
+		}
+
+		// 平均消息长度（归一化）
+		vec = append(vec, c.AvgMsgLen/maxAvgLen)
+
+		// Emoji 比例
+		if c.TotalMessages > 0 {
+			vec = append(vec, float64(c.EmojiCnt)/float64(c.TotalMessages))
+		} else {
+			vec = append(vec, 0)
+		}
+
+		// 主被动比（对方消息占比）
+		if c.TotalMessages > 0 {
+			vec = append(vec, float64(c.TheirMessages)/float64(c.TotalMessages))
+		} else {
+			vec = append(vec, 0.5)
+		}
+
+		features[i] = featureVec{vec: vec}
+	}
+
+	// 并行获取 Top 词（用于共同词展示）
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8)
+	for i, c := range candidates {
+		wg.Add(1)
+		go func(idx int, username string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			wc := s.GetWordCloud(username, false)
+			wm := make(map[string]int, len(wc))
+			for _, w := range wc {
+				wm[w.Word] = w.Count
+			}
+			features[idx].words = wm
+		}(i, c.Username)
+	}
+	wg.Wait()
+
+	// 计算所有对的余弦相似度
+	type scoredPair struct {
+		i, j  int
+		score float64
+	}
+	var pairs []scoredPair
+	for i := 0; i < len(candidates); i++ {
+		for j := i + 1; j < len(candidates); j++ {
+			score := cosineSimFloat64(features[i].vec, features[j].vec)
+			pairs = append(pairs, scoredPair{i, j, score})
+		}
+	}
+	sort.Slice(pairs, func(a, b int) bool { return pairs[a].score > pairs[b].score })
+
+	if topN <= 0 {
+		topN = 20
+	}
+	if len(pairs) > topN {
+		pairs = pairs[:topN]
+	}
+
+	result := make([]SimilarityPair, 0, len(pairs))
+	for _, p := range pairs {
+		c1, c2 := candidates[p.i], candidates[p.j]
+		name1 := c1.Remark
+		if name1 == "" { name1 = c1.Nickname }
+		name2 := c2.Remark
+		if name2 == "" { name2 = c2.Nickname }
+
+		// 共同高频词 Top5
+		var shared []string
+		if features[p.i].words != nil && features[p.j].words != nil {
+			type sharedWord struct {
+				word  string
+				score int
+			}
+			var sw []sharedWord
+			for w, cnt1 := range features[p.i].words {
+				if cnt2, ok := features[p.j].words[w]; ok {
+					sw = append(sw, sharedWord{w, cnt1 + cnt2})
+				}
+			}
+			sort.Slice(sw, func(a, b int) bool { return sw[a].score > sw[b].score })
+			for k := 0; k < len(sw) && k < 5; k++ {
+				shared = append(shared, sw[k].word)
+			}
+		}
+
+		result = append(result, SimilarityPair{
+			User1: c1.Username, Name1: name1, Avatar1: c1.SmallHeadURL,
+			User2: c2.Username, Name2: name2, Avatar2: c2.SmallHeadURL,
+			Score: math.Round(p.score*1000) / 1000,
+			TopShared: shared,
+		})
+	}
+
+	return &SimilarityResult{Pairs: result, Total: len(candidates)}
+}
+
+func cosineSimFloat64(a, b []float64) float64 {
+	if len(a) != len(b) || len(a) == 0 {
+		return 0
+	}
+	var dot, normA, normB float64
+	for i := range a {
+		dot += a[i] * b[i]
+		normA += a[i] * a[i]
+		normB += b[i] * b[i]
+	}
+	if normA == 0 || normB == 0 {
+		return 0
+	}
+	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
+}
+
 func (s *ContactService) GetCachedStats() []ContactStatsExtended {
 	s.cacheMu.RLock(); defer s.cacheMu.RUnlock()
 	if s.cache == nil { return []ContactStatsExtended{} }
@@ -1485,11 +1756,20 @@ func (s *ContactService) loadGroups() []GroupInfo {
 				}
 				mrows.Close()
 			}
+			// 尝试从 chatroom_member 表获取真实群成员总数
+			realMemberCount := 0
+			s.dbMgr.ContactDB.QueryRow(
+				`SELECT COUNT(*) FROM chatroom_member cm JOIN chat_room cr ON cr.id = cm.room_id WHERE cr.username = ?`,
+				g.uname).Scan(&realMemberCount)
+			if realMemberCount == 0 {
+				realMemberCount = len(wxidSet) // fallback: 用发言人数
+			}
+
 			name := g.remark; if name == "" { name = g.nick }; if name == "" { name = g.uname }
 			mu.Lock()
 			result = append(result, GroupInfo{
 				Username: g.uname, Name: name, SmallHeadURL: g.avatar,
-				TotalMessages: total, MemberCount: len(wxidSet),
+				TotalMessages: total, MemberCount: realMemberCount,
 				FirstMessage: s.formatTime(firstTs), LastMessage: s.formatTime(lastTs),
 			})
 			mu.Unlock()
@@ -1515,6 +1795,36 @@ func (s *ContactService) loadContactNameMap() map[string]string {
 		nameMap[uname] = name
 	}
 	return nameMap
+}
+
+// loadGroupAllMembers 从 chatroom_member 表获取群聊的完整成员列表（wxid → 显示名）
+func (s *ContactService) loadGroupAllMembers(groupUsername string, nameMap map[string]string) map[string]string {
+	members := make(map[string]string)
+	rows, err := s.dbMgr.ContactDB.Query(
+		`SELECT c.username, COALESCE(c.remark,''), COALESCE(c.nick_name,'')
+		 FROM chatroom_member cm
+		 JOIN chat_room cr ON cr.id = cm.room_id
+		 JOIN contact c ON c.id = cm.member_id
+		 WHERE cr.username = ?`, groupUsername)
+	if err != nil {
+		return members
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var uname, remark, nick string
+		rows.Scan(&uname, &remark, &nick)
+		name := remark
+		if name == "" { name = nick }
+		if name == "" {
+			if n, ok := nameMap[uname]; ok && n != "" {
+				name = n
+			} else {
+				name = uname
+			}
+		}
+		members[uname] = name
+	}
+	return members
 }
 
 // decodeGroupContent 解码群消息内容（支持 zstd 压缩，goroutine-safe）
@@ -1654,12 +1964,24 @@ func (s *ContactService) computeGroupDetail(username string) {
 	for speaker, cnt := range memberMap {
 		lastTime := ""
 		if ts, ok := memberLastTs[speaker]; ok && ts > 0 {
-			lastTime = time.Unix(ts, 0).In(s.tz).Format("2006-01-02")
+			lastTime = time.Unix(ts, 0).In(s.tz).Format("2006-01-02 15:04")
 		}
 		detail.MemberRank = append(detail.MemberRank, MemberStat{Speaker: speaker, Count: cnt, LastMessageTime: lastTime})
 	}
 	sort.Slice(detail.MemberRank, func(i, j int) bool { return detail.MemberRank[i].Count > detail.MemberRank[j].Count })
-	if len(detail.MemberRank) > 500 { detail.MemberRank = detail.MemberRank[:500] }
+
+	// 从 chatroom_member 表补全零发言成员
+	allMembers := s.loadGroupAllMembers(username, nameMap)
+	spokenSet := make(map[string]bool, len(memberMap))
+	for speaker := range memberMap {
+		spokenSet[speaker] = true
+	}
+	for _, displayName := range allMembers {
+		if !spokenSet[displayName] {
+			detail.MemberRank = append(detail.MemberRank, MemberStat{Speaker: displayName, Count: 0})
+			spokenSet[displayName] = true // 去重
+		}
+	}
 
 	// 高频词 top 30
 	for w, c := range wordCounts {
@@ -1811,8 +2133,9 @@ func (s *ContactService) GetGroupDayMessages(username, date string) []GroupChatM
 	return msgs
 }
 
-// SearchGroupMessages 在群聊消息中搜索关键词，只匹配文本消息，返回最多 200 条（按时间倒序）
-func (s *ContactService) SearchGroupMessages(username, query string) []GroupChatMessage {
+// SearchGroupMessages 在群聊消息中搜索关键词，只匹配文本消息（按时间倒序）。
+// speaker 非空时只返回该发言人的消息。
+func (s *ContactService) SearchGroupMessages(username, query, speaker string) []GroupChatMessage {
 	if query == "" {
 		return []GroupChatMessage{}
 	}
@@ -1879,19 +2202,24 @@ func (s *ContactService) SearchGroupMessages(username, query string) []GroupChat
 				continue
 			}
 
-			speaker := speakerWxid
+			speakerName := speakerWxid
 			if n, ok := nameMap[speakerWxid]; ok && n != "" {
-				speaker = n
+				speakerName = n
 			}
-			if speaker == "" {
-				speaker = "未知"
+			if speakerName == "" {
+				speakerName = "未知"
+			}
+
+			// 按发言人过滤
+			if speaker != "" && speakerName != speaker && speakerWxid != speaker {
+				continue
 			}
 
 			t := time.Unix(ts, 0).In(s.tz)
 			msgs = append(msgs, GroupChatMessage{
 				Time:    t.Format("15:04"),
 				Date:    t.Format("2006-01-02"),
-				Speaker: speaker,
+				Speaker: speakerName,
 				Content: content,
 				IsMine:  false,
 				Type:    1,
@@ -1904,9 +2232,6 @@ func (s *ContactService) SearchGroupMessages(username, query string) []GroupChat
 		return []GroupChatMessage{}
 	}
 	sort.Slice(msgs, func(i, j int) bool { return msgs[i].Date+msgs[i].Time > msgs[j].Date+msgs[j].Time })
-	if len(msgs) > 200 {
-		msgs = msgs[:200]
-	}
 	return msgs
 }
 
@@ -2812,9 +3137,10 @@ func daysUntilMMDD(mmdd, today string) int {
 
 // RelationshipNode 群内成员节点
 type RelationshipNode struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Messages int64  `json:"messages"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Messages  int64  `json:"messages"`
+	Community int    `json:"community"` // 社区编号（Label Propagation 检测）
 }
 
 // RelationshipEdge 成员间互动边
@@ -2826,10 +3152,18 @@ type RelationshipEdge struct {
 	Mentions int    `json:"mentions"`
 }
 
+// CommunityInfo 社区摘要
+type CommunityInfo struct {
+	ID      int      `json:"id"`
+	Members []string `json:"members"`
+	Size    int      `json:"size"`
+}
+
 // RelationshipGraph 完整关系图
 type RelationshipGraph struct {
-	Nodes []RelationshipNode `json:"nodes"`
-	Edges []RelationshipEdge `json:"edges"`
+	Nodes       []RelationshipNode `json:"nodes"`
+	Edges       []RelationshipEdge `json:"edges"`
+	Communities []CommunityInfo    `json:"communities,omitempty"` // 社区检测结果
 }
 
 // GetGroupRelationships 群聊人物关系（lazy load + 缓存，异步计算）
@@ -3012,9 +3346,109 @@ func (s *ContactService) computeGroupRelationships(username string) {
 		edges = []RelationshipEdge{}
 	}
 
-	graph := &RelationshipGraph{Nodes: nodes, Edges: edges}
+	// ── Label Propagation 社区检测 ──
+	detectCommunities(nodes, edges)
+
+	// 汇总社区信息
+	communityMembers := make(map[int][]string)
+	for _, n := range nodes {
+		communityMembers[n.Community] = append(communityMembers[n.Community], n.Name)
+	}
+	var communities []CommunityInfo
+	for id, members := range communityMembers {
+		communities = append(communities, CommunityInfo{ID: id, Members: members, Size: len(members)})
+	}
+	sort.Slice(communities, func(i, j int) bool { return communities[i].Size > communities[j].Size })
+
+	graph := &RelationshipGraph{Nodes: nodes, Edges: edges, Communities: communities}
 	s.groupDetailMu.Lock()
 	s.groupRelCache[username] = graph
 	delete(s.groupRelComputing, username)
 	s.groupDetailMu.Unlock()
+}
+
+// detectCommunities 使用 Label Propagation 算法为节点分配社区标签。
+// 每个节点初始化为独立社区，然后迭代地将节点标签更新为其邻居中权重最大的标签。
+func detectCommunities(nodes []RelationshipNode, edges []RelationshipEdge) {
+	if len(nodes) == 0 {
+		return
+	}
+
+	// 节点 ID → index
+	idIdx := make(map[string]int, len(nodes))
+	for i, n := range nodes {
+		idIdx[n.ID] = i
+		nodes[i].Community = i // 初始：每人一个社区
+	}
+
+	// 邻接表（带权重）
+	type neighbor struct {
+		idx    int
+		weight int
+	}
+	adj := make([][]neighbor, len(nodes))
+	for _, e := range edges {
+		si, ok1 := idIdx[e.Source]
+		ti, ok2 := idIdx[e.Target]
+		if !ok1 || !ok2 {
+			continue
+		}
+		adj[si] = append(adj[si], neighbor{ti, e.Weight})
+		adj[ti] = append(adj[ti], neighbor{si, e.Weight})
+	}
+
+	// 迭代 Label Propagation（最多 50 轮）
+	order := make([]int, len(nodes))
+	for i := range order {
+		order[i] = i
+	}
+	for iter := 0; iter < 50; iter++ {
+		// 随机化顺序（用简单 shuffle）
+		for i := len(order) - 1; i > 0; i-- {
+			j := int(time.Now().UnixNano()) % (i + 1)
+			if j < 0 {
+				j = -j
+			}
+			order[i], order[j] = order[j], order[i]
+		}
+
+		changed := false
+		for _, ni := range order {
+			if len(adj[ni]) == 0 {
+				continue
+			}
+			// 统计邻居标签的加权投票
+			votes := make(map[int]int)
+			for _, nb := range adj[ni] {
+				votes[nodes[nb.idx].Community] += nb.weight
+			}
+			// 选权重最大的标签
+			bestLabel := nodes[ni].Community
+			bestWeight := 0
+			for label, w := range votes {
+				if w > bestWeight || (w == bestWeight && label < bestLabel) {
+					bestWeight = w
+					bestLabel = label
+				}
+			}
+			if bestLabel != nodes[ni].Community {
+				nodes[ni].Community = bestLabel
+				changed = true
+			}
+		}
+		if !changed {
+			break
+		}
+	}
+
+	// 重新编号社区为连续 0, 1, 2, ...
+	labelMap := make(map[int]int)
+	nextID := 0
+	for i := range nodes {
+		if _, ok := labelMap[nodes[i].Community]; !ok {
+			labelMap[nodes[i].Community] = nextID
+			nextID++
+		}
+		nodes[i].Community = labelMap[nodes[i].Community]
+	}
 }

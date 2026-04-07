@@ -16,6 +16,7 @@ interface SimNode {
   id: string;
   name: string;
   messages: number;
+  community: number;
   x: number;
   y: number;
   vx: number;
@@ -167,8 +168,8 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
       ctx.stroke();
     }
 
-    // Draw nodes
-    nodes.forEach((n, i) => {
+    // Draw nodes (colored by community)
+    nodes.forEach((n) => {
       const isHighlighted = hoveredId === n.id;
       const isConnected = hoveredId && edges.some(
         e => (e.source === hoveredId && e.target === n.id) || (e.target === hoveredId && e.source === n.id)
@@ -177,7 +178,7 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
 
       ctx.beginPath();
       ctx.arc(n.x, n.y, n.radius, 0, 2 * Math.PI);
-      const color = COLORS[i % COLORS.length];
+      const color = COLORS[n.community % COLORS.length];
       ctx.fillStyle = dimmed ? 'rgba(200, 200, 200, 0.3)' : color;
       ctx.fill();
 
@@ -206,6 +207,7 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
     const maxMsgs = Math.max(1, ...graph.nodes.map(n => n.messages));
     const simNodes: SimNode[] = graph.nodes.map(n => ({
       ...n,
+      community: n.community ?? 0,
       x: 0, y: 0, vx: 0, vy: 0,
       radius: 6 + Math.sqrt(n.messages / maxMsgs) * 20,
       pinned: false,
@@ -314,7 +316,10 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <Loader2 size={32} className="text-[#07c160] animate-spin" />
-        <span className="text-sm text-gray-400">正在分析群聊人物关系…</span>
+        <div className="text-center">
+          <span className="text-sm text-gray-400">正在分析群聊人物关系…</span>
+          <p className="text-[10px] text-gray-300 mt-1">需要遍历所有消息计算互动关系，大群请耐心等待</p>
+        </div>
       </div>
     );
   }
@@ -327,11 +332,13 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
 
   const totalInteractions = graph.edges.reduce((s, e) => s + e.weight, 0);
   const topPair = graph.edges[0];
+  const communities = graph.communities ?? [];
+  const multiMemberCommunities = communities.filter(c => c.size >= 2);
 
   return (
     <div className="space-y-4">
       {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <div className="bg-[#f8f9fb] dark:bg-white/5 rounded-xl px-4 py-3 text-center">
           <div className="text-lg font-black text-[#1d1d1f] dk-text">{graph.nodes.length}</div>
           <div className="text-[10px] text-gray-400">活跃成员</div>
@@ -343,6 +350,10 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
         <div className="bg-[#f8f9fb] dark:bg-white/5 rounded-xl px-4 py-3 text-center">
           <div className="text-lg font-black text-[#1d1d1f] dk-text">{totalInteractions.toLocaleString()}</div>
           <div className="text-[10px] text-gray-400">互动总次数</div>
+        </div>
+        <div className="bg-[#f8f9fb] dark:bg-white/5 rounded-xl px-4 py-3 text-center">
+          <div className="text-lg font-black text-[#1d1d1f] dk-text">{multiMemberCommunities.length}</div>
+          <div className="text-[10px] text-gray-400">小团体</div>
         </div>
       </div>
 
@@ -440,6 +451,42 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
               <span className="text-[#fa5151] font-bold flex-shrink-0">连线粗细</span>
               <span>与两人之间的互动权重成正比（对数缩放），颜色深浅同理。</span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Community detection results */}
+      {multiMemberCommunities.length > 0 && (
+        <div className="space-y-3">
+          <div className="text-sm font-bold text-[#1d1d1f] dk-text">小团体检测</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {multiMemberCommunities.map((c) => (
+              <div
+                key={c.id}
+                className="bg-[#f8f9fb] dark:bg-white/5 rounded-xl px-4 py-3"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div
+                    className="w-3 h-3 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: COLORS[c.id % COLORS.length] }}
+                  />
+                  <span className="text-xs font-bold text-[#1d1d1f] dk-text">
+                    圈子 {c.id + 1}
+                  </span>
+                  <span className="text-[10px] text-gray-400 ml-auto">{c.size} 人</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {c.members.map((m) => (
+                    <span
+                      key={m}
+                      className={`inline-block text-[10px] px-2 py-0.5 rounded-full bg-white dark:bg-white/10 text-gray-600 dk-text${privacyMode ? ' privacy-blur' : ''}`}
+                    >
+                      {m}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -61,6 +61,21 @@ export interface MoneyEvent {
   kind: string;    // "红包" | "转账"
 }
 
+export interface ReplyRhythm {
+  my_avg_seconds: number;
+  their_avg_seconds: number;
+  my_median_seconds: number;
+  their_median_seconds: number;
+  my_quick_replies: number;
+  their_quick_replies: number;
+  my_slow_replies: number;
+  their_slow_replies: number;
+  my_total_replies: number;
+  their_total_replies: number;
+  my_hourly_avg: number[];
+  their_hourly_avg: number[];
+}
+
 export interface ContactDetail {
   hourly_dist: number[];      // [24]
   weekly_dist: number[];      // [7]
@@ -74,6 +89,7 @@ export interface ContactDetail {
   money_timeline?: MoneyEvent[];
   initiation_count: number;
   total_sessions: number;
+  reply_rhythm?: ReplyRhythm;
 }
 
 export interface WordCount {
@@ -155,6 +171,7 @@ export interface RelationshipNode {
   id: string;
   name: string;
   messages: number;
+  community: number;
 }
 
 export interface RelationshipEdge {
@@ -165,9 +182,32 @@ export interface RelationshipEdge {
   mentions: number;
 }
 
+export interface CommunityInfo {
+  id: number;
+  members: string[];
+  size: number;
+}
+
 export interface RelationshipGraph {
   nodes: RelationshipNode[];
   edges: RelationshipEdge[];
+  communities?: CommunityInfo[];
+}
+
+export interface SimilarityPair {
+  user1: string;
+  name1: string;
+  avatar1: string;
+  user2: string;
+  name2: string;
+  avatar2: string;
+  score: number;
+  top_shared: string[];
+}
+
+export interface SimilarityResult {
+  pairs: SimilarityPair[];
+  total: number;
 }
 
 export interface CalendarDayEntry {

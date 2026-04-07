@@ -20,6 +20,7 @@ import {
 } from '../common/SettingsPage';
 import { LLMAnalysisTab } from '../contact/LLMAnalysisTab';
 import { GroupSimChat } from './GroupSimChat';
+import { GroupComparePanel } from './GroupComparePanel';
 import { AIAnalysisBadge } from '../dashboard/ContactTable';
 import { avatarSrc } from '../../utils/avatar';
 
@@ -64,10 +65,16 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
   const [tab, setTab] = useState<'portrait' | 'search' | 'ai' | 'relationships' | 'sim'>('portrait');
   const [fullscreen, setFullscreen] = useState(false);
   const [memberSort, setMemberSort] = useState<'count' | 'last' | 'name'>('count');
+  const [memberSortAsc, setMemberSortAsc] = useState(false);
+  const toggleSort = (key: 'count' | 'last' | 'name') => {
+    if (memberSort === key) { setMemberSortAsc(!memberSortAsc); }
+    else { setMemberSort(key); setMemberSortAsc(false); }
+  };
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [dayPanel, setDayPanel] = useState<{ date: string; count: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchSpeaker, setSearchSpeaker] = useState('');
   const [searchResults, setSearchResults] = useState<GroupChatMessage[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
@@ -177,12 +184,12 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
     return () => { cancelled = true; };
   }, [group.username]);
 
-  const handleSearch = useCallback(async (q: string) => {
+  const handleSearch = useCallback(async (q: string, speaker?: string) => {
     if (!q.trim()) return;
     setSearchLoading(true);
     setSearchDone(false);
     try {
-      const results = await groupsApi.searchMessages(group.username, q.trim());
+      const results = await groupsApi.searchMessages(group.username, q.trim(), speaker || undefined);
       setSearchResults(results ?? []);
       setSearchDone(true);
     } catch (e) {
@@ -206,13 +213,14 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
   const sortedMembers = useMemo(() => {
     if (!detail?.member_rank) return [];
     const list = [...detail.member_rank];
+    const dir = memberSortAsc ? -1 : 1;
     switch (memberSort) {
-      case 'count': list.sort((a, b) => b.count - a.count); break;
-      case 'last': list.sort((a, b) => (a.last_message_time ?? '').localeCompare(b.last_message_time ?? '')); break;
-      case 'name': list.sort((a, b) => a.speaker.localeCompare(b.speaker, 'zh')); break;
+      case 'count': list.sort((a, b) => (b.count - a.count) * dir); break;
+      case 'last': list.sort((a, b) => (b.last_message_time ?? '').localeCompare(a.last_message_time ?? '') * dir); break;
+      case 'name': list.sort((a, b) => a.speaker.localeCompare(b.speaker, 'zh') * dir); break;
     }
     return list;
-  }, [detail?.member_rank, memberSort]);
+  }, [detail?.member_rank, memberSort, memberSortAsc]);
 
   const maxMember = detail?.member_rank?.[0]?.count ?? 1;
 
@@ -377,8 +385,8 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
 
         {tab === 'search' && (
           <div>
-            <form onSubmit={(e) => { e.preventDefault(); handleSearch(searchQuery); }} className="flex gap-2 mb-6">
-              <div className="flex-1 relative">
+            <form onSubmit={(e) => { e.preventDefault(); handleSearch(searchQuery, searchSpeaker); }} className="flex flex-wrap gap-2 mb-6">
+              <div className="flex-1 min-w-[200px] relative">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" strokeWidth={2.5} />
                 <input
                   ref={searchInputRef}
@@ -389,6 +397,16 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                   className="w-full pl-9 pr-4 py-2.5 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-[#07c160] transition-colors bg-gray-50 dk-subtle dk-border"
                 />
               </div>
+              <select
+                value={searchSpeaker}
+                onChange={(e) => setSearchSpeaker(e.target.value)}
+                className="px-3 py-2.5 rounded-2xl border border-gray-200 text-sm bg-gray-50 dk-subtle dk-border focus:outline-none focus:border-[#07c160] transition-colors min-w-[120px]"
+              >
+                <option value="">全部成员</option>
+                {(detail?.member_rank ?? []).map((m) => (
+                  <option key={m.speaker} value={m.speaker}>{m.speaker}</option>
+                ))}
+              </select>
               <button
                 type="submit"
                 disabled={!searchQuery.trim() || searchLoading}
@@ -399,14 +417,29 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             </form>
 
             {searchLoading ? (
-              <div className="flex items-center justify-center h-40">
+              <div className="flex flex-col items-center justify-center h-40 gap-3">
                 <Loader2 size={28} className="text-[#07c160] animate-spin" />
+                <span className="text-xs text-gray-400">消息量较大时搜索可能需要一点时间，请稍候…</span>
               </div>
             ) : searchDone && searchResults.length === 0 ? (
               <div className="text-center text-gray-300 py-12 text-sm">未找到相关消息</div>
             ) : searchResults.length > 0 ? (
               <div>
-                <p className="text-xs text-gray-400 mb-4">找到 {searchResults.length} 条消息{searchResults.length >= 200 ? '（最多显示 200 条）' : ''}</p>
+                <div className="flex items-center gap-3 mb-4">
+                  <p className="text-xs text-gray-400">找到 {searchResults.length} 条消息{searchSpeaker ? ` · ${searchSpeaker}` : ''}</p>
+                  <button
+                    onClick={() => exportGroupTxt(searchResults, group.name)}
+                    className="text-[10px] text-gray-400 hover:text-[#07c160] transition-colors flex items-center gap-1"
+                  >
+                    <Download size={12} /> 导出 TXT
+                  </button>
+                  <button
+                    onClick={() => exportGroupCsv(searchResults, group.name)}
+                    className="text-[10px] text-gray-400 hover:text-[#07c160] transition-colors flex items-center gap-1"
+                  >
+                    <Download size={12} /> 导出 CSV
+                  </button>
+                </div>
                 <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
                   {searchResults.map((msg, i) => (
                     <div
@@ -443,114 +476,146 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         )}
 
         {tab === 'portrait' && loading ? (
-          <div className="flex items-center justify-center h-64">
+          <div className="flex flex-col items-center justify-center h-64 gap-3">
             <Loader2 size={32} className="text-[#07c160] animate-spin" />
+            <div className="text-center">
+              <span className="text-sm text-gray-400">正在分析群聊数据…</span>
+              <p className="text-[10px] text-gray-300 mt-1">大群成员和消息较多，首次分析可能需要一些时间</p>
+            </div>
           </div>
         ) : tab === 'portrait' && detail ? (
           <div className="space-y-6">
             {/* 成员发言排行 */}
-            {(detail.member_rank?.length ?? 0) > 0 && (
-              <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                    <BarChart2 size={14} /> 成员发言排行 Top {Math.min(detail.member_rank.length, rankLimit)}
-                  </h4>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-gray-400">显示</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={detail.member_rank.length}
-                      value={rankLimit}
-                      onChange={(e) => {
-                        const v = Math.min(500, Math.max(1, Number(e.target.value) || DEFAULT_RANK_LIMIT));
-                        setRankLimit(v);
-                        localStorage.setItem(MEMBER_RANK_LIMIT_KEY, String(v));
-                      }}
-                      className="w-14 text-xs border border-gray-200 rounded-lg px-2 py-0.5 text-center focus:outline-none focus:border-[#07c160] bg-white dk-input dk-border"
-                      title="修改显示人数（最多 500）"
-                    />
-                    <span className="text-[10px] text-gray-400">/ {detail.member_rank.length} 人</span>
-                  </div>
-                </div>
-                {/* 快捷选项 + 排序 */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-1">
-                    {[3, 10, 50, detail.member_rank.length].map(n => (
-                      <button key={n} onClick={() => { setRankLimit(n); localStorage.setItem(MEMBER_RANK_LIMIT_KEY, String(n)); }}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                          rankLimit === n ? 'bg-[#07c160] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-400 hover:bg-gray-200'
-                        }`}>
-                        {n === detail.member_rank.length ? '全部' : `Top ${n}`}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-1 text-[10px] text-gray-400">
-                    <span>排序:</span>
-                    {([['count', '消息数'], ['last', '最后发言'], ['name', '名字']] as const).map(([key, label]) => (
-                      <button key={key} onClick={() => setMemberSort(key)}
-                        className={`px-1.5 py-0.5 rounded transition-all ${
-                          memberSort === key ? 'bg-[#07c160] text-white font-bold' : 'hover:bg-gray-100'
-                        }`}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {sortedMembers.slice(0, rankLimit).map((m, i) => {
-                    const contact = findContact(m.speaker);
-                    return (
-                    <div key={m.speaker} className="flex items-center gap-3">
-                      <span className={`w-5 text-xs font-black text-right flex-shrink-0 ${
-                        i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-orange-400' : 'text-gray-300'
-                      }`}>{i + 1}</span>
-                      {/* 名字列：宽度可拖拽 */}
-                      <div className="relative flex items-center gap-1.5 flex-shrink-0 min-w-0" style={{ width: nameWidth }}>
-                        <span
-                          className={`text-sm font-semibold dk-text truncate ${contact ? 'text-[#07c160] cursor-pointer hover:underline' : 'text-[#1d1d1f]'}`}
-                          onClick={() => contact && onContactClick(contact)}
-                          title={contact ? '点击查看个人统计' : '非好友'}
-                        ><span className={privacyMode ? 'privacy-blur' : ''}>{m.speaker}</span></span>
-                        {contact
-                          ? <span className="flex-shrink-0 text-[9px] font-bold text-[#07c160] bg-[#07c16018] px-1 py-0.5 rounded cursor-pointer" onClick={() => onContactClick(contact)}>好友↗</span>
-                          : <span className="flex-shrink-0 text-[9px] text-gray-300">非好友</span>
-                        }
-                        {/* 拖拽把手 */}
-                        <div
-                          className="absolute right-0 top-1/2 -translate-y-1/2 h-4 w-1.5 cursor-col-resize rounded-full bg-gray-300 hover:bg-[#07c160] transition-colors opacity-60 hover:opacity-100"
-                          onMouseDown={onDragStart}
-                          title="拖拽调整名字列宽度"
-                        />
-                      </div>
-                      <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${(m.count / maxMember) * 100}%`,
-                            background: MEMBER_COLORS[i % MEMBER_COLORS.length],
-                          }}
-                        />
-                      </div>
-                      <span className="text-xs text-gray-400 w-12 text-right flex-shrink-0">
-                        {m.count.toLocaleString()}
+            {(detail.member_rank?.length ?? 0) > 0 && (() => {
+              const activeCount = sortedMembers.filter(m => m.count > 0).length;
+              const silentCount = sortedMembers.length - activeCount;
+              const displayMembers = sortedMembers.slice(0, rankLimit);
+
+              return (
+              <div className="space-y-4">
+                {/* ── 活跃成员 ── */}
+                <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
+                  {/* 标题 + 快捷筛选 + 统计 */}
+                  <div className="flex items-center gap-3 mb-3 flex-wrap">
+                    <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                      <BarChart2 size={14} /> 成员发言排行
+                    </h4>
+                    <div className="flex items-center gap-1">
+                      {[10, 50, sortedMembers.length].filter((n, i, a) => n > 0 && a.indexOf(n) === i).map(n => (
+                        <button key={n} onClick={() => { setRankLimit(n); localStorage.setItem(MEMBER_RANK_LIMIT_KEY, String(n)); }}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                            rankLimit === n ? 'bg-[#07c160] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-400 hover:bg-gray-200'
+                          }`}>
+                          {n === sortedMembers.length ? '全部' : `Top ${n}`}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="ml-auto flex items-center gap-2 text-[10px] text-gray-400">
+                      <span className="px-2 py-0.5 rounded-full bg-[#07c160]/10 text-[#07c160] font-bold">
+                        {activeCount} 人发言
                       </span>
-                      {m.last_message_time && (
-                        <span className={`text-[10px] w-20 text-right flex-shrink-0 ${
-                          (() => {
-                            const days = Math.floor((Date.now() - new Date(m.last_message_time).getTime()) / 86400000);
-                            return days > 180 ? 'text-red-400 font-bold' : days > 30 ? 'text-orange-400' : 'text-gray-300';
-                          })()
-                        }`}>
-                          {m.last_message_time.slice(5)}
+                      {silentCount > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-400 font-bold">
+                          {silentCount} 人潜水
                         </span>
                       )}
+                      <button
+                        onClick={() => {
+                          const header = '排名,成员,消息数,最后发言\n';
+                          const rows = sortedMembers.map((m, i) =>
+                            [i + 1, `"${m.speaker}"`, m.count, m.last_message_time || '无'].join(',')
+                          ).join('\n');
+                          const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url; a.download = `${group.name}_成员排行.csv`;
+                          a.click(); URL.revokeObjectURL(url);
+                        }}
+                        className="flex items-center gap-1 text-gray-400 hover:text-[#07c160] transition-colors"
+                        title="导出成员排行 CSV"
+                      >
+                        <Download size={12} /> 导出
+                      </button>
                     </div>
-                    );
-                  })}
+                  </div>
+
+                  {/* 可点击排序的表头 */}
+                  <div className="flex items-center gap-3 pb-2 mb-1 border-b border-gray-200/60 dark:border-white/10 text-[10px] text-gray-400 font-bold select-none">
+                    <span className="w-6 text-right">#</span>
+                    <span className="flex-1 min-w-0 cursor-pointer hover:text-[#1d1d1f] dark:hover:text-gray-200 transition-colors" onClick={() => toggleSort('name')}>
+                      成员 {memberSort === 'name' ? (memberSortAsc ? '↑' : '↓') : ''}
+                    </span>
+                    <span className="w-16 text-right cursor-pointer hover:text-[#1d1d1f] dark:hover:text-gray-200 transition-colors" onClick={() => toggleSort('count')}>
+                      消息数 {memberSort === 'count' ? (memberSortAsc ? '↑' : '↓') : ''}
+                    </span>
+                    <span className="w-24 text-right cursor-pointer hover:text-[#1d1d1f] dark:hover:text-gray-200 transition-colors" onClick={() => toggleSort('last')}>
+                      最后发言 {memberSort === 'last' ? (memberSortAsc ? '↑' : '↓') : ''}
+                    </span>
+                  </div>
+
+                  {/* 成员列表 */}
+                  <div className="space-y-0 max-h-[600px] overflow-y-auto">
+                    {displayMembers.map((m, i) => {
+                      const contact = findContact(m.speaker);
+                      const days = m.last_message_time ? Math.floor((Date.now() - new Date(m.last_message_time).getTime()) / 86400000) : 999;
+                      const isSilent = m.count === 0;
+                      return (
+                        <div key={m.speaker} className={`flex items-center gap-3 py-1.5 hover:bg-white/60 dark:hover:bg-white/5 rounded-lg px-1 transition-colors group ${isSilent ? 'opacity-50' : ''}`}>
+                          {/* 排名 */}
+                          <span className={`w-6 text-xs font-black text-right flex-shrink-0 ${
+                            isSilent ? 'text-gray-200' : i === 0 ? 'text-[#ff9500]' : i === 1 ? 'text-[#8b5cf6]' : i === 2 ? 'text-[#10aeff]' : 'text-gray-300'
+                          }`}>{i + 1}</span>
+
+                          {/* 名字 + 进度条 */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span
+                                className={`text-sm font-semibold truncate ${contact ? 'text-[#07c160] cursor-pointer hover:underline' : 'text-[#1d1d1f] dk-text'}`}
+                                onClick={() => contact && onContactClick(contact)}
+                              >
+                                <span className={privacyMode ? 'privacy-blur' : ''}>{m.speaker}</span>
+                              </span>
+                              {contact && (
+                                <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[9px] text-[#07c160]">↗</span>
+                              )}
+                              {isSilent && (
+                                <span className="text-[9px] text-red-400 bg-red-50 dark:bg-red-900/20 px-1 py-0.5 rounded">潜水</span>
+                              )}
+                            </div>
+                            {!isSilent && (
+                              <div className="h-1 bg-gray-200/60 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-500"
+                                  style={{
+                                    width: `${Math.max(1, (m.count / maxMember) * 100)}%`,
+                                    background: i < 3 ? ['#ff9500', '#8b5cf6', '#10aeff'][i] : '#d1d5db',
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 消息数 */}
+                          <span className={`w-16 text-right flex-shrink-0 text-xs tabular-nums ${
+                            isSilent ? 'text-red-300' : i < 3 ? 'font-bold text-[#1d1d1f] dk-text' : 'text-gray-400'
+                          }`}>
+                            {isSilent ? '0' : m.count.toLocaleString()}
+                          </span>
+
+                          {/* 最后发言 */}
+                          <span className={`text-[10px] w-24 text-right flex-shrink-0 tabular-nums ${
+                            isSilent ? 'text-red-300' : days > 180 ? 'text-red-400 font-bold' : days > 30 ? 'text-orange-400' : 'text-gray-300'
+                          }`}>
+                            {m.last_message_time ? m.last_message_time.slice(5) : '从未发言'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* 群活跃趋势图（按月聚合 daily_heatmap） */}
             {Object.keys(detail.daily_heatmap).length > 0 && (() => {
@@ -840,6 +905,9 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareSelected, setCompareSelected] = useState<Set<string>>(new Set());
+  const [showCompare, setShowCompare] = useState(false);
 
   useEffect(() => {
     groupsApi.getList().then((data) => {
@@ -921,14 +989,27 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
           <h1 className="dk-text text-3xl sm:text-5xl font-black tracking-tight text-[#1d1d1f] mb-1">群聊画像</h1>
           <p className="text-gray-400 text-sm">{groups.length} 个群聊</p>
         </div>
-        <div className="relative w-full sm:w-64">
-          <input
-            type="text"
-            placeholder="搜索群聊..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-            className="dk-input w-full pl-4 pr-4 py-2.5 bg-white border border-gray-200 rounded-2xl text-sm focus:outline-none focus:border-[#07c160]"
-          />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { if (compareMode) { setCompareMode(false); setCompareSelected(new Set()); } else { setCompareMode(true); } }}
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-2xl text-sm font-bold transition-all whitespace-nowrap ${
+              compareMode
+                ? 'bg-[#07c160] text-white'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-[#e7f8f0] hover:text-[#07c160]'
+            }`}
+          >
+            <TrendingUp size={14} />
+            {compareMode ? '退出对比' : '对比模式'}
+          </button>
+          <div className="relative w-full sm:w-64">
+            <input
+              type="text"
+              placeholder="搜索群聊..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+              className="dk-input w-full pl-4 pr-4 py-2.5 bg-white border border-gray-200 rounded-2xl text-sm focus:outline-none focus:border-[#07c160]"
+            />
+          </div>
         </div>
       </div>
 
@@ -1061,11 +1142,32 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
               {currentGroups.map((group) => (
                 <tr
                   key={group.username}
-                  onClick={() => onGroupClick(group)}
-                  className="dk-row-hover hover:bg-[#f8f9fb] dark:hover:bg-white/5 cursor-pointer transition-colors duration-150"
+                  onClick={() => {
+                    if (compareMode) {
+                      setCompareSelected(prev => {
+                        const next = new Set(prev);
+                        if (next.has(group.username)) next.delete(group.username);
+                        else if (next.size < 6) next.add(group.username);
+                        return next;
+                      });
+                    } else {
+                      onGroupClick(group);
+                    }
+                  }}
+                  className={`dk-row-hover hover:bg-[#f8f9fb] dark:hover:bg-white/5 cursor-pointer transition-colors duration-150 ${
+                    compareMode && compareSelected.has(group.username) ? 'bg-[#e7f8f0] dark:bg-[#07c160]/10' : ''
+                  }`}
                 >
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-3">
+                      {compareMode && (
+                        <input
+                          type="checkbox"
+                          checked={compareSelected.has(group.username)}
+                          readOnly
+                          className="w-4 h-4 accent-[#07c160] flex-shrink-0"
+                        />
+                      )}
                       {group.small_head_url ? (
                         <img src={avatarSrc(group.small_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -1222,6 +1324,39 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
         )}
       </div>
 
+      {/* 对比模式浮动栏 */}
+      {compareMode && compareSelected.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40
+          bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700
+          shadow-2xl rounded-2xl px-5 py-3 flex items-center gap-4">
+          <span className="text-sm font-bold dk-text">
+            已选 <span className="text-[#07c160]">{compareSelected.size}</span> 个群
+            <span className="text-gray-400 font-normal ml-1">（最多 6 个）</span>
+          </span>
+          <button
+            onClick={() => { if (compareSelected.size >= 2) setShowCompare(true); }}
+            disabled={compareSelected.size < 2}
+            className="px-4 py-2 bg-[#07c160] text-white rounded-xl text-sm font-bold
+              disabled:opacity-40 hover:bg-[#06ad56] transition-colors"
+          >
+            开始对比
+          </button>
+          <button
+            onClick={() => { setCompareMode(false); setCompareSelected(new Set()); }}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
+
+      {/* 对比面板 */}
+      {showCompare && (() => {
+        const selected = groups.filter(g => compareSelected.has(g.username));
+        return selected.length >= 2 ? (
+          <GroupComparePanel groups={selected} onClose={() => setShowCompare(false)} />
+        ) : null;
+      })()}
     </div>
   );
 };

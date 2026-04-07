@@ -1086,6 +1086,8 @@ interface SettingsPageProps {
   onTogglePrivacyMode?: (v: boolean) => void;
   dark?: boolean;
   onToggleDark?: () => void;
+  fontSize?: number;
+  onFontSizeChange?: (size: number) => void;
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
@@ -1103,6 +1105,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onTogglePrivacyMode,
   dark = false,
   onToggleDark,
+  fontSize = 16,
+  onFontSizeChange,
 }) => {
   // 显示设置
   const [rankLimit, setRankLimit] = useState<number>(() =>
@@ -1289,6 +1293,41 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </button>
             </div>
           )}
+          {/* 字号调节 */}
+          {onFontSizeChange && (
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-[#1d1d1f] dk-text">字号大小</p>
+                <p className="text-xs text-gray-400 mt-0.5">调整全局文字大小（默认 16px）</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 w-6 text-right">{fontSize}</span>
+                <input
+                  type="range"
+                  min={12}
+                  max={22}
+                  step={1}
+                  value={fontSize}
+                  onChange={e => onFontSizeChange(Number(e.target.value))}
+                  className="w-28 accent-[#07c160]"
+                />
+                <div className="flex gap-1">
+                  {[14, 16, 18, 20].map(s => (
+                    <button
+                      key={s}
+                      onClick={() => onFontSizeChange(s)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                        fontSize === s ? 'bg-[#07c160] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-400 hover:bg-gray-200'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-[#1d1d1f] dk-text">群聊发言排行显示人数</p>
