@@ -15,6 +15,7 @@ import SocialReport from './SocialReport';
 import { DriftingApart } from './DriftingApart';
 import { LateNightGuard } from './LateNightGuard';
 import { ComparePanel } from './ComparePanel';
+import { SimilarityCard } from './SimilarityCard';
 import { formatCompactNumber } from '../../utils/formatters';
 
 interface StatsPageProps {
@@ -111,6 +112,11 @@ export const StatsPage: React.FC<StatsPageProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-6 sm:mb-8">
         <LateNightRanking data={globalStats} contacts={contacts} onContactClick={onContactClick} />
         <LateNightGuard globalStats={globalStats} contacts={contacts} onContactClick={onContactClick} />
+      </div>
+
+      {/* 谁最像谁 */}
+      <div className="mb-6 sm:mb-8">
+        <SimilarityCard />
       </div>
 
       {/* Contact Table */}

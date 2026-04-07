@@ -4,8 +4,17 @@
 
 import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, Legend } from 'recharts';
-import { Moon, Gift, MessageSquare, Zap, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { Moon, Gift, MessageSquare, Zap, ArrowUpRight, ArrowDownLeft, Timer } from 'lucide-react';
 import type { ContactDetail } from '../../types';
+
+function fmtDuration(seconds: number): string {
+  if (!seconds || seconds <= 0) return '-';
+  if (seconds < 60) return `${Math.round(seconds)}秒`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}分钟`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return m > 0 ? `${h}小时${m}分` : `${h}小时`;
+}
 import { CalendarHeatmap } from './CalendarHeatmap';
 import { DayChatPanel } from './DayChatPanel';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
@@ -152,6 +161,73 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
           </div>
         </div>
       )}
+
+      {/* 回复节奏分析 */}
+      {detail.reply_rhythm && (detail.reply_rhythm.my_total_replies > 0 || detail.reply_rhythm.their_total_replies > 0) && (() => {
+        const rr = detail.reply_rhythm!;
+        const hourlyData = Array.from({ length: 24 }, (_, h) => ({
+          hour: `${h.toString().padStart(2, '0')}`,
+          my: Math.round(rr.my_hourly_avg[h]),
+          their: Math.round(rr.their_hourly_avg[h]),
+        })).filter(d => d.my > 0 || d.their > 0);
+
+        return (
+          <div className="bg-white dk-card border border-gray-100 dk-border rounded-3xl p-5 sm:p-6">
+            <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2 mb-4">
+              <Timer size={14} /> 回复节奏
+            </h4>
+
+            {/* 对比卡片 */}
+            <div className="grid grid-cols-2 gap-4 mb-5">
+              <div className="bg-[#10aeff]/5 rounded-2xl p-4 text-center">
+                <div className="text-[10px] text-gray-400 mb-1">我的平均回复</div>
+                <div className="text-2xl font-black text-[#10aeff]">{fmtDuration(rr.my_median_seconds)}</div>
+                <div className="text-[10px] text-gray-300 mt-1">中位数 · 均值 {fmtDuration(rr.my_avg_seconds)}</div>
+                <div className="flex justify-center gap-3 mt-2 text-[10px]">
+                  <span className="text-[#07c160]">{rr.my_quick_replies} 次秒回</span>
+                  <span className="text-orange-400">{rr.my_slow_replies} 次慢回</span>
+                </div>
+              </div>
+              <div className="bg-[#576b95]/5 rounded-2xl p-4 text-center">
+                <div className="text-[10px] text-gray-400 mb-1">
+                  <span className={privacyMode ? 'privacy-blur' : ''}>{contactName}</span>的平均回复
+                </div>
+                <div className="text-2xl font-black text-[#576b95]">{fmtDuration(rr.their_median_seconds)}</div>
+                <div className="text-[10px] text-gray-300 mt-1">中位数 · 均值 {fmtDuration(rr.their_avg_seconds)}</div>
+                <div className="flex justify-center gap-3 mt-2 text-[10px]">
+                  <span className="text-[#07c160]">{rr.their_quick_replies} 次秒回</span>
+                  <span className="text-orange-400">{rr.their_slow_replies} 次慢回</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 按小时回复速度对比 */}
+            {hourlyData.length > 3 && (
+              <div>
+                <div className="text-[10px] text-gray-400 mb-2">各时段平均回复速度（秒）</div>
+                <ResponsiveContainer width="100%" height={120}>
+                  <BarChart data={hourlyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
+                    <XAxis dataKey="hour" tick={{ fontSize: 9, fill: '#bbb' }} tickLine={false} interval={2} />
+                    <YAxis tick={false} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: 8, fontSize: 12 }}
+                      formatter={(v: number) => [fmtDuration(v), '']}
+                      labelFormatter={(l: string) => `${l}:00`}
+                    />
+                    <Bar dataKey="my" fill="#10aeff" opacity={0.7} radius={[2, 2, 0, 0]} maxBarSize={8} name="我" />
+                    <Bar dataKey="their" fill="#576b95" opacity={0.7} radius={[2, 2, 0, 0]} maxBarSize={8} name={contactName} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="flex gap-4 mt-1 text-[10px] text-gray-400">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#10aeff] inline-block" />我</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#576b95] inline-block" /><span className={privacyMode ? 'privacy-blur' : ''}>{contactName}</span></span>
+                  <span className="ml-auto">柱子越矮 = 回复越快 · 秒回 = 60秒内 · 慢回 = 1小时以上</span>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* 小时 + 周分布 并排 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

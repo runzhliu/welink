@@ -33,6 +33,7 @@ import (
 	"os"
 	"sort"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -2120,15 +2121,16 @@ func serverMain() {
 			c.JSON(http.StatusOK, getSvc().GetGroupDayMessages(uname, date))
 		})
 
-		// 群聊搜索聊天记录
+		// 群聊搜索聊天记录（支持按发言人过滤）
 		prot.GET("/groups/search", func(c *gin.Context) {
 			uname := c.Query("username")
 			q := c.Query("q")
+			speaker := c.Query("speaker")
 			if uname == "" || q == "" {
 				c.JSON(400, gin.H{"error": "username and q required"})
 				return
 			}
-			c.JSON(http.StatusOK, getSvc().SearchGroupMessages(uname, q))
+			c.JSON(http.StatusOK, getSvc().SearchGroupMessages(uname, q, speaker))
 		})
 
 		// 群聊深度画像
@@ -2149,6 +2151,17 @@ func serverMain() {
 				return
 			}
 			c.JSON(http.StatusOK, getSvc().GetGroupRelationships(uname))
+		})
+
+		// 联系人相似度分析（谁最像谁）
+		prot.GET("/contacts/similarity", func(c *gin.Context) {
+			topN := 20
+			if n := c.Query("top"); n != "" {
+				if v, err := strconv.Atoi(n); err == nil && v > 0 {
+					topN = v
+				}
+			}
+			c.JSON(http.StatusOK, getSvc().GetContactSimilarity(topN))
 		})
 
 		// 获取与联系人的共同群聊

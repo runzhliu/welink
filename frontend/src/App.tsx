@@ -50,6 +50,13 @@ const ALL_TIME: TimeRange = { from: null, to: null, label: '全部' };
 function App() {
   const { dark, toggle: toggleDark } = useDarkMode();
 
+  // 全局字号（rem 基准，默认 16px）
+  const [fontSize, setFontSize] = useState(() => Number(localStorage.getItem('welink_fontSize')) || 16);
+  useEffect(() => {
+    document.documentElement.style.fontSize = `${fontSize}px`;
+    localStorage.setItem('welink_fontSize', String(fontSize));
+  }, [fontSize]);
+
   // State — 从 URL hash 恢复当前 tab + 联系人/群聊弹窗
   // hash 格式：#/stats  #/stats/contact/wxid_abc  #/groups/group/xxx@chatroom
   const VALID_TABS: TabType[] = ['dashboard', 'stats', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'settings'];
@@ -368,6 +375,8 @@ function App() {
             onTogglePrivacyMode={setPrivacyMode}
             dark={dark}
             onToggleDark={toggleDark}
+            fontSize={fontSize}
+            onFontSizeChange={setFontSize}
           />
         ) : (
           <div>

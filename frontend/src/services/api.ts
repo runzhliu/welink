@@ -104,6 +104,10 @@ export const contactsApi = {
 
   getCooling: () =>
     api.get<void, CoolingEntry[]>('/contacts/cooling'),
+
+  getSimilarity: (top = 20) =>
+    api.get<void, import('../types').SimilarityResult>('/contacts/similarity', { params: { top } }),
+
 };
 
 export const searchApi = {
@@ -191,8 +195,8 @@ export const groupsApi = {
   getDayMessages: (username: string, date: string) =>
     api.get<void, GroupChatMessage[]>('/groups/messages', { params: { username, date } }),
 
-  searchMessages: (username: string, q: string) =>
-    api.get<void, GroupChatMessage[]>('/groups/search', { params: { username, q } }),
+  searchMessages: (username: string, q: string, speaker?: string) =>
+    api.get<void, GroupChatMessage[]>('/groups/search', { params: { username, q, ...(speaker ? { speaker } : {}) } }),
 
   exportMessages: (username: string, from?: number, to?: number) =>
     api.get<void, GroupChatMessage[]>('/groups/export', { params: { username, ...(from ? { from } : {}), ...(to ? { to } : {}) } }),
