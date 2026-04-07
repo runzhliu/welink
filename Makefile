@@ -75,25 +75,20 @@ docs-logs:   ## 跟踪官网容器日志
 DOCKER_USER   := runzhliu
 BUILD_PLATFORMS := linux/amd64,linux/arm64
 
-## _server-build-push 对单个镜像分别 build amd64/arm64 后合并推送
+## _server-build-push 使用 docker buildx 一次性多平台构建并推送
 ## 用法：$(call _server-build-push,<tag>,<context>[,extra-build-args])
+## 需要先执行一次：docker buildx create --name welink --use（仅首次）
 define _server-build-push
-	@echo "→ build $(1) amd64"; \
-	PROXY="$${HTTP_PROXY:-$${http_proxy:-$${ALL_PROXY:-$${all_proxy:-}}}}"; \
-	BARGS="$(3)"; [ -n "$$PROXY" ] && BARGS="$$BARGS --build-arg HTTP_PROXY=$$PROXY --build-arg HTTPS_PROXY=$$PROXY"; \
-	docker build $$BARGS --platform linux/amd64 -t $(1):amd64-tmp $(2); \
-	echo "→ build $(1) arm64"; \
-	docker build $$BARGS --platform linux/arm64 -t $(1):arm64-tmp $(2); \
-	echo "→ push $(1)"; \
-	docker push $(1):amd64-tmp; \
-	docker push $(1):arm64-tmp; \
-	docker manifest rm $(1):latest 2>/dev/null || true; \
-	docker manifest create $(1):latest $(1):amd64-tmp $(1):arm64-tmp; \
-	docker manifest push --purge $(1):latest; \
-	docker rmi $(1):amd64-tmp $(1):arm64-tmp 2>/dev/null || true
+	@echo "→ buildx $(1) (amd64 + arm64)"; \
+	docker buildx build $(3) \
+		--platform linux/amd64,linux/arm64 \
+		-t $(1):latest \
+		--push \
+		$(2)
 endef
 
 server-push: ## 【本地执行】多平台构建并推送到 Docker Hub（amd64 + arm64，需已 docker login）
+	@docker buildx use welink 2>/dev/null || docker buildx create --name welink --driver docker-container --use
 	$(call _server-build-push,$(DOCKER_USER)/welink-website,docs/,--build-arg VERSION=$(DOCS_VERSION))
 	$(call _server-build-push,$(DOCKER_USER)/welink-frontend,frontend/)
 	$(call _server-build-push,$(DOCKER_USER)/welink-backend,backend/,--build-arg APP_VERSION=$(APP_VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT))
