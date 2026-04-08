@@ -521,9 +521,17 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                       )}
                       <button
                         onClick={() => {
-                          const header = '排名,成员,消息数,最后发言\n';
+                          const header = '排名,成员,微信号,消息数,首次发言,最后发言\n';
+                          const esc = (s: string) => `"${(s || '').replace(/"/g, '""')}"`;
                           const rows = sortedMembers.map((m, i) =>
-                            [i + 1, `"${m.speaker}"`, m.count, m.last_message_time || '无'].join(',')
+                            [
+                              i + 1,
+                              esc(m.speaker),
+                              esc(m.username || ''),
+                              m.count,
+                              esc(m.first_message_time || '未发言'),
+                              esc(m.last_message_time || '未发言'),
+                            ].join(',')
                           ).join('\n');
                           const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8' });
                           const url = URL.createObjectURL(blob);
