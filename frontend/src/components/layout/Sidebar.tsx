@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { Bot, BarChart2, Database, Sun, Moon, MessagesSquare, BookOpen, Github, Search, GitCommitHorizontal, Hourglass, Heart, X, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bot, BarChart2, Database, Sun, Moon, MessagesSquare, MessageCircle, BookOpen, Github, Search, GitCommitHorizontal, Hourglass, Heart, X, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { TabType } from '../../types';
 
 interface SidebarProps {
@@ -41,7 +41,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
 
   const navItems: { tab: TabType; icon: React.ReactNode; label: string }[] = [
     { tab: 'dashboard', icon: <Bot size={20} strokeWidth={2} />,              label: 'AI 首页' },
-    { tab: 'stats',     icon: <BarChart2 size={20} strokeWidth={2} />,        label: '数据概览' },
+    { tab: 'stats',     icon: <BarChart2 size={20} strokeWidth={2} />,        label: 'Dashboard' },
+    { tab: 'contacts',  icon: <MessageCircle size={20} strokeWidth={2} />,    label: '私聊' },
     { tab: 'groups',    icon: <MessagesSquare size={20} strokeWidth={2} />,   label: '群聊' },
     { tab: 'timeline',  icon: <GitCommitHorizontal size={20} strokeWidth={2} />, label: '时间线' },
     { tab: 'calendar',    icon: <Hourglass size={20} strokeWidth={2} />,        label: '时光机' },

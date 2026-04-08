@@ -2153,6 +2153,11 @@ func serverMain() {
 			c.JSON(http.StatusOK, getSvc().GetGroupRelationships(uname))
 		})
 
+		// 红包/转账全局总览
+		prot.GET("/contacts/money-overview", func(c *gin.Context) {
+			c.JSON(http.StatusOK, getSvc().GetMoneyOverview())
+		})
+
 		// 联系人相似度分析（谁最像谁）
 		prot.GET("/contacts/similarity", func(c *gin.Context) {
 			topN := 20

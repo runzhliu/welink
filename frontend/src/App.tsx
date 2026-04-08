@@ -13,6 +13,7 @@ import { Header } from './components/layout/Header';
 // Dashboard Components
 import { AIHomePage } from './components/dashboard/AIHomePage';
 import { StatsPage } from './components/dashboard/StatsPage';
+import { ContactsPage } from './components/dashboard/ContactsPage';
 import { DatabaseView } from './components/dashboard/DatabaseView';
 import { SearchView } from './components/search/SearchView';
 import { TimelineView } from './components/timeline/TimelineView';
@@ -59,7 +60,7 @@ function App() {
 
   // State — 从 URL hash 恢复当前 tab + 联系人/群聊弹窗
   // hash 格式：#/stats  #/stats/contact/wxid_abc  #/groups/group/xxx@chatroom
-  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'settings'];
+  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'contacts', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'settings'];
 
   const parseHash = (): { tab: TabType; contactId?: string; groupId?: string } => {
     const raw = window.location.hash.replace('#/', '').replace('#', '');
@@ -333,9 +334,14 @@ function App() {
         ) : activeTab === 'stats' ? (
           <StatsPage
             contacts={contacts}
-            filteredContacts={filteredContacts}
             globalStats={globalStats}
             healthStatus={healthStatus}
+            onContactClick={handleContactClick}
+          />
+        ) : activeTab === 'contacts' ? (
+          <ContactsPage
+            contacts={contacts}
+            filteredContacts={filteredContacts}
             statsLoading={statsLoading}
             search={search}
             onSearchChange={setSearch}

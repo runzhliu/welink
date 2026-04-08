@@ -130,7 +130,7 @@ export interface BackendStatus {
   total_cached: number;
 }
 
-export type TabType = 'dashboard' | 'stats' | 'db' | 'groups' | 'search' | 'timeline' | 'calendar' | 'anniversary' | 'settings';
+export type TabType = 'dashboard' | 'stats' | 'contacts' | 'db' | 'groups' | 'search' | 'timeline' | 'calendar' | 'anniversary' | 'settings';
 
 export interface DetectedEvent {
   type: string;
@@ -316,6 +316,26 @@ export interface QueryResult {
   columns: string[];
   rows: (string | number | null)[][];
   error?: string;
+}
+
+export interface MoneyContactStat {
+  username: string;
+  name: string;
+  avatar: string;
+  sent_red_packet: number;
+  recv_red_packet: number;
+  sent_transfer: number;
+  recv_transfer: number;
+  total: number;
+}
+
+export interface MoneyOverview {
+  total_red_packet: number;
+  total_transfer: number;
+  total_sent: number;
+  total_recv: number;
+  monthly_trend: Record<string, [number, number]>; // [sent, recv]
+  contacts: MoneyContactStat[];
 }
 
 // null means "all time"

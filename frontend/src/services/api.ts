@@ -108,6 +108,8 @@ export const contactsApi = {
   getSimilarity: (top = 20) =>
     api.get<void, import('../types').SimilarityResult>('/contacts/similarity', { params: { top } }),
 
+  getMoneyOverview: () =>
+    api.get<void, import('../types').MoneyOverview>('/contacts/money-overview'),
 };
 
 export const searchApi = {

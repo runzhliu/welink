@@ -200,6 +200,10 @@ type ContactService struct {
 	filterFrom       int64 // 全局时间范围过滤（Unix 秒，0=不限）
 	filterTo         int64
 	calendarHeatmap  map[string]int // 全局每日消息量（联系人+群聊），performAnalysis 后可读
+	similarityCache  *SimilarityResult // 联系人相似度缓存
+	similarityMu     sync.RWMutex
+	moneyCache       *MoneyOverview    // 红包转账缓存
+	moneyMu          sync.RWMutex
 }
 
 // 强化的系统话术过滤词库
@@ -325,6 +329,13 @@ func (s *ContactService) Reinitialize(from, to int64) {
 	s.groupRelCache = make(map[string]*RelationshipGraph)
 	s.groupRelComputing = make(map[string]bool)
 	s.groupDetailMu.Unlock()
+
+	s.similarityMu.Lock()
+	s.similarityCache = nil
+	s.similarityMu.Unlock()
+	s.moneyMu.Lock()
+	s.moneyCache = nil
+	s.moneyMu.Unlock()
 
 	go func() {
 		log.Printf("[INIT] Reinitializing with from=%d to=%d", from, to)
@@ -1440,6 +1451,14 @@ type SimilarityResult struct {
 // GetContactSimilarity 基于聊天风格特征计算联系人间相似度，返回最相似的 Top N 对。
 // 特征向量：消息类型分布(归一化) + 平均消息长度(归一化) + 24h 活跃分布(归一化)
 func (s *ContactService) GetContactSimilarity(topN int) *SimilarityResult {
+	s.similarityMu.RLock()
+	if s.similarityCache != nil {
+		result := s.similarityCache
+		s.similarityMu.RUnlock()
+		return result
+	}
+	s.similarityMu.RUnlock()
+
 	s.cacheMu.RLock()
 	stats := s.cache
 	s.cacheMu.RUnlock()
@@ -1585,7 +1604,11 @@ func (s *ContactService) GetContactSimilarity(topN int) *SimilarityResult {
 		})
 	}
 
-	return &SimilarityResult{Pairs: result, Total: len(candidates)}
+	sr := &SimilarityResult{Pairs: result, Total: len(candidates)}
+	s.similarityMu.Lock()
+	s.similarityCache = sr
+	s.similarityMu.Unlock()
+	return sr
 }
 
 func cosineSimFloat64(a, b []float64) float64 {
@@ -1602,6 +1625,165 @@ func cosineSimFloat64(a, b []float64) float64 {
 		return 0
 	}
 	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
+}
+
+// ─── 红包/转账全局总览 ───────────────────────────────────────────────────────
+
+// MoneyContactStat 单个联系人的红包转账统计
+type MoneyContactStat struct {
+	Username     string `json:"username"`
+	Name         string `json:"name"`
+	Avatar       string `json:"avatar"`
+	SentRedPacket   int `json:"sent_red_packet"`   // 我发出红包
+	RecvRedPacket   int `json:"recv_red_packet"`   // 我收到红包
+	SentTransfer    int `json:"sent_transfer"`     // 我发出转账
+	RecvTransfer    int `json:"recv_transfer"`     // 我收到转账
+	Total           int `json:"total"`
+}
+
+// MoneyOverview 全局红包转账总览
+type MoneyOverview struct {
+	TotalRedPacket    int                `json:"total_red_packet"`
+	TotalTransfer     int                `json:"total_transfer"`
+	TotalSent         int                `json:"total_sent"`         // 我发出的总数
+	TotalRecv         int                `json:"total_recv"`         // 我收到的总数
+	MonthlyTrend      map[string][2]int  `json:"monthly_trend"`     // "2024-01" → [sent, recv]
+	Contacts          []MoneyContactStat `json:"contacts"`          // 按 total 排序
+}
+
+// GetMoneyOverview 遍历有红包/转账记录的联系人，聚合全局统计
+func (s *ContactService) GetMoneyOverview() *MoneyOverview {
+	s.moneyMu.RLock()
+	if s.moneyCache != nil {
+		result := s.moneyCache
+		s.moneyMu.RUnlock()
+		return result
+	}
+	s.moneyMu.RUnlock()
+
+	s.cacheMu.RLock()
+	stats := s.cache
+	s.cacheMu.RUnlock()
+
+	// 找出有红包转账的联系人
+	var candidates []ContactStatsExtended
+	for _, st := range stats {
+		if st.MoneyCount > 0 {
+			candidates = append(candidates, st)
+		}
+	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].MoneyCount > candidates[j].MoneyCount })
+
+	overview := &MoneyOverview{
+		MonthlyTrend: make(map[string][2]int),
+		Contacts:     []MoneyContactStat{},
+	}
+
+	tw := s.timeWhere()
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8)
+
+	for _, c := range candidates {
+		wg.Add(1)
+		go func(c ContactStatsExtended) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			tableName := db.GetTableName(c.Username)
+			whereClause := tw
+
+			var sentRP, recvRP, sentTF, recvTF int
+			monthly := make(map[string][2]int)
+
+			for _, mdb := range s.dbMgr.MessageDBs {
+				var contactRowID int64 = -1
+				mdb.QueryRow(fmt.Sprintf("SELECT rowid FROM Name2Id WHERE user_name = %q", c.Username)).Scan(&contactRowID)
+
+				rows, err := mdb.Query(fmt.Sprintf(
+					"SELECT create_time, local_type, message_content, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s",
+					tableName, whereClause))
+				if err != nil {
+					continue
+				}
+				for rows.Next() {
+					var ts int64
+					var lt int
+					var rawContent []byte
+					var ct, senderID int64
+					rows.Scan(&ts, &lt, &rawContent, &ct, &senderID)
+					content := decodeGroupContent(rawContent, ct)
+					typeName := classifyMsgType(lt, content)
+					if typeName != "红包" && typeName != "转账" {
+						continue
+					}
+					isMine := contactRowID < 0 || senderID != contactRowID
+					month := time.Unix(ts, 0).In(s.tz).Format("2006-01")
+
+					if typeName == "红包" {
+						if isMine {
+							sentRP++
+						} else {
+							recvRP++
+						}
+					} else {
+						if isMine {
+							sentTF++
+						} else {
+							recvTF++
+						}
+					}
+					m := monthly[month]
+					if isMine {
+						m[0]++
+					} else {
+						m[1]++
+					}
+					monthly[month] = m
+				}
+				rows.Close()
+			}
+
+			total := sentRP + recvRP + sentTF + recvTF
+			if total == 0 {
+				return
+			}
+			name := c.Remark
+			if name == "" {
+				name = c.Nickname
+			}
+
+			mu.Lock()
+			overview.TotalRedPacket += sentRP + recvRP
+			overview.TotalTransfer += sentTF + recvTF
+			overview.TotalSent += sentRP + sentTF
+			overview.TotalRecv += recvRP + recvTF
+			for m, v := range monthly {
+				cur := overview.MonthlyTrend[m]
+				cur[0] += v[0]
+				cur[1] += v[1]
+				overview.MonthlyTrend[m] = cur
+			}
+			overview.Contacts = append(overview.Contacts, MoneyContactStat{
+				Username: c.Username, Name: name, Avatar: c.SmallHeadURL,
+				SentRedPacket: sentRP, RecvRedPacket: recvRP,
+				SentTransfer: sentTF, RecvTransfer: recvTF,
+				Total: total,
+			})
+			mu.Unlock()
+		}(c)
+	}
+	wg.Wait()
+
+	sort.Slice(overview.Contacts, func(i, j int) bool {
+		return overview.Contacts[i].Total > overview.Contacts[j].Total
+	})
+
+	s.moneyMu.Lock()
+	s.moneyCache = overview
+	s.moneyMu.Unlock()
+	return overview
 }
 
 func (s *ContactService) GetCachedStats() []ContactStatsExtended {
