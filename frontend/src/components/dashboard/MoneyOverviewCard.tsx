@@ -2,7 +2,7 @@
  * 红包/转账全局总览
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Loader2, Gift, ArrowUpRight, ArrowDownLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import type { MoneyOverview } from '../../types';
@@ -10,19 +10,38 @@ import { contactsApi } from '../../services/api';
 import { avatarSrc } from '../../utils/avatar';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
-export const MoneyOverviewCard: React.FC = () => {
+interface Props {
+  blockedUsers?: string[];
+  blockedDisplayNames?: Set<string>;
+}
+
+export const MoneyOverviewCard: React.FC<Props> = ({ blockedUsers = [], blockedDisplayNames }) => {
   const { privacyMode } = usePrivacyMode();
-  const [data, setData] = useState<MoneyOverview | null>(null);
+  const [rawData, setRawData] = useState<MoneyOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     contactsApi.getMoneyOverview().then(res => {
-      if (!cancelled) { setData(res); setLoading(false); }
+      if (!cancelled) { setRawData(res); setLoading(false); }
     }).catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  // 屏蔽过滤
+  const data = useMemo(() => {
+    if (!rawData) return null;
+    const blockedUsernames = new Set(blockedUsers);
+    const blockedNames = blockedDisplayNames ?? new Set<string>();
+    if (blockedUsernames.size === 0 && blockedNames.size === 0) return rawData;
+    return {
+      ...rawData,
+      contacts: rawData.contacts.filter(c =>
+        !blockedUsernames.has(c.username) && !blockedNames.has(c.name)
+      ),
+    };
+  }, [rawData, blockedUsers, blockedDisplayNames]);
 
   if (loading) {
     return (

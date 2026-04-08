@@ -21,9 +21,14 @@ const openExternal = (url: string) => {
   }
 };
 
-export const URLCollectionPage: React.FC = () => {
+interface Props {
+  blockedUsers?: string[];
+  blockedDisplayNames?: Set<string>;
+}
+
+export const URLCollectionPage: React.FC<Props> = ({ blockedUsers = [], blockedDisplayNames }) => {
   const { privacyMode } = usePrivacyMode();
-  const [data, setData] = useState<URLCollectionResult | null>(null);
+  const [rawData, setRawData] = useState<URLCollectionResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [domainFilter, setDomainFilter] = useState<string | null>(null);
@@ -33,10 +38,31 @@ export const URLCollectionPage: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     contactsApi.getURLs().then(res => {
-      if (!cancelled) { setData(res); setLoading(false); }
+      if (!cancelled) { setRawData(res); setLoading(false); }
     }).catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  // 屏蔽过滤
+  const data = useMemo(() => {
+    if (!rawData) return null;
+    const blockedUsernames = new Set(blockedUsers);
+    const blockedNames = blockedDisplayNames ?? new Set<string>();
+    if (blockedUsernames.size === 0 && blockedNames.size === 0) return rawData;
+    const filteredUrls = rawData.urls.filter(u =>
+      !blockedUsernames.has(u.username) && !blockedNames.has(u.contact)
+    );
+    // 重新计算 domain 分布
+    const domainCount: Record<string, number> = {};
+    for (const u of filteredUrls) {
+      domainCount[u.domain] = (domainCount[u.domain] ?? 0) + 1;
+    }
+    return {
+      total: filteredUrls.length,
+      urls: filteredUrls,
+      domains: domainCount,
+    };
+  }, [rawData, blockedUsers, blockedDisplayNames]);
 
   const topDomains = useMemo(() => {
     if (!data) return [];
