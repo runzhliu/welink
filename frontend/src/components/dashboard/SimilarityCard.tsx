@@ -2,23 +2,42 @@
  * 谁最像谁 — 联系人聊天风格相似度排行
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Loader2, Users2 } from 'lucide-react';
 import type { SimilarityResult } from '../../types';
 import { contactsApi } from '../../services/api';
 import { avatarSrc } from '../../utils/avatar';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
-export const SimilarityCard: React.FC = () => {
+interface Props {
+  blockedUsers?: string[];
+  blockedDisplayNames?: Set<string>;
+}
+
+export const SimilarityCard: React.FC<Props> = ({ blockedUsers = [], blockedDisplayNames }) => {
   const { privacyMode } = usePrivacyMode();
-  const [data, setData] = useState<SimilarityResult | null>(null);
+  const [rawData, setRawData] = useState<SimilarityResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
+
+  const data = useMemo(() => {
+    if (!rawData) return null;
+    const blockedUsernames = new Set(blockedUsers);
+    const blockedNames = blockedDisplayNames ?? new Set<string>();
+    if (blockedUsernames.size === 0 && blockedNames.size === 0) return rawData;
+    return {
+      ...rawData,
+      pairs: rawData.pairs.filter(p =>
+        !blockedUsernames.has(p.user1) && !blockedUsernames.has(p.user2) &&
+        !blockedNames.has(p.name1) && !blockedNames.has(p.name2)
+      ),
+    };
+  }, [rawData, blockedUsers, blockedDisplayNames]);
 
   useEffect(() => {
     let cancelled = false;
     contactsApi.getSimilarity(20).then(res => {
-      if (!cancelled) { setData(res); setLoading(false); }
+      if (!cancelled) { setRawData(res); setLoading(false); }
     }).catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);

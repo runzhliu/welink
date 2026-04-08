@@ -32,6 +32,8 @@ interface StatsPageProps {
   globalStats: GlobalStats | null;
   healthStatus: HealthStatus;
   onContactClick: (c: ContactStats) => void;
+  blockedUsers: string[];
+  blockedDisplayNames: Set<string>;
 }
 
 const LAYOUT_KEY = 'welink_stats_layout_v3';
@@ -75,6 +77,8 @@ export const StatsPage: React.FC<StatsPageProps> = ({
   globalStats,
   healthStatus,
   onContactClick,
+  blockedUsers,
+  blockedDisplayNames,
 }) => {
   const [editMode, setEditMode] = useState(false);
   const [layouts, setLayouts] = useState<Layouts>(() => {
@@ -165,7 +169,7 @@ export const StatsPage: React.FC<StatsPageProps> = ({
       case 'hourly':
         return <HourlyHeatmap data={globalStats} />;
       case 'self':
-        return <SelfPortraitCard />;
+        return <SelfPortraitCard blockedDisplayNames={blockedDisplayNames} />;
       case 'breadth':
         return <SocialBreadthCard />;
       case 'social-report':
@@ -177,9 +181,9 @@ export const StatsPage: React.FC<StatsPageProps> = ({
       case 'late-night-guard':
         return <LateNightGuard globalStats={globalStats} contacts={contacts} onContactClick={onContactClick} />;
       case 'similarity':
-        return <SimilarityCard />;
+        return <SimilarityCard blockedUsers={blockedUsers} blockedDisplayNames={blockedDisplayNames} />;
       case 'money':
-        return <MoneyOverviewCard />;
+        return <MoneyOverviewCard blockedUsers={blockedUsers} blockedDisplayNames={blockedDisplayNames} />;
       case 'recall':
         return <RecallRanking contacts={contacts} onContactClick={onContactClick} />;
       default:

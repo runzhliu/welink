@@ -338,6 +338,8 @@ function App() {
             globalStats={globalStats}
             healthStatus={healthStatus}
             onContactClick={handleContactClick}
+            blockedUsers={blockedUsers}
+            blockedDisplayNames={blockedDisplayNames}
           />
         ) : activeTab === 'contacts' ? (
           <ContactsPage
@@ -367,7 +369,7 @@ function App() {
             blockedGroups={blockedGroups}
           />
         ) : activeTab === 'urls' ? (
-          <URLCollectionPage />
+          <URLCollectionPage blockedUsers={blockedUsers} blockedDisplayNames={blockedDisplayNames} />
         ) : activeTab === 'settings' ? (
           <SettingsPage
             isAppMode={appInfo.app_mode}

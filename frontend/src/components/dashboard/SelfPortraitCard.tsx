@@ -11,7 +11,11 @@ import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
-export const SelfPortraitCard: React.FC = () => {
+interface Props {
+  blockedDisplayNames?: Set<string>;
+}
+
+export const SelfPortraitCard: React.FC<Props> = ({ blockedDisplayNames }) => {
   const { privacyMode } = usePrivacyMode();
   const [data, setData] = useState<SelfPortrait | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,6 +27,11 @@ export const SelfPortraitCard: React.FC = () => {
     }).catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  // 如果最常联系的人被屏蔽，隐藏该字段
+  const displayMostContacted = data && (!blockedDisplayNames || !blockedDisplayNames.has(data.most_contacted_name))
+    ? data.most_contacted_name
+    : '';
 
   if (loading) {
     return (
@@ -91,12 +100,12 @@ export const SelfPortraitCard: React.FC = () => {
             你最爱在 <b className="text-[#1d1d1f] dk-text">{WEEKDAYS[data.top_active_weekday]}</b> 发消息
           </span>
         </div>
-        {data.most_contacted_name && (
+        {displayMostContacted && (
           <div className="flex items-center gap-2">
             <User size={12} className="text-gray-400 flex-shrink-0" />
             <span className="text-gray-500 dk-text">
               最常联系的人是{' '}
-              <b className={`text-[#07c160] ${privacyMode ? 'privacy-blur' : ''}`}>{data.most_contacted_name}</b>
+              <b className={`text-[#07c160] ${privacyMode ? 'privacy-blur' : ''}`}>{displayMostContacted}</b>
               <span className="text-gray-400 font-normal ml-1">（给 TA 发过 {data.most_contacted_count.toLocaleString()} 条）</span>
             </span>
           </div>

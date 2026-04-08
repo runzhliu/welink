@@ -206,6 +206,12 @@ type ContactService struct {
 	similarityMu     sync.RWMutex
 	moneyCache       *MoneyOverview    // 红包转账缓存
 	moneyMu          sync.RWMutex
+	selfPortraitCache *SelfPortrait    // 个人自画像缓存
+	selfPortraitMu    sync.RWMutex
+	socialBreadthCache []SocialBreadthPoint // 每日社交广度缓存
+	socialBreadthMu    sync.RWMutex
+	urlCollectionCache *URLCollectionResult // URL 收藏夹缓存
+	urlCollectionMu    sync.RWMutex
 }
 
 // 强化的系统话术过滤词库
@@ -338,6 +344,15 @@ func (s *ContactService) Reinitialize(from, to int64) {
 	s.moneyMu.Lock()
 	s.moneyCache = nil
 	s.moneyMu.Unlock()
+	s.selfPortraitMu.Lock()
+	s.selfPortraitCache = nil
+	s.selfPortraitMu.Unlock()
+	s.socialBreadthMu.Lock()
+	s.socialBreadthCache = nil
+	s.socialBreadthMu.Unlock()
+	s.urlCollectionMu.Lock()
+	s.urlCollectionCache = nil
+	s.urlCollectionMu.Unlock()
 
 	go func() {
 		log.Printf("[INIT] Reinitializing with from=%d to=%d", from, to)
@@ -936,6 +951,14 @@ var urlRe = regexp.MustCompile(`https?://[^\s<>"'\x{3000}-\x{303F}\x{FF00}-\x{FF
 
 // GetURLCollection 扫描所有联系人的文本消息，提取所有 URL
 func (s *ContactService) GetURLCollection() *URLCollectionResult {
+	s.urlCollectionMu.RLock()
+	if s.urlCollectionCache != nil {
+		result := s.urlCollectionCache
+		s.urlCollectionMu.RUnlock()
+		return result
+	}
+	s.urlCollectionMu.RUnlock()
+
 	s.cacheMu.RLock()
 	stats := s.cache
 	s.cacheMu.RUnlock()
@@ -1041,6 +1064,10 @@ func (s *ContactService) GetURLCollection() *URLCollectionResult {
 
 	sort.Slice(result.URLs, func(i, j int) bool { return result.URLs[i].Time > result.URLs[j].Time })
 	result.Total = len(result.URLs)
+
+	s.urlCollectionMu.Lock()
+	s.urlCollectionCache = result
+	s.urlCollectionMu.Unlock()
 	return result
 }
 
@@ -1064,6 +1091,14 @@ type SocialBreadthPoint struct {
 
 // GetSocialBreadth 返回每日"联系了多少不同的人"时间序列
 func (s *ContactService) GetSocialBreadth() []SocialBreadthPoint {
+	s.socialBreadthMu.RLock()
+	if s.socialBreadthCache != nil {
+		result := s.socialBreadthCache
+		s.socialBreadthMu.RUnlock()
+		return result
+	}
+	s.socialBreadthMu.RUnlock()
+
 	s.cacheMu.RLock()
 	stats := s.cache
 	s.cacheMu.RUnlock()
@@ -1132,6 +1167,10 @@ func (s *ContactService) GetSocialBreadth() []SocialBreadthPoint {
 		})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Date < result[j].Date })
+
+	s.socialBreadthMu.Lock()
+	s.socialBreadthCache = result
+	s.socialBreadthMu.Unlock()
 	return result
 }
 
@@ -1154,6 +1193,14 @@ type SelfPortrait struct {
 
 // GetSelfPortrait 聚合"我"方向的消息数据，生成个人自画像
 func (s *ContactService) GetSelfPortrait() *SelfPortrait {
+	s.selfPortraitMu.RLock()
+	if s.selfPortraitCache != nil {
+		result := s.selfPortraitCache
+		s.selfPortraitMu.RUnlock()
+		return result
+	}
+	s.selfPortraitMu.RUnlock()
+
 	s.cacheMu.RLock()
 	stats := s.cache
 	s.cacheMu.RUnlock()
@@ -1275,6 +1322,9 @@ func (s *ContactService) GetSelfPortrait() *SelfPortrait {
 		portrait.MostContactedCount = perContact[0].count
 	}
 
+	s.selfPortraitMu.Lock()
+	s.selfPortraitCache = portrait
+	s.selfPortraitMu.Unlock()
 	return portrait
 }
 
