@@ -110,6 +110,18 @@ export const contactsApi = {
 
   getMoneyOverview: () =>
     api.get<void, import('../types').MoneyOverview>('/contacts/money-overview'),
+
+  getURLs: () =>
+    api.get<void, import('../types').URLCollectionResult>('/contacts/urls'),
+
+  getSocialBreadth: () =>
+    api.get<void, import('../types').SocialBreadthPoint[]>('/contacts/social-breadth'),
+
+  getSelfPortrait: () =>
+    api.get<void, import('../types').SelfPortrait>('/contacts/self-portrait'),
+
+  getCommonCircle: (user1: string, user2: string) =>
+    api.get<void, import('../types').CommonCircleResult>('/contacts/common-circle', { params: { user1, user2 } }),
 };
 
 export const searchApi = {

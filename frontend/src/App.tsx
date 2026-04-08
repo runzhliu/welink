@@ -14,6 +14,7 @@ import { Header } from './components/layout/Header';
 import { AIHomePage } from './components/dashboard/AIHomePage';
 import { StatsPage } from './components/dashboard/StatsPage';
 import { ContactsPage } from './components/dashboard/ContactsPage';
+import { URLCollectionPage } from './components/dashboard/URLCollectionPage';
 import { DatabaseView } from './components/dashboard/DatabaseView';
 import { SearchView } from './components/search/SearchView';
 import { TimelineView } from './components/timeline/TimelineView';
@@ -60,7 +61,7 @@ function App() {
 
   // State — 从 URL hash 恢复当前 tab + 联系人/群聊弹窗
   // hash 格式：#/stats  #/stats/contact/wxid_abc  #/groups/group/xxx@chatroom
-  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'contacts', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'settings'];
+  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'contacts', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'urls', 'settings'];
 
   const parseHash = (): { tab: TabType; contactId?: string; groupId?: string } => {
     const raw = window.location.hash.replace('#/', '').replace('#', '');
@@ -365,6 +366,8 @@ function App() {
             }}
             blockedGroups={blockedGroups}
           />
+        ) : activeTab === 'urls' ? (
+          <URLCollectionPage />
         ) : activeTab === 'settings' ? (
           <SettingsPage
             isAppMode={appInfo.app_mode}

@@ -3,8 +3,8 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, Legend } from 'recharts';
-import { Moon, Gift, MessageSquare, Zap, ArrowUpRight, ArrowDownLeft, Timer } from 'lucide-react';
+import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, Legend } from 'recharts';
+import { Moon, Gift, MessageSquare, Zap, ArrowUpRight, ArrowDownLeft, Timer, Activity } from 'lucide-react';
 import type { ContactDetail } from '../../types';
 
 function fmtDuration(seconds: number): string {
@@ -349,6 +349,127 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
           </div>
         </div>
       )}
+
+      {/* 间隔分布直方图 */}
+      {detail.interval_buckets && (() => {
+        const buckets = detail.interval_buckets;
+        const labels: Array<[string, string]> = [
+          ['10s', '10 秒内'],
+          ['1min', '1 分钟内'],
+          ['10min', '10 分钟内'],
+          ['1h', '1 小时内'],
+          ['6h', '6 小时内'],
+          ['1d', '1 天内'],
+        ];
+        const total = labels.reduce((s, [k]) => s + (buckets[k] ?? 0), 0);
+        if (total === 0) return null;
+        const maxVal = Math.max(...labels.map(([k]) => buckets[k] ?? 0));
+
+        return (
+          <div className="bg-white dk-card border border-gray-100 dk-border rounded-3xl p-5 sm:p-6">
+            <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2 mb-1">
+              <Timer size={14} /> 消息间隔分布
+            </h4>
+            <p className="text-[10px] text-gray-400 mb-3">相邻消息之间的时间间隔分布，看看你们是秒回型还是慢热型</p>
+            <div className="space-y-2">
+              {labels.map(([key, label]) => {
+                const cnt = buckets[key] ?? 0;
+                const pct = total > 0 ? cnt / total * 100 : 0;
+                const width = maxVal > 0 ? cnt / maxVal * 100 : 0;
+                return (
+                  <div key={key} className="flex items-center gap-3">
+                    <span className="w-20 text-xs text-gray-500 dk-text flex-shrink-0">{label}</span>
+                    <div className="flex-1 h-5 bg-gray-50 dark:bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#07c160] to-[#10aeff] transition-all duration-500"
+                        style={{ width: `${Math.max(width, cnt > 0 ? 3 : 0)}%` }}
+                      />
+                    </div>
+                    <span className="w-16 text-right text-xs font-bold text-[#1d1d1f] dk-text flex-shrink-0 tabular-nums">
+                      {cnt.toLocaleString()}
+                    </span>
+                    <span className="w-10 text-right text-[10px] text-gray-400 flex-shrink-0 tabular-nums">
+                      {pct.toFixed(1)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 聊天密度曲线 */}
+      {detail.density_curve && (() => {
+        const entries = Object.entries(detail.density_curve)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([month, avgSec]) => ({
+            month,
+            label: `${month.slice(2, 4)}/${month.slice(5)}`,
+            avgMin: Math.round(avgSec / 60),       // 平均间隔（分钟）
+            density: avgSec > 0 ? Math.round(3600 / avgSec * 10) / 10 : 0, // 条/小时
+          }));
+        if (entries.length < 3) return null;
+
+        const maxDensity = Math.max(...entries.map(e => e.density));
+        const minDensity = Math.min(...entries.map(e => e.density));
+        const latestDensity = entries[entries.length - 1]?.density ?? 0;
+        const earliestDensity = entries[0]?.density ?? 0;
+        const trend = latestDensity > earliestDensity * 1.2 ? 'warming' : latestDensity < earliestDensity * 0.8 ? 'cooling' : 'stable';
+
+        return (
+          <div className="bg-white dk-card border border-gray-100 dk-border rounded-3xl p-5 sm:p-6">
+            <div className="flex items-center justify-between mb-1">
+              <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                <Activity size={14} /> 聊天密度曲线
+              </h4>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                trend === 'warming' ? 'bg-[#07c160]/10 text-[#07c160]' :
+                trend === 'cooling' ? 'bg-red-50 text-red-400 dark:bg-red-900/20' :
+                'bg-gray-100 text-gray-500 dark:bg-white/10'
+              }`}>
+                {trend === 'warming' ? '趋势升温' : trend === 'cooling' ? '趋势降温' : '趋势平稳'}
+              </span>
+            </div>
+            <p className="text-[10px] text-gray-400 mb-3">每月活跃时段内的平均聊天频率（条/小时），曲线越高聊天越密集</p>
+            <div className="flex gap-3 mb-3 text-[10px]">
+              <span className="px-2 py-0.5 rounded-full bg-[#07c160]/10 text-[#07c160] font-bold">
+                最密集 {maxDensity.toFixed(1)} 条/时
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-white/10 font-bold">
+                最稀疏 {minDensity.toFixed(1)} 条/时
+              </span>
+            </div>
+            <ResponsiveContainer width="100%" height={130}>
+              <AreaChart data={entries} margin={{ top: 4, right: 4, bottom: 0, left: -30 }}>
+                <defs>
+                  <linearGradient id="densityGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={trend === 'cooling' ? '#fa5151' : '#07c160'} stopOpacity={0.3} />
+                    <stop offset="100%" stopColor={trend === 'cooling' ? '#fa5151' : '#07c160'} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#bbb' }} tickLine={false}
+                  interval={Math.max(0, Math.floor(entries.length / 8) - 1)} />
+                <YAxis tick={false} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 8, fontSize: 12 }}
+                  formatter={(v: number) => [`${v.toFixed(1)} 条/小时`, '聊天密度']}
+                  labelFormatter={(l: string) => `20${l.replace('/', ' 年 ')} 月`}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="density"
+                  stroke={trend === 'cooling' ? '#fa5151' : '#07c160'}
+                  strokeWidth={2}
+                  fill="url(#densityGrad)"
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()}
 
       {dayPanel && (
         <DayChatPanel

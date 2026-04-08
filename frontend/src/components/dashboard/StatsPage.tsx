@@ -15,6 +15,9 @@ import { DriftingApart } from './DriftingApart';
 import { LateNightGuard } from './LateNightGuard';
 import { SimilarityCard } from './SimilarityCard';
 import { MoneyOverviewCard } from './MoneyOverviewCard';
+import { RecallRanking } from './RecallRanking';
+import { SelfPortraitCard } from './SelfPortraitCard';
+import { SocialBreadthCard } from './SocialBreadthCard';
 import { formatCompactNumber } from '../../utils/formatters';
 
 interface StatsPageProps {
@@ -67,6 +70,12 @@ export const StatsPage: React.FC<StatsPageProps> = ({
         <HourlyHeatmap data={globalStats} />
       </div>
 
+      {/* 个人自画像 + 社交广度 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-6 sm:mb-8">
+        <SelfPortraitCard />
+        <SocialBreadthCard />
+      </div>
+
       {/* Social Report + Drifting Apart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-6 sm:mb-8">
         <SocialReport contacts={contacts} globalStats={globalStats} healthStatus={healthStatus} />
@@ -83,6 +92,11 @@ export const StatsPage: React.FC<StatsPageProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-6 sm:mb-8">
         <SimilarityCard />
         <MoneyOverviewCard />
+      </div>
+
+      {/* 消息撤回排行 */}
+      <div className="mb-6 sm:mb-8">
+        <RecallRanking contacts={contacts} onContactClick={onContactClick} />
       </div>
     </div>
   );

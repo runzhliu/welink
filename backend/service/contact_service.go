@@ -93,9 +93,11 @@ type ContactDetail struct {
 	RedPacketCount    int64          `json:"red_packet_count"`    // 红包次数
 	TransferCount     int64          `json:"transfer_count"`      // 转账次数
 	MoneyTimeline     []MoneyEvent   `json:"money_timeline"`      // 红包/转账时间线
-	InitiationCnt     int64          `json:"initiation_count"`    // 主动发起对话次数（间隔>6h）
-	TotalSessions     int64          `json:"total_sessions"`
-	ReplyRhythm       *ReplyRhythm   `json:"reply_rhythm,omitempty"`
+	InitiationCnt     int64              `json:"initiation_count"`    // 主动发起对话次数（间隔>6h）
+	TotalSessions     int64              `json:"total_sessions"`
+	ReplyRhythm       *ReplyRhythm       `json:"reply_rhythm,omitempty"`
+	DensityCurve      map[string]float64 `json:"density_curve,omitempty"` // "2024-01" → 月均消息间隔（秒）
+	IntervalBuckets   map[string]int     `json:"interval_buckets,omitempty"` // "10s"/"1min"/"10min"/"1h"/"6h"/"1d" → 次数
 }
 
 type ContactStatsExtended struct {
@@ -729,6 +731,15 @@ func (s *ContactService) GetContactDetail(username string) *ContactDetail {
 	var prevTs int64
 	var prevIsMine bool
 	var prevMsgTs int64
+	// 密度曲线：按月统计消息间隔
+	type monthInterval struct {
+		totalSec int64
+		count    int
+	}
+	densityMonthly := make(map[string]*monthInterval)
+	var densityPrevTs int64
+	// 间隔分布桶: 10s / 1min / 10min / 1h / 6h / 1d
+	intervalBuckets := map[string]int{"10s": 0, "1min": 0, "10min": 0, "1h": 0, "6h": 0, "1d": 0}
 	var myReplyDelays []int64   // 我的回复间隔（秒）
 	var theirReplyDelays []int64 // 对方的回复间隔（秒）
 	type hourlyDelay struct {
@@ -758,6 +769,38 @@ func (s *ContactService) GetContactDetail(username string) *ContactDetail {
 
 			isMineMsg := contactRowID < 0 || senderID != contactRowID
 			month := dt.Format("2006-01")
+
+			// 密度曲线：记录消息间隔（排除超过 24h 的间隔，避免非活跃时段拉高均值）
+			if densityPrevTs > 0 {
+				gap := ts - densityPrevTs
+				if gap > 0 {
+					if gap <= 86400 {
+						mi := densityMonthly[month]
+						if mi == nil {
+							mi = &monthInterval{}
+							densityMonthly[month] = mi
+						}
+						mi.totalSec += gap
+						mi.count++
+					}
+					// 间隔分布桶
+					switch {
+					case gap <= 10:
+						intervalBuckets["10s"]++
+					case gap <= 60:
+						intervalBuckets["1min"]++
+					case gap <= 600:
+						intervalBuckets["10min"]++
+					case gap <= 3600:
+						intervalBuckets["1h"]++
+					case gap <= 21600:
+						intervalBuckets["6h"]++
+					default:
+						intervalBuckets["1d"]++
+					}
+				}
+			}
+			densityPrevTs = ts
 
 			detail.HourlyDist[h]++
 			detail.WeeklyDist[w]++
@@ -852,7 +895,387 @@ func (s *ContactService) GetContactDetail(username string) *ContactDetail {
 		detail.ReplyRhythm = rr
 	}
 
+	// 密度曲线：月均消息间隔
+	if len(densityMonthly) > 0 {
+		dc := make(map[string]float64, len(densityMonthly))
+		for m, mi := range densityMonthly {
+			if mi.count > 0 {
+				dc[m] = float64(mi.totalSec) / float64(mi.count)
+			}
+		}
+		detail.DensityCurve = dc
+	}
+
+	// 间隔分布直方图
+	detail.IntervalBuckets = intervalBuckets
+
 	return detail
+}
+
+// ─── URL 收藏夹 ─────────────────────────────────────────────────────────────
+
+// URLEntry 一条 URL 记录
+type URLEntry struct {
+	URL      string `json:"url"`
+	Domain   string `json:"domain"`
+	Time     string `json:"time"`     // "2024-03-15 14:23"
+	Contact  string `json:"contact"`  // 来源联系人显示名
+	Username string `json:"username"` // 来源联系人 wxid
+	IsMine   bool   `json:"is_mine"`
+	Context  string `json:"context"`  // 消息原文前 120 字符
+}
+
+// URLCollectionResult URL 收藏夹结果
+type URLCollectionResult struct {
+	Total   int                `json:"total"`
+	Domains map[string]int     `json:"domains"` // 域名 → 次数
+	URLs    []URLEntry         `json:"urls"`
+}
+
+var urlRe = regexp.MustCompile(`https?://[^\s<>"'\x{3000}-\x{303F}\x{FF00}-\x{FFEF}]+`)
+
+// GetURLCollection 扫描所有联系人的文本消息，提取所有 URL
+func (s *ContactService) GetURLCollection() *URLCollectionResult {
+	s.cacheMu.RLock()
+	stats := s.cache
+	s.cacheMu.RUnlock()
+
+	result := &URLCollectionResult{
+		Domains: make(map[string]int),
+		URLs:    []URLEntry{},
+	}
+	tw := s.timeWhere()
+	whereClause := tw
+	if whereClause == "" {
+		whereClause = " WHERE local_type=1"
+	} else {
+		whereClause += " AND local_type=1"
+	}
+
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8)
+
+	for _, c := range stats {
+		if c.TotalMessages == 0 {
+			continue
+		}
+		wg.Add(1)
+		go func(c ContactStatsExtended) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			tableName := db.GetTableName(c.Username)
+			name := c.Remark
+			if name == "" {
+				name = c.Nickname
+			}
+			if name == "" {
+				name = c.Username
+			}
+
+			var urls []URLEntry
+			domainCount := make(map[string]int)
+
+			for _, mdb := range s.dbMgr.MessageDBs {
+				var contactRowID int64 = -1
+				mdb.QueryRow(fmt.Sprintf("SELECT rowid FROM Name2Id WHERE user_name = %q", c.Username)).Scan(&contactRowID)
+
+				rows, err := mdb.Query(fmt.Sprintf(
+					"SELECT create_time, message_content, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s",
+					tableName, whereClause))
+				if err != nil {
+					continue
+				}
+				for rows.Next() {
+					var ts int64
+					var rawContent []byte
+					var ct, senderID int64
+					rows.Scan(&ts, &rawContent, &ct, &senderID)
+					content := decodeGroupContent(rawContent, ct)
+					if content == "" {
+						continue
+					}
+					matches := urlRe.FindAllString(content, -1)
+					if len(matches) == 0 {
+						continue
+					}
+					isMine := contactRowID < 0 || senderID != contactRowID
+					timeStr := time.Unix(ts, 0).In(s.tz).Format("2006-01-02 15:04")
+					ctxRunes := []rune(content)
+					if len(ctxRunes) > 120 {
+						content = string(ctxRunes[:120]) + "…"
+					}
+					for _, u := range matches {
+						// 去掉尾部标点
+						u = strings.TrimRight(u, ".,;!?)")
+						domain := extractDomain(u)
+						domainCount[domain]++
+						urls = append(urls, URLEntry{
+							URL:      u,
+							Domain:   domain,
+							Time:     timeStr,
+							Contact:  name,
+							Username: c.Username,
+							IsMine:   isMine,
+							Context:  content,
+						})
+					}
+				}
+				rows.Close()
+			}
+
+			if len(urls) == 0 {
+				return
+			}
+			mu.Lock()
+			result.URLs = append(result.URLs, urls...)
+			for d, n := range domainCount {
+				result.Domains[d] += n
+			}
+			mu.Unlock()
+		}(c)
+	}
+	wg.Wait()
+
+	sort.Slice(result.URLs, func(i, j int) bool { return result.URLs[i].Time > result.URLs[j].Time })
+	result.Total = len(result.URLs)
+	return result
+}
+
+func extractDomain(url string) string {
+	u := strings.TrimPrefix(url, "https://")
+	u = strings.TrimPrefix(u, "http://")
+	if idx := strings.IndexAny(u, "/?#"); idx >= 0 {
+		u = u[:idx]
+	}
+	return u
+}
+
+// ─── 每日社交广度 ───────────────────────────────────────────────────────────
+
+// SocialBreadthPoint 单日社交广度
+type SocialBreadthPoint struct {
+	Date          string `json:"date"`
+	UniqueContacts int    `json:"unique_contacts"`
+	TotalMessages  int    `json:"total_messages"`
+}
+
+// GetSocialBreadth 返回每日"联系了多少不同的人"时间序列
+func (s *ContactService) GetSocialBreadth() []SocialBreadthPoint {
+	s.cacheMu.RLock()
+	stats := s.cache
+	s.cacheMu.RUnlock()
+
+	// 按天统计: date → set of usernames, and total messages
+	dateContacts := make(map[string]map[string]int) // date → username → count
+
+	tw := s.timeWhere()
+
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8)
+
+	for _, c := range stats {
+		if c.TotalMessages == 0 {
+			continue
+		}
+		wg.Add(1)
+		go func(c ContactStatsExtended) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			tableName := db.GetTableName(c.Username)
+			local := make(map[string]int) // date → count
+
+			for _, mdb := range s.dbMgr.MessageDBs {
+				rows, err := mdb.Query(fmt.Sprintf(
+					"SELECT create_time FROM [%s]%s",
+					tableName, tw))
+				if err != nil {
+					continue
+				}
+				for rows.Next() {
+					var ts int64
+					rows.Scan(&ts)
+					day := time.Unix(ts, 0).In(s.tz).Format("2006-01-02")
+					local[day]++
+				}
+				rows.Close()
+			}
+
+			mu.Lock()
+			for day, cnt := range local {
+				if dateContacts[day] == nil {
+					dateContacts[day] = make(map[string]int)
+				}
+				dateContacts[day][c.Username] = cnt
+			}
+			mu.Unlock()
+		}(c)
+	}
+	wg.Wait()
+
+	// 构造结果
+	result := make([]SocialBreadthPoint, 0, len(dateContacts))
+	for date, contacts := range dateContacts {
+		total := 0
+		for _, n := range contacts {
+			total += n
+		}
+		result = append(result, SocialBreadthPoint{
+			Date:           date,
+			UniqueContacts: len(contacts),
+			TotalMessages:  total,
+		})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Date < result[j].Date })
+	return result
+}
+
+// ─── 个人自画像 ─────────────────────────────────────────────────────────────
+
+// SelfPortrait 个人自画像统计
+type SelfPortrait struct {
+	TotalSent         int64              `json:"total_sent"`            // 我发出的消息总数
+	TotalChars        int64              `json:"total_chars"`           // 我发出的总字数
+	AvgMsgLen         float64            `json:"avg_msg_len"`           // 平均消息长度
+	HourlyDist        [24]int            `json:"hourly_dist"`           // 我的小时分布
+	WeeklyDist        [7]int             `json:"weekly_dist"`           // 我的周分布
+	InitiationCount   int64              `json:"initiation_count"`      // 主动发起次数
+	TotalContacts     int                `json:"total_contacts"`        // 我主动发过消息的人数
+	TopActiveHour     int                `json:"top_active_hour"`       // 最活跃的小时
+	TopActiveWeekday  int                `json:"top_active_weekday"`    // 最活跃的星期
+	MostContactedName string             `json:"most_contacted_name"`   // 最常联系的人
+	MostContactedCount int64             `json:"most_contacted_count"`
+}
+
+// GetSelfPortrait 聚合"我"方向的消息数据，生成个人自画像
+func (s *ContactService) GetSelfPortrait() *SelfPortrait {
+	s.cacheMu.RLock()
+	stats := s.cache
+	s.cacheMu.RUnlock()
+
+	portrait := &SelfPortrait{}
+
+	tw := s.timeWhere()
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8)
+
+	type contactSent struct {
+		name  string
+		count int64
+	}
+	var perContact []contactSent
+
+	for _, c := range stats {
+		if c.TotalMessages == 0 {
+			continue
+		}
+		wg.Add(1)
+		go func(c ContactStatsExtended) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			tableName := db.GetTableName(c.Username)
+			var sent int64
+			var chars int64
+			hourly := [24]int{}
+			weekly := [7]int{}
+
+			for _, mdb := range s.dbMgr.MessageDBs {
+				var contactRowID int64 = -1
+				mdb.QueryRow(fmt.Sprintf("SELECT rowid FROM Name2Id WHERE user_name = %q", c.Username)).Scan(&contactRowID)
+
+				rows, err := mdb.Query(fmt.Sprintf(
+					"SELECT create_time, local_type, message_content, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s",
+					tableName, tw))
+				if err != nil {
+					continue
+				}
+				for rows.Next() {
+					var ts int64
+					var lt int
+					var rawContent []byte
+					var ct, senderID int64
+					rows.Scan(&ts, &lt, &rawContent, &ct, &senderID)
+					isMine := contactRowID < 0 || senderID != contactRowID
+					if !isMine {
+						continue
+					}
+					sent++
+					if lt == 1 {
+						content := decodeGroupContent(rawContent, ct)
+						chars += int64(len([]rune(content)))
+					}
+					dt := time.Unix(ts, 0).In(s.tz)
+					hourly[dt.Hour()]++
+					weekly[int(dt.Weekday())]++
+				}
+				rows.Close()
+			}
+
+			if sent == 0 {
+				return
+			}
+			name := c.Remark
+			if name == "" {
+				name = c.Nickname
+			}
+			if name == "" {
+				name = c.Username
+			}
+
+			mu.Lock()
+			portrait.TotalSent += sent
+			portrait.TotalChars += chars
+			for h := 0; h < 24; h++ {
+				portrait.HourlyDist[h] += hourly[h]
+			}
+			for w := 0; w < 7; w++ {
+				portrait.WeeklyDist[w] += weekly[w]
+			}
+			perContact = append(perContact, contactSent{name: name, count: sent})
+			mu.Unlock()
+		}(c)
+	}
+	wg.Wait()
+
+	portrait.TotalContacts = len(perContact)
+	if portrait.TotalSent > 0 {
+		portrait.AvgMsgLen = float64(portrait.TotalChars) / float64(portrait.TotalSent)
+	}
+
+	// 最活跃小时
+	maxHour := 0
+	for h := 1; h < 24; h++ {
+		if portrait.HourlyDist[h] > portrait.HourlyDist[maxHour] {
+			maxHour = h
+		}
+	}
+	portrait.TopActiveHour = maxHour
+
+	// 最活跃星期
+	maxWeek := 0
+	for w := 1; w < 7; w++ {
+		if portrait.WeeklyDist[w] > portrait.WeeklyDist[maxWeek] {
+			maxWeek = w
+		}
+	}
+	portrait.TopActiveWeekday = maxWeek
+
+	// 最常联系的人
+	sort.Slice(perContact, func(i, j int) bool { return perContact[i].count > perContact[j].count })
+	if len(perContact) > 0 {
+		portrait.MostContactedName = perContact[0].name
+		portrait.MostContactedCount = perContact[0].count
+	}
+
+	return portrait
 }
 
 // ChatMessage 单条聊天消息（用于日历点击查看当天记录）
@@ -2568,6 +2991,202 @@ func (s *ContactService) buildSharedGroupCounts() map[string]int {
 
 // GetCommonGroups 返回当前用户与指定联系人共同所在的群聊列表
 // 判断依据：在群聊消息表中，通过 Name2Id 查找该联系人的 wxid 是否出现过
+// ─── 共同社交圈（两个联系人） ─────────────────────────────────────────────────
+
+// CommonCircleGroup 一个共同群 + 其他成员
+type CommonCircleGroup struct {
+	Username     string   `json:"username"`
+	Name         string   `json:"name"`
+	SmallHeadURL string   `json:"small_head_url"`
+	MemberCount  int      `json:"member_count"`  // 该群总成员数
+	OtherMembers []string `json:"other_members"` // 除两人之外的其他成员名
+}
+
+// CommonFriend 推测的共同好友（出现在多个共同群中）
+type CommonFriend struct {
+	Name          string `json:"name"`
+	Username      string `json:"username"` // wxid，可能为空
+	Avatar        string `json:"avatar,omitempty"`
+	IsMyContact   bool   `json:"is_my_contact"` // 是否是我的好友
+	GroupCount    int    `json:"group_count"`   // 出现在多少个共同群里
+}
+
+// CommonCircleResult 共同社交圈结果
+type CommonCircleResult struct {
+	User1Name    string               `json:"user1_name"`
+	User2Name    string               `json:"user2_name"`
+	SharedGroups []CommonCircleGroup  `json:"shared_groups"`
+	CommonFriends []CommonFriend      `json:"common_friends"` // 按 group_count 降序
+}
+
+// GetCommonCircle 找出两个联系人的共同群和共同好友
+func (s *ContactService) GetCommonCircle(user1, user2 string) *CommonCircleResult {
+	// 查两个联系人在 contact 表中的 id
+	var id1, id2 int64
+	s.dbMgr.ContactDB.QueryRow("SELECT id FROM contact WHERE username = ?", user1).Scan(&id1)
+	s.dbMgr.ContactDB.QueryRow("SELECT id FROM contact WHERE username = ?", user2).Scan(&id2)
+	if id1 == 0 || id2 == 0 {
+		return &CommonCircleResult{SharedGroups: []CommonCircleGroup{}, CommonFriends: []CommonFriend{}}
+	}
+
+	// 查两人的显示名
+	nameMap := s.loadContactNameMap()
+	name1 := nameMap[user1]
+	name2 := nameMap[user2]
+
+	// 查找两人同时在的所有群（从 chatroom_member 表）
+	rows, err := s.dbMgr.ContactDB.Query(`
+		SELECT cr.id, cr.username
+		FROM chat_room cr
+		WHERE EXISTS (SELECT 1 FROM chatroom_member cm WHERE cm.room_id = cr.id AND cm.member_id = ?)
+		  AND EXISTS (SELECT 1 FROM chatroom_member cm WHERE cm.room_id = cr.id AND cm.member_id = ?)
+	`, id1, id2)
+	if err != nil {
+		return &CommonCircleResult{
+			User1Name: name1, User2Name: name2,
+			SharedGroups: []CommonCircleGroup{}, CommonFriends: []CommonFriend{},
+		}
+	}
+	defer rows.Close()
+
+	type roomEntry struct {
+		id       int64
+		username string
+	}
+	var rooms []roomEntry
+	for rows.Next() {
+		var r roomEntry
+		rows.Scan(&r.id, &r.username)
+		rooms = append(rooms, r)
+	}
+
+	// 查所有现有群的元信息（name, avatar）
+	groupMeta := make(map[string]struct{ name, avatar string })
+	gRows, _ := s.dbMgr.ContactDB.Query(
+		`SELECT username, COALESCE(remark,''), COALESCE(nick_name,''), COALESCE(small_head_url,'') FROM contact WHERE username LIKE '%@chatroom'`)
+	if gRows != nil {
+		for gRows.Next() {
+			var uname, remark, nick, avatar string
+			gRows.Scan(&uname, &remark, &nick, &avatar)
+			name := remark
+			if name == "" {
+				name = nick
+			}
+			if name == "" {
+				name = uname
+			}
+			groupMeta[uname] = struct{ name, avatar string }{name, avatar}
+		}
+		gRows.Close()
+	}
+
+	// 查我的所有好友 wxid 集合（判断 is_my_contact）
+	myContacts := make(map[string]string) // wxid → avatar
+	cRows, _ := s.dbMgr.ContactDB.Query(
+		"SELECT username, COALESCE(small_head_url,'') FROM contact WHERE verify_flag=0 AND (flag&3 != 0 OR remark != '')")
+	if cRows != nil {
+		for cRows.Next() {
+			var uname, avatar string
+			cRows.Scan(&uname, &avatar)
+			myContacts[uname] = avatar
+		}
+		cRows.Close()
+	}
+
+	// 统计每个共同群的成员 + 汇总出现在多个共同群的"共同好友"
+	type friendStat struct {
+		username string
+		avatar   string
+		isMine   bool
+		count    int
+	}
+	friendMap := make(map[string]*friendStat) // name → stat
+
+	sharedGroups := make([]CommonCircleGroup, 0, len(rooms))
+	for _, r := range rooms {
+		// 查该群所有成员
+		mRows, err := s.dbMgr.ContactDB.Query(`
+			SELECT c.username, COALESCE(c.remark,''), COALESCE(c.nick_name,''), COALESCE(c.small_head_url,'')
+			FROM chatroom_member cm
+			JOIN contact c ON c.id = cm.member_id
+			WHERE cm.room_id = ?
+		`, r.id)
+		if err != nil {
+			continue
+		}
+		var members []string
+		memberCount := 0
+		for mRows.Next() {
+			var uname, remark, nick, avatar string
+			mRows.Scan(&uname, &remark, &nick, &avatar)
+			memberCount++
+			if uname == user1 || uname == user2 {
+				continue
+			}
+			displayName := remark
+			if displayName == "" {
+				displayName = nick
+			}
+			if displayName == "" {
+				displayName = uname
+			}
+			members = append(members, displayName)
+
+			// 累计共同好友出现次数
+			stat := friendMap[displayName]
+			if stat == nil {
+				_, isMine := myContacts[uname]
+				stat = &friendStat{username: uname, avatar: avatar, isMine: isMine}
+				friendMap[displayName] = stat
+			}
+			stat.count++
+		}
+		mRows.Close()
+
+		meta := groupMeta[r.username]
+		sharedGroups = append(sharedGroups, CommonCircleGroup{
+			Username:     r.username,
+			Name:         meta.name,
+			SmallHeadURL: meta.avatar,
+			MemberCount:  memberCount,
+			OtherMembers: members,
+		})
+	}
+
+	// 排序共同群：按成员数升序（小群更可能是紧密圈子）
+	sort.Slice(sharedGroups, func(i, j int) bool {
+		return sharedGroups[i].MemberCount < sharedGroups[j].MemberCount
+	})
+
+	// 共同好友：按出现次数降序，同次数时好友优先
+	commonFriends := make([]CommonFriend, 0, len(friendMap))
+	for name, stat := range friendMap {
+		commonFriends = append(commonFriends, CommonFriend{
+			Name:        name,
+			Username:    stat.username,
+			Avatar:      stat.avatar,
+			IsMyContact: stat.isMine,
+			GroupCount:  stat.count,
+		})
+	}
+	sort.Slice(commonFriends, func(i, j int) bool {
+		if commonFriends[i].GroupCount != commonFriends[j].GroupCount {
+			return commonFriends[i].GroupCount > commonFriends[j].GroupCount
+		}
+		if commonFriends[i].IsMyContact != commonFriends[j].IsMyContact {
+			return commonFriends[i].IsMyContact
+		}
+		return commonFriends[i].Name < commonFriends[j].Name
+	})
+
+	return &CommonCircleResult{
+		User1Name:     name1,
+		User2Name:     name2,
+		SharedGroups:  sharedGroups,
+		CommonFriends: commonFriends,
+	}
+}
+
 func (s *ContactService) GetCommonGroups(contactUsername string) []GroupInfo {
 	// 先拿所有群列表（已有消息的）
 	allGroups := s.GetGroups()

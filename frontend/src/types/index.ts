@@ -90,6 +90,67 @@ export interface ContactDetail {
   initiation_count: number;
   total_sessions: number;
   reply_rhythm?: ReplyRhythm;
+  density_curve?: Record<string, number>; // "2024-01" → 月均消息间隔（秒）
+  interval_buckets?: Record<string, number>; // 10s/1min/10min/1h/6h/1d → 次数
+}
+
+export interface URLEntry {
+  url: string;
+  domain: string;
+  time: string;
+  contact: string;
+  username: string;
+  is_mine: boolean;
+  context: string;
+}
+
+export interface URLCollectionResult {
+  total: number;
+  domains: Record<string, number>;
+  urls: URLEntry[];
+}
+
+export interface SocialBreadthPoint {
+  date: string;
+  unique_contacts: number;
+  total_messages: number;
+}
+
+export interface CommonCircleGroup {
+  username: string;
+  name: string;
+  small_head_url: string;
+  member_count: number;
+  other_members: string[];
+}
+
+export interface CommonFriend {
+  name: string;
+  username: string;
+  avatar?: string;
+  is_my_contact: boolean;
+  group_count: number;
+}
+
+export interface CommonCircleResult {
+  user1_name: string;
+  user2_name: string;
+  shared_groups: CommonCircleGroup[];
+  common_friends: CommonFriend[];
+}
+
+export interface SelfPortrait {
+  total_sent: number;
+  total_chars: number;
+  avg_msg_len: number;
+  hourly_dist: number[];
+  weekly_dist: number[];
+  initiation_count: number;
+  total_contacts: number;
+  top_active_hour: number;
+  top_active_weekday: number;
+  most_contacted_name: string;
+  most_contacted_count: number;
 }
 
 export interface WordCount {
@@ -130,7 +191,7 @@ export interface BackendStatus {
   total_cached: number;
 }
 
-export type TabType = 'dashboard' | 'stats' | 'contacts' | 'db' | 'groups' | 'search' | 'timeline' | 'calendar' | 'anniversary' | 'settings';
+export type TabType = 'dashboard' | 'stats' | 'contacts' | 'db' | 'groups' | 'search' | 'timeline' | 'calendar' | 'anniversary' | 'urls' | 'settings';
 
 export interface DetectedEvent {
   type: string;

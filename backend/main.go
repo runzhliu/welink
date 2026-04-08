@@ -2158,6 +2158,32 @@ func serverMain() {
 			c.JSON(http.StatusOK, getSvc().GetMoneyOverview())
 		})
 
+		// URL 收藏夹
+		prot.GET("/contacts/urls", func(c *gin.Context) {
+			c.JSON(http.StatusOK, getSvc().GetURLCollection())
+		})
+
+		// 每日社交广度
+		prot.GET("/contacts/social-breadth", func(c *gin.Context) {
+			c.JSON(http.StatusOK, getSvc().GetSocialBreadth())
+		})
+
+		// 个人自画像
+		prot.GET("/contacts/self-portrait", func(c *gin.Context) {
+			c.JSON(http.StatusOK, getSvc().GetSelfPortrait())
+		})
+
+		// 共同社交圈（两个联系人的共同群 + 共同好友推测）
+		prot.GET("/contacts/common-circle", func(c *gin.Context) {
+			u1 := c.Query("user1")
+			u2 := c.Query("user2")
+			if u1 == "" || u2 == "" {
+				c.JSON(400, gin.H{"error": "user1 and user2 required"})
+				return
+			}
+			c.JSON(http.StatusOK, getSvc().GetCommonCircle(u1, u2))
+		})
+
 		// 联系人相似度分析（谁最像谁）
 		prot.GET("/contacts/similarity", func(c *gin.Context) {
 			topN := 20

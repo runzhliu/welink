@@ -3,10 +3,11 @@
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { Search, GitCompareArrows, X } from 'lucide-react';
+import { Search, GitCompareArrows, Users, X } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { ContactTable } from './ContactTable';
 import { ComparePanel } from './ComparePanel';
+import { CommonCirclePanel } from './CommonCirclePanel';
 
 interface Props {
   contacts: ContactStats[];
@@ -28,6 +29,7 @@ export const ContactsPage: React.FC<Props> = ({
   const [compareMode, setCompareMode] = useState(false);
   const [compareSelected, setCompareSelected] = useState<Set<string>>(new Set());
   const [showCompare, setShowCompare] = useState(false);
+  const [showCommonCircle, setShowCommonCircle] = useState(false);
 
   const handleCompareToggle = useCallback((username: string) => {
     setCompareSelected(prev => {
@@ -69,6 +71,13 @@ export const ContactsPage: React.FC<Props> = ({
             >
               <GitCompareArrows size={14} />
               {compareMode ? '退出对比' : '对比模式'}
+            </button>
+            <button
+              onClick={() => setShowCommonCircle(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-[#8b5cf6]/10 hover:text-[#8b5cf6] transition-all"
+            >
+              <Users size={14} />
+              共同社交圈
             </button>
           </div>
           <div className="relative">
@@ -124,6 +133,13 @@ export const ContactsPage: React.FC<Props> = ({
         <ComparePanel
           contacts={compareContacts}
           onClose={() => setShowCompare(false)}
+        />
+      )}
+
+      {showCommonCircle && (
+        <CommonCirclePanel
+          contacts={contacts}
+          onClose={() => setShowCommonCircle(false)}
         />
       )}
     </div>
