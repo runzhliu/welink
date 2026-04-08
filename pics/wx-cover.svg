@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900" width="900" height="900">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f0faf4"/>
+      <stop offset="100%" stop-color="#e7f8f0"/>
+    </linearGradient>
+    <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#09d46a"/>
+      <stop offset="100%" stop-color="#07c160"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="10"/>
+      <feOffset dx="0" dy="8" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.18"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="900" height="900" fill="url(#bg)"/>
+
+  <!-- 装饰圆点 -->
+  <circle cx="80" cy="150" r="100" fill="#07c160" opacity="0.06"/>
+  <circle cx="820" cy="750" r="130" fill="#07c160" opacity="0.05"/>
+  <circle cx="780" cy="180" r="60" fill="#07c160" opacity="0.08"/>
+  <circle cx="100" cy="780" r="70" fill="#07c160" opacity="0.07"/>
+
+  <!-- ─── 2.35:1 头图内容区（居中）：y=258 ~ y=642，高度 384 ─── -->
+  <!-- 中间 2.35:1 区域: (900 - 384) / 2 = 258, 258 + 384 = 642 -->
+
+  <!-- Logo（左侧） -->
+  <g transform="translate(80, 342) scale(6)" filter="url(#shadow)">
+    <rect width="32" height="32" rx="7" fill="url(#logoGrad)"/>
+    <g transform="translate(6, 6)">
+      <rect x="1" y="1" width="18" height="14" rx="3" fill="none" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+      <line x1="5" y1="6" x2="15" y2="6" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="5" y1="10" x2="12" y2="10" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+      <polyline points="3,15 1,20 6,17" fill="white" stroke="white" stroke-width="0.5" stroke-linejoin="round"/>
+    </g>
+  </g>
+
+  <!-- 右侧文字区 -->
+  <g transform="translate(330, 258)">
+    <!-- 主标题 -->
+    <text x="0" y="155"
+          font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+          font-size="78"
+          font-weight="900"
+          fill="#1d1d1f"
+          letter-spacing="-2">WeLink</text>
+
+    <!-- 副标题 -->
+    <text x="2" y="200"
+          font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+          font-size="22"
+          font-weight="600"
+          fill="#07c160">
+      AI 驱动 · 微信聊天数据分析
+    </text>
+
+    <!-- 一句话描述 -->
+    <text x="2" y="252"
+          font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+          font-size="18"
+          font-weight="500"
+          fill="#576b95">
+      让 AI 替你重新读完十年微信聊天记录
+    </text>
+
+    <!-- 标签 -->
+    <g transform="translate(0, 280)">
+      <rect x="0" y="0" width="92" height="30" rx="15" fill="#07c160"/>
+      <text x="46" y="20" text-anchor="middle"
+            font-family="-apple-system, 'PingFang SC', sans-serif"
+            font-size="13" font-weight="700" fill="white">完全开源</text>
+
+      <rect x="100" y="0" width="92" height="30" rx="15" fill="white" stroke="#07c160" stroke-width="1.5"/>
+      <text x="146" y="20" text-anchor="middle"
+            font-family="-apple-system, 'PingFang SC', sans-serif"
+            font-size="13" font-weight="700" fill="#07c160">本地运行</text>
+
+      <rect x="200" y="0" width="92" height="30" rx="15" fill="white" stroke="#07c160" stroke-width="1.5"/>
+      <text x="246" y="20" text-anchor="middle"
+            font-family="-apple-system, 'PingFang SC', sans-serif"
+            font-size="13" font-weight="700" fill="#07c160">数据不上云</text>
+    </g>
+  </g>
+</svg>
