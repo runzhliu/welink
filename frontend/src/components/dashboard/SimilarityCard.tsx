@@ -30,8 +30,12 @@ export const SimilarityCard: React.FC = () => {
           <Users2 size={18} className="text-[#8b5cf6]" />
           <h3 className="text-lg font-black text-[#1d1d1f] dk-text">谁最像谁</h3>
         </div>
-        <div className="flex items-center justify-center py-12">
+        <div className="flex flex-col items-center justify-center py-12 gap-3">
           <Loader2 size={24} className="text-[#8b5cf6] animate-spin" />
+          <div className="text-center">
+            <p className="text-xs text-gray-400">正在计算联系人相似度…</p>
+            <p className="text-[10px] text-gray-300 mt-1">提取每人聊天特征向量并两两对比，结果会缓存加速下次访问</p>
+          </div>
         </div>
       </div>
     );

@@ -31,8 +31,12 @@ export const MoneyOverviewCard: React.FC = () => {
           <Gift size={18} className="text-red-500" />
           <h3 className="text-lg font-black text-[#1d1d1f] dk-text">红包 / 转账总览</h3>
         </div>
-        <div className="flex items-center justify-center py-12">
+        <div className="flex flex-col items-center justify-center py-12 gap-3">
           <Loader2 size={24} className="text-red-500 animate-spin" />
+          <div className="text-center">
+            <p className="text-xs text-gray-400">正在统计全部红包和转账记录…</p>
+            <p className="text-[10px] text-gray-300 mt-1">遍历所有联系人的消息识别 wcpay 支付类型，结果会缓存</p>
+          </div>
         </div>
       </div>
     );

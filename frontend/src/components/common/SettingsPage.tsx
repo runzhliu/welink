@@ -1580,9 +1580,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             <User size={16} className="text-[#07c160]" />
             <h4 className="font-bold text-[#1d1d1f] dk-text">屏蔽联系人</h4>
             {blockedUsers.length > 0 && (
-              <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400">
-                {blockedUsers.length} 条
-              </span>
+              <>
+                <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400">
+                  {blockedUsers.length} 条
+                </span>
+                <button
+                  onClick={() => {
+                    if (confirm(`确定清空全部 ${blockedUsers.length} 个屏蔽联系人？`)) {
+                      blockedUsers.forEach(u => onRemoveBlockedUser(u));
+                    }
+                  }}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  清空
+                </button>
+              </>
             )}
           </div>
           <TagList items={blockedUsers} onRemove={onRemoveBlockedUser} emptyText="暂无屏蔽联系人" labelFor={userLabelFor} privacyMode={privacyMode} />
@@ -1594,9 +1606,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             <Users size={16} className="text-[#07c160]" />
             <h4 className="font-bold text-[#1d1d1f] dk-text">屏蔽群聊</h4>
             {blockedGroups.length > 0 && (
-              <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400">
-                {blockedGroups.length} 条
-              </span>
+              <>
+                <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400">
+                  {blockedGroups.length} 条
+                </span>
+                <button
+                  onClick={() => {
+                    if (confirm(`确定清空全部 ${blockedGroups.length} 个屏蔽群聊？`)) {
+                      blockedGroups.forEach(g => onRemoveBlockedGroup(g));
+                    }
+                  }}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  清空
+                </button>
+              </>
             )}
           </div>
           <TagList items={blockedGroups} onRemove={onRemoveBlockedGroup} emptyText="暂无屏蔽群聊" labelFor={groupLabelFor} privacyMode={privacyMode} />

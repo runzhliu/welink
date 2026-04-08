@@ -34,8 +34,12 @@ export const SocialBreadthCard: React.FC = () => {
           <Users size={18} className="text-[#10aeff]" />
           <h3 className="text-lg font-black text-[#1d1d1f] dk-text">每日社交广度</h3>
         </div>
-        <div className="flex items-center justify-center py-12">
+        <div className="flex flex-col items-center justify-center py-12 gap-3">
           <Loader2 size={24} className="text-[#10aeff] animate-spin" />
+          <div className="text-center">
+            <p className="text-xs text-gray-400">正在扫描每日社交广度…</p>
+            <p className="text-[10px] text-gray-300 mt-1">按天聚合所有联系人的消息，消息量大时需要一些时间</p>
+          </div>
         </div>
       </div>
     );

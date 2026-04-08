@@ -31,8 +31,12 @@ export const SelfPortraitCard: React.FC = () => {
           <User size={18} className="text-[#07c160]" />
           <h3 className="text-lg font-black text-[#1d1d1f] dk-text">个人自画像</h3>
         </div>
-        <div className="flex items-center justify-center py-12">
+        <div className="flex flex-col items-center justify-center py-12 gap-3">
           <Loader2 size={24} className="text-[#07c160] animate-spin" />
+          <div className="text-center">
+            <p className="text-xs text-gray-400">正在聚合所有联系人的发送数据…</p>
+            <p className="text-[10px] text-gray-300 mt-1">需要遍历全部消息统计你的发言指纹，请耐心等待</p>
+          </div>
         </div>
       </div>
     );
