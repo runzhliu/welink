@@ -316,8 +316,10 @@ export interface GroupInfo {
 
 export interface MemberStat {
   speaker: string;
+  username?: string;
   count: number;
   last_message_time?: string;
+  first_message_time?: string;
 }
 
 export interface GroupDetail {

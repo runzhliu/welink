@@ -2311,9 +2311,11 @@ type GroupInfo struct {
 }
 
 type MemberStat struct {
-	Speaker        string `json:"speaker"`
-	Count          int64  `json:"count"`
-	LastMessageTime string `json:"last_message_time,omitempty"` // "2024-03-15"
+	Speaker          string `json:"speaker"`
+	Username         string `json:"username,omitempty"`           // wxid，用于区分同名不同人
+	Count            int64  `json:"count"`
+	LastMessageTime  string `json:"last_message_time,omitempty"`  // "2024-03-15 14:23"
+	FirstMessageTime string `json:"first_message_time,omitempty"` // 首次发言时间（近似加群时间）
 }
 
 type GroupDetail struct {
@@ -2526,8 +2528,11 @@ func (s *ContactService) GetGroupDetail(username string) *GroupDetail {
 func (s *ContactService) computeGroupDetail(username string) {
 	tableName := db.GetTableName(username)
 	detail := &GroupDetail{DailyHeatmap: make(map[string]int), TypeDist: make(map[string]int), MemberRank: []MemberStat{}, TopWords: []WordCount{}}
-	memberMap := make(map[string]int64)
-	memberLastTs := make(map[string]int64) // speaker → 最后发言 Unix 时间戳
+	// 用 wxid 作为 key，避免显示名重复导致的合并
+	memberMap := make(map[string]int64)      // wxid → 发言数
+	memberLastTs := make(map[string]int64)   // wxid → 最后发言 Unix 时间戳
+	memberFirstTs := make(map[string]int64)  // wxid → 首次发言 Unix 时间戳
+	memberNames := make(map[string]string)   // wxid → 显示名
 	wordCounts := make(map[string]int)
 
 	nameMap := s.loadContactNameMap()
@@ -2563,10 +2568,14 @@ func (s *ContactService) computeGroupDetail(username string) {
 			typeName := classifyMsgType(lt, content)
 			if typeName != "系统" { detail.TypeDist[typeName]++ }
 			if wxid, ok := idToWxid[senderID]; ok && wxid != "" {
-				speaker := wxid
-				if name, ok2 := nameMap[wxid]; ok2 { speaker = name }
-				memberMap[speaker]++
-				if ts > memberLastTs[speaker] { memberLastTs[speaker] = ts }
+				memberMap[wxid]++
+				if ts > memberLastTs[wxid] { memberLastTs[wxid] = ts }
+				if cur, ok2 := memberFirstTs[wxid]; !ok2 || ts < cur { memberFirstTs[wxid] = ts }
+				if _, ok2 := memberNames[wxid]; !ok2 {
+					name := wxid
+					if n, ok3 := nameMap[wxid]; ok3 && n != "" { name = n }
+					memberNames[wxid] = name
+				}
 			}
 		}
 		rows.Close()
@@ -2615,26 +2624,40 @@ func (s *ContactService) computeGroupDetail(username string) {
 	}
 	s.segmenterMu.Unlock()
 
-	// 成员排行 top 500（含最后发言时间）
-	for speaker, cnt := range memberMap {
+	// 成员排行 top 500（含最后发言时间、首次发言时间）
+	for wxid, cnt := range memberMap {
 		lastTime := ""
-		if ts, ok := memberLastTs[speaker]; ok && ts > 0 {
+		if ts, ok := memberLastTs[wxid]; ok && ts > 0 {
 			lastTime = time.Unix(ts, 0).In(s.tz).Format("2006-01-02 15:04")
 		}
-		detail.MemberRank = append(detail.MemberRank, MemberStat{Speaker: speaker, Count: cnt, LastMessageTime: lastTime})
+		firstTime := ""
+		if ts, ok := memberFirstTs[wxid]; ok && ts > 0 {
+			firstTime = time.Unix(ts, 0).In(s.tz).Format("2006-01-02 15:04")
+		}
+		detail.MemberRank = append(detail.MemberRank, MemberStat{
+			Speaker:          memberNames[wxid],
+			Username:         wxid,
+			Count:            cnt,
+			LastMessageTime:  lastTime,
+			FirstMessageTime: firstTime,
+		})
 	}
 	sort.Slice(detail.MemberRank, func(i, j int) bool { return detail.MemberRank[i].Count > detail.MemberRank[j].Count })
 
-	// 从 chatroom_member 表补全零发言成员
+	// 从 chatroom_member 表补全零发言成员（wxid → 显示名）
 	allMembers := s.loadGroupAllMembers(username, nameMap)
-	spokenSet := make(map[string]bool, len(memberMap))
-	for speaker := range memberMap {
-		spokenSet[speaker] = true
+	spokenWxids := make(map[string]bool, len(memberMap))
+	for wxid := range memberMap {
+		spokenWxids[wxid] = true
 	}
-	for _, displayName := range allMembers {
-		if !spokenSet[displayName] {
-			detail.MemberRank = append(detail.MemberRank, MemberStat{Speaker: displayName, Count: 0})
-			spokenSet[displayName] = true // 去重
+	for wxid, displayName := range allMembers {
+		if !spokenWxids[wxid] {
+			detail.MemberRank = append(detail.MemberRank, MemberStat{
+				Speaker:  displayName,
+				Username: wxid,
+				Count:    0,
+			})
+			spokenWxids[wxid] = true
 		}
 	}
 
