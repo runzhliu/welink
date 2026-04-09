@@ -2,10 +2,15 @@
  * Skill 管理页面 — 列出所有已炼化的 Skill，支持重新下载和删除
  */
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Sparkles, Download, Trash2, Loader2, Package, User, Users, Bot, AlertCircle, Clock } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { Sparkles, Download, Trash2, Loader2, Package, User, Users, Bot, AlertCircle, Clock, Search, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { skillsApi, type SkillRecord } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+
+type SortKey = 'target_name' | 'skill_type' | 'format' | 'created_at' | 'file_size' | 'status';
+type SortDir = 'asc' | 'desc';
+type FilterType = 'all' | 'contact' | 'self' | 'group' | 'group-member';
+type FilterStatus = 'all' | 'success' | 'pending' | 'running' | 'failed';
 
 const FORMAT_LABELS: Record<string, { icon: string; name: string }> = {
   'claude-skill':  { icon: '📁', name: 'Claude Code Skill' },
@@ -48,6 +53,12 @@ export const SkillsView: React.FC = () => {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // 搜索 + 排序 + 筛选
+  const [query, setQuery] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('created_at');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [filterType, setFilterType] = useState<FilterType>('all');
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
 
   const loadSkills = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -139,6 +150,73 @@ export const SkillsView: React.FC = () => {
     }
   };
 
+  // 过滤 + 搜索 + 排序
+  const displayedSkills = useMemo(() => {
+    let list = [...skills];
+
+    // 类型筛选
+    if (filterType !== 'all') {
+      list = list.filter(s => s.skill_type === filterType);
+    }
+    // 状态筛选
+    if (filterStatus !== 'all') {
+      list = list.filter(s => s.status === filterStatus);
+    }
+    // 关键词搜索（目标名、文件名、模型）
+    const q = query.trim().toLowerCase();
+    if (q) {
+      list = list.filter(s =>
+        s.target_name.toLowerCase().includes(q) ||
+        s.filename.toLowerCase().includes(q) ||
+        s.model_provider.toLowerCase().includes(q) ||
+        s.model_name.toLowerCase().includes(q) ||
+        (FORMAT_LABELS[s.format]?.name ?? '').toLowerCase().includes(q)
+      );
+    }
+    // 排序
+    list.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case 'target_name': cmp = a.target_name.localeCompare(b.target_name, 'zh'); break;
+        case 'skill_type':  cmp = a.skill_type.localeCompare(b.skill_type); break;
+        case 'format':      cmp = a.format.localeCompare(b.format); break;
+        case 'created_at':  cmp = a.created_at - b.created_at; break;
+        case 'file_size':   cmp = a.file_size - b.file_size; break;
+        case 'status':      cmp = a.status.localeCompare(b.status); break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return list;
+  }, [skills, query, sortKey, sortDir, filterType, filterStatus]);
+
+  // 状态统计
+  const statusCounts = useMemo(() => {
+    const counts = { all: skills.length, success: 0, pending: 0, running: 0, failed: 0 };
+    for (const s of skills) {
+      if (s.status === 'success') counts.success++;
+      else if (s.status === 'pending') counts.pending++;
+      else if (s.status === 'running') counts.running++;
+      else if (s.status === 'failed') counts.failed++;
+    }
+    return counts;
+  }, [skills]);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
+  };
+
+  const SortIcon = ({ col }: { col: SortKey }) => {
+    if (sortKey !== col) return <span className="opacity-20 ml-0.5 inline-block"><ChevronUp size={10} /></span>;
+    return sortDir === 'asc'
+      ? <ChevronUp size={10} className="ml-0.5 text-[#07c160] inline-block" />
+      : <ChevronDown size={10} className="ml-0.5 text-[#07c160] inline-block" />;
+  };
+
   return (
     <div className="max-w-5xl">
       {/* 标题 */}
@@ -149,6 +227,69 @@ export const SkillsView: React.FC = () => {
         </h1>
         <p className="text-gray-400 text-sm">查看所有已炼化的 Skill 包，支持重新下载和删除</p>
       </div>
+
+      {/* 搜索 + 筛选 */}
+      {!loading && skills.length > 0 && (
+        <div className="mb-4 space-y-3">
+          {/* 搜索框 */}
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
+            <input
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="搜索目标名、文件名、模型..."
+              className="w-full pl-9 pr-9 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm focus:outline-none focus:border-[#07c160] bg-white dk-card dk-border"
+            />
+            {query && (
+              <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* 筛选按钮行 */}
+          <div className="flex flex-wrap items-center gap-4 text-xs">
+            {/* 类型筛选 */}
+            <div className="flex items-center gap-1">
+              <span className="text-gray-400">类型:</span>
+              {([
+                ['all', '全部'],
+                ['contact', '联系人'],
+                ['self', '自画像'],
+                ['group', '群聊'],
+                ['group-member', '群成员'],
+              ] as const).map(([key, label]) => (
+                <button key={key} onClick={() => setFilterType(key)}
+                  className={`px-2 py-0.5 rounded-lg font-bold transition-all ${
+                    filterType === key ? 'bg-[#07c160] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-500 hover:bg-gray-200'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {/* 状态筛选 */}
+            <div className="flex items-center gap-1">
+              <span className="text-gray-400">状态:</span>
+              {([
+                ['all', `全部 (${statusCounts.all})`, ''],
+                ['success', `成功 (${statusCounts.success})`, 'text-[#07c160]'],
+                ['running', `进行中 (${statusCounts.pending + statusCounts.running})`, 'text-blue-500'],
+                ['failed', `失败 (${statusCounts.failed})`, 'text-red-500'],
+              ] as const).map(([key, label, colorCls]) => (
+                <button key={key} onClick={() => setFilterStatus(key as FilterStatus)}
+                  className={`px-2 py-0.5 rounded-lg font-bold transition-all ${
+                    filterStatus === key
+                      ? 'bg-[#07c160] text-white'
+                      : `bg-gray-100 dark:bg-white/10 ${colorCls || 'text-gray-500'} hover:bg-gray-200`
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
@@ -183,16 +324,33 @@ export const SkillsView: React.FC = () => {
       {!loading && skills.length > 0 && (
         <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl overflow-hidden">
           <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-4 px-5 py-3 bg-[#f8f9fb] dark:bg-white/5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-            <div>目标</div>
-            <div className="w-20 text-center">类型</div>
-            <div className="w-28 text-center">格式</div>
+            <button onClick={() => handleSort('target_name')} className="text-left hover:text-[#07c160] transition-colors flex items-center">
+              目标<SortIcon col="target_name" />
+            </button>
+            <button onClick={() => handleSort('skill_type')} className="w-20 text-center hover:text-[#07c160] transition-colors">
+              类型<SortIcon col="skill_type" />
+            </button>
+            <button onClick={() => handleSort('format')} className="w-28 text-center hover:text-[#07c160] transition-colors">
+              格式<SortIcon col="format" />
+            </button>
             <div className="w-32 text-right">模型</div>
-            <div className="w-36 text-right">炼化时间</div>
+            <button onClick={() => handleSort('created_at')} className="w-36 text-right hover:text-[#07c160] transition-colors">
+              炼化时间<SortIcon col="created_at" />
+            </button>
             <div className="w-20 text-right">操作</div>
           </div>
 
+          {/* 无匹配结果 */}
+          {displayedSkills.length === 0 && (
+            <div className="px-5 py-12 text-center text-sm text-gray-400">
+              没有匹配的 Skill
+              <button onClick={() => { setQuery(''); setFilterType('all'); setFilterStatus('all'); }}
+                className="ml-2 text-[#07c160] underline text-xs">重置筛选</button>
+            </div>
+          )}
+
           <div className="divide-y divide-gray-100 dark:divide-white/5">
-            {skills.map(rec => {
+            {displayedSkills.map(rec => {
               const typeInfo = TYPE_LABELS[rec.skill_type];
               const formatInfo = FORMAT_LABELS[rec.format];
               const isActive = rec.status === 'pending' || rec.status === 'running';
@@ -299,7 +457,10 @@ export const SkillsView: React.FC = () => {
 
       {!loading && skills.length > 0 && (
         <p className="text-[10px] text-gray-300 mt-3 text-center">
-          共 {skills.length} 个 Skill · 存储在 ai_analysis.db 的 skills 表
+          {displayedSkills.length === skills.length
+            ? `共 ${skills.length} 个 Skill`
+            : `显示 ${displayedSkills.length} / ${skills.length} 个 Skill`
+          } · 存储在 ai_analysis.db 的 skills 表
         </p>
       )}
     </div>
