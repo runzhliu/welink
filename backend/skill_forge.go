@@ -36,7 +36,7 @@ import (
 // SkillPackage 炼化过程产出的中间数据（格式无关）
 type SkillPackage struct {
 	// 元数据
-	SkillType    string    `json:"skill_type"`    // contact / self / group
+	SkillType    string    `json:"skill_type"`    // contact / self / group / group-member
 	Name         string    `json:"name"`          // 短名（slug 化）
 	DisplayName  string    `json:"display_name"`  // 人类可读名
 	Description  string    `json:"description"`   // 一句话描述
@@ -44,14 +44,17 @@ type SkillPackage struct {
 	MessageCount int       `json:"message_count"` // 分析用的消息数
 
 	// LLM 抽取的画像
-	Personality  string   `json:"personality"`  // 性格特征
-	Style        string   `json:"style"`        // 说话风格
-	Vocabulary   []string `json:"vocabulary"`   // 高频词/独特用词
-	Catchphrases []string `json:"catchphrases"` // 口头禅
-	Topics       []string `json:"topics"`       // 常聊话题 / 知识领域
-	Relationship string   `json:"relationship"` // 关系背景（contact 类型专有）
-	DosAndDonts  string   `json:"dos_and_donts"`
-	Samples      []string `json:"samples"` // 代表性对话片段（已脱敏）
+	Personality        string   `json:"personality"`         // 性格特征
+	Style              string   `json:"style"`               // 说话风格
+	Vocabulary         []string `json:"vocabulary"`          // 高频词/独特用词
+	Catchphrases       []string `json:"catchphrases"`        // 口头禅
+	Topics             []string `json:"topics"`              // 常聊话题 / 知识领域
+	Relationship       string   `json:"relationship"`        // 关系背景（contact 类型专有）
+	DosAndDonts        string   `json:"dos_and_donts"`
+	Samples            []string `json:"samples"`             // 代表性对话片段（已脱敏）
+	SignatureBehaviors string   `json:"signature_behaviors"` // 标志性行为模式
+	TypicalOpenings    []string `json:"typical_openings"`    // 典型开场白
+	TypicalClosings    []string `json:"typical_closings"`    // 典型结尾
 }
 
 // ForgeOptions 炼化选项
@@ -64,46 +67,57 @@ type ForgeOptions struct {
 	MsgLimit      int    // 使用最近 N 条消息（0 = 默认 300）
 }
 
-// skillCharBudget 送入 LLM 的消息采样字符上限，避免 token 爆炸
-const skillCharBudget = 12000
+// skillCharBudget 送入 LLM 的消息采样字符上限。
+// 现代大模型 (Claude 3.5+, GPT-4o, DeepSeek, Kimi 等) 都有 128k+ 上下文，
+// 50000 字约等于 30k-50k token，安全且能保留足够的风格样本。
+const skillCharBudget = 50000
 
 // ─── LLM 结构化抽取 ──────────────────────────────────────────────────────────
 
 // llmSkillExtract 调 LLM 返回的结构化 JSON
 type llmSkillExtract struct {
-	Personality  string   `json:"personality"`
-	Style        string   `json:"style"`
-	Vocabulary   []string `json:"vocabulary"`
-	Catchphrases []string `json:"catchphrases"`
-	Topics       []string `json:"topics"`
-	Relationship string   `json:"relationship"`
-	DosAndDonts  string   `json:"dos_and_donts"`
-	Samples      []string `json:"samples"`
+	Personality        string   `json:"personality"`
+	Style              string   `json:"style"`
+	Vocabulary         []string `json:"vocabulary"`
+	Catchphrases       []string `json:"catchphrases"`
+	Topics             []string `json:"topics"`
+	Relationship       string   `json:"relationship"`
+	DosAndDonts        string   `json:"dos_and_donts"`
+	Samples            []string `json:"samples"`
+	SignatureBehaviors string   `json:"signature_behaviors"`
+	TypicalOpenings    []string `json:"typical_openings"`
+	TypicalClosings    []string `json:"typical_closings"`
 }
 
 // buildForgePrompt 根据 skill 类型构造 LLM prompt
 func buildForgePrompt(skillType, displayName, samplesBlock string, stats string) (string, string) {
-	systemPrompt := `你是一个聊天记录分析助手。你的任务是阅读用户提供的聊天记录片段和统计特征，抽取出说话风格和关键信息，产出一份结构化的 JSON 描述。
+	systemPrompt := `你是一个聊天记录分析助手。你的任务是深度阅读用户提供的聊天记录（可能有几千到上万条），抽取出这个人说话的"味道"——所有让 TA 区别于别人的独特特征——然后产出一份结构化的 JSON 描述。
+
+这个 JSON 会被用作一个 AI Skill，让 Claude / GPT 等模型去模拟这个人说话。所以你抽取的特征越具体、越有辨识度、越可操作，最终的模拟效果就越好。
 
 你必须严格按照以下 JSON 结构返回（不要任何多余文字，不要 markdown 代码块）：
 
 {
-  "personality": "性格特征描述（50-120 字）",
-  "style": "说话风格描述（句长、语气、用词偏好、标点习惯、emoji 使用，80-150 字）",
-  "vocabulary": ["高频词 1", "高频词 2", ...],
-  "catchphrases": ["口头禅 1", "口头禅 2", ...],
-  "topics": ["话题 1", "话题 2", ...],
-  "relationship": "和用户的关系背景（如果是群聊或自画像，留空字符串）",
-  "dos_and_donts": "使用时的注意事项（什么场景适合用这个 skill、什么场景不适合）",
-  "samples": ["代表性对话片段 1", "片段 2", ...]
+  "personality": "性格特征描述：要具体生动，不要空话套话。举例说明 TA 的典型反应模式（100-200 字）",
+  "style": "说话风格描述：非常具体地描述句长偏好、典型句式、语气助词、标点使用（尤其是感叹号、省略号、换行）、emoji/颜文字习惯、是否混用中英文/方言。举具体的例子（150-300 字）",
+  "vocabulary": ["至少 15 个有强辨识度的词"],
+  "catchphrases": ["至少 8 个真实出现过的口头禅/习惯性短语/开场白/结尾句，直接引用原话"],
+  "topics": ["常聊的话题/领域/兴趣点，至少 8 个"],
+  "relationship": "和用户的关系背景（如果是群聊整体或自画像，留空字符串）",
+  "dos_and_donts": "使用注意：什么场景适合、什么场景不适合、需要警惕什么误用",
+  "samples": ["至少 10 条最能代表其风格的原话，原样保留，不要改写。优先选那些能看出 TA 个性的句子"],
+  "signature_behaviors": "TA 在对话里的几个标志性行为模式，比如'遇到技术讨论喜欢甩链接'、'被问到时间总是先说没空再答应'等（100-200 字）",
+  "typical_openings": ["典型的开场白/打招呼方式，3-5 个真实原话"],
+  "typical_closings": ["典型的结尾方式/告别语，3-5 个真实原话"]
 }
 
-注意：
-- vocabulary 取 8-15 个有辨识度的词（不要"我""你""的""是"这种停用词）
-- catchphrases 取 3-8 个口头禅/常用短语
-- topics 取 5-10 个话题或专业领域
-- samples 取 5-8 条最能代表其风格的原话（原样保留，必要时手机号、邮箱脱敏为 ***）
-- 所有内容用中文输出`
+抽取原则：
+- 优先用**原文引用**，不要自己概括改写
+- 关注那些**反复出现的细节**：某个词用得特别多、某个语气词带得特别频繁、某类话题反应特别激烈
+- 如果发现 TA 有中英混用、粤语、方言、emoji 偏好等，一定要抓住
+- 对于长句短句比例、换行习惯、标点偏好这些细节，越具体越好
+- 所有内容用中文输出
+- 所有描述要足够具体到可以"照着演出来"`
 
 	var userPrompt string
 	// group-member 共用 contact 的 prompt（单人风格）
@@ -164,10 +178,10 @@ func extractSkillPackage(
 	profileID string,
 ) (*SkillPackage, error) {
 	samplesBlock := strings.Join(samples, "\n")
-	if len([]rune(samplesBlock)) > 8000 {
-		// 防止 prompt 过长，截断到 ~8000 字
+	// smartSample 已经做了字符预算裁剪，这里只做兜底（防止极端情况）
+	if len([]rune(samplesBlock)) > skillCharBudget {
 		runes := []rune(samplesBlock)
-		samplesBlock = string(runes[:8000]) + "\n[...更多内容已省略]"
+		samplesBlock = string(runes[:skillCharBudget]) + "\n[...]"
 	}
 
 	systemPrompt, userPrompt := buildForgePrompt(skillType, displayName, samplesBlock, statsText)
@@ -200,19 +214,22 @@ func extractSkillPackage(
 	}
 
 	pkg := &SkillPackage{
-		SkillType:    skillType,
-		Name:         slugify(displayName),
-		DisplayName:  displayName,
-		GeneratedAt:  time.Now(),
-		MessageCount: len(samples),
-		Personality:  extract.Personality,
-		Style:        extract.Style,
-		Vocabulary:   extract.Vocabulary,
-		Catchphrases: extract.Catchphrases,
-		Topics:       extract.Topics,
-		Relationship: extract.Relationship,
-		DosAndDonts:  extract.DosAndDonts,
-		Samples:      extract.Samples,
+		SkillType:          skillType,
+		Name:               slugify(displayName),
+		DisplayName:        displayName,
+		GeneratedAt:        time.Now(),
+		MessageCount:       len(samples),
+		Personality:        extract.Personality,
+		Style:              extract.Style,
+		Vocabulary:         extract.Vocabulary,
+		Catchphrases:       extract.Catchphrases,
+		Topics:             extract.Topics,
+		Relationship:       extract.Relationship,
+		DosAndDonts:        extract.DosAndDonts,
+		Samples:            extract.Samples,
+		SignatureBehaviors: extract.SignatureBehaviors,
+		TypicalOpenings:    extract.TypicalOpenings,
+		TypicalClosings:    extract.TypicalClosings,
 	}
 
 	// 生成 description
@@ -620,6 +637,11 @@ func buildMainBody(pkg *SkillPackage) string {
 	sb.WriteString("## 说话风格\n\n")
 	sb.WriteString(pkg.Style + "\n\n")
 
+	if pkg.SignatureBehaviors != "" {
+		sb.WriteString("## 标志性行为\n\n")
+		sb.WriteString(pkg.SignatureBehaviors + "\n\n")
+	}
+
 	if len(pkg.Vocabulary) > 0 {
 		sb.WriteString("## 高频词 / 独特用词\n\n")
 		for _, v := range pkg.Vocabulary {
@@ -631,7 +653,23 @@ func buildMainBody(pkg *SkillPackage) string {
 	if len(pkg.Catchphrases) > 0 {
 		sb.WriteString("## 口头禅\n\n")
 		for _, c := range pkg.Catchphrases {
-			sb.WriteString("- " + c + "\n")
+			sb.WriteString("- `" + c + "`\n")
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(pkg.TypicalOpenings) > 0 {
+		sb.WriteString("## 典型开场白\n\n")
+		for _, o := range pkg.TypicalOpenings {
+			sb.WriteString("- `" + o + "`\n")
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(pkg.TypicalClosings) > 0 {
+		sb.WriteString("## 典型结尾方式\n\n")
+		for _, c := range pkg.TypicalClosings {
+			sb.WriteString("- `" + c + "`\n")
 		}
 		sb.WriteString("\n")
 	}

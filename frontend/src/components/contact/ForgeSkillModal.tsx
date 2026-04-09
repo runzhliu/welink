@@ -34,14 +34,15 @@ const FORMATS: Array<{ key: FormatKey; name: string; description: string; icon: 
   { key: 'generic', name: '通用 Markdown', description: '工具无关，可粘贴到任何 AI 对话或手动转换', icon: '📄' },
 ];
 
-// 消息条数预设：默认 300 平衡质量和成本
-const MSG_LIMIT_OPTIONS = [100, 300, 500, 1000, 2000];
+// 消息条数预设：默认 500 平衡质量和成本
+// 上限字符预算是 50000（约 30-50k token），对应约 5000-10000 条平均长度的消息
+const MSG_LIMIT_OPTIONS = [300, 500, 1000, 2000, 5000, 10000];
 
 export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, username, displayName }) => {
   const [format, setFormat] = useState<FormatKey>('claude-skill');
   const [profileId, setProfileId] = useState('');
   const [profiles, setProfiles] = useState<LLMProfileItem[]>([]);
-  const [msgLimit, setMsgLimit] = useState(300);
+  const [msgLimit, setMsgLimit] = useState(500);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -267,10 +268,14 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
             ))}
           </div>
           <p className="text-[10px] text-gray-400">
-            {msgLimit <= 300 && '轻量：10 秒内完成，约 5k token'}
-            {msgLimit > 300 && msgLimit <= 500 && '均衡：约 15 秒，约 8k token'}
-            {msgLimit > 500 && msgLimit <= 1000 && '深度：约 25 秒，约 12k token（超 1.2 万字会自动降采样）'}
-            {msgLimit > 1000 && '全面：约 30 秒，超过预算的部分会均匀降采样到 1.2 万字内送入 LLM'}
+            {msgLimit <= 300 && '轻量：约 10 秒，适合快速预览，可能不够"味道"'}
+            {msgLimit > 300 && msgLimit <= 1000 && '均衡（推荐）：约 20-30 秒，能抓到主要特征'}
+            {msgLimit > 1000 && msgLimit <= 2000 && '深度：约 30-40 秒，特征更丰富完整'}
+            {msgLimit > 2000 && msgLimit <= 5000 && '高精：约 40-60 秒，约 20-30k token，适合有大量聊天记录的深度炼化'}
+            {msgLimit > 5000 && '极致：约 60-90 秒，约 30-50k token，最高保真度，需要 128k 上下文的模型'}
+          </p>
+          <p className="text-[10px] text-gray-300 mt-1">
+            上限 5 万字（约 30-50k token），超出后会从选中范围内均匀降采样。大多数现代模型（Claude 3.5+/GPT-4o/DeepSeek 等）都能稳定处理。
           </p>
         </div>
 
