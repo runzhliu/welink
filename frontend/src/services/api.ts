@@ -126,10 +126,12 @@ export const contactsApi = {
 
 // Skill 炼化（blob 下载）
 export async function forgeSkill(opts: {
-  skill_type: 'contact' | 'self' | 'group';
+  skill_type: 'contact' | 'self' | 'group' | 'group-member';
   username?: string;
+  member_speaker?: string;
   format: 'claude-skill' | 'claude-agent' | 'codex' | 'opencode' | 'cursor' | 'generic';
   profile_id?: string;
+  msg_limit?: number;
 }): Promise<{ blob: Blob; filename: string }> {
   const resp = await fetch('/api/ai/forge-skill', {
     method: 'POST',
@@ -145,10 +147,16 @@ export async function forgeSkill(opts: {
     throw new Error(errMsg);
   }
   const blob = await resp.blob();
-  // 从 Content-Disposition 取文件名
+  // 从 Content-Disposition 取文件名：优先 RFC 5987 的 filename*，否则降级到 filename
   const disp = resp.headers.get('Content-Disposition') || '';
-  const match = disp.match(/filename="([^"]+)"/);
-  const filename = match ? match[1] : 'skill.zip';
+  let filename = 'skill.zip';
+  const utf8Match = disp.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match) {
+    try { filename = decodeURIComponent(utf8Match[1]); } catch {/* ignore */}
+  } else {
+    const plainMatch = disp.match(/filename="([^"]+)"/);
+    if (plainMatch) filename = plainMatch[1];
+  }
   return { blob, filename };
 }
 

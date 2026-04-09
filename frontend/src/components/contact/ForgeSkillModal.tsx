@@ -2,9 +2,10 @@
  * Skill 炼化弹窗 — 把聊天记录导出为 Claude Code / Codex / OpenCode / Cursor 等工具的 Skill
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, Loader2, Download, Sparkles, Info } from 'lucide-react';
-import { forgeSkill } from '../../services/api';
+import { forgeSkill, groupsApi } from '../../services/api';
+import type { MemberStat } from '../../types';
 
 interface Props {
   open: boolean;
@@ -22,6 +23,7 @@ interface LLMProfileItem {
 }
 
 type FormatKey = 'claude-skill' | 'claude-agent' | 'codex' | 'opencode' | 'cursor' | 'generic';
+type GroupTargetKind = 'whole' | 'member';
 
 const FORMATS: Array<{ key: FormatKey; name: string; description: string; icon: string }> = [
   { key: 'claude-skill', name: 'Claude Code Skill', description: '目录式，含 SKILL.md frontmatter，放到 ~/.claude/skills/', icon: '📁' },
@@ -32,38 +34,79 @@ const FORMATS: Array<{ key: FormatKey; name: string; description: string; icon: 
   { key: 'generic', name: '通用 Markdown', description: '工具无关，可粘贴到任何 AI 对话或手动转换', icon: '📄' },
 ];
 
+// 消息条数预设：默认 300 平衡质量和成本
+const MSG_LIMIT_OPTIONS = [100, 300, 500, 1000, 2000];
+
 export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, username, displayName }) => {
   const [format, setFormat] = useState<FormatKey>('claude-skill');
   const [profileId, setProfileId] = useState('');
   const [profiles, setProfiles] = useState<LLMProfileItem[]>([]);
+  const [msgLimit, setMsgLimit] = useState(300);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // 群聊专用：选整个群还是某个成员
+  const [groupTarget, setGroupTarget] = useState<GroupTargetKind>('whole');
+  const [members, setMembers] = useState<MemberStat[]>([]);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [selectedMember, setSelectedMember] = useState<MemberStat | null>(null);
+
   useEffect(() => {
     if (!open) return;
-    // 加载 LLM profiles（允许用户选择用哪个模型炼化）
     fetch('/api/preferences/llm').then(r => r.json()).then((d: { profiles?: LLMProfileItem[] }) => {
       if (d.profiles) setProfiles(d.profiles);
     }).catch(() => {});
   }, [open]);
 
+  // 群聊模式下加载成员列表
   useEffect(() => {
-    if (open) { setError(null); setSuccess(false); }
+    if (!open || skillType !== 'group' || !username) return;
+    groupsApi.getDetail(username).then(d => {
+      if (d && d.member_rank) {
+        setMembers(d.member_rank.filter(m => m.count > 0));
+      }
+    }).catch(() => {});
+  }, [open, skillType, username]);
+
+  useEffect(() => {
+    if (open) {
+      setError(null);
+      setSuccess(false);
+      setGroupTarget('whole');
+      setSelectedMember(null);
+      setMemberSearch('');
+    }
   }, [open]);
+
+  const filteredMembers = useMemo(() => {
+    if (!memberSearch) return members.slice(0, 50);
+    const q = memberSearch.toLowerCase();
+    return members.filter(m => m.speaker.toLowerCase().includes(q) || (m.username ?? '').toLowerCase().includes(q)).slice(0, 50);
+  }, [members, memberSearch]);
 
   const handleForge = async () => {
     setLoading(true);
     setError(null);
     setSuccess(false);
     try {
+      let effectiveType: 'contact' | 'self' | 'group' | 'group-member' = skillType;
+      let memberSpeaker: string | undefined;
+      if (skillType === 'group' && groupTarget === 'member') {
+        if (!selectedMember) {
+          throw new Error('请先选择一个群成员');
+        }
+        effectiveType = 'group-member';
+        memberSpeaker = selectedMember.speaker;
+      }
       const { blob, filename } = await forgeSkill({
-        skill_type: skillType,
+        skill_type: effectiveType,
         username,
+        member_speaker: memberSpeaker,
         format,
         profile_id: profileId || undefined,
+        msg_limit: msgLimit,
       });
-      // 触发下载
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -80,8 +123,19 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
 
   if (!open) return null;
 
-  const skillLabel = skillType === 'contact' ? '联系人风格' : skillType === 'self' ? '我的写作风格' : '群聊智囊';
-  const costHint = skillType === 'group' ? '约 8-15k token' : '约 5-10k token';
+  const effectiveDisplayName =
+    skillType === 'group' && groupTarget === 'member' && selectedMember
+      ? `${selectedMember.speaker}（来自「${displayName}」群）`
+      : displayName;
+
+  const skillLabel =
+    skillType === 'contact'
+      ? '联系人风格'
+      : skillType === 'self'
+      ? '我的写作风格'
+      : groupTarget === 'member'
+      ? '群成员风格'
+      : '群聊智囊';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
@@ -91,7 +145,7 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
       >
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-black text-[#1d1d1f] dk-text flex items-center gap-2">
-            <Sparkles size={20} className="text-[#8b5cf6]" />
+            <Sparkles size={20} className="text-[#07c160]" />
             炼化为 Skill
           </h2>
           <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
@@ -99,15 +153,125 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
           </button>
         </div>
 
-        <div className="mb-5 p-4 bg-[#8b5cf6]/5 rounded-2xl">
+        <div className="mb-5 p-4 bg-[#07c160]/5 rounded-2xl">
           <div className="flex items-start gap-3">
-            <Info size={16} className="text-[#8b5cf6] flex-shrink-0 mt-0.5" />
+            <Info size={16} className="text-[#07c160] flex-shrink-0 mt-0.5" />
             <div className="text-xs text-gray-500 dk-text leading-relaxed">
-              把 <b className="text-[#8b5cf6]">{displayName}</b> 的聊天记录炼化为一个<b>{skillLabel}</b> Skill，
+              把 <b className="text-[#07c160]">{effectiveDisplayName}</b> 的聊天记录炼化为一个<b>{skillLabel}</b> Skill，
               让 Claude Code、Codex、Cursor 等 AI 编程工具可以直接用 TA 的语气回应。
-              整个过程会调用一次 LLM（{costHint}），结果下载为 zip 文件包。
+              结果下载为 zip 文件包。
             </div>
           </div>
+        </div>
+
+        {/* 群聊：选整个群 or 某个成员 */}
+        {skillType === 'group' && (
+          <div className="mb-5">
+            <div className="text-xs font-bold text-gray-500 dk-text mb-2">炼化目标</div>
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => setGroupTarget('whole')}
+                disabled={loading}
+                className={`flex-1 p-3 rounded-2xl border-2 text-left transition-all ${
+                  groupTarget === 'whole'
+                    ? 'border-[#07c160] bg-[#07c160]/5'
+                    : 'border-gray-100 dark:border-white/10 hover:border-gray-200'
+                }`}
+              >
+                <div className="text-sm font-bold text-[#1d1d1f] dk-text mb-1">🌐 整个群聊</div>
+                <div className="text-[10px] text-gray-400">群的集体知识、氛围和讨论主题</div>
+              </button>
+              <button
+                onClick={() => setGroupTarget('member')}
+                disabled={loading}
+                className={`flex-1 p-3 rounded-2xl border-2 text-left transition-all ${
+                  groupTarget === 'member'
+                    ? 'border-[#07c160] bg-[#07c160]/5'
+                    : 'border-gray-100 dark:border-white/10 hover:border-gray-200'
+                }`}
+              >
+                <div className="text-sm font-bold text-[#1d1d1f] dk-text mb-1">👤 某个群友</div>
+                <div className="text-[10px] text-gray-400">只炼化指定群友的说话风格</div>
+              </button>
+            </div>
+
+            {groupTarget === 'member' && (
+              <div>
+                {selectedMember ? (
+                  <div className="flex items-center gap-3 p-3 bg-[#07c160]/5 rounded-xl border border-[#07c160]/30">
+                    <div className="w-8 h-8 rounded-full bg-[#07c160] flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                      {selectedMember.speaker.charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-[#1d1d1f] dk-text truncate">{selectedMember.speaker}</div>
+                      <div className="text-[10px] text-gray-400">{selectedMember.count.toLocaleString()} 条发言{selectedMember.username ? ` · ${selectedMember.username}` : ''}</div>
+                    </div>
+                    <button onClick={() => setSelectedMember(null)} className="p-1 text-gray-400 hover:text-gray-600">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      value={memberSearch}
+                      onChange={e => setMemberSearch(e.target.value)}
+                      placeholder={`搜索 ${members.length} 位活跃成员…`}
+                      className="w-full px-3 py-2 bg-white dk-input border border-gray-200 dk-border rounded-xl text-sm focus:outline-none focus:border-[#07c160] mb-2"
+                      disabled={loading}
+                    />
+                    <div className="max-h-56 overflow-y-auto border border-gray-100 dk-border rounded-xl">
+                      {filteredMembers.length === 0 ? (
+                        <div className="text-center text-gray-300 text-xs py-6">
+                          {members.length === 0 ? '正在加载成员列表…' : '未找到匹配的成员'}
+                        </div>
+                      ) : filteredMembers.map(m => (
+                        <button
+                          key={m.speaker + (m.username ?? '')}
+                          onClick={() => setSelectedMember(m)}
+                          className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors border-b border-gray-50 dark:border-white/5 last:border-0"
+                        >
+                          <div className="w-7 h-7 rounded-full bg-[#576b95] flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                            {m.speaker.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0 text-left">
+                            <div className="text-sm font-semibold text-[#1d1d1f] dk-text truncate">{m.speaker}</div>
+                            <div className="text-[10px] text-gray-400">{m.count.toLocaleString()} 条{m.username ? ` · ${m.username}` : ''}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 消息条数选择 */}
+        <div className="mb-5">
+          <div className="text-xs font-bold text-gray-500 dk-text mb-2">分析的消息数</div>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {MSG_LIMIT_OPTIONS.map(n => (
+              <button
+                key={n}
+                onClick={() => setMsgLimit(n)}
+                disabled={loading}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  msgLimit === n
+                    ? 'bg-[#07c160] text-white'
+                    : 'bg-gray-100 dark:bg-white/10 text-gray-500 hover:bg-gray-200 dark:hover:bg-white/20'
+                }`}
+              >
+                最近 {n} 条
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-gray-400">
+            {msgLimit <= 300 && '轻量：10 秒内完成，约 5k token'}
+            {msgLimit > 300 && msgLimit <= 500 && '均衡：约 15 秒，约 8k token'}
+            {msgLimit > 500 && msgLimit <= 1000 && '深度：约 25 秒，约 12k token（超 1.2 万字会自动降采样）'}
+            {msgLimit > 1000 && '全面：约 30 秒，超过预算的部分会均匀降采样到 1.2 万字内送入 LLM'}
+          </p>
         </div>
 
         {/* 格式选择 */}
@@ -121,7 +285,7 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
                 disabled={loading}
                 className={`text-left p-3 rounded-2xl border-2 transition-all ${
                   format === f.key
-                    ? 'border-[#8b5cf6] bg-[#8b5cf6]/5'
+                    ? 'border-[#07c160] bg-[#07c160]/5'
                     : 'border-gray-100 dark:border-white/10 hover:border-gray-200'
                 } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
@@ -143,7 +307,7 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
               value={profileId}
               onChange={e => setProfileId(e.target.value)}
               disabled={loading}
-              className="w-full px-3 py-2 bg-white dk-input border border-gray-200 dk-border rounded-xl text-sm focus:outline-none focus:border-[#8b5cf6]"
+              className="w-full px-3 py-2 bg-white dk-input border border-gray-200 dk-border rounded-xl text-sm focus:outline-none focus:border-[#07c160]"
             >
               <option value="">默认 ({profiles[0]?.provider} · {profiles[0]?.model || '—'})</option>
               {profiles.map(p => (
@@ -164,7 +328,7 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
 
         {/* 成功提示 */}
         {success && (
-          <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-xs text-[#07c160]">
+          <div className="mb-4 p-3 bg-[#07c160]/5 border border-[#07c160]/30 rounded-xl text-xs text-[#07c160]">
             ✓ 炼化成功，zip 文件已开始下载。解压后按 README 说明安装到对应工具。
           </div>
         )}
@@ -180,13 +344,13 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
           </button>
           <button
             onClick={handleForge}
-            disabled={loading}
-            className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold bg-[#8b5cf6] text-white hover:bg-[#7c3aed] disabled:opacity-50 transition-colors"
+            disabled={loading || (skillType === 'group' && groupTarget === 'member' && !selectedMember)}
+            className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold bg-[#07c160] text-white hover:bg-[#06ad56] disabled:opacity-50 transition-colors"
           >
             {loading ? (
               <>
                 <Loader2 size={14} className="animate-spin" />
-                炼化中… 可能需要 10-30 秒
+                炼化中…
               </>
             ) : (
               <>
