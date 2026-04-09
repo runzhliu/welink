@@ -2,9 +2,9 @@
  * Skill 炼化弹窗 — 把聊天记录导出为 Claude Code / Codex / OpenCode / Cursor 等工具的 Skill
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Loader2, Download, Sparkles, Info } from 'lucide-react';
-import { forgeSkill, groupsApi } from '../../services/api';
+import { forgeSkill, skillsApi, groupsApi } from '../../services/api';
 import type { MemberStat } from '../../types';
 
 interface Props {
@@ -44,9 +44,11 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
   const [profiles, setProfiles] = useState<LLMProfileItem[]>([]);
   const [msgLimit, setMsgLimit] = useState(500);
   const [loading, setLoading] = useState(false);
+  const [statusText, setStatusText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [savedPath, setSavedPath] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 群聊专用：选整个群还是某个成员
   const [groupTarget, setGroupTarget] = useState<GroupTargetKind>('whole');
@@ -79,10 +81,23 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
       setError(null);
       setSuccess(false);
       setSavedPath(null);
+      setStatusText(null);
       setGroupTarget('whole');
       setSelectedMember(null);
       setMemberSearch('');
+    } else {
+      // 关闭时清理轮询
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
     }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
   }, [open]);
 
   const filteredMembers = useMemo(() => {
@@ -97,11 +112,70 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
     return ua.includes('AppleWebKit') && !ua.includes('Safari') && !ua.includes('Chrome') && !ua.includes('Firefox');
   };
 
+  // 轮询 skill 状态直到完成或失败
+  const pollSkillStatus = (id: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const rec = await skillsApi.get(id);
+        if (rec.status === 'pending') {
+          setStatusText('已提交，等待执行…');
+        } else if (rec.status === 'running') {
+          setStatusText('正在调用 AI 分析聊天记录…');
+        } else if (rec.status === 'success') {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          setStatusText(null);
+          setLoading(false);
+
+          // 自动下载
+          if (isWebView()) {
+            try {
+              const resp = await fetch(skillsApi.downloadUrl(id));
+              const blob = await resp.blob();
+              const reader = new FileReader();
+              reader.onloadend = async () => {
+                const base64 = (reader.result as string).split(',')[1] ?? '';
+                const saveResp = await fetch('/api/app/save-file', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ filename: rec.filename, content: base64, encoding: 'base64' }),
+                });
+                if (saveResp.ok) {
+                  const d = await saveResp.json() as { path?: string };
+                  setSavedPath(d.path ?? `~/Downloads/${rec.filename}`);
+                } else {
+                  setSavedPath(rec.file_path);
+                }
+              };
+              reader.readAsDataURL(blob);
+            } catch {
+              setSavedPath(rec.file_path);
+            }
+          } else {
+            const a = document.createElement('a');
+            a.href = skillsApi.downloadUrl(id);
+            a.download = rec.filename;
+            a.click();
+          }
+          setSuccess(true);
+        } else if (rec.status === 'failed') {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          setStatusText(null);
+          setLoading(false);
+          setError(rec.error_msg || '炼化失败');
+        }
+      } catch (e) {
+        console.error('Poll skill status failed', e);
+      }
+    }, 2000);
+  };
+
   const handleForge = async () => {
     setLoading(true);
     setError(null);
     setSuccess(false);
     setSavedPath(null);
+    setStatusText('正在提交任务…');
     try {
       let effectiveType: 'contact' | 'self' | 'group' | 'group-member' = skillType;
       let memberSpeaker: string | undefined;
@@ -121,43 +195,12 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
         msg_limit: msgLimit,
       });
 
-      // App 模式：通过 /api/app/save-file 写入 ~/Downloads 并获取真实路径
-      if (isWebView()) {
-        try {
-          const saveResp = await fetch('/api/app/save-file', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: result.filename,
-              content: result.content_base64,
-              encoding: 'base64',
-            }),
-          });
-          if (saveResp.ok) {
-            const d = await saveResp.json() as { path?: string };
-            setSavedPath(d.path ?? `~/Downloads/${result.filename}`);
-          } else {
-            // 降级：显示后端持久化路径
-            setSavedPath(result.file_path);
-          }
-        } catch {
-          setSavedPath(result.file_path);
-        }
-      } else {
-        // 浏览器模式：从 base64 构造 blob 并触发下载
-        const bytes = Uint8Array.from(atob(result.content_base64), c => c.charCodeAt(0));
-        const blob = new Blob([bytes], { type: 'application/zip' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = result.filename;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-      setSuccess(true);
+      // 任务已提交，开始轮询状态
+      setStatusText('任务已提交，等待执行…');
+      pollSkillStatus(result.id);
     } catch (e) {
-      setError((e as Error).message || '炼化失败');
-    } finally {
+      setError((e as Error).message || '提交失败');
+      setStatusText(null);
       setLoading(false);
     }
   };
@@ -376,6 +419,19 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
           </div>
         )}
 
+        {/* 进行中状态 */}
+        {loading && statusText && (
+          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-xs text-blue-600 dark:text-blue-300 flex items-start gap-2">
+            <Loader2 size={14} className="animate-spin flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold">{statusText}</div>
+              <div className="text-[10px] text-blue-500 dark:text-blue-400 mt-0.5">
+                任务在后台运行，可以关闭此窗口稍后在「Skill 管理」页面查看结果。
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 成功提示 */}
         {success && (
           <div className="mb-4 p-3 bg-[#07c160]/5 border border-[#07c160]/30 rounded-xl text-xs text-[#07c160] space-y-1">
@@ -404,10 +460,9 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
         <div className="flex items-center justify-end gap-2">
           <button
             onClick={onClose}
-            disabled={loading}
-            className="px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors disabled:opacity-50"
+            className="px-4 py-2 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
           >
-            取消
+            {loading ? '后台继续' : '取消'}
           </button>
           <button
             onClick={handleForge}

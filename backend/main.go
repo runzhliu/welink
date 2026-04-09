@@ -1326,32 +1326,6 @@ func serverMain() {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "服务未就绪"})
 			return
 		}
-		zipBytes, filename, err := ForgeSkillZip(svc, ForgeOptions{
-			SkillType:     body.SkillType,
-			Username:      body.Username,
-			MemberSpeaker: body.MemberSpeaker,
-			Format:        body.Format,
-			ProfileID:     body.ProfileID,
-			MsgLimit:      body.MsgLimit,
-		}, prefs)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		// 保存到持久化目录（与 preferences.json 同目录下的 skills/<id>/<filename>.zip）
-		skillID := fmt.Sprintf("%d%04d", time.Now().UnixNano(), rand.Intn(10000))
-		skillsDir := filepath.Join(filepath.Dir(preferencesPath()), "skills", skillID)
-		if err := os.MkdirAll(skillsDir, 0755); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建 skill 目录失败: " + err.Error()})
-			return
-		}
-		filePath := filepath.Join(skillsDir, filename)
-		if err := os.WriteFile(filePath, zipBytes, 0644); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存 skill 文件失败: " + err.Error()})
-			return
-		}
-
 		// 解析目标名（用于列表展示）
 		targetName := body.Username
 		if body.SkillType == "self" {
@@ -1375,8 +1349,9 @@ func serverMain() {
 			}
 		}
 
-		// 插入 DB 记录
-		rec := &SkillRecord{
+		// 生成 ID 并立即创建 pending 记录
+		skillID := fmt.Sprintf("%d%04d", time.Now().UnixNano(), rand.Intn(10000))
+		pendingRec := &SkillRecord{
 			ID:             skillID,
 			SkillType:      body.SkillType,
 			Format:         body.Format,
@@ -1386,23 +1361,74 @@ func serverMain() {
 			ModelProvider:  cfg.provider,
 			ModelName:      cfg.model,
 			MsgLimit:       body.MsgLimit,
-			Filename:       filename,
-			FilePath:       filePath,
-			FileSize:       int64(len(zipBytes)),
+			Filename:       "",
+			FilePath:       "",
+			FileSize:       0,
+			Status:         SkillStatusPending,
 		}
-		if err := InsertSkillRecord(rec); err != nil {
-			log.Printf("[skill] insert record failed: %v", err)
+		if err := InsertSkillRecord(pendingRec); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建任务失败: " + err.Error()})
+			return
 		}
 
-		// 返回 JSON 元数据 + base64 内容（前端按需下载）
-		c.JSON(http.StatusOK, gin.H{
-			"id":            skillID,
-			"filename":      filename,
-			"file_path":     filePath,
-			"file_size":     len(zipBytes),
-			"content_base64": base64.StdEncoding.EncodeToString(zipBytes),
-			"record":        rec,
+		// 异步执行炼化
+		go func(id string, opts ForgeOptions, p Preferences, s *service.ContactService) {
+			// 标记为运行中
+			_ = UpdateSkillStatus(id, SkillStatusRunning, "", "", 0, "")
+
+			zipBytes, filename, err := ForgeSkillZip(s, opts, p)
+			if err != nil {
+				log.Printf("[skill %s] forge failed: %v", id, err)
+				_ = UpdateSkillStatus(id, SkillStatusFailed, err.Error(), "", 0, "")
+				return
+			}
+
+			// 保存到持久化目录
+			skillsDir := filepath.Join(filepath.Dir(preferencesPath()), "skills", id)
+			if err := os.MkdirAll(skillsDir, 0755); err != nil {
+				_ = UpdateSkillStatus(id, SkillStatusFailed, "创建 skill 目录失败: "+err.Error(), "", 0, "")
+				return
+			}
+			filePath := filepath.Join(skillsDir, filename)
+			if err := os.WriteFile(filePath, zipBytes, 0644); err != nil {
+				_ = UpdateSkillStatus(id, SkillStatusFailed, "保存 skill 文件失败: "+err.Error(), "", 0, "")
+				return
+			}
+
+			if err := UpdateSkillStatus(id, SkillStatusSuccess, "", filePath, int64(len(zipBytes)), filename); err != nil {
+				log.Printf("[skill %s] update status failed: %v", id, err)
+			}
+			log.Printf("[skill %s] forge success: %s (%d bytes)", id, filename, len(zipBytes))
+		}(skillID, ForgeOptions{
+			SkillType:     body.SkillType,
+			Username:      body.Username,
+			MemberSpeaker: body.MemberSpeaker,
+			Format:        body.Format,
+			ProfileID:     body.ProfileID,
+			MsgLimit:      body.MsgLimit,
+		}, prefs, svc)
+
+		// 立即返回 pending 状态
+		c.JSON(http.StatusAccepted, gin.H{
+			"id":     skillID,
+			"status": SkillStatusPending,
+			"record": pendingRec,
 		})
+	})
+
+	// GET /api/skills/:id — 获取单个 skill 的状态
+	api.GET("/skills/:id", func(c *gin.Context) {
+		id := c.Param("id")
+		rec, err := GetSkillRecord(id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if rec == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "记录不存在"})
+			return
+		}
+		c.JSON(http.StatusOK, rec)
 	})
 
 	// GET /api/skills — 列出所有已炼化的 skill
