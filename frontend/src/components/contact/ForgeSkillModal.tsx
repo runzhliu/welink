@@ -326,8 +326,16 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
 
         {/* 错误提示 */}
         {error && (
-          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-xs text-red-600 dark:text-red-400">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-xs text-red-600 dark:text-red-400 whitespace-pre-line">
             {error}
+            {(error.includes('风控') || error.includes('content_filter') || error.includes('high risk')) && (
+              <div className="mt-2 pt-2 border-t border-red-200 dark:border-red-800 text-[10px] text-red-500">
+                💡 <b>常见解决方法：</b><br />
+                • 切换到 Claude / GPT-4o / Gemini 等境外大模型（风控较宽松）<br />
+                • 把消息条数减少到 300-500 条<br />
+                • 如果是单个群友，尝试换成整个群聊
+              </div>
+            )}
           </div>
         )}
 

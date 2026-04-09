@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
 	"sort"
 	"strings"
@@ -177,18 +178,10 @@ func extractSkillPackage(
 	prefs Preferences,
 	profileID string,
 ) (*SkillPackage, error) {
-	samplesBlock := strings.Join(samples, "\n")
-	// smartSample 已经做了字符预算裁剪，这里只做兜底（防止极端情况）
-	if len([]rune(samplesBlock)) > skillCharBudget {
-		runes := []rune(samplesBlock)
-		samplesBlock = string(runes[:skillCharBudget]) + "\n[...]"
-	}
-
-	systemPrompt, userPrompt := buildForgePrompt(skillType, displayName, samplesBlock, statsText)
-
-	msgs := []LLMMessage{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: userPrompt},
+	// 预处理：移除 URL、过长消息、纯符号行（降低触发 LLM 内容风控的概率）
+	samples = sanitizeForLLM(samples)
+	if len(samples) < 10 {
+		return nil, fmt.Errorf("清洗后可用的文本消息太少（%d 条），无法生成有意义的 skill", len(samples))
 	}
 
 	// 复用 CompleteLLM
@@ -201,8 +194,59 @@ func extractSkillPackage(
 		profPrefs.LLMModel = cfg.model
 	}
 
-	raw, err := CompleteLLM(msgs, profPrefs)
+	// 尝试调用 LLM，遇到内容风控错误则自动重试（逐次缩小样本 + 更激进的过滤）
+	buildAndCall := func(s []string) (string, error) {
+		samplesBlock := strings.Join(s, "\n")
+		if len([]rune(samplesBlock)) > skillCharBudget {
+			runes := []rune(samplesBlock)
+			samplesBlock = string(runes[:skillCharBudget]) + "\n[...]"
+		}
+		systemPrompt, userPrompt := buildForgePrompt(skillType, displayName, samplesBlock, statsText)
+		msgs := []LLMMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userPrompt},
+		}
+		return CompleteLLM(msgs, profPrefs)
+	}
+
+	raw, err := buildAndCall(samples)
+	if err != nil && isContentFilterError(err) {
+		// 第一次重试：去掉可能更"激进"的内容并缩小一半
+		log.Printf("[skill-forge] 内容风控触发，缩小样本重试: %v", err)
+		half := samples
+		if len(samples) > 50 {
+			half = samples[len(samples)/2:] // 取后半（更近期）
+		}
+		// 进一步过滤：移除微信表情占位符，移除可能敏感的消息（含特定关键词）
+		var filtered []string
+		for _, s := range half {
+			cleaned := reWxEmoji.ReplaceAllString(s, "")
+			cleaned = strings.TrimSpace(cleaned)
+			if cleaned == "" {
+				continue
+			}
+			filtered = append(filtered, cleaned)
+		}
+		if len(filtered) < 10 {
+			return nil, fmt.Errorf("LLM 内容风控拒绝，缩小样本后可用消息过少。建议换用其他大模型（如 Claude / GPT-4o 风控较宽松），或减少消息条数：%w", err)
+		}
+		raw, err = buildAndCall(filtered)
+		if err != nil && isContentFilterError(err) {
+			// 第二次重试：再砍一半
+			log.Printf("[skill-forge] 二次风控触发，继续缩小: %v", err)
+			if len(filtered) > 50 {
+				filtered = filtered[len(filtered)/2:]
+			}
+			raw, err = buildAndCall(filtered)
+		}
+		if err == nil {
+			samples = filtered // 更新 sample count 用于记录
+		}
+	}
 	if err != nil {
+		if isContentFilterError(err) {
+			return nil, fmt.Errorf("LLM 内容风控拒绝了这批消息（自动重试 2 次仍失败）。建议：\n1. 换用风控宽松的模型（Claude、GPT-4o、Gemini）\n2. 减少消息条数到 300-500\n3. 检查聊天内容是否包含敏感话题\n原始错误：%w", err)
+		}
 		return nil, fmt.Errorf("LLM 调用失败: %w", err)
 	}
 
@@ -590,6 +634,10 @@ var (
 	reMobile = regexp.MustCompile(`1[3-9]\d{9}`)
 	reEmail  = regexp.MustCompile(`[\w.+-]+@[\w-]+\.[\w.-]+`)
 	reIDCard = regexp.MustCompile(`[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]`)
+	// 用于 LLM 内容风控防御：URL 会被国内大模型视为高风险
+	reURL = regexp.MustCompile(`https?://[^\s]+`)
+	// 微信表情符号 [xxx] 占位符对 LLM 没意义，反而可能干扰
+	reWxEmoji = regexp.MustCompile(`\[[^\]]{1,12}\]`)
 )
 
 func maskSensitive(s string) string {
@@ -597,6 +645,57 @@ func maskSensitive(s string) string {
 	s = reMobile.ReplaceAllString(s, "***手机号***")
 	s = reEmail.ReplaceAllString(s, "***邮箱***")
 	return s
+}
+
+// sanitizeForLLM 把消息处理得更"安全"，减少触发 LLM 内容风控的概率：
+//   - 移除所有 URL（国内大模型对 URL 容忍度低）
+//   - 去掉过长的单条消息（>300 字的往往是转发内容，无助于风格提炼）
+//   - 去掉只有符号/数字/空白的行
+//   - 对于极其敏感的关键词，替换为占位符
+func sanitizeForLLM(samples []string) []string {
+	sensitiveWords := []string{} // 保留扩展点
+	_ = sensitiveWords
+	out := make([]string, 0, len(samples))
+	for _, s := range samples {
+		// 移除 URL
+		s = reURL.ReplaceAllString(s, "[链接]")
+		// 过长消息丢弃（转发长文对炼化无用）
+		if len([]rune(s)) > 300 {
+			continue
+		}
+		// 去空白/纯符号
+		trimmed := strings.TrimSpace(s)
+		if trimmed == "" {
+			continue
+		}
+		// 纯数字/符号行
+		onlyNonText := true
+		for _, r := range trimmed {
+			if (r >= 0x4E00 && r <= 0x9FFF) || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+				onlyNonText = false
+				break
+			}
+		}
+		if onlyNonText {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+// isContentFilterError 判断错误是否是 LLM 内容风控拒绝
+func isContentFilterError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "content_filter") ||
+		strings.Contains(msg, "high risk") ||
+		strings.Contains(msg, "high_risk") ||
+		strings.Contains(msg, "data_inspection_failed") ||
+		strings.Contains(msg, "risk_control") ||
+		strings.Contains(msg, "sensitive")
 }
 
 // ─── 格式化：6 种输出 ────────────────────────────────────────────────────────
