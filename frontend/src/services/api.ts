@@ -125,6 +125,8 @@ export const contactsApi = {
 };
 
 // Skill 炼化（blob 下载）
+export type SkillStatus = 'pending' | 'running' | 'success' | 'failed';
+
 export interface SkillRecord {
   id: string;
   skill_type: 'contact' | 'self' | 'group' | 'group-member';
@@ -139,14 +141,14 @@ export interface SkillRecord {
   file_path: string;
   file_size: number;
   created_at: number;
+  status: SkillStatus;
+  error_msg?: string;
+  updated_at: number;
 }
 
 export interface ForgeSkillResult {
   id: string;
-  filename: string;
-  file_path: string;
-  file_size: number;
-  content_base64: string;
+  status: SkillStatus;
   record: SkillRecord;
 }
 
@@ -172,6 +174,7 @@ export async function forgeSkill(opts: {
 
 export const skillsApi = {
   list: () => api.get<void, { skills: SkillRecord[] }>('/skills').then(d => d.skills ?? []),
+  get: (id: string) => api.get<void, SkillRecord>(`/skills/${id}`),
   delete: (id: string) => api.delete<void, { ok: boolean }>(`/skills/${id}`),
   downloadUrl: (id: string) => `/api/skills/${id}/download`,
 };
