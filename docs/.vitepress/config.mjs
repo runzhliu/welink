@@ -60,6 +60,7 @@ export default defineConfig({
           { text: 'AI 群聊模拟', link: '/ai-group-sim' },
           { text: '跨联系人 AI 问答', link: '/cross-contact-qa' },
           { text: 'AI 分析功能', link: '/ai-analysis' },
+          { text: 'Skill 炼化', link: '/skill-forge' },
           { text: 'Ollama 本地 AI 配置', link: '/ollama-setup' },
           { text: 'MCP Server', link: '/mcp-server' },
         ],

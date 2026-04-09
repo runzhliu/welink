@@ -176,6 +176,50 @@ WeLink 内置 [MCP（Model Context Protocol）](https://modelcontextprotocol.io/
 
 ---
 
+## 🔮 Skill 炼化 — 把聊天记录变成 AI 工具的能力包
+
+**把聊天记录里的人际关系，直接炼化成 Claude Code / Codex / Cursor 等 AI 编程工具的 Skill 文件包。** 一次炼化，多处使用。
+
+### 三种 Skill 类型
+
+| 类型 | 输入 | 用途 |
+|------|------|------|
+| **contact** 联系人分身 | 和某联系人的全部聊天 | 让 AI 用 TA 的语气帮你写邮件、起草回复、预演对话 |
+| **self** 我的写作风格 | 我发出去的所有消息 | 让 AI 用你自己的口吻写公众号、朋友圈、邮件，避免 AI 腔 |
+| **group** 群聊智囊 | 某个群的集体聊天 | 回答「这个群会怎么说」，把群的集体知识/术语/氛围封装起来 |
+
+### 六种输出格式（一键切换）
+
+| 格式 | 目标工具 | 产物路径 |
+|------|---------|---------|
+| **claude-skill** | Claude Code Skills（目录式） | `~/.claude/skills/<name>/SKILL.md` + 附件 |
+| **claude-agent** | Claude Code Subagent（单文件） | `~/.claude/agents/<name>.md`（带 frontmatter） |
+| **codex** | OpenAI Codex CLI | 项目根 `AGENTS.md` |
+| **opencode** | OpenCode Agent | `.opencode/agent/<name>.md` |
+| **cursor** | Cursor Rules | `.cursor/rules/<name>.mdc`（支持 glob） |
+| **generic** | 通用 Markdown | 工具无关，可粘贴到任何 AI 对话 |
+
+### 炼化的内容
+- **性格特征**：LLM 从真实对话里抽取的人物画像
+- **说话风格**：句长、语气、用词偏好、标点习惯、emoji 使用
+- **高频词与口头禅**：独特词汇和常用短语
+- **常聊话题**：兴趣领域和专业方向
+- **关系背景**：你和 TA 的关系推断（仅 contact 类型）
+- **代表性原话**：5-8 条最能体现风格的消息片段（自动脱敏）
+- **使用注意事项**：什么场景适合用、什么场景不适合
+
+### 使用入口
+- 联系人深度画像头部 → 紫色 Sparkles 图标按钮
+- 群聊画像头部 → 紫色 Sparkles 图标按钮  
+- 洞察页「个人自画像」卡 → 「炼化我的 Skill」按钮
+
+### 隐私保护
+- 炼化前手机号、邮箱、身份证号自动脱敏
+- 整个过程只调用一次 LLM（约 5-15k token）
+- 产物是本地 zip 文件，由你决定是否分享
+
+---
+
 ## 数据分析功能
 
 **好友分析**

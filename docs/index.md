@@ -22,6 +22,11 @@ features:
     details: 让 AI 学习任何联系人的聊天风格，模拟和 TA 对话。追忆远方的亲人、重逢失联的老友，或和最信任的人聊聊——TA 会用 TA 的方式回应你。
     link: /ai-clone
     linkText: 了解更多
+  - icon: 🔮
+    title: Skill 炼化
+    details: 把聊天记录炼化为 Claude Code / Codex / OpenCode / Cursor 等 AI 编程工具的 Skill 文件包。3 种类型（联系人 / 我自己 / 群聊智囊）× 6 种输出格式，让任意 AI 工具都能用 TA 的语气说话。
+    link: /skill-forge
+    linkText: 了解更多
   - icon: 👥
     title: AI 群聊模拟
     details: AI 按群友的发言比例和说话风格模拟群聊对话，你也可以随时加入。支持自定义话题、氛围和参与成员。
