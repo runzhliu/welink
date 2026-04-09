@@ -3,11 +3,12 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Loader2, User, Clock, MessageSquare, Calendar, Zap, Users } from 'lucide-react';
+import { Loader2, User, Clock, MessageSquare, Calendar, Zap, Users, Sparkles } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { SelfPortrait } from '../../types';
 import { contactsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { ForgeSkillModal } from '../contact/ForgeSkillModal';
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
@@ -19,6 +20,7 @@ export const SelfPortraitCard: React.FC<Props> = ({ blockedDisplayNames }) => {
   const { privacyMode } = usePrivacyMode();
   const [data, setData] = useState<SelfPortrait | null>(null);
   const [loading, setLoading] = useState(true);
+  const [forgeOpen, setForgeOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,9 +65,19 @@ export const SelfPortraitCard: React.FC<Props> = ({ blockedDisplayNames }) => {
 
   return (
     <div className="bg-white dk-card rounded-3xl border border-gray-100 dk-border p-6">
-      <div className="flex items-center gap-2 mb-5">
-        <User size={18} className="text-[#07c160]" />
-        <h3 className="text-lg font-black text-[#1d1d1f] dk-text">个人自画像</h3>
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <User size={18} className="text-[#07c160]" />
+          <h3 className="text-lg font-black text-[#1d1d1f] dk-text">个人自画像</h3>
+        </div>
+        <button
+          onClick={() => setForgeOpen(true)}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#8b5cf6]/10 text-[#8b5cf6] hover:bg-[#8b5cf6]/20 transition-colors"
+          title="把自己的写作风格炼化为 Skill"
+        >
+          <Sparkles size={11} />
+          炼化我的 Skill
+        </button>
       </div>
 
       {/* KPI 4 宫格 */}
@@ -132,6 +144,15 @@ export const SelfPortraitCard: React.FC<Props> = ({ blockedDisplayNames }) => {
           </BarChart>
         </ResponsiveContainer>
       </div>
+
+      {forgeOpen && (
+        <ForgeSkillModal
+          open={forgeOpen}
+          onClose={() => setForgeOpen(false)}
+          skillType="self"
+          displayName="我的写作风格"
+        />
+      )}
     </div>
   );
 };

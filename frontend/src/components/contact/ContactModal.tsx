@@ -11,6 +11,7 @@ import { exportContactCsv, exportContactTxt, EXPORT_LIMIT, parseExportResult } f
 import { WordCloudCanvas } from './WordCloudCanvas';
 import { LLMAnalysisTab } from './LLMAnalysisTab';
 import { AICloneTab } from './AICloneTab';
+import { ForgeSkillModal } from './ForgeSkillModal';
 import { AIInsights } from './AIInsights';
 import { ContactDetailCharts } from './ContactDetailCharts';
 import { SentimentChart } from './SentimentChart';
@@ -51,6 +52,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
   const { data: wordData, loading: isAnalysing, fetch: fetchWordCloud } = useWordCloud();
   const [tab, setTab] = useState<ModalTab>(initialTab ?? 'wordcloud');
   const [fullscreen, setFullscreen] = useState(false);
+  const [forgeOpen, setForgeOpen] = useState(false);
 
   // 联系人切换时重置到指定 tab（支持从首页跳转到 AI 分析）
   useEffect(() => {
@@ -259,6 +261,13 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
               </div>
             )}
           </div>
+          <button
+            onClick={() => setForgeOpen(true)}
+            className="p-2 rounded-xl text-gray-300 hover:text-[#8b5cf6] hover:bg-[#8b5cf6]/10 transition-colors duration-200"
+            title="炼化为 Skill（导出给 Claude Code / Codex / Cursor 等工具使用）"
+          >
+            <Sparkles size={20} strokeWidth={2} />
+          </button>
           <button
             onClick={() => setFullscreen(v => !v)}
             className="p-2 rounded-xl text-gray-300 hover:text-[#07c160] hover:bg-[#e7f8f0] dark:hover:bg-[#07c160]/15 transition-colors duration-200"
@@ -759,6 +768,16 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
           ✕
         </button>
       </div>
+    )}
+
+    {forgeOpen && (
+      <ForgeSkillModal
+        open={forgeOpen}
+        onClose={() => setForgeOpen(false)}
+        skillType="contact"
+        username={contact.username}
+        displayName={displayName}
+      />
     )}
   </>
   );
