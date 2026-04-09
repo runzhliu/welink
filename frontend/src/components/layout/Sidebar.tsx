@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { Bot, BarChart2, Database, Sun, Moon, MessagesSquare, MessageCircle, BookOpen, Github, Search, GitCommitHorizontal, Hourglass, Heart, Link2, X, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bot, BarChart2, Database, Sun, Moon, MessagesSquare, MessageCircle, BookOpen, Github, Search, GitCommitHorizontal, Hourglass, Heart, Link2, X, Settings, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import type { TabType } from '../../types';
 
 interface SidebarProps {
@@ -49,6 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
     { tab: 'anniversary', icon: <Heart size={20} strokeWidth={2} />,          label: '纪念日' },
     { tab: 'search',      icon: <Search size={20} strokeWidth={2} />,         label: '搜索' },
     { tab: 'urls',        icon: <Link2 size={20} strokeWidth={2} />,           label: '链接' },
+    { tab: 'skills',      icon: <Sparkles size={20} strokeWidth={2} />,        label: 'Skill' },
     { tab: 'db',        icon: <Database size={20} strokeWidth={2} />,         label: '数据库' },
     { tab: 'settings',  icon: <Settings size={20} strokeWidth={2} />,         label: '设置' },
   ];

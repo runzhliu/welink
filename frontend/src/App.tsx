@@ -20,6 +20,7 @@ import { SearchView } from './components/search/SearchView';
 import { TimelineView } from './components/timeline/TimelineView';
 import { ChatCalendarPage } from './components/calendar/ChatCalendarPage';
 import { AnniversaryPage } from './components/anniversary/AnniversaryPage';
+import { SkillsView } from './components/skills/SkillsView';
 import { GroupsView, GroupDetailModal } from './components/groups/GroupsView';
 import { useDarkMode } from './hooks/useDarkMode';
 
@@ -61,7 +62,7 @@ function App() {
 
   // State — 从 URL hash 恢复当前 tab + 联系人/群聊弹窗
   // hash 格式：#/stats  #/stats/contact/wxid_abc  #/groups/group/xxx@chatroom
-  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'contacts', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'urls', 'settings'];
+  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'contacts', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'urls', 'skills', 'settings'];
 
   const parseHash = (): { tab: TabType; contactId?: string; groupId?: string } => {
     const raw = window.location.hash.replace('#/', '').replace('#', '');
@@ -358,6 +359,8 @@ function App() {
           <ChatCalendarPage contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'anniversary' ? (
           <AnniversaryPage contacts={contacts} onContactClick={handleContactClick} />
+        ) : activeTab === 'skills' ? (
+          <SkillsView />
         ) : activeTab === 'search' ? (
           <SearchView
             contacts={contacts}

@@ -46,6 +46,7 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [savedPath, setSavedPath] = useState<string | null>(null);
 
   // 群聊专用：选整个群还是某个成员
   const [groupTarget, setGroupTarget] = useState<GroupTargetKind>('whole');
@@ -77,6 +78,7 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
     if (open) {
       setError(null);
       setSuccess(false);
+      setSavedPath(null);
       setGroupTarget('whole');
       setSelectedMember(null);
       setMemberSearch('');
@@ -89,10 +91,17 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
     return members.filter(m => m.speaker.toLowerCase().includes(q) || (m.username ?? '').toLowerCase().includes(q)).slice(0, 50);
   }, [members, memberSearch]);
 
+  // 检测是否运行在桌面 App 的 WebView 里（不是 Chrome/Safari/Firefox）
+  const isWebView = () => {
+    const ua = navigator.userAgent;
+    return ua.includes('AppleWebKit') && !ua.includes('Safari') && !ua.includes('Chrome') && !ua.includes('Firefox');
+  };
+
   const handleForge = async () => {
     setLoading(true);
     setError(null);
     setSuccess(false);
+    setSavedPath(null);
     try {
       let effectiveType: 'contact' | 'self' | 'group' | 'group-member' = skillType;
       let memberSpeaker: string | undefined;
@@ -103,7 +112,7 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
         effectiveType = 'group-member';
         memberSpeaker = selectedMember.speaker;
       }
-      const { blob, filename } = await forgeSkill({
+      const result = await forgeSkill({
         skill_type: effectiveType,
         username,
         member_speaker: memberSpeaker,
@@ -111,12 +120,40 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
         profile_id: profileId || undefined,
         msg_limit: msgLimit,
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+
+      // App 模式：通过 /api/app/save-file 写入 ~/Downloads 并获取真实路径
+      if (isWebView()) {
+        try {
+          const saveResp = await fetch('/api/app/save-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: result.filename,
+              content: result.content_base64,
+              encoding: 'base64',
+            }),
+          });
+          if (saveResp.ok) {
+            const d = await saveResp.json() as { path?: string };
+            setSavedPath(d.path ?? `~/Downloads/${result.filename}`);
+          } else {
+            // 降级：显示后端持久化路径
+            setSavedPath(result.file_path);
+          }
+        } catch {
+          setSavedPath(result.file_path);
+        }
+      } else {
+        // 浏览器模式：从 base64 构造 blob 并触发下载
+        const bytes = Uint8Array.from(atob(result.content_base64), c => c.charCodeAt(0));
+        const blob = new Blob([bytes], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = result.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
       setSuccess(true);
     } catch (e) {
       setError((e as Error).message || '炼化失败');
@@ -341,8 +378,25 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
 
         {/* 成功提示 */}
         {success && (
-          <div className="mb-4 p-3 bg-[#07c160]/5 border border-[#07c160]/30 rounded-xl text-xs text-[#07c160]">
-            ✓ 炼化成功，zip 文件已开始下载。解压后按 README 说明安装到对应工具。
+          <div className="mb-4 p-3 bg-[#07c160]/5 border border-[#07c160]/30 rounded-xl text-xs text-[#07c160] space-y-1">
+            <div>✓ 炼化成功！</div>
+            {savedPath ? (
+              <>
+                <div className="text-gray-500 dark:text-gray-400">
+                  文件已保存到：
+                </div>
+                <code className="block text-[10px] bg-white dark:bg-black/20 px-2 py-1 rounded font-mono text-[#07c160] break-all select-all">
+                  {savedPath}
+                </code>
+                <div className="text-gray-400 text-[10px] mt-1">
+                  解压后按 README 说明安装到对应工具。也可以在「Skill 管理」页面重新下载。
+                </div>
+              </>
+            ) : (
+              <div className="text-gray-500 dark:text-gray-400">
+                zip 文件已开始下载。解压后按 README 说明安装到对应工具。
+              </div>
+            )}
           </div>
         )}
 
