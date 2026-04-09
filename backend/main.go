@@ -1295,6 +1295,49 @@ func serverMain() {
 		c.JSON(http.StatusOK, CompleteResponse{Content: content})
 	})
 
+	// ── Skill 炼化：导出 Claude Code / Codex / OpenCode / Cursor / generic 格式 ──
+	// POST /api/ai/forge-skill  body: { skill_type: contact|self|group, username, format, profile_id }
+	api.POST("/ai/forge-skill", func(c *gin.Context) {
+		var body struct {
+			SkillType string `json:"skill_type"`
+			Username  string `json:"username"`
+			Format    string `json:"format"`
+			ProfileID string `json:"profile_id"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		prefs := loadPreferences()
+		cfg := llmConfigForProfile(body.ProfileID, prefs)
+		if cfg.provider == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
+			return
+		}
+		if cfg.apiKey == "" && cfg.provider != "ollama" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+			return
+		}
+		svc := getSvc()
+		if svc == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "服务未就绪"})
+			return
+		}
+		zipBytes, filename, err := ForgeSkillZip(svc, ForgeOptions{
+			SkillType: body.SkillType,
+			Username:  body.Username,
+			Format:    body.Format,
+			ProfileID: body.ProfileID,
+		}, prefs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.Header("Content-Type", "application/zip")
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+		c.Data(http.StatusOK, "application/zip", zipBytes)
+	})
+
 	// ── AI 群聊模拟（SSE 流式）────────────────────────────────────────────
 	// POST /api/ai/group-sim — 模拟群聊：按成员发言比例和风格生成对话
 	api.POST("/ai/group-sim", func(c *gin.Context) {

@@ -124,6 +124,34 @@ export const contactsApi = {
     api.get<void, import('../types').CommonCircleResult>('/contacts/common-circle', { params: { user1, user2 } }),
 };
 
+// Skill 炼化（blob 下载）
+export async function forgeSkill(opts: {
+  skill_type: 'contact' | 'self' | 'group';
+  username?: string;
+  format: 'claude-skill' | 'claude-agent' | 'codex' | 'opencode' | 'cursor' | 'generic';
+  profile_id?: string;
+}): Promise<{ blob: Blob; filename: string }> {
+  const resp = await fetch('/api/ai/forge-skill', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(opts),
+  });
+  if (!resp.ok) {
+    let errMsg = `炼化失败: HTTP ${resp.status}`;
+    try {
+      const j = await resp.json() as { error?: string };
+      if (j.error) errMsg = j.error;
+    } catch {/* ignore */}
+    throw new Error(errMsg);
+  }
+  const blob = await resp.blob();
+  // 从 Content-Disposition 取文件名
+  const disp = resp.headers.get('Content-Disposition') || '';
+  const match = disp.match(/filename="([^"]+)"/);
+  const filename = match ? match[1] : 'skill.zip';
+  return { blob, filename };
+}
+
 export const searchApi = {
   global: (q: string, type: 'contact' | 'group' | 'all') =>
     api.get<void, GlobalSearchGroup[]>('/search', { params: { q, type } }),

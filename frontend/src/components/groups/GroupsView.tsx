@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Users, MessageSquare, MessageCircle, Clock, ChevronRight, ChevronUp, ChevronDown, Loader2, X, BarChart2, EyeOff, Search, Download, Bot, TrendingUp, Flame, Calendar, Crown, Maximize2, Minimize2 } from 'lucide-react';
+import { Users, MessageSquare, MessageCircle, Clock, ChevronRight, ChevronUp, ChevronDown, Loader2, X, BarChart2, EyeOff, Search, Download, Bot, TrendingUp, Flame, Calendar, Crown, Maximize2, Minimize2, Sparkles } from 'lucide-react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { GroupInfo, GroupDetail, ContactStats, GroupChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
@@ -21,6 +21,7 @@ import {
 import { LLMAnalysisTab } from '../contact/LLMAnalysisTab';
 import { GroupSimChat } from './GroupSimChat';
 import { GroupComparePanel } from './GroupComparePanel';
+import { ForgeSkillModal } from '../contact/ForgeSkillModal';
 import { AIAnalysisBadge } from '../dashboard/ContactTable';
 import { avatarSrc } from '../../utils/avatar';
 
@@ -64,6 +65,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
   };
   const [tab, setTab] = useState<'portrait' | 'search' | 'ai' | 'relationships' | 'sim'>('portrait');
   const [fullscreen, setFullscreen] = useState(false);
+  const [forgeOpen, setForgeOpen] = useState(false);
   const [memberSort, setMemberSort] = useState<'count' | 'last' | 'name'>('count');
   const [memberSortAsc, setMemberSortAsc] = useState(false);
   const toggleSort = (key: 'count' | 'last' | 'name') => {
@@ -295,6 +297,13 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
               </div>
             )}
           </div>
+          <button
+            onClick={() => setForgeOpen(true)}
+            className="p-2 rounded-xl text-gray-300 hover:text-[#8b5cf6] hover:bg-[#8b5cf6]/10 transition-colors duration-200"
+            title="炼化群为 Skill（导出给 Claude Code / Codex / Cursor 等工具使用）"
+          >
+            <Sparkles size={20} strokeWidth={2} />
+          </button>
           <button
             onClick={() => setFullscreen(v => !v)}
             className="p-2 rounded-xl text-gray-300 hover:text-[#07c160] hover:bg-[#e7f8f0] dark:hover:bg-[#07c160]/15 transition-colors duration-200"
@@ -866,6 +875,16 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         <SearchContextModal
           {...contextTarget}
           onClose={() => setContextTarget(null)}
+        />
+      )}
+
+      {forgeOpen && (
+        <ForgeSkillModal
+          open={forgeOpen}
+          onClose={() => setForgeOpen(false)}
+          skillType="group"
+          username={group.username}
+          displayName={group.name}
         />
       )}
     </div>
