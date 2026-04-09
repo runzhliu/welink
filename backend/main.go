@@ -30,6 +30,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"path/filepath"
@@ -1296,13 +1297,15 @@ func serverMain() {
 	})
 
 	// ── Skill 炼化：导出 Claude Code / Codex / OpenCode / Cursor / generic 格式 ──
-	// POST /api/ai/forge-skill  body: { skill_type: contact|self|group, username, format, profile_id }
+	// POST /api/ai/forge-skill  body: { skill_type, username, member_speaker, format, profile_id, msg_limit }
 	api.POST("/ai/forge-skill", func(c *gin.Context) {
 		var body struct {
-			SkillType string `json:"skill_type"`
-			Username  string `json:"username"`
-			Format    string `json:"format"`
-			ProfileID string `json:"profile_id"`
+			SkillType     string `json:"skill_type"`
+			Username      string `json:"username"`
+			MemberSpeaker string `json:"member_speaker"`
+			Format        string `json:"format"`
+			ProfileID     string `json:"profile_id"`
+			MsgLimit      int    `json:"msg_limit"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
@@ -1324,17 +1327,23 @@ func serverMain() {
 			return
 		}
 		zipBytes, filename, err := ForgeSkillZip(svc, ForgeOptions{
-			SkillType: body.SkillType,
-			Username:  body.Username,
-			Format:    body.Format,
-			ProfileID: body.ProfileID,
+			SkillType:     body.SkillType,
+			Username:      body.Username,
+			MemberSpeaker: body.MemberSpeaker,
+			Format:        body.Format,
+			ProfileID:     body.ProfileID,
+			MsgLimit:      body.MsgLimit,
 		}, prefs)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		// Content-Disposition 需要用 RFC 5987 编码包含非 ASCII 字符的文件名
+		// 同时提供 ASCII 降级版（把中文替换为 skill）和 UTF-8 版
+		asciiFallback := "skill.zip"
+		utf8Encoded := url.PathEscape(filename)
 		c.Header("Content-Type", "application/zip")
-		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, asciiFallback, utf8Encoded))
 		c.Data(http.StatusOK, "application/zip", zipBytes)
 	})
 

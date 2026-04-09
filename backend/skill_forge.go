@@ -56,11 +56,16 @@ type SkillPackage struct {
 
 // ForgeOptions 炼化选项
 type ForgeOptions struct {
-	SkillType string // contact / self / group
-	Username  string // 联系人或群的 wxid（self 类型不需要）
-	Format    string // claude-skill / claude-agent / codex / opencode / cursor / generic
-	ProfileID string // LLM profile
+	SkillType     string // contact / self / group / group-member
+	Username      string // 联系人或群的 wxid（self 类型不需要）
+	MemberSpeaker string // group-member 类型专用：目标成员的显示名
+	Format        string // claude-skill / claude-agent / codex / opencode / cursor / generic
+	ProfileID     string // LLM profile
+	MsgLimit      int    // 使用最近 N 条消息（0 = 默认 300）
 }
+
+// skillCharBudget 送入 LLM 的消息采样字符上限，避免 token 爆炸
+const skillCharBudget = 12000
 
 // ─── LLM 结构化抽取 ──────────────────────────────────────────────────────────
 
@@ -101,7 +106,12 @@ func buildForgePrompt(skillType, displayName, samplesBlock string, stats string)
 - 所有内容用中文输出`
 
 	var userPrompt string
-	switch skillType {
+	// group-member 共用 contact 的 prompt（单人风格）
+	promptKind := skillType
+	if promptKind == "group-member" {
+		promptKind = "contact"
+	}
+	switch promptKind {
 	case "contact":
 		userPrompt = fmt.Sprintf(`以下是和联系人「%s」的聊天记录片段，请分析 TA（对方，不是"我"）的说话风格。
 
@@ -213,6 +223,8 @@ func extractSkillPackage(
 		pkg.Description = "以用户自己的口吻写作 — 匹配本人语气、用词和表达习惯"
 	case "group":
 		pkg.Description = fmt.Sprintf("「%s」群的集体知识与氛围 — 群聊智囊", displayName)
+	case "group-member":
+		pkg.Description = fmt.Sprintf("以「%s」的说话风格回应 — 基于群聊消息提炼", displayName)
 	}
 
 	return pkg, nil
@@ -257,8 +269,57 @@ func slugify(name string) string {
 
 // ─── 数据收集：联系人 / 自己 / 群聊 ──────────────────────────────────────────
 
+// smartSample 从 all 中按字符预算做采样：
+//   1. 先取最近 targetCount 条
+//   2. 如果字符数仍超预算，均匀下采样至预算内
+func smartSample(all []string, targetCount int) []string {
+	if targetCount <= 0 {
+		targetCount = 300
+	}
+	// 先取最近 targetCount 条
+	var picked []string
+	if len(all) > targetCount {
+		picked = all[len(all)-targetCount:]
+	} else {
+		picked = all
+	}
+	// 统计字符数
+	total := 0
+	for _, s := range picked {
+		total += len([]rune(s))
+	}
+	if total <= skillCharBudget {
+		return picked
+	}
+	// 超预算：均匀下采样
+	targetLen := skillCharBudget
+	// 估算每条平均字符数
+	avgLen := total / len(picked)
+	if avgLen < 1 {
+		avgLen = 1
+	}
+	keepN := targetLen / avgLen
+	if keepN < 30 {
+		keepN = 30
+	}
+	if keepN >= len(picked) {
+		return picked
+	}
+	// 均匀间隔挑选
+	result := make([]string, 0, keepN)
+	step := float64(len(picked)) / float64(keepN)
+	for i := 0; i < keepN; i++ {
+		idx := int(float64(i) * step)
+		if idx >= len(picked) {
+			idx = len(picked) - 1
+		}
+		result = append(result, picked[idx])
+	}
+	return result
+}
+
 // collectContactData 收集单个联系人的统计 + 代表性消息样本
-func collectContactData(svc *service.ContactService, username string) (displayName, statsText string, samples []string, err error) {
+func collectContactData(svc *service.ContactService, username string, msgLimit int) (displayName, statsText string, samples []string, err error) {
 	// 从缓存拿 stats
 	allStats := svc.GetCachedStats()
 	var stats *service.ContactStatsExtended
@@ -315,9 +376,8 @@ func collectContactData(svc *service.ContactService, username string) (displayNa
 	}
 	statsText = sb.String()
 
-	// 采样消息：取最近的文本消息 100 条
+	// 采样消息：取所有文本消息，然后按 msgLimit 和字符预算智能采样
 	msgs := svc.ExportContactMessages(username, 0, 0)
-	// 只保留文本
 	var textMsgs []string
 	for _, m := range msgs {
 		if m.Type != 1 || strings.TrimSpace(m.Content) == "" {
@@ -330,16 +390,12 @@ func collectContactData(svc *service.ContactService, username string) (displayNa
 		}
 		textMsgs = append(textMsgs, fmt.Sprintf("%s: %s", speaker, content))
 	}
-	// 取最后 100 条（最近的）
-	if len(textMsgs) > 100 {
-		textMsgs = textMsgs[len(textMsgs)-100:]
-	}
-	samples = textMsgs
+	samples = smartSample(textMsgs, msgLimit)
 	return displayName, statsText, samples, nil
 }
 
 // collectSelfData 收集"我"发给所有联系人的消息汇总
-func collectSelfData(svc *service.ContactService) (statsText string, samples []string, err error) {
+func collectSelfData(svc *service.ContactService, msgLimit int) (statsText string, samples []string, err error) {
 	// 自画像数据
 	portrait := svc.GetSelfPortrait()
 	if portrait == nil || portrait.TotalSent == 0 {
@@ -371,10 +427,21 @@ func collectSelfData(svc *service.ContactService) (statsText string, samples []s
 		pairs = pairs[:20]
 	}
 
+	// 从每个联系人取一些最近的 我 消息
+	perContactQuota := 10
+	if msgLimit > 0 {
+		perContactQuota = msgLimit/len(pairs) + 1
+		if perContactQuota < 3 {
+			perContactQuota = 3
+		}
+		if perContactQuota > 20 {
+			perContactQuota = 20
+		}
+	}
 	for _, p := range pairs {
 		msgs := svc.ExportContactMessages(p.username, 0, 0)
 		added := 0
-		for i := len(msgs) - 1; i >= 0 && added < 5; i-- {
+		for i := len(msgs) - 1; i >= 0 && added < perContactQuota; i-- {
 			m := msgs[i]
 			if m.Type != 1 || !m.IsMine || strings.TrimSpace(m.Content) == "" {
 				continue
@@ -384,14 +451,13 @@ func collectSelfData(svc *service.ContactService) (statsText string, samples []s
 		}
 	}
 
-	if len(samples) > 100 {
-		samples = samples[:100]
-	}
+	samples = smartSample(samples, msgLimit)
 	return statsText, samples, nil
 }
 
 // collectGroupData 收集群聊的统计 + 代表性消息
-func collectGroupData(svc *service.ContactService, username string) (displayName, statsText string, samples []string, err error) {
+//   - 如果 memberSpeaker 非空，只保留该成员的发言，并把 displayName 改为成员名
+func collectGroupData(svc *service.ContactService, username, memberSpeaker string, msgLimit int) (displayName, statsText string, samples []string, err error) {
 	detail := svc.GetGroupDetail(username)
 	// GetGroupDetail 可能异步，轮询一小段
 	for i := 0; i < 50 && detail == nil; i++ {
@@ -403,61 +469,102 @@ func collectGroupData(svc *service.ContactService, username string) (displayName
 	}
 
 	// 从群列表拿群名
+	groupName := ""
 	for _, g := range svc.GetGroups() {
 		if g.Username == username {
-			displayName = g.Name
+			groupName = g.Name
 			break
 		}
 	}
-	if displayName == "" {
-		displayName = username
+	if groupName == "" {
+		groupName = username
+	}
+	// 如果指定了成员，displayName 改为 "成员名 @ 群名"；否则用群名
+	if memberSpeaker != "" {
+		displayName = fmt.Sprintf("%s（来自「%s」群）", memberSpeaker, groupName)
+	} else {
+		displayName = groupName
 	}
 
 	var sb strings.Builder
-	totalMsgs := 0
-	for _, c := range detail.DailyHeatmap {
-		totalMsgs += c
-	}
-	fmt.Fprintf(&sb, "- 群总消息数: %d\n", totalMsgs)
-	fmt.Fprintf(&sb, "- 活跃成员数: %d\n", len(detail.MemberRank))
-	if len(detail.MemberRank) > 0 {
-		top := detail.MemberRank
-		if len(top) > 10 {
-			top = top[:10]
+
+	if memberSpeaker != "" {
+		// 只针对某个成员
+		var memberCount int64
+		var memberLast, memberFirst string
+		for _, m := range detail.MemberRank {
+			if m.Speaker == memberSpeaker {
+				memberCount = m.Count
+				memberLast = m.LastMessageTime
+				memberFirst = m.FirstMessageTime
+				break
+			}
 		}
-		var members []string
-		for _, m := range top {
-			members = append(members, fmt.Sprintf("%s(%d条)", m.Speaker, m.Count))
+		if memberCount == 0 {
+			return "", "", nil, fmt.Errorf("成员「%s」在「%s」群里没有发言记录", memberSpeaker, groupName)
 		}
-		fmt.Fprintf(&sb, "- 发言排行 Top 10: %s\n", strings.Join(members, ", "))
-	}
-	if len(detail.TopWords) > 0 {
-		var words []string
-		for i := 0; i < len(detail.TopWords) && i < 20; i++ {
-			words = append(words, detail.TopWords[i].Word)
+		fmt.Fprintf(&sb, "- 成员: %s\n", memberSpeaker)
+		fmt.Fprintf(&sb, "- 所在群: %s\n", groupName)
+		fmt.Fprintf(&sb, "- 该成员发言数: %d\n", memberCount)
+		if memberFirst != "" {
+			fmt.Fprintf(&sb, "- 首次发言: %s\n", memberFirst)
 		}
-		fmt.Fprintf(&sb, "- 高频词: %s\n", strings.Join(words, ", "))
+		if memberLast != "" {
+			fmt.Fprintf(&sb, "- 最近发言: %s\n", memberLast)
+		}
+	} else {
+		// 整个群
+		totalMsgs := 0
+		for _, c := range detail.DailyHeatmap {
+			totalMsgs += c
+		}
+		fmt.Fprintf(&sb, "- 群总消息数: %d\n", totalMsgs)
+		fmt.Fprintf(&sb, "- 活跃成员数: %d\n", len(detail.MemberRank))
+		if len(detail.MemberRank) > 0 {
+			top := detail.MemberRank
+			if len(top) > 10 {
+				top = top[:10]
+			}
+			var members []string
+			for _, m := range top {
+				members = append(members, fmt.Sprintf("%s(%d条)", m.Speaker, m.Count))
+			}
+			fmt.Fprintf(&sb, "- 发言排行 Top 10: %s\n", strings.Join(members, ", "))
+		}
+		if len(detail.TopWords) > 0 {
+			var words []string
+			for i := 0; i < len(detail.TopWords) && i < 20; i++ {
+				words = append(words, detail.TopWords[i].Word)
+			}
+			fmt.Fprintf(&sb, "- 高频词: %s\n", strings.Join(words, ", "))
+		}
 	}
 	statsText = sb.String()
 
-	// 群消息采样：最近 100 条文本
+	// 群消息采样
 	msgs := svc.ExportGroupMessages(username, 0, 0)
 	var textMsgs []string
 	for _, m := range msgs {
 		if m.Type != 1 || strings.TrimSpace(m.Content) == "" {
 			continue
 		}
-		content := maskSensitive(m.Content)
 		speaker := m.Speaker
 		if speaker == "" {
 			speaker = "成员"
 		}
-		textMsgs = append(textMsgs, fmt.Sprintf("%s: %s", speaker, content))
+		// 如果指定了成员，只保留该成员的消息
+		if memberSpeaker != "" && speaker != memberSpeaker {
+			continue
+		}
+		content := maskSensitive(m.Content)
+		if memberSpeaker != "" {
+			// 单成员模式下，不用重复前缀 speaker 名
+			textMsgs = append(textMsgs, content)
+		} else {
+			textMsgs = append(textMsgs, fmt.Sprintf("%s: %s", speaker, content))
+		}
 	}
-	if len(textMsgs) > 100 {
-		textMsgs = textMsgs[len(textMsgs)-100:]
-	}
-	samples = textMsgs
+	samples = smartSample(textMsgs, msgLimit)
 	return displayName, statsText, samples, nil
 }
 
@@ -562,7 +669,7 @@ func buildMainBody(pkg *SkillPackage) string {
 
 func whenToUse(pkg *SkillPackage) string {
 	switch pkg.SkillType {
-	case "contact":
+	case "contact", "group-member":
 		return fmt.Sprintf("- 需要用「%s」的风格起草文字、回复、邮件时\n- 回忆或模拟和 TA 的对话时\n- 在做决定前想听听 TA 可能的反应时\n\n**不适合**：涉及真实决策的场景（如代 TA 回复他人、冒充身份）。AI 分身只是对风格的近似，不代表真人想法。", pkg.DisplayName)
 	case "self":
 		return "- 用 AI 写公众号、朋友圈、邮件时，希望保持自己的口吻\n- 避免 AI 生成过于正式或机械的文字\n- 让 AI 续写、改写时匹配原有语气"
@@ -786,15 +893,20 @@ func ForgeSkillZip(svc *service.ContactService, opts ForgeOptions, prefs Prefere
 		if opts.Username == "" {
 			return nil, "", fmt.Errorf("缺少 username 参数")
 		}
-		displayName, statsText, samples, err = collectContactData(svc, opts.Username)
+		displayName, statsText, samples, err = collectContactData(svc, opts.Username, opts.MsgLimit)
 	case "self":
 		displayName = "我"
-		statsText, samples, err = collectSelfData(svc)
+		statsText, samples, err = collectSelfData(svc, opts.MsgLimit)
 	case "group":
 		if opts.Username == "" {
 			return nil, "", fmt.Errorf("缺少 username 参数")
 		}
-		displayName, statsText, samples, err = collectGroupData(svc, opts.Username)
+		displayName, statsText, samples, err = collectGroupData(svc, opts.Username, "", opts.MsgLimit)
+	case "group-member":
+		if opts.Username == "" || opts.MemberSpeaker == "" {
+			return nil, "", fmt.Errorf("缺少 username 或 member_speaker 参数")
+		}
+		displayName, statsText, samples, err = collectGroupData(svc, opts.Username, opts.MemberSpeaker, opts.MsgLimit)
 	default:
 		return nil, "", fmt.Errorf("未知的 skill 类型: %s", opts.SkillType)
 	}
