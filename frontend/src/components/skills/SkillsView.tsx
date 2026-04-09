@@ -223,7 +223,7 @@ export const SkillsView: React.FC = () => {
       <div className="mb-6">
         <h1 className="dk-text text-3xl sm:text-5xl font-black tracking-tight text-[#1d1d1f] mb-1 flex items-center gap-3">
           <Sparkles size={32} className="text-[#07c160]" />
-          Skill 管理
+          Skills
         </h1>
         <p className="text-gray-400 text-sm">查看所有已炼化的 Skill 包，支持重新下载和删除</p>
       </div>

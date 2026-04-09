@@ -426,7 +426,7 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
             <div>
               <div className="font-bold">{statusText}</div>
               <div className="text-[10px] text-blue-500 dark:text-blue-400 mt-0.5">
-                任务在后台运行，可以关闭此窗口稍后在「Skill 管理」页面查看结果。
+                任务在后台运行，可以关闭此窗口稍后在「Skills」页面查看结果。
               </div>
             </div>
           </div>
@@ -445,7 +445,7 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
                   {savedPath}
                 </code>
                 <div className="text-gray-400 text-[10px] mt-1">
-                  解压后按 README 说明安装到对应工具。也可以在「Skill 管理」页面重新下载。
+                  解压后按 README 说明安装到对应工具。也可以在「Skills」页面重新下载。
                 </div>
               </>
             ) : (
