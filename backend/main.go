@@ -1338,13 +1338,130 @@ func serverMain() {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		// Content-Disposition 需要用 RFC 5987 编码包含非 ASCII 字符的文件名
-		// 同时提供 ASCII 降级版（把中文替换为 skill）和 UTF-8 版
+
+		// 保存到持久化目录（与 preferences.json 同目录下的 skills/<id>/<filename>.zip）
+		skillID := fmt.Sprintf("%d%04d", time.Now().UnixNano(), rand.Intn(10000))
+		skillsDir := filepath.Join(filepath.Dir(preferencesPath()), "skills", skillID)
+		if err := os.MkdirAll(skillsDir, 0755); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建 skill 目录失败: " + err.Error()})
+			return
+		}
+		filePath := filepath.Join(skillsDir, filename)
+		if err := os.WriteFile(filePath, zipBytes, 0644); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存 skill 文件失败: " + err.Error()})
+			return
+		}
+
+		// 解析目标名（用于列表展示）
+		targetName := body.Username
+		if body.SkillType == "self" {
+			targetName = "我"
+		} else if body.SkillType == "contact" && svc != nil {
+			for _, c := range svc.GetCachedStats() {
+				if c.Username == body.Username {
+					if c.Remark != "" { targetName = c.Remark } else if c.Nickname != "" { targetName = c.Nickname }
+					break
+				}
+			}
+		} else if (body.SkillType == "group" || body.SkillType == "group-member") && svc != nil {
+			for _, g := range svc.GetGroups() {
+				if g.Username == body.Username {
+					targetName = g.Name
+					break
+				}
+			}
+			if body.SkillType == "group-member" && body.MemberSpeaker != "" {
+				targetName = body.MemberSpeaker + "（来自 " + targetName + "）"
+			}
+		}
+
+		// 插入 DB 记录
+		rec := &SkillRecord{
+			ID:             skillID,
+			SkillType:      body.SkillType,
+			Format:         body.Format,
+			TargetUsername: body.Username,
+			TargetName:     targetName,
+			MemberSpeaker:  body.MemberSpeaker,
+			ModelProvider:  cfg.provider,
+			ModelName:      cfg.model,
+			MsgLimit:       body.MsgLimit,
+			Filename:       filename,
+			FilePath:       filePath,
+			FileSize:       int64(len(zipBytes)),
+		}
+		if err := InsertSkillRecord(rec); err != nil {
+			log.Printf("[skill] insert record failed: %v", err)
+		}
+
+		// 返回 JSON 元数据 + base64 内容（前端按需下载）
+		c.JSON(http.StatusOK, gin.H{
+			"id":            skillID,
+			"filename":      filename,
+			"file_path":     filePath,
+			"file_size":     len(zipBytes),
+			"content_base64": base64.StdEncoding.EncodeToString(zipBytes),
+			"record":        rec,
+		})
+	})
+
+	// GET /api/skills — 列出所有已炼化的 skill
+	api.GET("/skills", func(c *gin.Context) {
+		list, err := ListSkillRecords()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if list == nil {
+			list = []SkillRecord{}
+		}
+		c.JSON(http.StatusOK, gin.H{"skills": list})
+	})
+
+	// GET /api/skills/:id/download — 重新下载指定 skill 的 zip
+	api.GET("/skills/:id/download", func(c *gin.Context) {
+		id := c.Param("id")
+		rec, err := GetSkillRecord(id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if rec == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "记录不存在"})
+			return
+		}
+		data, err := os.ReadFile(rec.FilePath)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "文件已丢失: " + err.Error()})
+			return
+		}
 		asciiFallback := "skill.zip"
-		utf8Encoded := url.PathEscape(filename)
+		utf8Encoded := url.PathEscape(rec.Filename)
 		c.Header("Content-Type", "application/zip")
 		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, asciiFallback, utf8Encoded))
-		c.Data(http.StatusOK, "application/zip", zipBytes)
+		c.Data(http.StatusOK, "application/zip", data)
+	})
+
+	// DELETE /api/skills/:id — 删除指定 skill 记录和文件
+	api.DELETE("/skills/:id", func(c *gin.Context) {
+		id := c.Param("id")
+		rec, err := GetSkillRecord(id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if rec == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "记录不存在"})
+			return
+		}
+		// 删除文件和所在目录
+		_ = os.Remove(rec.FilePath)
+		_ = os.Remove(filepath.Dir(rec.FilePath))
+		if err := DeleteSkillRecord(id); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 
 	// ── AI 群聊模拟（SSE 流式）────────────────────────────────────────────

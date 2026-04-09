@@ -191,7 +191,7 @@ export interface BackendStatus {
   total_cached: number;
 }
 
-export type TabType = 'dashboard' | 'stats' | 'contacts' | 'db' | 'groups' | 'search' | 'timeline' | 'calendar' | 'anniversary' | 'urls' | 'settings';
+export type TabType = 'dashboard' | 'stats' | 'contacts' | 'db' | 'groups' | 'search' | 'timeline' | 'calendar' | 'anniversary' | 'urls' | 'skills' | 'settings';
 
 export interface DetectedEvent {
   type: string;

@@ -125,6 +125,31 @@ export const contactsApi = {
 };
 
 // Skill 炼化（blob 下载）
+export interface SkillRecord {
+  id: string;
+  skill_type: 'contact' | 'self' | 'group' | 'group-member';
+  format: string;
+  target_username?: string;
+  target_name: string;
+  member_speaker?: string;
+  model_provider: string;
+  model_name: string;
+  msg_limit: number;
+  filename: string;
+  file_path: string;
+  file_size: number;
+  created_at: number;
+}
+
+export interface ForgeSkillResult {
+  id: string;
+  filename: string;
+  file_path: string;
+  file_size: number;
+  content_base64: string;
+  record: SkillRecord;
+}
+
 export async function forgeSkill(opts: {
   skill_type: 'contact' | 'self' | 'group' | 'group-member';
   username?: string;
@@ -132,33 +157,24 @@ export async function forgeSkill(opts: {
   format: 'claude-skill' | 'claude-agent' | 'codex' | 'opencode' | 'cursor' | 'generic';
   profile_id?: string;
   msg_limit?: number;
-}): Promise<{ blob: Blob; filename: string }> {
+}): Promise<ForgeSkillResult> {
   const resp = await fetch('/api/ai/forge-skill', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(opts),
   });
+  const data = await resp.json().catch(() => ({} as { error?: string }));
   if (!resp.ok) {
-    let errMsg = `炼化失败: HTTP ${resp.status}`;
-    try {
-      const j = await resp.json() as { error?: string };
-      if (j.error) errMsg = j.error;
-    } catch {/* ignore */}
-    throw new Error(errMsg);
+    throw new Error((data as { error?: string }).error || `炼化失败: HTTP ${resp.status}`);
   }
-  const blob = await resp.blob();
-  // 从 Content-Disposition 取文件名：优先 RFC 5987 的 filename*，否则降级到 filename
-  const disp = resp.headers.get('Content-Disposition') || '';
-  let filename = 'skill.zip';
-  const utf8Match = disp.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match) {
-    try { filename = decodeURIComponent(utf8Match[1]); } catch {/* ignore */}
-  } else {
-    const plainMatch = disp.match(/filename="([^"]+)"/);
-    if (plainMatch) filename = plainMatch[1];
-  }
-  return { blob, filename };
+  return data as ForgeSkillResult;
 }
+
+export const skillsApi = {
+  list: () => api.get<void, { skills: SkillRecord[] }>('/skills').then(d => d.skills ?? []),
+  delete: (id: string) => api.delete<void, { ok: boolean }>(`/skills/${id}`),
+  downloadUrl: (id: string) => `/api/skills/${id}/download`,
+};
 
 export const searchApi = {
   global: (q: string, type: 'contact' | 'group' | 'all') =>
