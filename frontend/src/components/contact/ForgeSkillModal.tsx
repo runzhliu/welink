@@ -55,9 +55,12 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
 
   useEffect(() => {
     if (!open) return;
-    fetch('/api/preferences/llm').then(r => r.json()).then((d: { profiles?: LLMProfileItem[] }) => {
-      if (d.profiles) setProfiles(d.profiles);
+    fetch('/api/preferences').then(r => r.json()).then((d: { llm_profiles?: LLMProfileItem[] }) => {
+      const ps = d?.llm_profiles ?? [];
+      setProfiles(ps);
+      if (ps.length > 0 && !profileId) setProfileId(ps[0].id);
     }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // 群聊模式下加载成员列表
@@ -149,9 +152,26 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
             <Sparkles size={20} className="text-[#07c160]" />
             炼化为 Skill
           </h2>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
-            <X size={18} className="text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {profiles.length > 0 && (
+              <select
+                value={profileId}
+                onChange={e => setProfileId(e.target.value)}
+                disabled={loading}
+                className="text-[11px] text-[#576b95] bg-[#576b95]/10 px-2.5 py-1 rounded-full font-semibold border-0 outline-none cursor-pointer max-w-[180px] truncate"
+                title="切换 AI 模型"
+              >
+                {profiles.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.provider}{p.model ? ` · ${p.model}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+              <X size={18} className="text-gray-400" />
+            </button>
+          </div>
         </div>
 
         <div className="mb-5 p-4 bg-[#07c160]/5 rounded-2xl">
@@ -303,26 +323,6 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
             ))}
           </div>
         </div>
-
-        {/* LLM profile 选择 */}
-        {profiles.length > 0 && (
-          <div className="mb-5">
-            <div className="text-xs font-bold text-gray-500 dk-text mb-2">使用的 AI 模型</div>
-            <select
-              value={profileId}
-              onChange={e => setProfileId(e.target.value)}
-              disabled={loading}
-              className="w-full px-3 py-2 bg-white dk-input border border-gray-200 dk-border rounded-xl text-sm focus:outline-none focus:border-[#07c160]"
-            >
-              <option value="">默认 ({profiles[0]?.provider} · {profiles[0]?.model || '—'})</option>
-              {profiles.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.provider} · {p.model || '—'})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
 
         {/* 错误提示 */}
         {error && (
