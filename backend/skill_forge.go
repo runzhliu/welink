@@ -211,36 +211,28 @@ func extractSkillPackage(
 
 	raw, err := buildAndCall(samples)
 	if err != nil && isContentFilterError(err) {
-		// 第一次重试：去掉可能更"激进"的内容并缩小一半
-		log.Printf("[skill-forge] 内容风控触发，缩小样本重试: %v", err)
-		half := samples
-		if len(samples) > 50 {
-			half = samples[len(samples)/2:] // 取后半（更近期）
-		}
-		// 进一步过滤：移除微信表情占位符，移除可能敏感的消息（含特定关键词）
-		var filtered []string
-		for _, s := range half {
-			cleaned := reWxEmoji.ReplaceAllString(s, "")
-			cleaned = strings.TrimSpace(cleaned)
-			if cleaned == "" {
-				continue
-			}
-			filtered = append(filtered, cleaned)
-		}
+		// 第 1 次重试：更激进的清洗 —— 只保留纯中英文 + 基础标点的"日常"消息
+		log.Printf("[skill-forge] 内容风控触发（第 1 次），切换到严格清洗模式: %v", err)
+		filtered := strictFilter(samples)
 		if len(filtered) < 10 {
-			return nil, fmt.Errorf("LLM 内容风控拒绝，缩小样本后可用消息过少。建议换用其他大模型（如 Claude / GPT-4o 风控较宽松），或减少消息条数：%w", err)
+			return nil, fmt.Errorf("严格清洗后消息过少（%d 条），无法重试。建议换用 Claude/GPT-4o/Gemini 等风控宽松的模型：%w", len(filtered), err)
+		}
+		// 缩小到后半样本（近期内容）
+		if len(filtered) > 200 {
+			filtered = filtered[len(filtered)/2:]
 		}
 		raw, err = buildAndCall(filtered)
+
 		if err != nil && isContentFilterError(err) {
-			// 第二次重试：再砍一半
-			log.Printf("[skill-forge] 二次风控触发，继续缩小: %v", err)
+			// 第 2 次重试：再砍一半
+			log.Printf("[skill-forge] 内容风控触发（第 2 次），继续缩小: %v", err)
 			if len(filtered) > 50 {
 				filtered = filtered[len(filtered)/2:]
 			}
 			raw, err = buildAndCall(filtered)
 		}
 		if err == nil {
-			samples = filtered // 更新 sample count 用于记录
+			samples = filtered
 		}
 	}
 	if err != nil {
@@ -629,54 +621,157 @@ func collectGroupData(svc *service.ContactService, username, memberSpeaker strin
 	return displayName, statsText, samples, nil
 }
 
-// maskSensitive 简单脱敏：手机号、邮箱、身份证
+// maskSensitive 简单脱敏：手机号、邮箱、身份证、银行卡号
 var (
-	reMobile = regexp.MustCompile(`1[3-9]\d{9}`)
+	reMobile = regexp.MustCompile(`(?:(?:\+?86)?[ \-]?)?1[3-9]\d{9}`)
 	reEmail  = regexp.MustCompile(`[\w.+-]+@[\w-]+\.[\w.-]+`)
 	reIDCard = regexp.MustCompile(`[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]`)
+	reBank   = regexp.MustCompile(`\b\d{16,19}\b`)
 	// 用于 LLM 内容风控防御：URL 会被国内大模型视为高风险
 	reURL = regexp.MustCompile(`https?://[^\s]+`)
 	// 微信表情符号 [xxx] 占位符对 LLM 没意义，反而可能干扰
 	reWxEmoji = regexp.MustCompile(`\[[^\]]{1,12}\]`)
+	// wxid 格式的 ID（避免泄露）
+	reWxID = regexp.MustCompile(`wxid_[a-z0-9]+`)
+	// 长串非 ASCII 的奇怪字符（可能是 base64/加密/异常内容）
+	reLongNonText = regexp.MustCompile(`[A-Za-z0-9+/=]{40,}`)
 )
 
 func maskSensitive(s string) string {
-	s = reIDCard.ReplaceAllString(s, "***身份证***")
-	s = reMobile.ReplaceAllString(s, "***手机号***")
-	s = reEmail.ReplaceAllString(s, "***邮箱***")
+	s = reIDCard.ReplaceAllString(s, "[身份证]")
+	s = reMobile.ReplaceAllString(s, "[手机号]")
+	s = reEmail.ReplaceAllString(s, "[邮箱]")
+	s = reBank.ReplaceAllString(s, "[卡号]")
+	s = reWxID.ReplaceAllString(s, "[wxid]")
 	return s
 }
 
+// 内置的风控高危词列表（国内大模型常拦截的词类）
+// 匹配到这些词的消息会整条丢弃 —— 替换比丢弃更可能仍被拦，所以直接跳过
+// 只列最常触发风控的类别，避免误伤日常词汇
+var sensitivePatterns = []string{
+	// 政治相关（不穷举，只列最高频的风控触发词）
+	"习近平", "胡锦涛", "江泽民", "毛泽东", "邓小平", "温家宝",
+	"共产党", "中共", "政府", "党中央", "政治局", "反动",
+	"六四", "天安门", "法轮", "达赖",
+	"港独", "台独", "藏独", "疆独",
+	"民主运动", "维权",
+	// 色情/暴力（风控触发高频词）
+	"色情", "卖淫", "嫖娼",
+	"枪支", "炸弹", "爆炸", "恐怖主义",
+	"毒品", "海洛因", "冰毒", "大麻",
+	// 金融风险
+	"洗钱", "传销", "非法集资",
+	// 其他高风险
+	"自杀", "自残",
+}
+
+// containsSensitive 判断消息是否命中敏感词
+func containsSensitive(s string) bool {
+	for _, w := range sensitivePatterns {
+		if strings.Contains(s, w) {
+			return true
+		}
+	}
+	return false
+}
+
 // sanitizeForLLM 把消息处理得更"安全"，减少触发 LLM 内容风控的概率：
-//   - 移除所有 URL（国内大模型对 URL 容忍度低）
-//   - 去掉过长的单条消息（>300 字的往往是转发内容，无助于风格提炼）
-//   - 去掉只有符号/数字/空白的行
-//   - 对于极其敏感的关键词，替换为占位符
+//   - 移除所有 URL 和长串可疑字符（base64/加密内容）
+//   - 去掉过长的单条消息（>250 字往往是转发内容，风险高且对风格提炼无用）
+//   - 去掉纯符号/纯数字行
+//   - 丢弃命中敏感词列表的整条消息（而非替换，因为替换后仍可能触发）
+//   - 丢弃非 ASCII 字符占比过高的可疑行
 func sanitizeForLLM(samples []string) []string {
-	sensitiveWords := []string{} // 保留扩展点
-	_ = sensitiveWords
 	out := make([]string, 0, len(samples))
 	for _, s := range samples {
-		// 移除 URL
-		s = reURL.ReplaceAllString(s, "[链接]")
-		// 过长消息丢弃（转发长文对炼化无用）
-		if len([]rune(s)) > 300 {
+		// 先过敏感词（最前，尽早丢弃）
+		if containsSensitive(s) {
 			continue
 		}
-		// 去空白/纯符号
+		// 移除 URL
+		s = reURL.ReplaceAllString(s, "[链接]")
+		// 移除长串 base64/加密样字符
+		s = reLongNonText.ReplaceAllString(s, "[数据]")
+		// 移除连续的转发引用符号
+		s = strings.ReplaceAll(s, "> >", "")
+		// 过长消息丢弃（转发长文对炼化无用）
+		if len([]rune(s)) > 250 {
+			continue
+		}
+		// 去空白
 		trimmed := strings.TrimSpace(s)
 		if trimmed == "" {
 			continue
 		}
 		// 纯数字/符号行
-		onlyNonText := true
+		hasText := false
 		for _, r := range trimmed {
 			if (r >= 0x4E00 && r <= 0x9FFF) || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
-				onlyNonText = false
+				hasText = true
 				break
 			}
 		}
-		if onlyNonText {
+		if !hasText {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+// strictFilter 严格清洗模式：遇到风控错误后使用，更激进地丢弃可能触发风控的消息
+//   - 丢弃超过 100 字的消息（只留短平快的日常对话）
+//   - 丢弃含有非中英文/数字/基础标点的消息
+//   - 丢弃含有表情符号的消息（Unicode emoji）
+//   - 丢弃含有特殊字符（如<>{}|`~等）的消息
+//   - 再次过敏感词
+func strictFilter(samples []string) []string {
+	out := make([]string, 0, len(samples))
+	for _, s := range samples {
+		if containsSensitive(s) {
+			continue
+		}
+		// 先移除微信表情占位符
+		s = reWxEmoji.ReplaceAllString(s, "")
+		// 移除 URL（以防有漏网的）
+		s = reURL.ReplaceAllString(s, "")
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		// 严格长度限制
+		runes := []rune(s)
+		if len(runes) > 100 || len(runes) < 2 {
+			continue
+		}
+		// 只允许安全字符集：中日韩、英文字母数字、基础标点
+		safe := true
+		for _, r := range runes {
+			ok := false
+			switch {
+			case r >= 0x4E00 && r <= 0x9FFF: // CJK Unified Ideographs
+				ok = true
+			case r >= 0x3000 && r <= 0x303F: // CJK symbols and punctuation
+				ok = true
+			case r >= 0xFF00 && r <= 0xFFEF: // Halfwidth and Fullwidth Forms
+				ok = true
+			case r >= 'A' && r <= 'Z':
+				ok = true
+			case r >= 'a' && r <= 'z':
+				ok = true
+			case r >= '0' && r <= '9':
+				ok = true
+			case r == ' ' || r == ',' || r == '.' || r == '!' || r == '?' ||
+				r == ':' || r == ';' || r == '-' || r == '_' || r == '(' || r == ')':
+				ok = true
+			}
+			if !ok {
+				safe = false
+				break
+			}
+		}
+		if !safe {
 			continue
 		}
 		out = append(out, s)
