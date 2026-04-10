@@ -100,6 +100,7 @@ const PROVIDERS = [
   { value: 'minimax-cn', label: 'MiniMax（国内版）', defaultURL: 'https://api.minimaxi.com/v1', defaultModel: 'MiniMax-Text-01' },
   { value: 'openai',   label: 'OpenAI', defaultURL: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini' },
   { value: 'claude',   label: 'Claude (Anthropic)', defaultURL: 'https://api.anthropic.com', defaultModel: 'claude-haiku-4-5-20251001' },
+  { value: 'bedrock',  label: 'AWS Bedrock', defaultURL: 'https://bedrock-runtime.us-east-1.amazonaws.com', defaultModel: 'us.anthropic.claude-sonnet-4-6' },
   { value: 'ollama',   label: 'Ollama（本地）', defaultURL: 'http://localhost:11434/v1', defaultModel: 'llama3' },
   { value: 'custom',   label: '自定义 OpenAI 兼容接口', defaultURL: '', defaultModel: '' },
 ] as const;
@@ -198,12 +199,13 @@ const ProfileCard: React.FC<{
           API Key
           {profile.provider === 'ollama' && <span className="ml-1 font-normal normal-case text-gray-400">（本地无需填写）</span>}
           {profile.provider === 'gemini' && geminiAuthorized && <span className="ml-1 font-normal normal-case text-gray-400">（OAuth 已授权，可留空）</span>}
+          {profile.provider === 'bedrock' && <span className="ml-1 font-normal normal-case text-gray-400">（格式：AccessKeyId:SecretAccessKey）</span>}
         </label>
         <input
           type="password"
           value={profile.api_key ?? ''}
           onChange={e => set('api_key', e.target.value)}
-          placeholder={profile.provider === 'ollama' ? '留空即可' : profile.provider === 'gemini' && geminiAuthorized ? '已通过 OAuth 授权' : '请输入 API Key'}
+          placeholder={profile.provider === 'ollama' ? '留空即可' : profile.provider === 'gemini' && geminiAuthorized ? '已通过 OAuth 授权' : profile.provider === 'bedrock' ? 'AccessKeyId:SecretAccessKey' : '请输入 API Key'}
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white font-mono dk-input"
         />
       </div>

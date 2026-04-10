@@ -128,6 +128,13 @@ func defaultsFor(p *llmConfig) {
 		if p.model == "" {
 			p.model = "claude-haiku-4-5-20251001"
 		}
+	case "bedrock":
+		if p.baseURL == "" {
+			p.baseURL = "https://bedrock-runtime.us-east-1.amazonaws.com"
+		}
+		if p.model == "" {
+			p.model = "us.anthropic.claude-sonnet-4-6"
+		}
 	}
 }
 
@@ -198,6 +205,8 @@ func streamLLMCore(sendChunk func(StreamChunk), msgs []LLMMessage, prefs Prefere
 	var err error
 	if cfg.provider == "claude" {
 		err = streamClaude(sendChunk, msgs, cfg)
+	} else if cfg.provider == "bedrock" {
+		err = streamBedrock(sendChunk, msgs, cfg)
 	} else {
 		err = streamOpenAICompat(sendChunk, msgs, cfg)
 	}
@@ -214,6 +223,8 @@ func streamLLMCoreWithProfile(sendChunk func(StreamChunk), msgs []LLMMessage, pr
 	var err error
 	if cfg.provider == "claude" {
 		err = streamClaude(sendChunk, msgs, cfg)
+	} else if cfg.provider == "bedrock" {
+		err = streamBedrock(sendChunk, msgs, cfg)
 	} else {
 		err = streamOpenAICompat(sendChunk, msgs, cfg)
 	}
@@ -477,6 +488,9 @@ func CompleteLLM(msgs []LLMMessage, prefs Preferences) (string, error) {
 	if cfg.provider == "claude" {
 		return completeClaudeSync(msgs, cfg)
 	}
+	if cfg.provider == "bedrock" {
+		return completBedrockSync(msgs, cfg)
+	}
 	return completeOpenAICompatSync(msgs, cfg)
 }
 
@@ -619,6 +633,18 @@ func testLLMConn(prefs Preferences) (string, error) {
 	}
 	if cfg.apiKey == "" && cfg.provider != "ollama" {
 		return "", fmt.Errorf("未配置 API Key")
+	}
+
+	// Bedrock uses a different test path
+	if cfg.provider == "bedrock" {
+		result, err := completBedrockSync([]LLMMessage{{Role: "user", Content: "Hi"}}, cfg)
+		if err != nil {
+			return cfg.model, err
+		}
+		if result != "" {
+			return cfg.model, nil
+		}
+		return cfg.model, fmt.Errorf("响应为空")
 	}
 
 	body, _ := json.Marshal(openAIRequest{Model: cfg.model, Messages: []LLMMessage{{Role: "user", Content: "Hi"}}, Stream: true})
