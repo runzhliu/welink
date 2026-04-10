@@ -78,20 +78,52 @@ Prompt 中可以使用以下变量，运行时自动替换：
 |----------|------|---------|
 | `deepseek` | DeepSeek | `deepseek-chat` |
 | `kimi` | Kimi（月之暗面） | `kimi-k2.5` |
-| `gemini` | Google Gemini | `gemini-2.0-flash` |
+| `gemini` | Google Gemini（AI Studio） | `gemini-2.0-flash` |
+| `vertex` | **Google Vertex AI**（原生） | `google/gemini-2.0-flash-001` |
+| `bedrock` | **AWS Bedrock**（原生） | `us.anthropic.claude-sonnet-4-6` |
 | `glm` | 智谱 AI | `glm-4-flash` |
 | `grok` | xAI Grok | `grok-3-mini` |
 | `minimax` | MiniMax 国际版 | `MiniMax-Text-01` |
 | `minimax-cn` | MiniMax 国内版 | `MiniMax-Text-01` |
 | `openai` | OpenAI | `gpt-4o-mini` |
-| `claude` | Anthropic Claude | `claude-haiku-4-5-20251001` |
+| `claude` | Anthropic Claude（直接 API） | `claude-haiku-4-5-20251001` |
 | `ollama` | 本地 Ollama | `llama3` |
-| `custom` | 自定义 | 用户指定 |
+| `custom` | 自定义 OpenAI 兼容接口 | 用户指定 |
 
 ::: tip 说明
 - Base URL 留空自动使用各 Provider 的默认地址，无需手动填写
-- Claude 使用原生 API（`x-api-key` 鉴权），其他 Provider 均为 OpenAI 兼容格式
+- Claude 使用原生 API（`x-api-key` 鉴权），其他大多数 Provider 均为 OpenAI 兼容格式
 - Ollama 本地模式无需 API Key
+:::
+
+#### Vertex AI 配置说明
+
+认证方式：**Service Account JSON** → JWT (RS256) → OAuth2 access token（自动缓存 + 到期前 2 分钟自动刷新）
+
+设置页面填写：
+- **Provider**：Google Vertex AI
+- **API Key（SA JSON）**：粘贴完整的 Service Account JSON 文本
+- **GCP Project ID**：你的 GCP 项目 ID
+- **Region**：如 `us-central1`
+- **Model**：如 `google/gemini-2.0-flash-001`
+
+::: tip 技术细节
+Vertex AI 底层走 [OpenAI 兼容端点](https://cloud.google.com/vertex-ai/docs/reference/rest)，端点格式：`https://{region}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{region}/endpoints/openapi/chat/completions`。WeLink 自动从 SA JSON 提取 private key 签名 JWT、换取 access token，无需安装 gcloud 或 GCP SDK。
+:::
+
+#### AWS Bedrock 配置说明
+
+认证方式：**AWS SigV4 签名**（手写实现，无 AWS SDK 依赖），使用 **Converse API**（跨模型家族统一 API）
+
+设置页面填写：
+- **Provider**：AWS Bedrock
+- **API Key（Access Key ID）**：你的 AWS Access Key ID
+- **AWS Secret Access Key**：对应的 Secret
+- **AWS Region**：如 `us-east-1`
+- **Model ID**：Bedrock 的 modelId，如 `anthropic.claude-3-5-sonnet-20241022-v2:0`
+
+::: tip 支持的模型
+Bedrock Converse API 支持所有 Bedrock 模型家族：**Claude / Llama / Mistral / Titan / Cohere / AI21** 等。只需填对 modelId 即可，WeLink 自动处理请求格式转换。
 :::
 
 ### 配置存储
