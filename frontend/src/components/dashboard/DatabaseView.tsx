@@ -11,6 +11,20 @@ import {
 import { databaseApi } from '../../services/api';
 import type { DBInfo, TableInfo, ColumnInfo, TableData, QueryResult } from '../../types';
 
+// ─── 点击复制 Hook ────────────────────────────────────────────────────────────
+
+const useCopyable = () => {
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const copy = useCallback((text: string, key: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 1500);
+    }).catch(() => {});
+  }, []);
+  return { copy, copiedKey };
+};
+
 // ─── 子组件：表数据面板 ──────────────────────────────────────────────────────
 
 interface TablePanelProps {
@@ -428,6 +442,7 @@ const DBRow: React.FC<DBRowProps> = ({ db, formatSize, onSelectTable }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState('');
+  const { copy, copiedKey } = useCopyable();
 
   const handleExpand = async () => {
     if (!expanded && tables.length === 0) {
@@ -462,13 +477,33 @@ const DBRow: React.FC<DBRowProps> = ({ db, formatSize, onSelectTable }) => {
           }
         </td>
         <td className="px-4 py-4">
-          <span className="font-bold text-[#1d1d1f] dk-text">{db.name}</span>
+          <button
+            onClick={(e) => copy(db.name, `db:${db.name}`, e)}
+            className="group/copy inline-flex items-center gap-1.5 font-bold text-[#1d1d1f] dk-text hover:text-[#07c160] transition-colors"
+            title="点击复制"
+          >
+            {db.name}
+            {copiedKey === `db:${db.name}`
+              ? <Check size={12} className="text-[#07c160]" />
+              : <Copy size={11} className="text-gray-300 opacity-0 group-hover/copy:opacity-100 transition-opacity" />
+            }
+          </button>
         </td>
         <td className="px-4 py-4">
           <span className="text-gray-600 font-medium">{formatSize(db.size)}</span>
         </td>
         <td className="px-4 py-4">
-          <span className="text-xs text-gray-400 font-mono break-all">{db.path}</span>
+          <button
+            onClick={(e) => copy(db.path, `path:${db.name}`, e)}
+            className="group/copy inline-flex items-start gap-1.5 text-xs text-gray-400 font-mono break-all hover:text-[#07c160] text-left transition-colors"
+            title="点击复制路径"
+          >
+            <span>{db.path}</span>
+            {copiedKey === `path:${db.name}`
+              ? <Check size={11} className="text-[#07c160] flex-shrink-0 mt-0.5" />
+              : <Copy size={10} className="text-gray-300 flex-shrink-0 mt-0.5 opacity-0 group-hover/copy:opacity-100 transition-opacity" />
+            }
+          </button>
         </td>
       </tr>
 
@@ -502,22 +537,32 @@ const DBRow: React.FC<DBRowProps> = ({ db, formatSize, onSelectTable }) => {
                 )}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                   {filteredTables.map((t) => (
-                    <button
+                    <div
                       key={t.name}
+                      className="flex items-center justify-between dk-card dk-border bg-white border border-gray-100 rounded-xl px-4 py-3 hover:border-[#07c160] hover:bg-[#f0faf4] dark:hover:bg-white/5 transition group cursor-pointer"
                       onClick={(e) => {
                         e.stopPropagation();
                         onSelectTable(db.name, t.name);
                       }}
-                      className="flex items-center justify-between dk-card dk-border bg-white border border-gray-100 rounded-xl px-4 py-3 hover:border-[#07c160] hover:bg-[#f0faf4] dark:hover:bg-white/5 transition group text-left"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <LayoutList size={14} className="text-gray-300 group-hover:text-[#07c160] flex-shrink-0" />
                         <span className="text-sm font-semibold text-[#1d1d1f] dk-text truncate">{t.name}</span>
                       </div>
-                      <span className="text-xs text-gray-400 ml-2 flex-shrink-0">
-                        {t.row_count.toLocaleString()}
-                      </span>
-                    </button>
+                      <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                        <span className="text-xs text-gray-400">{t.row_count.toLocaleString()}</span>
+                        <button
+                          onClick={(e) => copy(t.name, `t:${db.name}:${t.name}`, e)}
+                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-white/10 text-gray-300 hover:text-[#07c160] opacity-0 group-hover:opacity-100 transition-all"
+                          title="复制表名"
+                        >
+                          {copiedKey === `t:${db.name}:${t.name}`
+                            ? <Check size={11} className="text-[#07c160]" />
+                            : <Copy size={11} />
+                          }
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
