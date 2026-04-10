@@ -80,6 +80,9 @@ features:
   - icon: 🔍
     title: 全局搜索
     details: 跨所有联系人与群聊搜索聊天记录，关键词高亮，热门搜索推荐，点击任意消息可弹出当天完整对话并自动定位。
+  - icon: 🧩
+    title: 13+ LLM 提供商原生支持
+    details: DeepSeek、Kimi、OpenAI、Claude、Gemini、GLM、Grok、MiniMax、Ollama，以及原生 Google Vertex AI（Service Account JWT 认证）和 AWS Bedrock（SigV4 签名 + Converse API），还支持任意 OpenAI 兼容接口。
   - icon: 🔒
     title: 完全本地，数据不出机
     details: 所有分析和 AI 推理均在本机完成，不上传任何服务器。支持 Ollama 离线运行，连 API Key 都不需要。
