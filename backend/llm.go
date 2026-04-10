@@ -133,7 +133,7 @@ func defaultsFor(p *llmConfig) {
 			p.baseURL = "https://bedrock-runtime.us-east-1.amazonaws.com"
 		}
 		if p.model == "" {
-			p.model = "anthropic.claude-sonnet-4-6"
+			p.model = "us.anthropic.claude-sonnet-4-6"
 		}
 	}
 }
