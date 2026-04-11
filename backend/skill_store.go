@@ -6,7 +6,7 @@
  *   skill_type      TEXT ('contact' / 'self' / 'group' / 'group-member')
  *   format          TEXT ('claude-skill' / 'claude-agent' / ...)
  *   target_username TEXT (联系人/群 username，self 时为空)
- *   target_name     TEXT (显示名，如 "老婆" 或 "工作群")
+ *   target_name     TEXT (显示名，如 "Saka" 或 "更衣室")
  *   member_speaker  TEXT (仅 group-member 用)
  *   model_provider  TEXT
  *   model_name      TEXT

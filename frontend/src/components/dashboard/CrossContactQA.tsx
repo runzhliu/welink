@@ -3,13 +3,14 @@
  * 支持问题如："谁跟我聊过旅行""去年国庆和谁聊天了""哪些朋友经常提到加班"
  */
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Globe, Send, Loader2, Trash2, Bot, Search, Calendar, RotateCcw, Share2, Check, Copy } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { searchApi, calendarApi } from '../../services/api';
 import { generateShareImage } from '../../utils/shareImage';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { ConversationHistory } from './ConversationHistory';
 
 interface Props {
   onOpenSettings?: () => void;
@@ -50,6 +51,7 @@ export const CrossContactQA: React.FC<Props> = ({ onOpenSettings, onContactClick
   const [profiles, setProfiles] = useState<{ id: string; provider: string; model?: string }[]>([]);
   const [sharingIdx, setSharingIdx] = useState(-1);
   const [sharedIdx, setSharedIdx] = useState(-1);
+  const [conversationKey, setConversationKey] = useState<string | null>(null);
   const [copiedIdx, setCopiedIdx] = useState(-1);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -287,6 +289,49 @@ export const CrossContactQA: React.FC<Props> = ({ onOpenSettings, onContactClick
     }
   }, [loading, profileId, privacyMode, scrollToBottom]);
 
+  // 自动保存对话
+  useEffect(() => {
+    if (loading || messages.length === 0) return;
+    const hasAssistant = messages.some(m => m.role === 'assistant' && !m.searching && m.content);
+    if (!hasAssistant) return;
+
+    let key = conversationKey;
+    if (!key) {
+      key = `cross-qa:${Date.now()}`;
+      setConversationKey(key);
+    }
+
+    const saveData = messages
+      .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.searching))
+      .map(m => ({ role: m.role, content: m.content }));
+    fetch('/api/ai/conversations', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, messages: saveData }),
+    }).then(() => {
+      window.dispatchEvent(new Event('welink:conversation-saved'));
+    }).catch(() => {});
+  }, [messages, loading, conversationKey]);
+
+  const loadConversation = useCallback(async (key: string) => {
+    try {
+      const resp = await fetch(`/api/ai/conversations?key=${encodeURIComponent(key)}`);
+      const data = await resp.json();
+      if (data.messages?.length) {
+        setMessages(data.messages.map((m: { role: string; content: string }) => ({
+          role: m.role as 'user' | 'assistant' | 'system',
+          content: m.content,
+        })));
+        setConversationKey(key);
+      }
+    } catch {}
+  }, []);
+
+  const startNew = useCallback(() => {
+    setMessages([]);
+    setConversationKey(null);
+  }, []);
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -313,12 +358,21 @@ export const CrossContactQA: React.FC<Props> = ({ onOpenSettings, onContactClick
             </select>
           )}
           {messages.length > 0 && (
-            <button onClick={() => setMessages([])} className="text-gray-400 hover:text-red-400 p-1 transition-colors" title="清空对话">
+            <button onClick={startNew} className="text-gray-400 hover:text-red-400 p-1 transition-colors" title="清空对话">
               <Trash2 size={14} />
             </button>
           )}
         </div>
       </div>
+
+      {/* 历史记录 */}
+      <ConversationHistory
+        prefix="cross-qa:"
+        currentKey={conversationKey}
+        onSelect={loadConversation}
+        onNew={startNew}
+        className="mb-3"
+      />
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 min-h-0 mb-3">
