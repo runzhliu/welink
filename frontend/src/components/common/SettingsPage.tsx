@@ -100,6 +100,7 @@ const PROVIDERS = [
   { value: 'minimax-cn', label: 'MiniMax（国内版）', defaultURL: 'https://api.minimaxi.com/v1', defaultModel: 'MiniMax-Text-01' },
   { value: 'openai',   label: 'OpenAI', defaultURL: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini' },
   { value: 'claude',   label: 'Claude (Anthropic)', defaultURL: 'https://api.anthropic.com', defaultModel: 'claude-haiku-4-5-20251001' },
+  { value: 'vertex',   label: 'Google Vertex AI', defaultURL: '', defaultModel: 'google/gemini-2.0-flash-001' },
   { value: 'bedrock',  label: 'AWS Bedrock', defaultURL: 'https://bedrock-runtime.us-east-1.amazonaws.com', defaultModel: 'us.anthropic.claude-sonnet-4-6' },
   { value: 'ollama',   label: 'Ollama（本地）', defaultURL: 'http://localhost:11434/v1', defaultModel: 'llama3' },
   { value: 'custom',   label: '自定义 OpenAI 兼容接口', defaultURL: '', defaultModel: '' },
@@ -179,11 +180,18 @@ const ProfileCard: React.FC<{
           value={profile.provider}
           onChange={e => {
             const newProvider = e.target.value as ProviderValue;
+            const oldProvider = profile.provider;
             const oldProviderNames: string[] = PROVIDERS.map(p => p.value as string);
             const shouldAutoRename = !profile.name || oldProviderNames.includes(profile.name);
+            // provider 真的变了 → 清空 api_key（不同 provider 的 key 不通用）
+            // provider 没变（比如切走再切回来在同一次未保存的编辑中）→ 保留
+            const providerChanged = newProvider !== oldProvider;
             onChange({
               ...profile,
               provider: newProvider,
+              api_key: providerChanged ? '' : profile.api_key,
+              base_url: '',
+              model: '',
               ...(shouldAutoRename ? { name: newProvider } : {}),
             });
           }}
@@ -196,19 +204,45 @@ const ProfileCard: React.FC<{
       {/* API Key */}
       <div>
         <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wide">
-          API Key
+          {profile.provider === 'vertex' ? 'Service Account JSON' : 'API Key'}
           {profile.provider === 'ollama' && <span className="ml-1 font-normal normal-case text-gray-400">（本地无需填写）</span>}
           {profile.provider === 'gemini' && geminiAuthorized && <span className="ml-1 font-normal normal-case text-gray-400">（OAuth 已授权，可留空）</span>}
           {profile.provider === 'bedrock' && <span className="ml-1 font-normal normal-case text-gray-400">（格式：AccessKeyId:SecretAccessKey）</span>}
+          {profile.provider === 'vertex' && <span className="ml-1 font-normal normal-case text-gray-400">（完整 JSON）</span>}
         </label>
+        {profile.provider === 'vertex' ? (
+          <textarea
+            value={profile.api_key ?? ''}
+            onChange={e => set('api_key', e.target.value)}
+            placeholder='粘贴完整的 Service Account JSON，含 private_key 和 client_email'
+            rows={4}
+            className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white font-mono dk-input"
+          />
+        ) : (
         <input
           type="password"
-          value={profile.api_key ?? ''}
+          value={profile.api_key === '__HAS_KEY__' ? '' : (profile.api_key ?? '')}
           onChange={e => set('api_key', e.target.value)}
-          placeholder={profile.provider === 'ollama' ? '留空即可' : profile.provider === 'gemini' && geminiAuthorized ? '已通过 OAuth 授权' : profile.provider === 'bedrock' ? 'AccessKeyId:SecretAccessKey' : '请输入 API Key'}
+          placeholder={
+            profile.api_key === '__HAS_KEY__'
+              ? '●●●●●●●● 已保存（留空保留，输入则覆盖）'
+              : profile.provider === 'ollama' ? '留空即可'
+              : profile.provider === 'gemini' && geminiAuthorized ? '已通过 OAuth 授权'
+              : profile.provider === 'bedrock' ? 'AccessKeyId:SecretAccessKey'
+              : '请输入 API Key'
+          }
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white font-mono dk-input"
         />
+        )}
       </div>
+
+      {/* Vertex AI Base URL 提示 */}
+      {profile.provider === 'vertex' && (
+        <div className="rounded-lg border border-green-100 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10 p-3 text-[10px] text-green-700 dark:text-green-400 leading-relaxed">
+          <strong>Base URL 格式</strong>：<code className="bg-white/60 dark:bg-black/20 px-1 rounded">{'https://{region}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{region}/endpoints/openapi'}</code>
+          <br />例如：<code className="bg-white/60 dark:bg-black/20 px-1 rounded">https://us-central1-aiplatform.googleapis.com/v1beta1/projects/my-project-123/locations/us-central1/endpoints/openapi</code>
+        </div>
+      )}
 
       {/* Gemini OAuth（全局唯一，仅在第一个 Gemini profile 处显示） */}
       {profile.provider === 'gemini' && index === 0 && (
@@ -223,8 +257,10 @@ const ProfileCard: React.FC<{
             </div>
             <div>
               <label className="block text-[10px] font-bold text-blue-600 dark:text-blue-400 mb-1">Client Secret</label>
-              <input type="password" value={geminiClientSecret} onChange={e => onGeminiClientSecretChange(e.target.value)}
-                placeholder="GOCSPX-…"
+              <input type="password"
+                value={geminiClientSecret === '__HAS_KEY__' ? '' : geminiClientSecret}
+                onChange={e => onGeminiClientSecretChange(e.target.value)}
+                placeholder={geminiClientSecret === '__HAS_KEY__' ? '●●●●●● 已保存' : 'GOCSPX-…'}
                 className="w-full text-xs border border-blue-200 dark:border-blue-500/30 rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-400 bg-white font-mono dk-input" />
             </div>
           </div>
@@ -347,20 +383,21 @@ const AISettingsSection: React.FC = () => {
     } catch { return false; }
   };
 
-  useEffect(() => {
-    axios.get<{
-      llm_profiles?: LLMProfile[];
-      llm_provider?: string; llm_api_key?: string;
-      llm_base_url?: string; llm_model?: string;
-      gemini_client_id?: string; gemini_client_secret?: string;
-      ai_analysis_db_path?: string;
-      embedding_provider?: string; embedding_api_key?: string;
-      embedding_base_url?: string; embedding_model?: string; embedding_dims?: number;
-    }>('/api/preferences').then(r => {
+  // 从后端加载配置（初始化 + 保存后刷新）
+  const loadPreferences = useCallback(async () => {
+    try {
+      const r = await axios.get<{
+        llm_profiles?: LLMProfile[];
+        llm_provider?: string; llm_api_key?: string;
+        llm_base_url?: string; llm_model?: string;
+        gemini_client_id?: string; gemini_client_secret?: string;
+        ai_analysis_db_path?: string;
+        embedding_provider?: string; embedding_api_key?: string;
+        embedding_base_url?: string; embedding_model?: string; embedding_dims?: number;
+      }>('/api/preferences');
       if (r.data.llm_profiles && r.data.llm_profiles.length > 0) {
         setProfiles(r.data.llm_profiles);
       } else if (r.data.llm_provider) {
-        // 从旧版单配置迁移
         setProfiles([{
           id: genId(),
           name: r.data.llm_provider,
@@ -380,9 +417,13 @@ const AISettingsSection: React.FC = () => {
         embedding_model: r.data.embedding_model,
         embedding_dims: r.data.embedding_dims,
       };
-    }).catch(() => {}).finally(() => setLoaded(true));
-    checkGeminiStatus();
+    } catch {} finally { setLoaded(true); }
   }, []);
+
+  useEffect(() => {
+    loadPreferences();
+    checkGeminiStatus();
+  }, [loadPreferences]);
 
   const buildPayload = () => ({
     llm_profiles: profiles,
@@ -397,6 +438,7 @@ const AISettingsSection: React.FC = () => {
     setSaveMsg(null);
     try {
       await axios.put('/api/preferences/llm', buildPayload());
+      await loadPreferences(); // 重新从后端加载，确保 __HAS_KEY__ 标记正确
       setSaveMsg({ ok: true, text: '已保存' });
     } catch {
       setSaveMsg({ ok: false, text: '保存失败' });
@@ -411,6 +453,7 @@ const AISettingsSection: React.FC = () => {
     setTestMsgs(prev => { const n = { ...prev }; delete n[profileId]; return n; });
     try {
       await axios.put('/api/preferences/llm', buildPayload());
+      await loadPreferences(); // 重新加载确保 key 标记正确
       const r = await axios.post<{ ok: boolean; provider: string; model: string }>('/api/ai/llm/test', { profile_id: profileId });
       setTestMsgs(prev => ({ ...prev, [profileId]: { ok: true, text: `连接成功（${r.data.provider} · ${r.data.model}）` } }));
     } catch (e: unknown) {
@@ -660,9 +703,9 @@ const EmbeddingSettingsSection: React.FC = () => {
             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">API Key</label>
             <input
               type="password"
-              value={apiKey}
+              value={apiKey === '__HAS_KEY__' ? '' : apiKey}
               onChange={e => setApiKey(e.target.value)}
-              placeholder="请输入 API Key"
+              placeholder={apiKey === '__HAS_KEY__' ? '●●●●●● 已保存（留空保留）' : '请输入 API Key'}
               className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#07c160] bg-[#f8f9fb] font-mono dk-input"
             />
           </div>

@@ -179,34 +179,28 @@ func effectiveConfig(p Preferences) Preferences {
 	return p
 }
 
+// hasKeyPlaceholder 是 API 响应中用于标记"已设置 key"的占位符。
+// 前端看到此值 → 显示"已保存"提示；保存时传回此值或空 → 后端保留原值。
+const hasKeyPlaceholder = "__HAS_KEY__"
+
 // sanitizeForResponse 返回去除敏感字段的 Preferences 副本，用于 API 响应。
+// API Key 不返回脱敏值，只返回占位符标记是否已设置。
 func sanitizeForResponse(p Preferences) Preferences {
-	mask := func(s string) string {
-		if len(s) <= 4 {
-			return "****"
-		}
-		return s[:2] + "****" + s[len(s)-2:]
+	redact := func(s string) string {
+		if s == "" { return "" }
+		return hasKeyPlaceholder
 	}
 	out := p
-	if out.LLMAPIKey != "" {
-		out.LLMAPIKey = mask(out.LLMAPIKey)
-	}
-	if out.EmbeddingAPIKey != "" {
-		out.EmbeddingAPIKey = mask(out.EmbeddingAPIKey)
-	}
-	if out.GeminiClientSecret != "" {
-		out.GeminiClientSecret = mask(out.GeminiClientSecret)
-	}
+	out.LLMAPIKey = redact(out.LLMAPIKey)
+	out.EmbeddingAPIKey = redact(out.EmbeddingAPIKey)
+	out.GeminiClientSecret = redact(out.GeminiClientSecret)
 	out.GeminiAccessToken = ""
 	out.GeminiRefreshToken = ""
-	// LLMProfiles 中的 APIKey 也需要脱敏
 	if len(out.LLMProfiles) > 0 {
 		sanitized := make([]LLMProfile, len(out.LLMProfiles))
 		copy(sanitized, out.LLMProfiles)
 		for i := range sanitized {
-			if sanitized[i].APIKey != "" {
-				sanitized[i].APIKey = mask(sanitized[i].APIKey)
-			}
+			sanitized[i].APIKey = redact(sanitized[i].APIKey)
 		}
 		out.LLMProfiles = sanitized
 	}
