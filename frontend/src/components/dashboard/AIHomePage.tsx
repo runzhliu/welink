@@ -5,6 +5,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Bot, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, Share2, Users, Plus, ChevronDown, ChevronRight, BrainCircuit, Globe } from 'lucide-react';
 import { CrossContactQA } from './CrossContactQA';
+import { ConversationHistory } from './ConversationHistory';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateShareImage } from '../../utils/shareImage';
@@ -417,6 +418,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   const [loading, setLoading] = useState(false);
   const [homeMsgLimit, setHomeMsgLimit] = useState<number | null>(200); // null = 全部
   const [ctxLoading, setCtxLoading] = useState(false);
+  const [conversationKey, setConversationKey] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -627,6 +629,57 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
       abortRef.current = null;
     }
   }, [loading, selectedItems, messages, scrollToBottom, selectedProfileId, llmProvider, llmModel]);
+
+  // 自动保存对话到后端
+  useEffect(() => {
+    if (loading || messages.length === 0) return;
+    // 至少有一条 assistant 消息且不在 streaming 状态
+    const hasComplete = messages.some(m => m.role === 'assistant' && !m.streaming && m.content);
+    if (!hasComplete) return;
+
+    // 生成 key（如果没有）
+    let key = conversationKey;
+    if (!key) {
+      key = `ai-home:${Date.now()}`;
+      setConversationKey(key);
+    }
+
+    // 保存
+    const saveData = messages.map(m => ({
+      role: m.role,
+      content: m.content,
+      provider: m.stats?.provider,
+      model: m.stats?.model,
+    }));
+    fetch('/api/ai/conversations', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, messages: saveData }),
+    }).then(() => {
+      window.dispatchEvent(new Event('welink:conversation-saved'));
+    }).catch(() => {});
+  }, [messages, loading, conversationKey]);
+
+  // 加载历史对话
+  const loadConversation = useCallback(async (key: string) => {
+    try {
+      const resp = await fetch(`/api/ai/conversations?key=${encodeURIComponent(key)}`);
+      const data = await resp.json();
+      if (data.messages?.length) {
+        setMessages(data.messages.map((m: { role: string; content: string }) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        })));
+        setConversationKey(key);
+      }
+    } catch {}
+  }, []);
+
+  const startNewConversation = useCallback(() => {
+    setMessages([]);
+    setConversationKey(null);
+    setSelectedItems([]);
+  }, []);
 
   const handleSend = (query?: string) => {
     const q = query ?? input;
@@ -938,6 +991,15 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         </div>
       ) : (
       <>
+      {/* 历史记录 */}
+      <ConversationHistory
+        prefix="ai-home:"
+        currentKey={conversationKey}
+        onSelect={loadConversation}
+        onNew={startNewConversation}
+        className="w-full max-w-xl mx-auto mb-4"
+      />
+
       {/* 输入卡片 */}
       {inputCard}
 

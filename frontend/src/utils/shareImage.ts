@@ -558,11 +558,14 @@ export async function generateShareImage(options: ShareImageOptions): Promise<st
       padding:12px 14px 12px 17px;margin-bottom:14px;
       border-left:3px solid #07c160;
     `;
-    const escaped = question.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    qBox.innerHTML = `
-      <div style="font-size:11px;font-weight:700;color:#aaa;margin-bottom:7px;">提问</div>
-      <div style="font-size:13px;color:#444;line-height:1.6;white-space:pre-wrap;">${escaped}</div>
-    `;
+    const qLabel = document.createElement('div');
+    qLabel.style.cssText = 'font-size:11px;font-weight:700;color:#aaa;margin-bottom:7px;';
+    qLabel.textContent = '提问';
+    const qText = document.createElement('div');
+    qText.style.cssText = 'font-size:13px;color:#444;line-height:1.6;white-space:pre-wrap;';
+    qText.textContent = question;
+    qBox.appendChild(qLabel);
+    qBox.appendChild(qText);
     body.appendChild(qBox);
   }
 
