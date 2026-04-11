@@ -16,6 +16,6 @@ services:
     build: ./frontend
     container_name: welink-frontend-demo
     ports:
-      - "127.0.0.1:3000:80"
+      - "127.0.0.1:3418:80"
     depends_on:
       - backend

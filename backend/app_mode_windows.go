@@ -47,41 +47,74 @@ func startApp() {
 	w.SetTitle("WeLink — 微信聊天数据分析")
 	w.SetSize(1440, 900, webview.HintNone)
 
-	// 启动加载页
+	// 启动加载页（浅色背景，支持暗色模式）
 	w.SetHtml(`<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
-    background: #1d1d1f;
+    background: #f8f9fb;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     height: 100vh;
     font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-    color: #fff;
-    gap: 20px;
+    color: #1d1d1f;
+    gap: 16px;
   }
-  .dot-row { display:flex; gap:10px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1e; color: #e0e0e0; }
+    .subtitle { color: #666 !important; }
+    .status { color: #555 !important; }
+  }
+  .logo { width: 64px; height: 64px; box-shadow: 0 8px 24px rgba(7, 193, 96, 0.2); }
+  .title { font-size: 24px; font-weight: 900; }
+  .subtitle { font-size: 14px; color: #999; }
+  .dot-row { display: flex; gap: 8px; margin-top: 8px; }
   .dot {
-    width:10px; height:10px; border-radius:50%;
-    background:#07c160;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #07c160;
     animation: pulse 1.2s ease-in-out infinite;
   }
-  .dot:nth-child(2) { animation-delay:.2s; }
-  .dot:nth-child(3) { animation-delay:.4s; }
+  .dot:nth-child(2) { animation-delay: .2s; }
+  .dot:nth-child(3) { animation-delay: .4s; }
   @keyframes pulse {
-    0%,100% { opacity:.2; transform:scale(.8); }
-    50%      { opacity:1;  transform:scale(1.2); }
+    0%,100% { opacity: .2; transform: scale(.8); }
+    50%     { opacity: 1;  transform: scale(1.2); }
   }
-  p { font-size:15px; color:#888; }
+  .status { font-size: 13px; color: #aaa; margin-top: 4px; }
+  .error { color: #fa5151; font-size: 13px; margin-top: 12px; max-width: 500px; text-align: center; line-height: 1.6; display: none; }
 </style></head><body>
+  <div class="logo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="64" height="64">
+      <rect width="32" height="32" rx="7" fill="#07c160"/>
+      <g transform="translate(6, 6)">
+        <rect x="1" y="1" width="18" height="14" rx="3" fill="none" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+        <line x1="5" y1="6" x2="15" y2="6" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="5" y1="10" x2="12" y2="10" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+        <polyline points="3,15 1,20 6,17" fill="white" stroke="white" stroke-width="0.5" stroke-linejoin="round"/>
+      </g>
+    </svg>
+  </div>
+  <div class="title">WeLink</div>
+  <div class="subtitle">微信聊天数据分析</div>
   <div class="dot-row"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-  <p>WeLink 正在启动…</p>
+  <div class="status" id="status">正在启动服务…</div>
+  <div class="error" id="error"></div>
 </body></html>`)
 
 	// 后台等待服务器就绪后跳转
 	go func() {
 		port := <-serverPortCh
-		waitForServer(port)
+		w.Dispatch(func() {
+			w.Eval(`document.getElementById('status').textContent = '正在初始化数据库…'`)
+		})
+		ok := waitForServer(port)
+		if !ok {
+			w.Dispatch(func() {
+				w.Eval(`document.getElementById('status').textContent = '启动超时'`)
+				w.Eval(`var e = document.getElementById('error'); e.style.display='block'; e.textContent = '服务启动超时（30秒），请检查 decrypted 数据目录是否存在。'`)
+			})
+			time.Sleep(2 * time.Second)
+		}
 		w.Dispatch(func() {
 			w.Navigate("http://localhost:" + port)
 		})
@@ -91,16 +124,17 @@ func startApp() {
 	os.Exit(0)
 }
 
-// waitForServer polls /api/health until the server is up (up to 30 s).
-func waitForServer(port string) {
+// waitForServer polls /api/health until the server is up (up to 30 s). Returns false on timeout.
+func waitForServer(port string) bool {
 	client := &http.Client{Timeout: 400 * time.Millisecond}
 	for range 75 {
 		if resp, err := client.Get("http://localhost:" + port + "/api/health"); err == nil {
 			resp.Body.Close()
-			return
+			return true
 		}
 		time.Sleep(400 * time.Millisecond)
 	}
+	return false
 }
 
 // appDataDir returns the decrypted/ directory sitting next to WeLink.exe, if present.
