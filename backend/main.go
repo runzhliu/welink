@@ -210,7 +210,7 @@ func serverMain() {
 	// 跨域设置：仅允许 localhost 来源（开发调试用），生产流量通过 Nginx 反代不需要 CORS
 	r.Use(func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
-		if origin == "http://localhost:3000" || origin == "http://localhost:5173" {
+		if origin == "http://localhost:3418" || origin == "http://localhost:5173" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
 			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -641,8 +641,38 @@ func serverMain() {
 		}
 		existing := loadPreferences()
 		pathChanged := existing.AIAnalysisDBPath != incoming.AIAnalysisDBPath
+
+		// API Key 保护逻辑：
+		// - 空值 "" 或占位符 "__HAS_KEY__" → 用户没有修改，保留原始 key
+		// - 含 "****" → 旧版脱敏值兼容，保留原始 key
+		// - 其他非空值 → 用户输入了新 key，覆盖
+		keepOld := func(newKey string) bool {
+			return newKey == "" || newKey == hasKeyPlaceholder || strings.Contains(newKey, "****")
+		}
+
+		// LLM Profiles: 逐个按 ID 匹配，保护未修改的 key
+		for i, p := range incoming.LLMProfiles {
+			if keepOld(p.APIKey) {
+				restored := false
+				for _, old := range existing.LLMProfiles {
+					if old.ID == p.ID {
+						// 只有 provider 没变时才恢复旧 key
+						// provider 变了 → 旧 key 属于旧 provider，不应该保留
+						if old.Provider == p.Provider {
+							incoming.LLMProfiles[i].APIKey = old.APIKey
+							restored = true
+						}
+						break
+					}
+				}
+				if !restored {
+					incoming.LLMProfiles[i].APIKey = ""
+				}
+			}
+		}
+
 		existing.LLMProfiles = incoming.LLMProfiles
-		// 将第一个 profile 同步到单配置字段（向后兼容 CompleteLLM 等内部调用）
+		// 将第一个 profile 同步到单配置字段（向后兼容）
 		if len(incoming.LLMProfiles) > 0 {
 			p := incoming.LLMProfiles[0]
 			existing.LLMProvider = p.Provider
@@ -651,15 +681,23 @@ func serverMain() {
 			existing.LLMModel = p.Model
 		} else {
 			existing.LLMProvider = incoming.LLMProvider
-			existing.LLMAPIKey = incoming.LLMAPIKey
+			if !keepOld(incoming.LLMAPIKey) {
+				existing.LLMAPIKey = incoming.LLMAPIKey
+			}
 			existing.LLMBaseURL = incoming.LLMBaseURL
 			existing.LLMModel = incoming.LLMModel
 		}
+		if keepOld(incoming.GeminiClientSecret) {
+			// 保留原值
+		} else {
+			existing.GeminiClientSecret = incoming.GeminiClientSecret
+		}
 		existing.GeminiClientID = incoming.GeminiClientID
-		existing.GeminiClientSecret = incoming.GeminiClientSecret
 		existing.AIAnalysisDBPath = incoming.AIAnalysisDBPath
 		existing.EmbeddingProvider = incoming.EmbeddingProvider
-		existing.EmbeddingAPIKey = incoming.EmbeddingAPIKey
+		if !keepOld(incoming.EmbeddingAPIKey) {
+			existing.EmbeddingAPIKey = incoming.EmbeddingAPIKey
+		}
 		existing.EmbeddingBaseURL = incoming.EmbeddingBaseURL
 		existing.EmbeddingModel = incoming.EmbeddingModel
 		existing.EmbeddingDims = incoming.EmbeddingDims
@@ -755,11 +793,22 @@ func serverMain() {
 	})
 
 	// ── AI 分析历史持久化 ──────────────────────────────────────────────────
-	// GET  /api/ai/conversations?key=contact:username
+	// GET  /api/ai/conversations?key=contact:username    — 获取单条对话
+	// GET  /api/ai/conversations?prefix=ai-home:        — 按前缀列出对话历史
 	api.GET("/ai/conversations", func(c *gin.Context) {
+		if prefix := c.Query("prefix"); prefix != "" {
+			list, err := ListAIConversations(prefix)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			if list == nil { list = []ConversationEntry{} }
+			c.JSON(http.StatusOK, gin.H{"conversations": list})
+			return
+		}
 		key := c.Query("key")
 		if key == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 key 参数"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 key 或 prefix 参数"})
 			return
 		}
 		msgs, err := GetAIConversation(key)
@@ -1528,15 +1577,11 @@ func serverMain() {
 			return
 		}
 
-		// 1. 加载最近 N 条群消息
-		msgs := svc.ExportGroupMessages(body.GroupUsername, 0, 0)
+		// 1. 加载最近 N 条群消息（只加载需要的量，避免全量加载 36 万条）
+		msgs := svc.ExportGroupMessagesRecent(body.GroupUsername, body.MessageCount)
 		if len(msgs) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "该群聊没有消息记录"})
 			return
-		}
-		// 取最后 N 条
-		if len(msgs) > body.MessageCount {
-			msgs = msgs[len(msgs)-body.MessageCount:]
 		}
 
 		// 2. 统计成员发言比例 + 风格特征
@@ -1708,53 +1753,92 @@ func serverMain() {
 			simContext.WriteString(fmt.Sprintf("我：%s\n", body.UserMessage))
 		}
 
-		// 5. 用多轮对话方式逐轮生成（LLM 能"记住"已生成内容，避免重复）
-		llmMsgs := []LLMMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: "以下是最近的群聊对话，请在此基础上继续模拟：\n\n" + simContext.String()},
-		}
-
+		// 5. 一次 LLM 调用生成多条消息（避免 N 次调用，每次都重复处理巨大上下文）
+		// 构造成员顺序（按概率预先选好参与者序列）
+		var speakerOrder []string
 		for round := 0; round < body.Rounds; round++ {
-			// 按概率随机选成员
 			r := rand.Intn(totalCount)
 			var chosen *memberInfo
 			cumulative := 0
 			for _, mi := range members {
 				cumulative += mi.Count
-				if r < cumulative {
-					chosen = mi
+				if r < cumulative { chosen = mi; break }
+			}
+			if chosen == nil { chosen = members[0] }
+			speakerOrder = append(speakerOrder, chosen.Name)
+		}
+
+		instruction := fmt.Sprintf(
+			"请继续模拟群聊对话，生成 %d 条消息。\n"+
+				"发言顺序：%s\n"+
+				"格式要求：每条消息一行，严格用「成员名：消息内容」格式，不加编号或其他标注。\n"+
+				"承接上文已有对话，模仿每个人各自的风格，内容自然不重复。",
+			body.Rounds,
+			strings.Join(speakerOrder, " → "),
+		)
+
+		llmMsgs := []LLMMessage{
+			{Role: "system", Content: systemPrompt},
+		}
+		if simContext.Len() > 0 {
+			llmMsgs = append(llmMsgs, LLMMessage{Role: "user", Content: "以下是最近的群聊对话，请在此基础上继续模拟：\n\n" + simContext.String() + "\n" + instruction})
+		} else {
+			llmMsgs = append(llmMsgs, LLMMessage{Role: "user", Content: instruction})
+		}
+
+		// 流式输出，实时解析每行 "成员名：消息内容" 并逐条推送
+		var lineBuf strings.Builder
+		memberSet := make(map[string]bool)
+		for _, mi := range members { memberSet[mi.Name] = true }
+
+		streamLLMCoreWithProfile(func(chunk StreamChunk) {
+			if chunk.Delta == "" { return }
+			lineBuf.WriteString(chunk.Delta)
+
+			// 逐行解析
+			for {
+				text := lineBuf.String()
+				nlIdx := strings.Index(text, "\n")
+				if nlIdx < 0 { break }
+
+				line := strings.TrimSpace(text[:nlIdx])
+				lineBuf.Reset()
+				lineBuf.WriteString(text[nlIdx+1:])
+
+				if line == "" { continue }
+
+				// 尝试解析 "成员名：内容" 或 "成员名:内容"
+				var speaker, content string
+				for name := range memberSet {
+					if strings.HasPrefix(line, name+"：") {
+						speaker = name
+						content = strings.TrimSpace(line[len(name)+len("："):])
+						break
+					}
+					if strings.HasPrefix(line, name+":") {
+						speaker = name
+						content = strings.TrimSpace(line[len(name)+1:])
+						break
+					}
+				}
+				if speaker == "" || content == "" { continue }
+
+				sendSim(SimMessage{Speaker: speaker, Content: content})
+			}
+		}, llmMsgs, prefs, body.ProfileID)
+
+		// 处理最后一行（可能没有换行符）
+		if lastLine := strings.TrimSpace(lineBuf.String()); lastLine != "" {
+			for name := range memberSet {
+				if strings.HasPrefix(lastLine, name+"：") {
+					sendSim(SimMessage{Speaker: name, Content: strings.TrimSpace(lastLine[len(name)+len("："):])})
+					break
+				}
+				if strings.HasPrefix(lastLine, name+":") {
+					sendSim(SimMessage{Speaker: name, Content: strings.TrimSpace(lastLine[len(name)+1:])})
 					break
 				}
 			}
-			if chosen == nil { chosen = members[0] }
-
-			// 追加指令到对话历史
-			instruction := fmt.Sprintf(
-				"现在请以【%s】的身份和风格，生成一条自然的群聊消息。\n"+
-					"要求：只输出消息内容本身，不加角色前缀或引号；模仿该成员的用词和语气；承接上文不要重复已说过的话；长度适中。",
-				chosen.Name,
-			)
-			llmMsgs = append(llmMsgs, LLMMessage{Role: "user", Content: instruction})
-
-			// 收集完整回复
-			var reply strings.Builder
-			streamLLMCoreWithProfile(func(chunk StreamChunk) {
-				if chunk.Delta != "" {
-					reply.WriteString(chunk.Delta)
-				}
-			}, llmMsgs, prefs, body.ProfileID)
-
-			content := strings.TrimSpace(reply.String())
-			if content == "" { continue }
-
-			// 清理可能的角色前缀
-			content = strings.TrimPrefix(content, chosen.Name+"：")
-			content = strings.TrimPrefix(content, chosen.Name+":")
-
-			// 将生成结果作为 assistant 回复加入对话历史，LLM 下一轮能看到
-			llmMsgs = append(llmMsgs, LLMMessage{Role: "assistant", Content: content})
-
-			sendSim(SimMessage{Speaker: chosen.Name, Content: content})
 		}
 
 		sendSim(SimMessage{Done: true})

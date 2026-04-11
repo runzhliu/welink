@@ -135,6 +135,11 @@ func defaultsFor(p *llmConfig) {
 		if p.model == "" {
 			p.model = "us.anthropic.claude-sonnet-4-6"
 		}
+	case "vertex":
+		// BaseURL 由用户填写完整端点，model 给个默认
+		if p.model == "" {
+			p.model = "google/gemini-2.0-flash-001"
+		}
 	}
 }
 
@@ -202,15 +207,7 @@ func streamLLMCore(sendChunk func(StreamChunk), msgs []LLMMessage, prefs Prefere
 	}
 	defaultsFor(&cfg)
 
-	var err error
-	if cfg.provider == "claude" {
-		err = streamClaude(sendChunk, msgs, cfg)
-	} else if cfg.provider == "bedrock" {
-		err = streamBedrock(sendChunk, msgs, cfg)
-	} else {
-		err = streamOpenAICompat(sendChunk, msgs, cfg)
-	}
-
+	err := dispatchLLMStream(sendChunk, msgs, cfg)
 	if err != nil {
 		sendChunk(StreamChunk{Error: err.Error()})
 	}
@@ -220,14 +217,7 @@ func streamLLMCore(sendChunk func(StreamChunk), msgs []LLMMessage, prefs Prefere
 // streamLLMCoreWithProfile 与 streamLLMCore 相同，但通过 profileID 解析配置。
 func streamLLMCoreWithProfile(sendChunk func(StreamChunk), msgs []LLMMessage, prefs Preferences, profileID string) {
 	cfg := llmConfigForProfile(profileID, prefs)
-	var err error
-	if cfg.provider == "claude" {
-		err = streamClaude(sendChunk, msgs, cfg)
-	} else if cfg.provider == "bedrock" {
-		err = streamBedrock(sendChunk, msgs, cfg)
-	} else {
-		err = streamOpenAICompat(sendChunk, msgs, cfg)
-	}
+	err := dispatchLLMStream(sendChunk, msgs, cfg)
 	if err != nil {
 		sendChunk(StreamChunk{Error: err.Error()})
 	}
@@ -248,6 +238,20 @@ func testLLMConnProfile(profileID string, prefs Preferences) (string, error) {
 		LLMModel:    cfg.model,
 	}
 	return testLLMConn(tmp)
+}
+
+// dispatchLLMStream 统一流式分发
+func dispatchLLMStream(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) error {
+	switch cfg.provider {
+	case "claude":
+		return streamClaude(send, msgs, cfg)
+	case "bedrock":
+		return streamBedrock(send, msgs, cfg)
+	case "vertex":
+		return streamVertex(send, msgs, cfg)
+	default:
+		return streamOpenAICompat(send, msgs, cfg)
+	}
 }
 
 // ─── OpenAI 兼容流式实现 ───────────────────────────────────────────────────────
@@ -485,13 +489,16 @@ func CompleteLLM(msgs []LLMMessage, prefs Preferences) (string, error) {
 		model:    prefs.LLMModel,
 	}
 	defaultsFor(&cfg)
-	if cfg.provider == "claude" {
+	switch cfg.provider {
+	case "claude":
 		return completeClaudeSync(msgs, cfg)
-	}
-	if cfg.provider == "bedrock" {
+	case "bedrock":
 		return completBedrockSync(msgs, cfg)
+	case "vertex":
+		return completVertexSync(msgs, cfg)
+	default:
+		return completeOpenAICompatSync(msgs, cfg)
 	}
-	return completeOpenAICompatSync(msgs, cfg)
 }
 
 func completeOpenAICompatSync(msgs []LLMMessage, cfg llmConfig) (string, error) {
@@ -635,7 +642,7 @@ func testLLMConn(prefs Preferences) (string, error) {
 		return "", fmt.Errorf("未配置 API Key")
 	}
 
-	// Bedrock uses a different test path
+	// Bedrock / Vertex 走专用测试路径
 	if cfg.provider == "bedrock" {
 		result, err := completBedrockSync([]LLMMessage{{Role: "user", Content: "Hi"}}, cfg)
 		if err != nil {
@@ -645,6 +652,9 @@ func testLLMConn(prefs Preferences) (string, error) {
 			return cfg.model, nil
 		}
 		return cfg.model, fmt.Errorf("响应为空")
+	}
+	if cfg.provider == "vertex" {
+		return testVertexConn(cfg)
 	}
 
 	body, _ := json.Marshal(openAIRequest{Model: cfg.model, Messages: []LLMMessage{{Role: "user", Content: "Hi"}}, Stream: true})

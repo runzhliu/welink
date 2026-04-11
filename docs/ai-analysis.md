@@ -96,35 +96,166 @@ Prompt 中可以使用以下变量，运行时自动替换：
 - Ollama 本地模式无需 API Key
 :::
 
-#### Vertex AI 配置说明
+#### Google Vertex AI 配置指南
 
-认证方式：**Service Account JSON** → JWT (RS256) → OAuth2 access token（自动缓存 + 到期前 2 分钟自动刷新）
+Vertex AI 是 Google Cloud 的企业级 AI 平台，适合公司已有 GCP 账号或想用 Gemini 模型的用户。WeLink **原生支持** Vertex AI，不需要安装 gcloud CLI 或 GCP SDK。
 
-设置页面填写：
-- **Provider**：Google Vertex AI
-- **API Key（SA JSON）**：粘贴完整的 Service Account JSON 文本
-- **GCP Project ID**：你的 GCP 项目 ID
-- **Region**：如 `us-central1`
-- **Model**：如 `google/gemini-2.0-flash-001`
+##### 第一步：创建 GCP 项目（如已有可跳过）
 
-::: tip 技术细节
-Vertex AI 底层走 [OpenAI 兼容端点](https://cloud.google.com/vertex-ai/docs/reference/rest)，端点格式：`https://{region}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{region}/endpoints/openapi/chat/completions`。WeLink 自动从 SA JSON 提取 private key 签名 JWT、换取 access token，无需安装 gcloud 或 GCP SDK。
+1. 打开 [Google Cloud Console](https://console.cloud.google.com/)
+2. 点击左上角项目选择器 → **新建项目**
+3. 记住你的 **Project ID**（如 `my-welink-project-123`）
+
+##### 第二步：启用 Vertex AI API
+
+1. 在 GCP Console 搜索栏搜 **Vertex AI API**
+2. 点击进入 → **启用**（如果显示"管理"说明已启用）
+3. 确保你的账号有 Vertex AI 的使用权限
+
+##### 第三步：创建 Service Account 并下载 JSON
+
+1. 进入 [IAM → 服务账号](https://console.cloud.google.com/iam-admin/serviceaccounts)
+2. 点击 **创建服务账号**
+3. 名称随便填（如 `welink-vertex`），点下一步
+4. 授予角色：搜索并选择 **Vertex AI User**（或 `roles/aiplatform.user`）
+5. 完成创建后，点击该服务账号 → **密钥** tab → **添加密钥** → **创建新密钥** → 选 **JSON** → 下载
+
+你会得到一个类似这样的 JSON 文件：
+```json
+{
+  "type": "service_account",
+  "project_id": "my-welink-project-123",
+  "private_key_id": "abc123...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n",
+  "client_email": "welink-vertex@my-welink-project-123.iam.gserviceaccount.com",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  ...
+}
+```
+
+##### 第四步：在 WeLink 设置中配置
+
+1. 打开 WeLink **设置页** → AI 配置区 → 新建 Profile
+2. 填写如下：
+
+| 字段 | 填什么 |
+|------|--------|
+| **Provider** | 选择 `Google Vertex AI` |
+| **Service Account JSON** | 把下载的 JSON 文件内容**全部粘贴**进来 |
+| **Base URL** | `https://us-central1-aiplatform.googleapis.com/v1beta1/projects/my-welink-project-123/locations/us-central1/endpoints/openapi` |
+| **Model** | `google/gemini-2.0-flash-001`（留空也行，会用默认值） |
+
+::: warning Base URL 格式
+Base URL 必须包含你的 **Project ID** 和 **Region**，格式为：
+
+```
+https://{region}-aiplatform.googleapis.com/v1beta1/projects/{project_id}/locations/{region}/endpoints/openapi
+```
+
+把 `{region}` 替换为你的区域（如 `us-central1`、`europe-west1` 等），`{project_id}` 替换为你的项目 ID。
 :::
 
-#### AWS Bedrock 配置说明
+3. 点击 **测试连接** 验证
+4. 成功后点 **保存**
 
-认证方式：**AWS SigV4 签名**（手写实现，无 AWS SDK 依赖），使用 **Converse API**（跨模型家族统一 API）
-
-设置页面填写：
-- **Provider**：AWS Bedrock
-- **API Key（Access Key ID）**：你的 AWS Access Key ID
-- **AWS Secret Access Key**：对应的 Secret
-- **AWS Region**：如 `us-east-1`
-- **Model ID**：Bedrock 的 modelId，如 `anthropic.claude-3-5-sonnet-20241022-v2:0`
-
-::: tip 支持的模型
-Bedrock Converse API 支持所有 Bedrock 模型家族：**Claude / Llama / Mistral / Titan / Cohere / AI21** 等。只需填对 modelId 即可，WeLink 自动处理请求格式转换。
+::: tip 认证原理
+WeLink 从 SA JSON 中提取 `private_key` 和 `client_email`，构造 RS256 JWT 签名，向 Google OAuth2 端点换取 access token。Token 会自动缓存，到期前 2 分钟自动刷新。整个过程不需要安装任何 Google 工具。
 :::
+
+##### 常见问题
+
+**Q: 报错 "token endpoint 返回 403"**
+A: Service Account 缺少权限。去 IAM 页面给该账号加上 `Vertex AI User` 角色。
+
+**Q: 报错 "private_key PEM 解析失败"**
+A: 粘贴的 JSON 内容不完整。确保是完整的 JSON（从 `{` 开头到 `}` 结尾），不要多复制或少复制。
+
+**Q: 想用其他区域的 Vertex AI**
+A: 修改 Base URL 中的 region 部分。支持的区域列表见 [GCP 文档](https://cloud.google.com/vertex-ai/docs/general/locations)。
+
+---
+
+#### AWS Bedrock 配置指南
+
+AWS Bedrock 是亚马逊云的托管大模型服务，适合公司已有 AWS 账号或想用 Claude / Llama / Mistral 等模型的用户。WeLink **原生支持** Bedrock，不需要安装 AWS CLI 或 SDK。
+
+##### 第一步：开通 Bedrock 模型访问权限
+
+1. 登录 [AWS Console](https://console.aws.amazon.com/)
+2. 搜索并进入 **Amazon Bedrock**
+3. 左侧菜单 → **Model access** → 点击 **Manage model access**
+4. 勾选你想用的模型（如 Claude 3.5 Sonnet），点 **Save changes**
+5. 等待状态变为 **Access granted**（通常几分钟内）
+
+::: warning 注意区域
+不同区域支持的模型不同。推荐使用 **us-east-1**（弗吉尼亚）或 **us-west-2**（俄勒冈），这两个区域模型最全。
+:::
+
+##### 第二步：创建 IAM 用户并获取凭证
+
+1. 进入 [IAM → 用户](https://console.aws.amazon.com/iam/home#/users)
+2. **创建用户** → 用户名随便填（如 `welink-bedrock`）
+3. 权限：选择 **直接附加策略** → 搜索 `AmazonBedrockFullAccess` → 勾选
+4. 创建完成后，进入该用户 → **安全凭证** tab → **创建访问密钥**
+5. 选择 **第三方服务** → 下一步 → 创建
+6. 记下 **Access Key ID** 和 **Secret Access Key**（Secret 只显示一次！）
+
+##### 第三步：在 WeLink 设置中配置
+
+1. 打开 WeLink **设置页** → AI 配置区 → 新建 Profile
+2. 填写如下：
+
+| 字段 | 填什么 |
+|------|--------|
+| **Provider** | 选择 `AWS Bedrock` |
+| **API Key** | `AKIA...:wJalr...`（格式：`AccessKeyId:SecretAccessKey`，中间用英文冒号分隔） |
+| **Base URL** | `https://bedrock-runtime.us-east-1.amazonaws.com`（改成你的区域） |
+| **Model** | `us.anthropic.claude-sonnet-4-6`（或其他已开通的模型 ID） |
+
+::: tip API Key 格式
+WeLink 的 Bedrock 实现把 Access Key 和 Secret Key 合并成一个字符串，用 **英文冒号 `:`** 分隔：
+
+```
+AKIAIOSFODNN7EXAMPLE:wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+```
+
+这样不需要额外的输入框，和其他 provider 的 API Key 字段保持一致。
+:::
+
+3. 点击 **测试连接** 验证
+4. 成功后点 **保存**
+
+##### 常见 Model ID
+
+| 模型 | Model ID |
+|------|---------|
+| Claude Sonnet 4.6 | `us.anthropic.claude-sonnet-4-6` |
+| Claude 3.5 Sonnet | `anthropic.claude-3-5-sonnet-20241022-v2:0` |
+| Claude 3.5 Haiku | `anthropic.claude-3-5-haiku-20241022-v1:0` |
+| Llama 3.1 70B | `meta.llama3-1-70b-instruct-v1:0` |
+| Mistral Large | `mistral.mistral-large-2407-v1:0` |
+
+完整模型列表见 [AWS Bedrock 文档](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html)。
+
+##### 常见问题
+
+**Q: 报错 "AWS 凭证格式错误"**
+A: API Key 字段需要用英文冒号分隔 Access Key 和 Secret Key。确保格式是 `AKIA...:wJalr...`。
+
+**Q: 报错 "Bedrock API 错误 403"**
+A: 可能原因：
+- IAM 用户缺少 `AmazonBedrockFullAccess` 权限
+- 该模型在你选择的区域未开通（去 Bedrock Console 的 Model access 检查）
+- 该模型需要额外申请（如某些 Claude 模型需要 Anthropic 审批）
+
+**Q: 报错 "Bedrock API 错误 404"**
+A: Model ID 错误，或该模型在你的区域不可用。确认 Base URL 的区域和 Model ID 匹配。
+
+**Q: 想用不同区域**
+A: 修改 Base URL 中的区域部分（如 `us-west-2`、`eu-west-1` 等）。同时确保该区域已开通对应模型。
+
+**Q: 流式响应为什么不是逐字输出？**
+A: 当前 Bedrock 实现使用**非流式 Converse API**（整段返回后一次推送），因为 AWS event-stream 二进制格式解析复杂。对于普通对话分析和 Skill 炼化完全够用，体验上是"等一会儿然后整段出现"。
 
 ### 配置存储
 

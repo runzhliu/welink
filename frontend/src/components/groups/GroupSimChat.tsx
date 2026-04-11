@@ -8,6 +8,7 @@ import type { GroupInfo } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { groupsApi } from '../../services/api';
 import { avatarSrc } from '../../utils/avatar';
+import axios from 'axios';
 
 interface Props {
   group: GroupInfo;
@@ -79,6 +80,44 @@ export const GroupSimChat: React.FC<Props> = ({ group, onOpenSettings }) => {
   const abortRef = useRef<AbortController | null>(null);
   const colorMapRef = useRef(new Map<string, string>());
 
+  // ─── 对话持久化 ─────────────────────────────────────────────────
+  const convKey = `group-sim:${group.username}`;
+
+  // 加载已保存的对话历史
+  useEffect(() => {
+    axios.get('/api/ai/conversations', { params: { key: convKey } })
+      .then(res => {
+        const saved = res.data?.messages;
+        if (Array.isArray(saved) && saved.length > 0) {
+          const restored: SimMessage[] = saved.map((m: { role: string; content: string }) => ({
+            speaker: m.role === 'user' ? '我' : m.role,
+            content: m.content,
+            isUser: m.role === 'user',
+          })).filter((m: SimMessage) => m.content);
+          if (restored.length > 0) {
+            setMessages(restored);
+            setStarted(true);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [convKey]);
+
+  // 保存对话（messages 变化且非空时）
+  const saveConversation = useCallback((msgs: SimMessage[]) => {
+    if (msgs.length === 0) return;
+    const toSave = msgs.map(m => ({
+      role: m.isUser ? 'user' : m.speaker,
+      content: m.content,
+    }));
+    axios.put('/api/ai/conversations', { key: convKey, messages: toSave }).catch(() => {});
+  }, [convKey]);
+
+  // 删除对话
+  const deleteConversation = useCallback(() => {
+    axios.delete('/api/ai/conversations', { params: { key: convKey } }).catch(() => {});
+  }, [convKey]);
+
   // 加载 LLM profiles
   useEffect(() => {
     fetch('/api/preferences')
@@ -91,19 +130,32 @@ export const GroupSimChat: React.FC<Props> = ({ group, onOpenSettings }) => {
       .catch(() => {});
   }, []);
 
-  // 加载群成员排行
+  // 加载群成员排行（轮询直到后端异步计算完成）
   useEffect(() => {
+    let cancelled = false;
     setMembersLoading(true);
-    groupsApi.getDetail(group.username).then(detail => {
-      if (detail?.member_rank) {
-        const members = detail.member_rank.slice(0, 20).map(m => ({
-          name: m.speaker,
-          count: m.count,
-        }));
-        setMemberOptions(members);
-        setSelectedMembers(new Set(members.slice(0, 10).map(m => m.name)));
+    const poll = async () => {
+      while (!cancelled) {
+        try {
+          const detail = await groupsApi.getDetail(group.username);
+          if (detail?.member_rank && detail.member_rank.length > 0) {
+            const members = detail.member_rank.slice(0, 20).map(m => ({
+              name: m.speaker,
+              count: m.count,
+            }));
+            if (!cancelled) {
+              setMemberOptions(members);
+              setSelectedMembers(new Set(members.slice(0, 10).map(m => m.name)));
+              setMembersLoading(false);
+            }
+            return;
+          }
+        } catch { /* ignore */ }
+        await new Promise(r => setTimeout(r, 1000));
       }
-    }).catch(() => {}).finally(() => setMembersLoading(false));
+    };
+    poll();
+    return () => { cancelled = true; };
   }, [group.username]);
 
   const toggleMember = useCallback((name: string) => {
@@ -192,17 +244,23 @@ export const GroupSimChat: React.FC<Props> = ({ group, onOpenSettings }) => {
     } finally {
       setLoading(false);
       abortRef.current = null;
+      // 流式结束后保存到数据库
+      setMessages(prev => { saveConversation(prev); return prev; });
     }
-  }, [loading, messages, group.username, msgCount, profileId, rounds, topic, mood, selectedMembers, scrollToBottom]);
+  }, [loading, messages, group.username, msgCount, profileId, rounds, topic, mood, selectedMembers, scrollToBottom, saveConversation]);
 
   const handleSend = useCallback(() => {
     const text = input.trim();
     if (!text) return;
     setInput('');
-    setMessages(prev => [...prev, { speaker: '我', content: text, isUser: true }]);
+    setMessages(prev => {
+      const next = [...prev, { speaker: '我', content: text, isUser: true }];
+      saveConversation(next);
+      return next;
+    });
     scrollToBottom();
     runSimulation(text);
-  }, [input, runSimulation, scrollToBottom]);
+  }, [input, runSimulation, scrollToBottom, saveConversation]);
 
   const handleStop = useCallback(() => { abortRef.current?.abort(); }, []);
 
@@ -210,6 +268,7 @@ export const GroupSimChat: React.FC<Props> = ({ group, onOpenSettings }) => {
     setStarted(false);
     setMessages([]);
     colorMapRef.current.clear();
+    deleteConversation();
   }, []);
 
   // ─── 配置面板（未开始时） ───────────────────────────────────────
@@ -417,7 +476,7 @@ export const GroupSimChat: React.FC<Props> = ({ group, onOpenSettings }) => {
           </button>
           {messages.length > 0 && (
             <button
-              onClick={() => { setMessages([]); colorMapRef.current.clear(); }}
+              onClick={() => { setMessages([]); colorMapRef.current.clear(); deleteConversation(); }}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold
                 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
             >

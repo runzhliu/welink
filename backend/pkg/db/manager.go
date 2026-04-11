@@ -480,6 +480,9 @@ func createOptimizationIndexes(db *sql.DB, dbName string) {
 
 		// 3. 组合索引（local_type + create_time）用于词云查询优化
 		createCompositeIndex(db, tableName, "local_type", "create_time")
+
+		// 4. real_sender_id 索引（群聊成员统计、发言者过滤）
+		createIndexIfNotExists(db, tableName, "real_sender_id")
 	}
 }
 

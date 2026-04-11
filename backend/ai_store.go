@@ -142,6 +142,59 @@ func PutAIConversation(key string, msgs []AIMessage) error {
 	return err
 }
 
+// ConversationEntry 列表项（不含完整消息体，只含元数据）
+type ConversationEntry struct {
+	Key       string `json:"key"`
+	UpdatedAt int64  `json:"updated_at"`
+	Preview   string `json:"preview"` // 第一条 user 消息的前 50 字符
+	MsgCount  int    `json:"msg_count"`
+}
+
+// ListAIConversations 按 key 前缀列出对话记录（按 updated_at 降序）
+func ListAIConversations(prefix string) ([]ConversationEntry, error) {
+	aiDBMu.Lock()
+	defer aiDBMu.Unlock()
+	if aiDB == nil {
+		return nil, fmt.Errorf("ai_store: database not initialized")
+	}
+	rows, err := aiDB.Query(
+		`SELECT key, messages, updated_at FROM ai_conversations WHERE key LIKE ? ORDER BY updated_at DESC`,
+		prefix+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []ConversationEntry
+	for rows.Next() {
+		var key, raw string
+		var updatedAt int64
+		if err := rows.Scan(&key, &raw, &updatedAt); err != nil {
+			continue
+		}
+		var msgs []AIMessage
+		_ = json.Unmarshal([]byte(raw), &msgs)
+		preview := ""
+		for _, m := range msgs {
+			if m.Role == "user" && m.Content != "" {
+				runes := []rune(m.Content)
+				if len(runes) > 50 {
+					preview = string(runes[:50]) + "…"
+				} else {
+					preview = m.Content
+				}
+				break
+			}
+		}
+		list = append(list, ConversationEntry{
+			Key:       key,
+			UpdatedAt: updatedAt,
+			Preview:   preview,
+			MsgCount:  len(msgs),
+		})
+	}
+	return list, nil
+}
+
 // DeleteAIConversation 删除指定 key 的记录。
 func DeleteAIConversation(key string) error {
 	aiDBMu.Lock()

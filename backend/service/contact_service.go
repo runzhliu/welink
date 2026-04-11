@@ -1667,6 +1667,14 @@ func (s *ContactService) ExportGroupMessagesAll(username string) []GroupChatMess
 	return s.exportGroupMessages(username, 0, 0, 0)
 }
 
+// ExportGroupMessagesRecent 只导出群聊最近 limit 条消息（高效：只从尾部取，不加载全量）
+func (s *ContactService) ExportGroupMessagesRecent(username string, limit int) []GroupChatMessage {
+	if limit <= 0 {
+		limit = 1000
+	}
+	return s.exportGroupMessages(username, 0, 0, limit)
+}
+
 func (s *ContactService) exportGroupMessages(username string, from, to int64, limit int) []GroupChatMessage {
 	tableName := db.GetTableName(username)
 	tw := exportTimeWhere(from, to, s.timeWhere())
@@ -2538,7 +2546,8 @@ func (s *ContactService) computeGroupDetail(username string) {
 	nameMap := s.loadContactNameMap()
 
 	twDetail := s.timeWhere()
-	// Pass 1: 全量扫描时间分布 + 发言人统计
+	var textSamples []string
+	// Pass 1: 全量扫描时间分布 + 发言人统计 + 词云文本收集（合并为一次扫描）
 	// 用 real_sender_id（rowid）→ Name2Id → wxid → nameMap 解析所有人（含本人）
 	for _, mdb := range s.dbMgr.MessageDBs {
 		// 加载本 DB 的 Name2Id：rowid → wxid
@@ -2577,52 +2586,39 @@ func (s *ContactService) computeGroupDetail(username string) {
 					memberNames[wxid] = name
 				}
 			}
+			// 同时收集纯文本消息用于词云（合并到 Pass 1，避免第二次全表扫描）
+			if (lt&0xFFFF) == 1 && content != "" {
+				txtForCloud := content
+				if idx := strings.Index(txtForCloud, ":\n"); idx > 0 && idx < 80 {
+					txtForCloud = txtForCloud[idx+2:]
+				}
+				if txtForCloud != "" && !s.isSys(txtForCloud) {
+					textSamples = append(textSamples, wechatEmojiRe.ReplaceAllString(txtForCloud, ""))
+				}
+			}
 		}
 		rows.Close()
 	}
 
-	// Pass 2: 全量纯文本消息（local_type=1）收集后批量分词
-	// 先收集所有文本（持 DB 连接期间不分词），关闭连接后再加锁分词
-	twText := twDetail
-	if twText == "" {
-		twText = " WHERE local_type=1"
-	} else {
-		twText += " AND local_type=1"
-	}
-	var textSamples []string
-	for _, mdb := range s.dbMgr.MessageDBs {
-		rows, err := mdb.Query(fmt.Sprintf(
-			"SELECT message_content, COALESCE(WCDB_CT_message_content,0) FROM [%s]%s",
-			tableName, twText))
-		if err != nil { continue }
-		for rows.Next() {
-			var rawContent []byte
-			var ct int64
-			rows.Scan(&rawContent, &ct)
-			content := decodeGroupContent(rawContent, ct)
-			if content == "" { continue }
-			if idx := strings.Index(content, ":\n"); idx > 0 && idx < 80 {
-				content = content[idx+2:]
+	// 词云文本已在 Pass 1 中一次性收集完毕
+	// 分批分词（gse 非线程安全，每批 500 条加锁处理后释放，减少阻塞其他 goroutine）
+	const segBatch = 500
+	for i := 0; i < len(textSamples); i += segBatch {
+		end := i + segBatch
+		if end > len(textSamples) { end = len(textSamples) }
+		s.segmenterMu.Lock()
+		for _, text := range textSamples[i:end] {
+			for _, seg := range s.segmenter.Cut(text, true) {
+				seg = strings.TrimSpace(seg)
+				if !utf8.ValidString(seg) { continue }
+				runes := []rune(seg)
+				if len(runes) < 2 || len(runes) > 8 { continue }
+				if isNumeric(seg) || STOP_WORDS[seg] || containsEmoji(seg) || !hasWordChar(seg) { continue }
+				wordCounts[seg]++
 			}
-			if content == "" || s.isSys(content) { continue }
-			content = wechatEmojiRe.ReplaceAllString(content, "")
-			textSamples = append(textSamples, content)
 		}
-		rows.Close()
+		s.segmenterMu.Unlock()
 	}
-	// 关闭所有 DB 连接后，加锁做分词（gse 非线程安全）
-	s.segmenterMu.Lock()
-	for _, text := range textSamples {
-		for _, seg := range s.segmenter.Cut(text, true) {
-			seg = strings.TrimSpace(seg)
-			if !utf8.ValidString(seg) { continue }
-			runes := []rune(seg)
-			if len(runes) < 2 || len(runes) > 8 { continue }
-			if isNumeric(seg) || STOP_WORDS[seg] || containsEmoji(seg) || !hasWordChar(seg) { continue }
-			wordCounts[seg]++
-		}
-	}
-	s.segmenterMu.Unlock()
 
 	// 成员排行 top 500（含最后发言时间、首次发言时间）
 	for wxid, cnt := range memberMap {
