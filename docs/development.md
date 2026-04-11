@@ -77,7 +77,7 @@ cd frontend && npm install && npm run dev
 
 1. 终端 1：`make dev-backend`
 2. 终端 2：`make dev-frontend`
-3. 浏览器访问 `http://localhost:3000`
+3. 浏览器访问 `http://localhost:3418`
 
 前端 `vite.config.ts` 已配置 `/api` 代理到 `localhost:8080`。
 

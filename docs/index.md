@@ -207,7 +207,7 @@ cd welink
 docker compose -f docker-compose.demo.yml up
 ```
 
-访问 [localhost:3000](http://localhost:3000) 即可体验，预置了完整联系人列表与模拟消息。
+访问 [localhost:3418](http://localhost:3418) 即可体验，预置了完整联系人列表与模拟消息。
 
 ### 正式使用
 
@@ -240,7 +240,7 @@ docker compose up
 
 :::
 
-访问 [localhost:3000](http://localhost:3000) 开始分析。
+访问 [localhost:3418](http://localhost:3418) 开始分析。
 
 
 </div>

@@ -167,7 +167,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
                     <Terminal size={12} className="text-gray-400 flex-shrink-0" />
                     <code className="text-xs text-gray-600 dark:text-gray-300 font-mono">docker compose up</code>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1.5">访问 <span className="font-mono">localhost:3000</span> 即可开始分析</p>
+                  <p className="text-xs text-gray-400 mt-1.5">访问 <span className="font-mono">localhost:3418</span> 即可开始分析</p>
                 </div>
               </div>
             )}

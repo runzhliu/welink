@@ -7,7 +7,7 @@ export default defineConfig({
     sourcemap: false,
   },
   server: {
-    port: 3000,
+    port: 3418,
     proxy: {
       '/api': 'http://localhost:8080'
     }

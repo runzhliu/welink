@@ -96,7 +96,7 @@ cd welink
 docker compose up
 ```
 
-首次启动会自动拉取镜像，无需本地编译。访问 [localhost:3000](http://localhost:3000) 开始分析。
+首次启动会自动拉取镜像，无需本地编译。访问 [localhost:3418](http://localhost:3418) 开始分析。
 
 ### Demo 模式（无需真实数据）
 
