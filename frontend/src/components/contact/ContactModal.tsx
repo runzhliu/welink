@@ -4,6 +4,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame, Sparkles, Maximize2, Minimize2 } from 'lucide-react';
+import { ChatReplay } from './ChatReplay';
 import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
 import { contactsApi } from '../../services/api';
@@ -30,7 +31,7 @@ interface ContactModalProps {
   initialQuery?: string;
 }
 
-type ModalTab = 'wordcloud' | 'detail' | 'sentiment' | 'search' | 'ai' | 'clone' | 'insights';
+type ModalTab = 'wordcloud' | 'detail' | 'sentiment' | 'search' | 'ai' | 'clone' | 'insights' | 'replay';
 
 function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
 function shiftDays(n: number) {
@@ -52,6 +53,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
   const { data: wordData, loading: isAnalysing, fetch: fetchWordCloud } = useWordCloud();
   const [tab, setTab] = useState<ModalTab>(initialTab ?? 'wordcloud');
   const [fullscreen, setFullscreen] = useState(false);
+  // showReplay removed — now a tab
   const [forgeOpen, setForgeOpen] = useState(false);
 
   // 联系人切换时重置到指定 tab（支持从首页跳转到 AI 分析）
@@ -293,10 +295,13 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         </div>
 
         {!allReady ? (
-          <div className="flex items-center justify-center" style={{ minHeight: 400 }}>
-            <div className="text-[#07c160] font-black animate-pulse uppercase tracking-[0.3em] text-lg">
-              Analysing...
-            </div>
+          <div className="flex flex-col items-center justify-center gap-3" style={{ minHeight: 400 }}>
+            <Loader2 size={28} className="animate-spin text-[#07c160]" />
+            <div className="text-sm font-bold text-[#1d1d1f] dk-text">正在分析聊天记录</div>
+            <p className="text-xs text-gray-400 text-center max-w-xs">
+              聊天记录越多，分析时间越长。<br/>
+              消息量大的联系人首次加载可能需要 1-3 分钟，请耐心等待。
+            </p>
           </div>
         ) : (
           <div className="animate-in fade-in duration-200">
@@ -533,7 +538,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         {/* Tabs + 消息范围切换 */}
         <div className="flex items-center justify-between mb-6 dk-border border-b border-gray-100">
           <div className="flex gap-2">
-            {(['wordcloud', 'detail', 'sentiment', 'search', 'ai', 'clone', 'insights'] as ModalTab[]).map((t) => (
+            {(['wordcloud', 'detail', 'sentiment', 'search', 'replay', 'ai', 'clone', 'insights'] as ModalTab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => {
@@ -543,7 +548,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                   if (t === 'sentiment') fetchSentiment(contact.username, includeMine);
                   if (t === 'search') setTimeout(() => searchInputRef.current?.focus(), 50);
                 }}
-                className={`flex items-center gap-1 px-3 sm:px-5 py-2 rounded-t-xl text-xs sm:text-sm font-bold transition border-b-2 -mb-px ${
+                className={`flex items-center gap-0.5 px-2 sm:px-3 py-1.5 rounded-t-xl text-[11px] sm:text-xs font-bold transition border-b-2 -mb-px ${
                   tab === t
                     ? 'text-[#07c160] border-[#07c160]'
                     : 'text-gray-400 border-transparent hover:text-gray-600'
@@ -551,7 +556,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
               >
                 {t === 'ai' && <Bot size={13} className="flex-shrink-0" />}
                 {t === 'clone' && <Sparkles size={13} className="flex-shrink-0" />}
-                {t === 'wordcloud' ? '词云分析' : t === 'detail' ? '深度画像' : t === 'sentiment' ? '情感分析' : t === 'search' ? '搜索记录' : t === 'ai' ? 'AI 分析' : t === 'clone' ? 'AI 分身' : 'AI 洞察'}
+                {t === 'wordcloud' ? '词云分析' : t === 'detail' ? '深度画像' : t === 'sentiment' ? '情感分析' : t === 'search' ? '搜索记录' : t === 'ai' ? 'AI 分析' : t === 'clone' ? 'AI 分身' : t === 'insights' ? 'AI 洞察' : '回放'}
               </button>
             ))}
           </div>
@@ -659,6 +664,15 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
             displayName={displayName}
             avatarUrl={avatarUrl || undefined}
             onOpenSettings={onOpenSettings}
+          />
+        )}
+
+        {tab === 'replay' && (
+          <ChatReplay
+            username={contact.username}
+            displayName={displayName}
+            avatarUrl={avatarUrl || undefined}
+            onClose={() => setTab('wordcloud')}
           />
         )}
 

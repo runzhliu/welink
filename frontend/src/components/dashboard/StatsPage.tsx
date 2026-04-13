@@ -3,7 +3,8 @@
  */
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { Users, MessageSquare, Flame, Snowflake, Edit3, Check, RotateCcw, Eye, EyeOff } from 'lucide-react';
+import { Users, MessageSquare, Flame, Snowflake, Edit3, Check, RotateCcw, Eye, EyeOff, Rewind } from 'lucide-react';
+import { YearInReview } from './YearInReview';
 import { Responsive, WidthProvider, type Layout, type LayoutItem, type ResponsiveLayouts } from 'react-grid-layout/legacy';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -81,6 +82,7 @@ export const StatsPage: React.FC<StatsPageProps> = ({
   blockedDisplayNames,
 }) => {
   const [editMode, setEditMode] = useState(false);
+  const [showYearReview, setShowYearReview] = useState(false);
   const [layouts, setLayouts] = useState<Layouts>(() => {
     try {
       const saved = localStorage.getItem(LAYOUT_KEY);
@@ -181,9 +183,9 @@ export const StatsPage: React.FC<StatsPageProps> = ({
       case 'late-night-guard':
         return <LateNightGuard globalStats={globalStats} contacts={contacts} onContactClick={onContactClick} />;
       case 'similarity':
-        return <SimilarityCard blockedUsers={blockedUsers} blockedDisplayNames={blockedDisplayNames} />;
+        return <SimilarityCard blockedUsers={blockedUsers} blockedDisplayNames={blockedDisplayNames} onContactClick={u => { const c = contacts.find(cc => cc.username === u); if (c) onContactClick(c); }} />;
       case 'money':
-        return <MoneyOverviewCard blockedUsers={blockedUsers} blockedDisplayNames={blockedDisplayNames} />;
+        return <MoneyOverviewCard blockedUsers={blockedUsers} blockedDisplayNames={blockedDisplayNames} onContactClick={u => { const c = contacts.find(cc => cc.username === u); if (c) onContactClick(c); }} />;
       case 'recall':
         return <RecallRanking contacts={contacts} onContactClick={onContactClick} />;
       default:
@@ -274,6 +276,13 @@ export const StatsPage: React.FC<StatsPageProps> = ({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowYearReview(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[#07c160] text-white hover:bg-[#06ad56] hover:shadow-md transition-all"
+          >
+            <Rewind size={13} />
+            年度回顾
+          </button>
           {editMode && (
             <button
               onClick={resetLayout}
@@ -381,6 +390,14 @@ export const StatsPage: React.FC<StatsPageProps> = ({
           border-bottom-right-radius: 2px;
         }
       `}</style>
+
+      {showYearReview && (
+        <YearInReview
+          contacts={contacts}
+          globalStats={globalStats}
+          onClose={() => setShowYearReview(false)}
+        />
+      )}
     </div>
   );
 };
