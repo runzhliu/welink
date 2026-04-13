@@ -471,6 +471,8 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
   const [ragInfo, setRagInfo] = useState<{
     hits: number;
     retrieved: number;
+    total?: number;
+    truncated?: boolean;
     messages?: Array<{ datetime: string; sender: string; content: string; is_hit: boolean }>;
   } | null>(null);
   const [ragContextOpen, setRagContextOpen] = useState(false);
@@ -948,8 +950,21 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
           }
         }
       } catch (e: unknown) {
-        if ((e as { name?: string }).name === 'AbortError') return;
-        updateMsg(assistantIdx, { content: `❌ ${e instanceof Error ? e.message : '请求失败'}`, streaming: false });
+        if ((e as { name?: string }).name === 'AbortError') {
+          updateMsg(assistantIdx, { content: '⏹ 已停止分析。', streaming: false });
+          updateAnalysisState(key, prev => ({ ...prev, loading: false, chunkProgress: null, abort: null }));
+          return;
+        }
+        const errMsg = e instanceof Error ? e.message : '请求失败';
+        const isTokenLimit = errMsg.includes('maximum context length') || errMsg.includes('context_length_exceeded') || errMsg.includes('too many tokens');
+        if (isTokenLimit) {
+          updateMsg(assistantIdx, {
+            content: `⚠️ 消息量超出当前模型的上下文长度限制。\n\n**解决方案：**\n1. 切换到「混合检索」模式（推荐，只发送相关片段）\n2. 减少消息量：在上方选择较少的消息条数（如「最近 100 条」）\n3. 切换到上下文更大的模型（如 Kimi 支持 100 万 token、Gemini 支持 100 万 token）\n\n当前错误：${errMsg.slice(0, 150)}`,
+            streaming: false,
+          });
+        } else {
+          updateMsg(assistantIdx, { content: `❌ ${errMsg}`, streaming: false });
+        }
       } finally {
         const elapsedSecs = (Date.now() - streamStart) / 1000;
         updateAnalysisState(key, prev => {
@@ -991,7 +1006,11 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
         updateAnalysisState(key, prev => ({ ...prev, chunkProgress: null }));
         updateMsg(assistantIdx, { content: '' });
       } catch (e: unknown) {
-        if ((e as { name?: string }).name === 'AbortError') return;
+        if ((e as { name?: string }).name === 'AbortError') {
+          updateMsg(assistantIdx, { content: '⏹ 已停止分段分析。', streaming: false });
+          updateAnalysisState(key, prev => ({ ...prev, loading: false, chunkProgress: null, abort: null }));
+          return;
+        }
         updateMsg(assistantIdx, { content: `❌ ${e instanceof Error ? e.message : '分段摘要失败'}`, streaming: false });
         updateAnalysisState(key, prev => ({ ...prev, loading: false, chunkProgress: null, abort: null }));
         return;
@@ -1061,8 +1080,21 @@ ${effectiveCtx}
         }
       }
     } catch (e: unknown) {
-      if ((e as { name?: string }).name === 'AbortError') return;
-      updateMsg(assistantIdx, { content: `❌ ${e instanceof Error ? e.message : '请求失败'}`, streaming: false });
+      if ((e as { name?: string }).name === 'AbortError') {
+        updateMsg(assistantIdx, { content: '⏹ 已停止分析。', streaming: false });
+        updateAnalysisState(key, prev => ({ ...prev, loading: false, chunkProgress: null, abort: null }));
+        return;
+      }
+      const errMsg = e instanceof Error ? e.message : '请求失败';
+      const isTokenLimit = errMsg.includes('maximum context length') || errMsg.includes('context_length_exceeded') || errMsg.includes('too many tokens');
+      if (isTokenLimit) {
+        updateMsg(assistantIdx, {
+          content: `⚠️ 消息量超出当前模型的上下文长度限制。\n\n**解决方案：**\n1. 切换到「混合检索」模式（推荐，只发送相关片段）\n2. 减少消息量：在上方选择较少的消息条数\n3. 切换到上下文更大的模型（Kimi/Gemini 支持 100 万 token）\n\n当前错误：${errMsg.slice(0, 150)}`,
+          streaming: false,
+        });
+      } else {
+        updateMsg(assistantIdx, { content: `❌ ${errMsg}`, streaming: false });
+      }
     } finally {
       const elapsedSecs = (Date.now() - streamStart) / 1000;
       updateAnalysisState(key, prev => {
@@ -1390,6 +1422,11 @@ ${effectiveCtx}
               >
                 <Search size={10} />
                 本次检索：命中 {ragInfo.hits} 条，含上下文共 {ragInfo.retrieved} 条
+                {ragInfo.truncated && (
+                  <span className="text-amber-500 font-bold">
+                    （共 {ragInfo.total} 条，因模型上下文限制截断至 {ragInfo.retrieved} 条）
+                  </span>
+                )}
                 <span className="ml-0.5 opacity-60">{ragContextOpen ? '▲' : '▼'}</span>
               </button>
               )}

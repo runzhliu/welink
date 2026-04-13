@@ -12,9 +12,10 @@ import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 interface Props {
   blockedUsers?: string[];
   blockedDisplayNames?: Set<string>;
+  onContactClick?: (username: string) => void;
 }
 
-export const SimilarityCard: React.FC<Props> = ({ blockedUsers = [], blockedDisplayNames }) => {
+export const SimilarityCard: React.FC<Props> = ({ blockedUsers = [], blockedDisplayNames, onContactClick }) => {
   const { privacyMode } = usePrivacyMode();
   const [rawData, setRawData] = useState<SimilarityResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,7 +116,9 @@ export const SimilarityCard: React.FC<Props> = ({ blockedUsers = [], blockedDisp
             {/* Names */}
             <div className="flex-1 min-w-0">
               <div className={`text-sm font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>
-                {p.name1} <span className="text-gray-300 font-normal mx-1">&</span> {p.name2}
+                <button onClick={() => onContactClick?.(p.user1)} className="hover:text-[#07c160] transition-colors">{p.name1}</button>
+                <span className="text-gray-300 font-normal mx-1">&</span>
+                <button onClick={() => onContactClick?.(p.user2)} className="hover:text-[#07c160] transition-colors">{p.name2}</button>
               </div>
               {p.top_shared && p.top_shared.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1">

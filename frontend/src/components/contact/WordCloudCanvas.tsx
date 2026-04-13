@@ -156,10 +156,10 @@ export const WordCloudCanvas: React.FC<WordCloudCanvasProps> = ({
 
   if (loading) {
     return (
-      <div className={`${baseClass} p-12 flex items-center justify-center`}>
-        <div className="text-[#07c160] font-black animate-pulse uppercase tracking-[0.3em] text-lg">
-          Analysing...
-        </div>
+      <div className={`${baseClass} p-12 flex flex-col items-center justify-center gap-3`}>
+        <div className="w-6 h-6 border-2 border-[#07c160] border-t-transparent rounded-full animate-spin" />
+        <div className="text-sm font-bold text-[#1d1d1f] dk-text">正在生成词云</div>
+        <p className="text-xs text-gray-400">分析文本消息中的高频词汇…</p>
       </div>
     );
   }

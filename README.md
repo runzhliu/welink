@@ -372,6 +372,8 @@ docker compose up
 
 **macOS / Windows App**（无需 Docker）：前往 [GitHub Releases](https://github.com/runzhliu/welink/releases) 下载，启动后在设置页选择 `decrypted/` 目录即可。
 
+> **端口说明**：详见下方[端口与自定义](#端口与自定义)章节。
+
 ### 没有数据？先试试 Demo
 
 ```bash
@@ -403,6 +405,39 @@ docker compose -f docker-compose.demo.yml up
 2. 如提示缺少 WebView2，从 [Microsoft 官网](https://developer.microsoft.com/microsoft-edge/webview2/) 安装 Evergreen Bootstrapper
 
 从源码构建：`make exe`
+
+---
+
+## 端口与自定义
+
+WeLink 启动时会占用以下端口：
+
+| 运行方式 | 后端端口 | 前端端口 | 说明 |
+|----------|---------|---------|------|
+| **macOS / Windows App** | `8080` | — | 内置 WebView，后端直接监听 8080，无需额外端口 |
+| **Docker Compose** | `8080`（容器内） | `3418` → 容器 `80` | 浏览器访问 `localhost:3418` |
+| **本地开发** | `8080` | `3418` | 后端 `go run .`，前端 `npm run dev` |
+
+### 自定义端口
+
+**macOS / Windows App**：在设置页修改端口，或编辑 `preferences.json`：
+```json
+{ "port": "9090" }
+```
+也可以通过环境变量覆盖：
+```bash
+PORT=9090 ./WeLink
+```
+
+**Docker Compose**：修改 `docker-compose.yml` 的端口映射：
+```yaml
+ports:
+  - "5000:80"  # 改为 5000
+```
+
+**本地开发**：
+- 后端端口：编辑 `config.yaml` 的 `server.port`，或 `PORT=9090 go run .`
+- 前端端口：编辑 `frontend/vite.config.ts` 的 `server.port`
 
 ---
 

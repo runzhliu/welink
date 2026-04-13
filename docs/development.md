@@ -67,7 +67,7 @@ DEMO_MODE=true go run .
 ### 前端
 
 ```bash
-# 启动 Vite 开发服务器（端口 3000，自动代理 /api 到 8080）
+# 启动 Vite 开发服务器（端口 3418，自动代理 /api 到 8080）
 make dev-frontend
 # 或
 cd frontend && npm install && npm run dev

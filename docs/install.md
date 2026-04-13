@@ -98,6 +98,12 @@ docker compose up
 
 首次启动会自动拉取镜像，无需本地编译。访问 [localhost:3418](http://localhost:3418) 开始分析。
 
+::: tip 端口说明
+- **Docker 模式**：前端默认映射到 **3418** 端口，后端 8080（容器内部）
+- **macOS / Windows App**：后端默认监听 **8080** 端口，内置 WebView 直连无需额外端口
+- 自定义端口：Docker 修改 `docker-compose.yml` 的 `ports` 映射；App 在设置页修改或设环境变量 `PORT=9090`
+:::
+
 ### Demo 模式（无需真实数据）
 
 ```bash

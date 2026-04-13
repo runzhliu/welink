@@ -34,6 +34,7 @@ import (
 	"os"
 	"sort"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -104,15 +105,19 @@ func serverMain() {
 
 	// 服务层：受 svcMu 保护，支持运行时热替换
 	var (
-		svcMu      sync.RWMutex
-		contactSvc *service.ContactService
-		dbMgr      *db.DBManager
+		svcMu       sync.RWMutex
+		contactSvc  *service.ContactService
+		dbMgr       *db.DBManager
+		lastInitErr string // 最近一次 reinitSvc 失败的原因（供 /api/app/info 返回）
 	)
 
 	// reinitSvc 用新数据目录替换数据库连接和服务层（线程安全）。
 	reinitSvc := func(dataDir string, params service.AnalysisParams, initFrom, initTo int64) error {
 		newMgr, err := db.NewDBManager(dataDir)
 		if err != nil {
+			svcMu.Lock()
+			lastInitErr = err.Error()
+			svcMu.Unlock()
 			return err
 		}
 		newSvc := service.NewContactService(newMgr, params, initFrom, initTo)
@@ -122,16 +127,53 @@ func serverMain() {
 		}
 		dbMgr = newMgr
 		contactSvc = newSvc
+		lastInitErr = ""
 		svcMu.Unlock()
 		return nil
+	}
+
+	// probeDataDirs 列出启动时检查过的候选数据目录（用于 /api/app/info 前端提示）。
+	probeDataDirs := func(current string) []string {
+		var paths []string
+		seen := map[string]bool{}
+		add := func(p string) {
+			if p == "" || seen[p] {
+				return
+			}
+			seen[p] = true
+			paths = append(paths, p)
+		}
+		add(current)
+		if env := os.Getenv("WELINK_DATA_DIR"); env != "" {
+			add(env)
+		}
+		add("/data/decrypted") // Docker 容器内常用挂载点
+		if cwd, err := os.Getwd(); err == nil {
+			add(filepath.Join(cwd, "decrypted"))
+		}
+		if dir := appDataDir(); dir != "" {
+			add(dir) // .app/.exe 同级目录（仅桌面版返回非空）
+		}
+		return paths
 	}
 
 	// App 模式：优先从持久化配置读取目录，其次检查 .app 同级的 decrypted/
 	if hasFrontend {
 		if appCfg, ok := loadAppConfig(); ok {
 			if appCfg.DemoMode {
-				os.Setenv("DEMO_MODE", "true")
-				prefs.DataDir = demoDataDir()
+				// 用户可能手动删了 demo 数据目录想退出 demo 模式 ——
+				// 这种情况下不应该静默重建，而是把 demo_mode 重置后回到 Setup 页让用户选择。
+				demoDir := demoDataDir()
+				if _, err := os.Stat(filepath.Join(demoDir, "contact", "contact.db")); os.IsNotExist(err) {
+					log.Printf("[APP] demo_mode=true 但 %s 已被用户删除，重置为未配置状态", demoDir)
+					appCfg.DemoMode = false
+					appCfg.DataDir = ""
+					_ = saveAppConfig(appCfg)
+					// prefs.DataDir 保持空，下面 reinitSvc 会失败 → 前端展示 Setup 页
+				} else {
+					os.Setenv("DEMO_MODE", "true")
+					prefs.DataDir = demoDir
+				}
 			} else {
 				prefs.DataDir = appCfg.DataDir
 			}
@@ -173,9 +215,27 @@ func serverMain() {
 	}
 
 	if err := reinitSvc(prefs.DataDir, analysisParamsFromPrefs(prefs), prefs.DefaultInitFrom, prefs.DefaultInitTo); err != nil {
-		// App 模式或数据目录无效时：服务层保持 nil，前端会收到 503 并提示用户
-		// Docker 模式下请检查 volumes 中 decrypted/ 目录是否挂载正确
-		log.Printf("[WARN] Init DB failed: %v — service unavailable until data is ready", err)
+		// 服务层保持 nil —— 前端通过 /api/app/info 识别并引导用户
+		candidates := probeDataDirs(prefs.DataDir)
+		log.Printf("────────────────────────────────────────────────────────────────")
+		log.Printf("[SETUP REQUIRED] WeLink 未找到微信解密数据：%v", err)
+		log.Printf("已探测的候选目录：")
+		for _, p := range candidates {
+			log.Printf("  - %s", p)
+		}
+		switch {
+		case hasFrontend:
+			log.Printf("→ 请在应用首页选择 decrypted/ 目录，或点击「使用 Demo 数据」体验。")
+		case runtime.GOOS == "linux":
+			log.Printf("→ Docker：确认 docker-compose.yml 中已挂载 decrypted/，例如：")
+			log.Printf("    volumes:")
+			log.Printf("      - ./decrypted:/data/decrypted:ro")
+			log.Printf("   或设置环境变量 DEMO_MODE=true 使用演示数据。")
+		default:
+			log.Printf("→ 本地开发：把 decrypted/ 放到仓库根目录，或设置 WELINK_DATA_DIR；亦可 DEMO_MODE=true 体验演示数据。")
+		}
+		log.Printf("HTTP 服务已启动，前端会展示配置引导。就绪后刷新页面即可。")
+		log.Printf("────────────────────────────────────────────────────────────────")
 	}
 
 	// 初始化 AI 分析历史数据库
@@ -226,18 +286,29 @@ func serverMain() {
 
 	// ── App 配置相关（无需服务层） ──────────────────────────────────────────
 
-	// App 状态：前端用于判断是否需要显示 Setup 页面
+	// App 状态：前端用于判断是否需要显示 Setup 页面 / 未配置横幅。
+	// 所有运行模式（App / Docker / 本地）共用这个端点，靠 app_mode + platform 区分提示文案。
 	api.GET("/app/info", func(c *gin.Context) {
 		_, configured := loadAppConfig()
-		needsSetup := hasFrontend && !configured
 		svcMu.RLock()
 		ready := contactSvc != nil
+		reason := lastInitErr
 		svcMu.RUnlock()
+		// needs_setup：桌面版看是否走过 setup；Docker/本地模式直接看服务是否就绪
+		needsSetup := !ready
+		if hasFrontend {
+			needsSetup = !configured || !ready
+		}
 		c.JSON(http.StatusOK, gin.H{
-			"app_mode":    hasFrontend,
-			"needs_setup": needsSetup,
-			"ready":       ready,
-			"version":     appVersion,
+			"app_mode":     hasFrontend,
+			"needs_setup":  needsSetup,
+			"ready":        ready,
+			"version":      appVersion,
+			"platform":     runtime.GOOS,
+			"data_dir":     prefs.DataDir,
+			"reason":       reason,
+			"probed_paths": probeDataDirs(prefs.DataDir),
+			"can_demo":     hasFrontend, // 桌面版可一键切 Demo；Docker 用户走 docker-compose.demo.yml
 		})
 	})
 
@@ -329,7 +400,8 @@ func serverMain() {
 		c.JSON(http.StatusOK, result)
 	})
 
-	// 保存文件到 ~/Downloads（供 App 模式下的前端调用，绕过 WebView 的 blob 下载限制）
+	// 保存文件到用户配置的下载目录（供 App 模式下的前端调用，绕过 WebView 的 blob 下载限制）
+	// 目录优先级：preferences.download_dir（配置过）> ~/Downloads（平台默认）
 	// 非 App 模式返回 404，前端据此 fallback 到 Blob 下载。
 	api.POST("/app/save-file", func(c *gin.Context) {
 		if !hasFrontend {
@@ -351,9 +423,9 @@ func serverMain() {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "文件名不合法"})
 			return
 		}
-		homeDir, err := os.UserHomeDir()
+		saveDir, err := resolveDownloadDir()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "无法获取用户目录"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		var fileBytes []byte
@@ -367,12 +439,44 @@ func serverMain() {
 		} else {
 			fileBytes = []byte(body.Content)
 		}
-		savePath := filepath.Join(homeDir, "Downloads", cleanName)
+		savePath := filepath.Join(saveDir, cleanName)
 		if err := os.WriteFile(savePath, fileBytes, 0644); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "写入文件失败: " + err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"path": savePath})
+	})
+
+	// 在系统文件管理器中定位一个文件（Mac: Finder / Windows: Explorer）。
+	// 仅允许前端通过 /app/save-file 写出的文件路径，避免暴露任意读。
+	api.POST("/app/reveal", func(c *gin.Context) {
+		if !hasFrontend {
+			c.JSON(http.StatusNotFound, gin.H{"error": "only available in app mode"})
+			return
+		}
+		var body struct {
+			Path string `json:"path"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.Path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少路径"})
+			return
+		}
+		// 安全校验：路径必须在下载目录之下
+		saveDir, err := resolveDownloadDir()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		abs, err := filepath.Abs(body.Path)
+		if err != nil || !strings.HasPrefix(abs, saveDir+string(filepath.Separator)) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "路径不在下载目录下"})
+			return
+		}
+		if err := revealInFileManager(abs); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
 	// 前端日志收集：接收前端 console.error / window.onerror 等日志
@@ -467,6 +571,61 @@ func serverMain() {
 		c.JSON(http.StatusOK, gin.H{"path": zipPath})
 	})
 
+	// validateDataDir 在配置时做一次预检查，避免索引跑半天才发现目录有问题。
+	// 返回值：fatalErr 阻止配置继续；warnings 是非致命问题（如部分库只读），允许继续但提示用户。
+	validateDataDir := func(dataDir string) (warnings []string, fatalErr error) {
+		// 1. 目录结构
+		contactPath := filepath.Join(dataDir, "contact", "contact.db")
+		msgDir := filepath.Join(dataDir, "message")
+		if _, err := os.Stat(contactPath); err != nil {
+			return nil, fmt.Errorf("找不到 %s（确认 decrypted 目录结构是否完整）", contactPath)
+		}
+		if _, err := os.Stat(msgDir); err != nil {
+			return nil, fmt.Errorf("找不到 %s 目录", msgDir)
+		}
+
+		// 2. 列出 message_*.db
+		entries, err := os.ReadDir(msgDir)
+		if err != nil {
+			return nil, fmt.Errorf("无法读取 %s：%w", msgDir, err)
+		}
+		var msgDBs []string
+		for _, e := range entries {
+			n := e.Name()
+			if strings.HasPrefix(n, "message_") && strings.HasSuffix(n, ".db") &&
+				!strings.Contains(n, "fts") && !strings.Contains(n, "resource") {
+				msgDBs = append(msgDBs, filepath.Join(msgDir, n))
+			}
+		}
+		if len(msgDBs) == 0 {
+			return nil, fmt.Errorf("%s 下没有找到 message_*.db 文件", msgDir)
+		}
+
+		// 3. 写权限测试：尝试用 O_WRONLY 打开（不真的写），失败就算只读
+		// 只读会跳过查询索引创建，让全量分析慢 10–100 倍。
+		var readOnly []string
+		checkWritable := func(path string) {
+			f, err := os.OpenFile(path, os.O_WRONLY, 0)
+			if err != nil {
+				readOnly = append(readOnly, filepath.Base(path))
+				return
+			}
+			f.Close()
+		}
+		checkWritable(contactPath)
+		for _, p := range msgDBs {
+			checkWritable(p)
+		}
+
+		if len(readOnly) > 0 {
+			warnings = append(warnings,
+				fmt.Sprintf("以下数据库只读，将跳过查询索引创建，分析速度会显著变慢（建议复制到可写目录后再选择）：%s",
+					strings.Join(readOnly, ", ")))
+		}
+		log.Printf("[APP] 数据目录预检通过：contact + %d 个 message DB（%d 个只读）", len(msgDBs), len(readOnly))
+		return warnings, nil
+	}
+
 	// applyConfig 将配置落盘并热替换服务层；data_dir 为空时启用演示模式。
 	applyConfig := func(body Preferences) error {
 		if body.DataDir == "" {
@@ -476,6 +635,10 @@ func serverMain() {
 			if err := seed.Generate(body.DataDir); err != nil {
 				return fmt.Errorf("生成演示数据失败：%w", err)
 			}
+			// Demo 模式：直接用 10 年范围自动跑全量索引，省去 WelcomePage 的二次选择
+			// 与启动时的 DEMO_MODE=true 路径保持一致（main.go:serverMain）
+			body.DefaultInitFrom = 0
+			body.DefaultInitTo = time.Now().Unix() + 365*24*3600*10
 		} else {
 			body.DemoMode = false
 			os.Unsetenv("DEMO_MODE")
@@ -499,12 +662,23 @@ func serverMain() {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 			return
 		}
+		// 真实数据目录：先做预检查，致命问题立刻 400 + 详情返回；只读警告允许继续但前端会展示。
+		var warnings []string
+		if strings.TrimSpace(body.DataDir) != "" {
+			ws, err := validateDataDir(body.DataDir)
+			if err != nil {
+				log.Printf("[APP] setup validation failed: %v", err)
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			warnings = ws
+		}
 		if err := applyConfig(body); err != nil {
 			log.Printf("[APP] setup failed: %v", err)
-			c.JSON(http.StatusBadRequest, gin.H{"error": "配置失败，请检查目录是否正确"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "配置失败：" + err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "warnings": warnings})
 	})
 
 	// App 当前配置读取
@@ -573,6 +747,49 @@ func serverMain() {
 			return
 		}
 		c.JSON(http.StatusOK, sanitizeForResponse(existing))
+	})
+
+	// 导出文件的下载目录（仅 App 模式用）。单独一个端点：改这个不应触发重建索引。
+	// 空值 = 清空用户配置，回落到平台默认（~/Downloads）。
+	api.PUT("/preferences/download-dir", func(c *gin.Context) {
+		var body struct {
+			DownloadDir string `json:"download_dir"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		existing := loadPreferences()
+		trimmed := strings.TrimSpace(body.DownloadDir)
+		// 先预保存（用 resolveDownloadDir 校验），避免保存了坏值导致后续所有导出都失败
+		existing.DownloadDir = trimmed
+		if err := savePreferences(existing); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
+			return
+		}
+		// 验证一次，顺带把"实际生效的目录"返回给前端
+		effective, verr := resolveDownloadDir()
+		if verr != nil {
+			// 校验失败时：把用户输入回滚，避免下次导出整体失败
+			existing.DownloadDir = ""
+			_ = savePreferences(existing)
+			c.JSON(http.StatusBadRequest, gin.H{"error": verr.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "effective": effective})
+	})
+
+	// 读取当前的下载目录（用户配置 + 实际生效值）
+	api.GET("/preferences/download-dir", func(c *gin.Context) {
+		p := loadPreferences()
+		effective, err := resolveDownloadDir()
+		resp := gin.H{"configured": p.DownloadDir}
+		if err == nil {
+			resp["effective"] = effective
+		} else {
+			resp["error"] = err.Error()
+		}
+		c.JSON(http.StatusOK, resp)
 	})
 
 	// 自定义纪念日保存
@@ -2234,23 +2451,79 @@ func serverMain() {
 		}
 
 		// 构建检索到的上下文 + snipets（带命中标记）
+		// Token 预算：根据模型的 context window 动态调整
+		// 大约 1 中文字 ≈ 2 token，留 20% 余量给 system prompt + 用户消息 + 输出
+		ragCfg := llmConfigForProfile(body.ProfileID, prefs)
+		maxContextChars := 50000 // 默认 ~100K token，适合 128K 模型
+		switch ragCfg.provider {
+		case "kimi":
+			maxContextChars = 400000 // Kimi 支持 1M token
+		case "gemini":
+			maxContextChars = 400000 // Gemini 支持 1M token
+		case "claude":
+			maxContextChars = 80000 // Claude 支持 200K token
+		case "deepseek":
+			maxContextChars = 50000 // DeepSeek 128K token
+		case "openai":
+			maxContextChars = 50000 // GPT-4o 128K token
+		}
+		totalResults := len(results) // 截断前总数
+
+		// 第一轮：优先放入命中的消息（isHit=true），这些是检索的核心结果
+		type indexedResult struct {
+			idx  int
+			line string
+			r    RAGResult
+			hit  bool
+		}
+		var allIndexed []indexedResult
+		for i, r := range results {
+			line := fmt.Sprintf("[%s] %s：%s", r.Datetime, r.Sender, r.Content)
+			isHit := hitSeqs != nil && hitSeqs[r.Seq]
+			allIndexed = append(allIndexed, indexedResult{idx: i, line: line, r: r, hit: isHit})
+		}
+
+		selected := make(map[int]bool)
+		totalChars := 0
+
+		// 第一轮：放入所有命中消息
+		for _, ir := range allIndexed {
+			if !ir.hit { continue }
+			if totalChars+len(ir.line) > maxContextChars { break }
+			selected[ir.idx] = true
+			totalChars += len(ir.line)
+		}
+
+		// 第二轮：用窗口上下文消息填充剩余预算
+		for _, ir := range allIndexed {
+			if selected[ir.idx] { continue }
+			if totalChars+len(ir.line) > maxContextChars { break }
+			selected[ir.idx] = true
+			totalChars += len(ir.line)
+		}
+
+		// 按原始顺序（时间顺序）输出
 		var ctxLines []string
-		snipets := make([]RagSnipet, 0, len(results))
-		for _, r := range results {
-			ctxLines = append(ctxLines, fmt.Sprintf("[%s] %s：%s", r.Datetime, r.Sender, r.Content))
+		snipets := make([]RagSnipet, 0, len(selected))
+		for _, ir := range allIndexed {
+			if !selected[ir.idx] { continue }
+			ctxLines = append(ctxLines, ir.line)
 			snipets = append(snipets, RagSnipet{
-				Datetime: r.Datetime,
-				Sender:   r.Sender,
-				Content:  r.Content,
-				IsHit:    hitSeqs != nil && hitSeqs[r.Seq],
+				Datetime: ir.r.Datetime,
+				Sender:   ir.r.Sender,
+				Content:  ir.r.Content,
+				IsHit:    ir.hit,
 			})
 		}
 		ctxText := strings.Join(ctxLines, "\n")
 
 		// 先推送 RAG 元数据（含命中消息列表）
+		truncated := len(snipets) < totalResults
 		sendChunk(StreamChunk{RagMeta: &RagMeta{
 			Hits:      len(hitSeqs),
-			Retrieved: len(results),
+			Retrieved: len(snipets),
+			Total:     totalResults,
+			Truncated: truncated,
 			Messages:  snipets,
 		}})
 

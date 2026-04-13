@@ -13,9 +13,10 @@ import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 interface Props {
   blockedUsers?: string[];
   blockedDisplayNames?: Set<string>;
+  onContactClick?: (username: string) => void;
 }
 
-export const MoneyOverviewCard: React.FC<Props> = ({ blockedUsers = [], blockedDisplayNames }) => {
+export const MoneyOverviewCard: React.FC<Props> = ({ blockedUsers = [], blockedDisplayNames, onContactClick }) => {
   const { privacyMode } = usePrivacyMode();
   const [rawData, setRawData] = useState<MoneyOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -149,7 +150,11 @@ export const MoneyOverviewCard: React.FC<Props> = ({ blockedUsers = [], blockedD
           <div className="text-xs text-gray-400 mb-3">联系人红包/转账排行</div>
           <div className="space-y-2">
             {displayContacts.map((c, i) => (
-              <div key={c.username} className="flex items-center gap-3 px-3 py-2 bg-[#f8f9fb] dark:bg-white/5 rounded-xl">
+              <div
+              key={c.username}
+              onClick={() => onContactClick?.(c.username)}
+              className={`flex items-center gap-3 px-3 py-2 bg-[#f8f9fb] dark:bg-white/5 rounded-xl ${onContactClick ? 'cursor-pointer hover:bg-[#e7f8f0] dark:hover:bg-[#07c160]/10' : ''} transition-colors`}
+            >
                 <span className={`text-xs font-black w-5 text-center flex-shrink-0 ${
                   i === 0 ? 'text-[#ff9500]' : i === 1 ? 'text-[#8b5cf6]' : i === 2 ? 'text-[#10aeff]' : 'text-gray-300'
                 }`}>{i + 1}</span>

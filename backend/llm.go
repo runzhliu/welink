@@ -30,6 +30,8 @@ type StreamChunk struct {
 type RagMeta struct {
 	Hits      int         `json:"hits"`               // FTS 直接命中数
 	Retrieved int         `json:"retrieved"`          // 含窗口扩展后的消息数
+	Total     int         `json:"total,omitempty"`    // 检索到的总数（截断前）
+	Truncated bool        `json:"truncated,omitempty"` // 是否因 token 预算截断
 	Messages  []RagSnipet `json:"messages,omitempty"` // 命中消息片段
 }
 
