@@ -31,6 +31,7 @@ import { ContactModal } from './components/contact/ContactModal';
 import { InitializingScreen } from './components/common/InitializingScreen';
 import { WelcomePage } from './components/common/WelcomePage';
 import { AppSetupPage } from './components/common/AppSetupPage';
+import { SetupRequiredPage } from './components/common/SetupRequiredPage';
 import { SettingsPage } from './components/common/SettingsPage';
 
 // App API
@@ -281,12 +282,15 @@ function App() {
     }
   }, [backendReady]);
 
-  // 后端重启后自动重新触发索引（localStorage 有记录但后端尚未索引）
+  // 后端就绪后自动触发索引：覆盖两个场景
+  //   1. 后端重启（backendReady 翻 true）但 localStorage 记得用户已选过时间范围
+  //   2. 用户刚 setup 完真实数据目录（appInfo.ready 翻 true），但 hasStarted 已是 true，
+  //      会直接跳过 WelcomePage —— 必须由前端补一次 /api/init，否则后端永远不会开始 performAnalysis
   useEffect(() => {
-    if (backendReady && hasStarted && !isInitialized && !isIndexing && !initLoading) {
+    if (appInfo?.ready && hasStarted && !isInitialized && !isIndexing && !initLoading) {
       globalApi.init(timeRange.from, timeRange.to).then(() => startPolling()).catch(console.error);
     }
-  }, [backendReady]);
+  }, [backendReady, appInfo?.ready]);
 
   // 后端未连通时等待
   if (!backendReady) {
@@ -298,13 +302,18 @@ function App() {
     return <InitializingScreen message="正在检测配置..." />;
   }
 
-  // App 模式且未配置：显示 Setup 页面
+  // App 模式且未配置：显示 Setup 页面（可选目录 / 切 Demo）
   if (appInfo.app_mode && appInfo.needs_setup) {
     return (
       <AppSetupPage
         onSetupComplete={() => setAppInfo({ ...appInfo, needs_setup: false, ready: true })}
       />
     );
+  }
+
+  // Docker / 本地模式未就绪：展示运维引导页，持续轮询后端
+  if (!appInfo.app_mode && appInfo.needs_setup) {
+    return <SetupRequiredPage info={appInfo} onReady={(next) => setAppInfo(next)} />;
   }
 
   // 用户还没选时间范围，或主动点了「重新选择」

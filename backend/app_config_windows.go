@@ -92,6 +92,12 @@ func browseFolder(prompt string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// revealInFileManager 在资源管理器中定位文件（explorer /select,"path"）。
+func revealInFileManager(path string) error {
+	// explorer.exe 的 /select 参数不能有空格 + 引号要原样
+	return exec.Command("explorer", "/select,"+path).Start()
+}
+
 // restartApp 启动当前可执行文件的新实例，然后退出当前进程。
 func restartApp() {
 	exe, err := os.Executable()

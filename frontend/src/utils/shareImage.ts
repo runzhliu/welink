@@ -56,7 +56,7 @@ function isWebView(): boolean {
 /** 下载图片；App 模式返回保存路径，浏览器模式返回文件名 */
 async function downloadPng(dataUrl: string, filename: string): Promise<string> {
   if (isWebView()) {
-    // App 模式：通过后端写入 ~/Downloads（WebView 不支持 <a> download）
+    // App 模式：通过后端写入用户配置的下载目录（默认 ~/Downloads）
     const base64 = dataUrl.split(',')[1] ?? dataUrl;
     const res = await fetch('/api/app/save-file', {
       method: 'POST',

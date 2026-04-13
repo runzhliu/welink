@@ -1164,6 +1164,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   // App 配置状态
   const [dataDir, setDataDir] = useState('');
   const [logDir, setLogDir] = useState('');
+  const [downloadDir, setDownloadDir] = useState('');
+  const [downloadDirEffective, setDownloadDirEffective] = useState('');
   const [loadingCfg, setLoadingCfg] = useState(isAppMode);
   const [bundling, setBundling] = useState(false);
   const [bundlePath, setBundlePath] = useState<string | null>(null);
@@ -1173,7 +1175,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     assets: { name: string; size: number; url: string; mirror_url: string }[];
     error?: string;
   } | null>(null);
-  const [browsing, setBrowsing] = useState<'data' | 'log' | null>(null);
+  const [browsing, setBrowsing] = useState<'data' | 'log' | 'download' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [restarting, setRestarting] = useState(false);
@@ -1242,15 +1244,25 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       setDataDir(cfg.data_dir || '');
       setLogDir(cfg.log_dir || '');
     }).catch(() => {}).finally(() => setLoadingCfg(false));
+    // 下载目录：单独拉取（configured + effective）
+    axios.get<{ configured?: string; effective?: string }>('/api/preferences/download-dir')
+      .then(({ data }) => {
+        setDownloadDir(data.configured || '');
+        setDownloadDirEffective(data.effective || '');
+      }).catch(() => {});
   }, [isAppMode]);
 
-  const browse = useCallback(async (type: 'data' | 'log') => {
+
+  const browse = useCallback(async (type: 'data' | 'log' | 'download') => {
     setBrowsing(type);
     try {
-      const prompt = type === 'data' ? '选择解密后的微信数据库目录（decrypted/）' : '选择日志文件存放目录';
+      const prompt = type === 'data' ? '选择解密后的微信数据库目录（decrypted/）'
+                   : type === 'log'  ? '选择日志文件存放目录'
+                   :                   '选择导出图片/文件的保存目录';
       const path = await appApi.browse(prompt);
       if (type === 'data') setDataDir(path);
-      else setLogDir(path);
+      else if (type === 'log') setLogDir(path);
+      else setDownloadDir(path);
     } catch {
       // 用户取消，忽略
     } finally {
@@ -1262,6 +1274,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     setError('');
     setSubmitting(true);
     try {
+      // 下载目录不需要重启，先独立保存 + 校验；校验失败直接中止，不要带着坏配置重启
+      try {
+        await axios.put('/api/preferences/download-dir', { download_dir: downloadDir.trim() });
+      } catch (e: unknown) {
+        const anyE = e as { response?: { data?: { error?: string } } };
+        const detail = anyE?.response?.data?.error || '下载目录无效';
+        setError('下载目录保存失败：' + detail);
+        setSubmitting(false);
+        return;
+      }
       await appApi.restart(dataDir.trim(), logDir.trim());
       setRestarting(true);
     } catch (e: unknown) {
@@ -1716,7 +1738,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 </div>
 
                 {/* 日志目录 */}
-                <div>
+                <div className="mb-5">
                   <label className="block text-sm font-bold text-[#1d1d1f] dk-text mb-2 flex items-center gap-1.5">
                     <FileText size={14} className="text-gray-400" />
                     日志目录
@@ -1739,6 +1761,35 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       浏览
                     </button>
                   </div>
+                </div>
+
+                {/* 下载目录（导出图片/文件保存位置） */}
+                <div>
+                  <label className="block text-sm font-bold text-[#1d1d1f] dk-text mb-2 flex items-center gap-1.5">
+                    <FolderOpen size={14} className="text-gray-400" />
+                    导出图片保存位置
+                    <span className="text-xs text-gray-400 font-normal">（留空使用系统默认）</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={downloadDir}
+                      onChange={(e) => setDownloadDir(e.target.value)}
+                      placeholder={downloadDirEffective || '~/Downloads'}
+                      className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#07c160] bg-[#f8f9fb] font-mono dk-input"
+                    />
+                    <button
+                      onClick={() => browse('download')}
+                      disabled={browsing !== null}
+                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-white/15 disabled:opacity-50 transition-colors flex-shrink-0"
+                    >
+                      {browsing === 'download' ? <Loader2 size={14} className="animate-spin" /> : <FolderOpen size={14} />}
+                      浏览
+                    </button>
+                  </div>
+                  {downloadDirEffective && (
+                    <p className="mt-1.5 text-xs text-gray-400">实际生效：<span className="font-mono">{downloadDirEffective}</span></p>
+                  )}
                 </div>
               </div>
 
