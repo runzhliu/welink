@@ -422,7 +422,8 @@ func NewDBManager(dataDir string) (*DBManager, error) {
 
 			dbPath := filepath.Join(msgDir, file.Name())
 			// 先尝试读写模式打开（可创建优化索引，加速后续查询）
-			mdb, err := sql.Open("sqlite", dbPath)
+			// _busy_timeout=5000：遇到锁时最多等 5s 再报 SQLITE_BUSY，避免瞬时冲突
+			mdb, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)")
 			readOnly := false
 			if err != nil {
 				log.Printf("Warn: failed to open %s: %v", file.Name(), err)
@@ -458,19 +459,21 @@ func NewDBManager(dataDir string) (*DBManager, error) {
 // createOptimizationIndexes 为消息表创建性能优化索引
 func createOptimizationIndexes(db *sql.DB, dbName string) {
 	// 获取所有消息表名
-	tables, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Msg_%'")
+	rows, err := db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Msg_%'")
 	if err != nil {
 		log.Printf("Warn: failed to list tables in %s: %v", dbName, err)
 		return
 	}
-	defer tables.Close()
-
-	for tables.Next() {
-		var tableName string
-		if err := tables.Scan(&tableName); err != nil {
-			continue
+	var tableNames []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err == nil {
+			tableNames = append(tableNames, name)
 		}
+	}
+	rows.Close() // 必须先关闭读迭代器，否则下面 CREATE INDEX 会撞上 SQLITE_BUSY
 
+	for _, tableName := range tableNames {
 		// 为高频查询字段创建索引
 		// 1. create_time 索引（用于时间范围查询和排序）
 		createIndexIfNotExists(db, tableName, "create_time")

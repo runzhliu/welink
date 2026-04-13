@@ -93,6 +93,11 @@ func browseFolder(prompt string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// revealInFileManager 在 Finder 中定位文件（open -R 会打开 Finder 并选中目标）。
+func revealInFileManager(path string) error {
+	return exec.Command("open", "-R", path).Start()
+}
+
 // restartApp 启动当前可执行文件的新实例，然后退出当前进程。
 func restartApp() {
 	exe, err := os.Executable()

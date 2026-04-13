@@ -5,6 +5,7 @@ import (
 	"log"
 	"math"
 	"regexp"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -355,6 +356,16 @@ func (s *ContactService) Reinitialize(from, to int64) {
 	s.urlCollectionMu.Unlock()
 
 	go func() {
+		// panic 兜底：避免 performAnalysis 崩溃后 isInitialized 永远卡在 false，前端转圈无尽头
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[INIT] performAnalysis panic: %v\n%s", r, debug.Stack())
+				s.cacheMu.Lock()
+				s.isIndexing = false
+				s.isInitialized = true // 标记完成，让前端能进入主界面（功能会 503，但至少不卡死）
+				s.cacheMu.Unlock()
+			}
+		}()
 		log.Printf("[INIT] Reinitializing with from=%d to=%d", from, to)
 		s.performAnalysis()
 		s.cacheMu.Lock()
@@ -430,11 +441,31 @@ func (s *ContactService) performAnalysis() {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, s.params.WorkerCount)
 
+	// 进度日志：完成数 + 当前正在处理的联系人，方便卡住时定位
+	log.Printf("[INIT] performAnalysis 开始：%d 个联系人，%d 工作协程", len(contacts), s.params.WorkerCount)
+	startedAt := time.Now()
+	var done int64
+	var doneMu sync.Mutex
+
 	for i := range contacts {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done(); sem <- struct{}{}; defer func() { <-sem }()
 			c := contacts[idx]
+			contactStart := time.Now()
+			defer func() {
+				elapsed := time.Since(contactStart)
+				doneMu.Lock()
+				done++
+				cur := done
+				doneMu.Unlock()
+				// 慢联系人单独打 warn，其它每 50 个汇报一次
+				if elapsed > 10*time.Second {
+					log.Printf("[INIT] 联系人 %d/%d 处理较慢：%s 耗时 %s", cur, len(contacts), c.Username, elapsed.Round(time.Millisecond))
+				} else if cur%50 == 0 || cur == int64(len(contacts)) {
+					log.Printf("[INIT] 进度 %d/%d（已用 %s）", cur, len(contacts), time.Since(startedAt).Round(time.Second))
+				}
+			}()
 			tableName := db.GetTableName(c.Username)
 			ext := ContactStatsExtended{ContactStats: model.ContactStats{Contact: c}}
 

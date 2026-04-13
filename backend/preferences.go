@@ -2,10 +2,55 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+// resolveDownloadDir 返回当前应该写入导出文件的目录：
+//   1. 用户在设置里配置的 DownloadDir（存在且可写）
+//   2. 平台默认：$HOME/Downloads（Mac/Win）或 $XDG_DOWNLOAD_DIR（Linux）
+// 目录必须在用户 home 之下（防止前端传入 /etc 之类触发任意写）。
+func resolveDownloadDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("无法获取用户目录：%w", err)
+	}
+
+	pick := func(dir string) (string, error) {
+		abs, err := filepath.Abs(dir)
+		if err != nil {
+			return "", fmt.Errorf("解析目录失败：%w", err)
+		}
+		if !strings.HasPrefix(abs, home+string(filepath.Separator)) && abs != home {
+			return "", fmt.Errorf("下载目录必须在用户目录 %s 之下：%s", home, abs)
+		}
+		if err := os.MkdirAll(abs, 0o755); err != nil {
+			return "", fmt.Errorf("创建目录失败：%w", err)
+		}
+		// 写权限探测
+		probe := filepath.Join(abs, ".welink_write_probe")
+		if f, err := os.Create(probe); err != nil {
+			return "", fmt.Errorf("目录不可写：%s（%v）", abs, err)
+		} else {
+			f.Close()
+			os.Remove(probe)
+		}
+		return abs, nil
+	}
+
+	p := loadPreferences()
+	if strings.TrimSpace(p.DownloadDir) != "" {
+		return pick(p.DownloadDir)
+	}
+	// 平台默认
+	if xdg := os.Getenv("XDG_DOWNLOAD_DIR"); xdg != "" {
+		return pick(xdg)
+	}
+	return pick(filepath.Join(home, "Downloads"))
+}
 
 // migrateConfigYAML 一次性迁移：仅 App 模式下，如果 config.yaml 存在，打印警告提示迁移。
 // Docker 模式下 config.yaml 仍然被正常使用，不打印迁移提示。
@@ -34,9 +79,10 @@ type LLMProfile struct {
 // Docker/CLI 模式存储路径由环境变量 PREFERENCES_PATH 指定，默认为工作目录的 preferences.json。
 type Preferences struct {
 	// App 模式专用
-	DataDir  string `json:"data_dir,omitempty"`
-	LogDir   string `json:"log_dir,omitempty"`
-	DemoMode bool   `json:"demo_mode,omitempty"`
+	DataDir     string `json:"data_dir,omitempty"`
+	LogDir      string `json:"log_dir,omitempty"`
+	DownloadDir string `json:"download_dir,omitempty"` // 导出图片/文件的保存目录；留空 = 平台默认（~/Downloads）
+	DemoMode    bool   `json:"demo_mode,omitempty"`
 
 	// 服务器配置（修改后需重启）
 	Port    string `json:"port,omitempty"`     // 默认 8080，环境变量 PORT 覆盖

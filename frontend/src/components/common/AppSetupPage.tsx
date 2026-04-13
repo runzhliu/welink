@@ -17,6 +17,7 @@ export const AppSetupPage: React.FC<Props> = ({ onSetupComplete }) => {
   const [browsing, setBrowsing] = useState<'data' | 'log' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   const browse = async (type: 'data' | 'log') => {
     setBrowsing(type);
@@ -34,17 +35,23 @@ export const AppSetupPage: React.FC<Props> = ({ onSetupComplete }) => {
 
   const handleSubmit = async () => {
     setError('');
+    setWarnings([]);
     setSubmitting(true);
     try {
       const result = await appApi.setup(dataDir.trim(), logDir.trim());
       if (result.error) {
         setError(result.error);
+      } else if (result.warnings && result.warnings.length > 0) {
+        // 有警告（如部分库只读）：先展示给用户确认，不直接跳转
+        setWarnings(result.warnings);
       } else {
         onSetupComplete();
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError('配置失败：' + msg);
+      // axios 错误：尝试取出后端返回的具体原因
+      const anyE = e as { response?: { data?: { error?: string } }; message?: string };
+      const detail = anyE?.response?.data?.error || anyE?.message || String(e);
+      setError(detail);
     } finally {
       setSubmitting(false);
     }
@@ -149,14 +156,40 @@ export const AppSetupPage: React.FC<Props> = ({ onSetupComplete }) => {
         {error && (
           <div className="mb-4 flex items-start gap-2 bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
             <AlertCircle size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-700">{error}</p>
+            <p className="text-sm text-red-700 whitespace-pre-line">{error}</p>
+          </div>
+        )}
+
+        {/* 警告（非致命，如只读盘）：让用户选择继续还是换目录 */}
+        {warnings.length > 0 && (
+          <div className="mb-4 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+            <div className="flex items-start gap-2 mb-3">
+              <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-800 space-y-1">
+                {warnings.map((w, i) => (<p key={i} className="whitespace-pre-line">{w}</p>))}
+              </div>
+            </div>
+            <div className="flex gap-2 ml-6">
+              <button
+                onClick={onSetupComplete}
+                className="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600"
+              >
+                我知道，继续
+              </button>
+              <button
+                onClick={() => { setWarnings([]); setDataDir(''); }}
+                className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-700 text-xs font-semibold hover:bg-amber-100"
+              >
+                重新选目录
+              </button>
+            </div>
           </div>
         )}
 
         {/* 开始按钮 */}
         <button
           onClick={handleSubmit}
-          disabled={submitting}
+          disabled={submitting || warnings.length > 0}
           className="w-full bg-[#07c160] hover:bg-[#06ad56] disabled:opacity-50 text-white font-black text-base py-4 rounded-2xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-green-200"
         >
           {submitting ? (
