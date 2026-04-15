@@ -93,6 +93,18 @@ html.dark .feat-card p { color: #999; }
 </div>
 </details>
 
+<details>
+<summary style="font-size:16px;font-weight:800;cursor:pointer;padding:8px 0;color:#07c160;">⚡ 使用技巧 <a href="/ux" style="font-size:12px;font-weight:500;color:#07c160;text-decoration:underline;margin-left:8px;">完整说明 →</a></summary>
+<div class="feat-grid">
+<div class="feat-card"><div class="icon">⌨️</div><h4>命令面板（⌘K）</h4><p>任意页面按 ⌘K 搜索联系人、群聊、AI 对话历史，触发备份 / 诊断 / 刷新索引等动作。空查询展示最近打开。</p></div>
+<div class="feat-card"><div class="icon">🔢</div><h4>⌘1..⌘9 Tab 快捷键</h4><p>一键跳转到任意主 Tab：⌘1 首页 · ⌘2 统计 · ⌘3 联系人 · ⌘4 群聊 · ⌘5 搜索 · ⌘6 时间线 · ⌘7 日历 · ⌘8 Skills · ⌘9 设置。</p></div>
+<div class="feat-card"><div class="icon">🩺</div><h4>一键诊断</h4><p>设置页 → 诊断：数据目录健康 / 索引状态 / LLM 探活 / 磁盘占用。右上角可复制为 Markdown 直接贴 issue。</p></div>
+<div class="feat-card"><div class="icon">💾</div><h4>AI 数据备份 / 恢复</h4><p>Skills、聊天历史、记忆一键导出为 .db 快照（VACUUM INTO，自洽无损）。换机 / 重装前先备份，不会丢 AI 工作。</p></div>
+<div class="feat-card"><div class="icon">👥</div><h4>多账号快速切换</h4><p>把多个 decrypted/ 目录作为 profile 保存，下拉切换即热替换，无需重启。</p></div>
+<div class="feat-card"><div class="icon">📊</div><h4>真实索引进度</h4><p>初始化屏幕显示真实进度条 + ETA + 当前处理联系人；支持中途取消。</p></div>
+</div>
+</details>
+
 </div>
 
 <div class="vp-doc" style="max-width:900px;margin:0 auto;padding:48px 24px;">
