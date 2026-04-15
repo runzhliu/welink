@@ -79,7 +79,18 @@ func swaggerSpec() []byte {
                   "properties": {
                     "is_indexing":    { "type": "boolean" },
                     "is_initialized": { "type": "boolean" },
-                    "total_cached":   { "type": "integer" }
+                    "total_cached":   { "type": "integer" },
+                    "last_error":     { "type": "string", "description": "最近一次索引失败原因（cancelled / panic: ...）" },
+                    "progress": {
+                      "type": "object",
+                      "description": "仅索引中存在",
+                      "properties": {
+                        "done":            { "type": "integer" },
+                        "total":           { "type": "integer" },
+                        "current_contact": { "type": "string" },
+                        "elapsed_ms":      { "type": "integer" }
+                      }
+                    }
                   }
                 }
               }
@@ -114,7 +125,7 @@ func swaggerSpec() []byte {
       "get": {
         "tags": ["应用管理"],
         "summary": "获取应用信息",
-        "description": "返回当前运行模式（App/Docker）、是否需要初始化配置、服务层是否就绪、版本号。",
+        "description": "返回当前运行模式、配置状态、数据目录、探测过的候选路径等；App/Docker 共用。",
         "responses": {
           "200": {
             "description": "应用信息",
@@ -123,16 +134,140 @@ func swaggerSpec() []byte {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "app_mode":    { "type": "boolean", "description": "是否为桌面 App 模式" },
-                    "needs_setup": { "type": "boolean", "description": "App 模式下是否尚未配置数据目录" },
-                    "ready":       { "type": "boolean", "description": "服务层是否就绪" },
-                    "version":     { "type": "string",  "example": "0.0.2", "description": "应用版本号" }
+                    "app_mode":     { "type": "boolean", "description": "是否为桌面 App 模式" },
+                    "needs_setup":  { "type": "boolean", "description": "是否尚未配置或服务未就绪" },
+                    "ready":        { "type": "boolean", "description": "服务层是否就绪" },
+                    "version":      { "type": "string",  "example": "0.1.1", "description": "应用版本号" },
+                    "platform":     { "type": "string",  "example": "darwin", "description": "runtime.GOOS" },
+                    "data_dir":     { "type": "string",  "description": "当前配置的数据目录" },
+                    "reason":       { "type": "string",  "description": "最近一次 reinit 失败原因" },
+                    "probed_paths": { "type": "array", "items": { "type": "string" }, "description": "启动时探测过的候选目录" },
+                    "can_demo":     { "type": "boolean", "description": "是否支持一键切到 demo（当前仅桌面版）" }
                   }
                 }
               }
             }
           }
         }
+      }
+    },
+    "/cancel-index": {
+      "post": {
+        "tags": ["初始化"],
+        "summary": "取消正在进行的索引",
+        "description": "中止当前的 performAnalysis goroutine（通过 context cancel）。非索引状态下调用是 no-op。",
+        "responses": {
+          "200": { "description": "已发出取消信号", "content": { "application/json": { "schema": { "type": "object", "properties": { "cancelled": { "type": "boolean" } } } } } }
+        }
+      }
+    },
+    "/diagnostics": {
+      "get": {
+        "tags": ["应用管理"],
+        "summary": "诊断：数据目录 / 索引 / LLM / 磁盘",
+        "description": "聚合检查数据目录健康、索引状态、LLM 探活（OpenAI 兼容端点 GET /models，5s 超时）、磁盘占用。整个请求上限约 6s。",
+        "responses": {
+          "200": {
+            "description": "诊断结果",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "properties": {
+                "generated_at": { "type": "string", "format": "date-time" },
+                "data_dir":     { "type": "object" },
+                "index":        { "type": "object" },
+                "llm_profiles": { "type": "array", "items": { "type": "object" } },
+                "disk":         { "type": "object" }
+              }
+            } } }
+          }
+        }
+      }
+    },
+    "/preferences/download-dir": {
+      "get": {
+        "tags": ["偏好设置"],
+        "summary": "读取导出图片保存目录",
+        "description": "返回用户配置值 (configured) 和实际生效值 (effective，含平台默认 fallback)。",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "put": {
+        "tags": ["偏好设置"],
+        "summary": "设置导出图片保存目录",
+        "description": "必须在 UserHomeDir 下且可写；校验失败自动回滚。空串 = 恢复平台默认。",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "properties": { "download_dir": { "type": "string" } } } } }
+        },
+        "responses": { "200": { "description": "OK" }, "400": { "description": "目录无效或不可写" } }
+      }
+    },
+    "/app/reveal": {
+      "post": {
+        "tags": ["应用管理"],
+        "summary": "在 Finder / Explorer 中定位文件（App 模式）",
+        "description": "macOS 调 open -R；Windows 调 explorer /select。路径必须在下载目录之下，防止任意读。",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "path": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "OK" }, "400": { "description": "路径不在下载目录下" } }
+      }
+    },
+    "/app/ai-backup": {
+      "post": {
+        "tags": ["应用管理"],
+        "summary": "AI 数据备份到下载目录（App 模式）",
+        "description": "用 SQLite VACUUM INTO 写自洽快照到下载目录，返回路径供前端展示 + reveal。",
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "path": { "type": "string" }, "size": { "type": "integer" } } } } } } }
+      }
+    },
+    "/ai-backup-download": {
+      "get": {
+        "tags": ["应用管理"],
+        "summary": "AI 数据流式下载（Docker / 浏览器）",
+        "description": "用 VACUUM INTO 写临时快照后 stream，避免 stream 中途数据库被改。Content-Disposition: attachment。",
+        "responses": { "200": { "description": "SQLite 文件流", "content": { "application/octet-stream": {} } } }
+      }
+    },
+    "/app/ai-restore": {
+      "post": {
+        "tags": ["应用管理"],
+        "summary": "从备份恢复 AI 数据",
+        "description": "multipart 上传 .db → sanity check (sqlite + 含预期表) → 旧文件 rename 为 .bak → 替换 → InitAIDB 重新打开。",
+        "requestBody": { "required": true, "content": { "multipart/form-data": { "schema": { "type": "object", "properties": { "file": { "type": "string", "format": "binary" } } } } } },
+        "responses": { "200": { "description": "OK" }, "400": { "description": "文件不是有效备份" } }
+      }
+    },
+    "/app/data-profiles": {
+      "get": {
+        "tags": ["应用管理"],
+        "summary": "列出所有数据目录 profile",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "put": {
+        "tags": ["应用管理"],
+        "summary": "批量保存数据目录 profile 列表",
+        "description": "覆盖式保存；id 为空的 profile 会自动分配。",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "profiles": { "type": "array", "items": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "path": { "type": "string" } } } } } } } } },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/app/switch-profile": {
+      "post": {
+        "tags": ["应用管理"],
+        "summary": "热切换激活的数据目录",
+        "description": "走预校验 + reinitSvc 热替换，无需重启进程。前端应清掉 hasStarted 并 reload。",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "id": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "OK" }, "400": { "description": "profile 无效或校验失败" } }
+      }
+    },
+    "/ai/conversations/search": {
+      "get": {
+        "tags": ["AI"],
+        "summary": "AI 对话全局子串搜索",
+        "description": "在所有 ai_conversations 的 JSON 消息体里做 LIKE 搜索，返回 ~40 字前后上下文片段。",
+        "parameters": [
+          { "name": "q",     "in": "query", "required": true,  "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "default": 30, "maximum": 100 } }
+        ],
+        "responses": { "200": { "description": "匹配结果", "content": { "application/json": { "schema": { "type": "object", "properties": { "hits": { "type": "array", "items": { "type": "object" } } } } } } } }
       }
     },
     "/app/config": {

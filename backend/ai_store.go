@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -206,6 +207,117 @@ func ListAIConversations(prefix string) ([]ConversationEntry, error) {
 		})
 	}
 	return list, nil
+}
+
+// AIConvSearchHit 是 SearchAIConversations 返回的单条匹配。
+// Snippets 是从消息正文里裁出的上下文片段（带匹配词前后各 ~40 字符），最多 3 条。
+type AIConvSearchHit struct {
+	Key       string   `json:"key"`
+	UpdatedAt int64    `json:"updated_at"`
+	MsgCount  int      `json:"msg_count"`
+	Preview   string   `json:"preview"`
+	Snippets  []string `json:"snippets"`
+}
+
+// SearchAIConversations 在所有 ai_conversations 的 JSON 消息体里做子串搜索。
+// 数据量小（每联系人至多一条），LIKE 已经够用，省去维护 FTS5 的复杂度。
+func SearchAIConversations(query string, limit int) ([]AIConvSearchHit, error) {
+	aiDBMu.Lock()
+	defer aiDBMu.Unlock()
+	if aiDB == nil {
+		return nil, fmt.Errorf("ai_store: database not initialized")
+	}
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return []AIConvSearchHit{}, nil
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 30
+	}
+	// LIKE 转义：% 和 _ 是 SQL 通配符
+	esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(q)
+	pattern := "%" + esc + "%"
+	rows, err := aiDB.Query(`
+		SELECT key, messages, updated_at FROM ai_conversations
+		WHERE messages LIKE ? ESCAPE '\'
+		ORDER BY updated_at DESC
+		LIMIT ?`, pattern, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	qLower := strings.ToLower(q)
+	results := make([]AIConvSearchHit, 0)
+	for rows.Next() {
+		var key, raw string
+		var updatedAt int64
+		if err := rows.Scan(&key, &raw, &updatedAt); err != nil {
+			continue
+		}
+		var msgs []AIMessage
+		_ = json.Unmarshal([]byte(raw), &msgs)
+
+		// 从每条消息里裁 3 条命中的片段
+		var snippets []string
+		var preview string
+		for _, m := range msgs {
+			if m.Content == "" {
+				continue
+			}
+			if preview == "" && m.Role == "user" {
+				runes := []rune(m.Content)
+				if len(runes) > 50 {
+					preview = string(runes[:50]) + "…"
+				} else {
+					preview = m.Content
+				}
+			}
+			lower := strings.ToLower(m.Content)
+			idx := strings.Index(lower, qLower)
+			if idx < 0 {
+				continue
+			}
+			// 按 rune 裁上下文（不按 byte，中文友好）
+			runes := []rune(m.Content)
+			qLen := len([]rune(q))
+			// 把 byte idx 转成 rune idx（strings.Index 返回 byte 偏移）
+			runeStart := len([]rune(m.Content[:idx]))
+			from := runeStart - 40
+			to := runeStart + qLen + 40
+			if from < 0 {
+				from = 0
+			}
+			if to > len(runes) {
+				to = len(runes)
+			}
+			snippet := string(runes[from:to])
+			if from > 0 {
+				snippet = "…" + snippet
+			}
+			if to < len(runes) {
+				snippet += "…"
+			}
+			snippets = append(snippets, snippet)
+			if len(snippets) >= 3 {
+				break
+			}
+		}
+		if len(snippets) == 0 {
+			// LIKE 命中了但循环里没挑到，可能是 key 或别的字段命中；回落到第一条消息
+			if len(msgs) > 0 {
+				snippets = append(snippets, msgs[0].Content)
+			}
+		}
+		results = append(results, AIConvSearchHit{
+			Key:       key,
+			UpdatedAt: updatedAt,
+			MsgCount:  len(msgs),
+			Preview:   preview,
+			Snippets:  snippets,
+		})
+	}
+	return results, nil
 }
 
 // DeleteAIConversation 删除指定 key 的记录。

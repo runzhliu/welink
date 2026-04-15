@@ -32,6 +32,7 @@ import { InitializingScreen } from './components/common/InitializingScreen';
 import { WelcomePage } from './components/common/WelcomePage';
 import { AppSetupPage } from './components/common/AppSetupPage';
 import { SetupRequiredPage } from './components/common/SetupRequiredPage';
+import { CommandPalette } from './components/common/CommandPalette';
 import { SettingsPage } from './components/common/SettingsPage';
 
 // App API
@@ -126,6 +127,19 @@ function App() {
   const [hasStarted, setHasStarted] = useState(() => {
     return localStorage.getItem('welink_hasStarted') === 'true';
   });
+
+  // Cmd+K 命令面板
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen(p => !p);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
 
   // App 模式检测
@@ -414,6 +428,17 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Cmd+K 命令面板 */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        contacts={allContacts}
+        groups={allGroups}
+        onContactClick={setSelectedContact}
+        onGroupClick={setSelectedGroup}
+        onTabChange={setActiveTab}
+      />
 
       {/* Contact Detail Modal */}
       <ContactModal

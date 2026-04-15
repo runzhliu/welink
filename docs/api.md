@@ -44,13 +44,36 @@
 
 ### `GET /api/status`
 
-查询索引进度。
+查询索引进度。索引中会返回 `progress` 字段，完成后省略。
 
 **响应**
 
 ```json
-{ "is_indexing": false, "is_initialized": true, "total_cached": 312 }
+{
+  "is_indexing": true,
+  "is_initialized": false,
+  "total_cached": 0,
+  "last_error": "",
+  "progress": {
+    "done": 42,
+    "total": 312,
+    "current_contact": "wxid_xxx",
+    "elapsed_ms": 7823
+  }
+}
 ```
+
+### `POST /api/cancel-index`
+
+中止当前正在进行的索引（通过 context cancel）。非索引状态下是 no-op。
+
+```json
+{ "cancelled": true }
+```
+
+### `GET /api/diagnostics`
+
+一键诊断：数据目录健康、索引状态、LLM 探活（OpenAI 兼容端点 `GET /models`，5s 超时）、磁盘占用。整体耗时上限约 6s。每段带 `status: "ok" / "warn" / "error" / "skipped"`。
 
 ### `GET /api/health`
 
@@ -352,6 +375,24 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 
 删除指定的 AI 对话历史。
 
+### `GET /api/ai/conversations/search?q=关键词&limit=30`
+
+在所有 AI 对话里做子串搜索（LIKE），返回命中的对话及前后 ~40 字符上下文片段。`limit` 默认 30，最大 100。
+
+```json
+{
+  "hits": [
+    {
+      "key": "contact:wxid_xxx",
+      "updated_at": 1710000000,
+      "msg_count": 14,
+      "preview": "…",
+      "snippets": ["…找到匹配词前后的上下文…"]
+    }
+  ]
+}
+```
+
 
 ## 用户偏好
 
@@ -370,6 +411,14 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 ### `PUT /api/preferences/anniversaries`
 
 保存自定义纪念日。
+
+### `GET /api/preferences/download-dir`
+
+获取导出图片 / AI 备份的保存目录。返回用户配置值（`configured`）和实际生效值（`effective`，含平台默认 fallback）。
+
+### `PUT /api/preferences/download-dir`
+
+设置导出目录。必须在 `UserHomeDir` 之下且可写；校验失败自动回滚到上一个有效值。空串 = 恢复平台默认（`~/Downloads`）。
 
 
 ## Gemini OAuth
@@ -440,7 +489,50 @@ OAuth 回调处理（交换 token）。
 
 ### `POST /api/app/save-file`
 
-保存文件到 `~/Downloads`（WebView 模式下替代浏览器下载）。
+保存文件到用户配置的下载目录（默认 `~/Downloads`，可在 Settings 修改；WebView 模式下替代浏览器下载）。
+
+### `POST /api/app/reveal`
+
+在 macOS Finder / Windows 资源管理器中定位文件。`path` 必须在下载目录之下，防止任意读。
+
+```json
+{ "path": "/Users/xxx/Downloads/image.png" }
+```
+
+### `POST /api/app/ai-backup`
+
+用 SQLite `VACUUM INTO` 生成 `ai_analysis.db` 的一致快照，写入下载目录。返回 `{ path, size }` 供前端展示 + reveal。
+
+### `GET /api/ai-backup-download`
+
+Docker / 浏览器模式下使用：同样 `VACUUM INTO` 临时文件后 stream（`Content-Disposition: attachment`）。
+
+### `POST /api/app/ai-restore`
+
+multipart 上传 `.db` 文件恢复 AI 数据。流程：写入临时文件 → sanity check（sqlite + 包含 `skills` / `mem_facts` / `chat_history` 任一表）→ 原文件 rename 为 `.bak` → 替换 → `InitAIDB` 重新打开。
+
+### `GET /api/app/data-profiles`
+
+列出所有已保存的数据目录 profile（多账号切换）。
+
+```json
+{
+  "profiles": [{ "id": "p1710...", "name": "主号", "path": "/path/to/decrypted", "last_indexed_at": 0 }],
+  "active_dir": "/path/to/decrypted"
+}
+```
+
+### `PUT /api/app/data-profiles`
+
+批量保存 profile 列表（覆盖式）。`id` 为空的新条目会自动分配 `p<unixNano>`。
+
+### `POST /api/app/switch-profile`
+
+热切换激活的数据目录。调用 `validateDataDir` 预检 → `reinitSvc` 替换服务层 → 保存 `prefs.data_dir`。**无需重启进程**，但前端需要清掉 `localStorage.welink_hasStarted` 后刷新页面。
+
+```json
+{ "id": "p1710000000000" }
+```
 
 ### `POST /api/app/frontend-log`
 
