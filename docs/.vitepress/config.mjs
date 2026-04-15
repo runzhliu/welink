@@ -50,6 +50,7 @@ export default defineConfig({
         items: [
           { text: '产品概览', link: '/' },
           { text: '下载与安装', link: '/install' },
+          { text: '使用技巧', link: '/ux' },
           { text: '开发与构建', link: '/development' },
         ],
       },

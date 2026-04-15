@@ -19,6 +19,7 @@ import { appApi } from '../../services/appApi';
 import type { ContactStats, GroupInfo } from '../../types';
 import { useToast } from './Toast';
 import { RelativeTime } from './RelativeTime';
+import { FeedbackModal } from './FeedbackModal';
 
 // ─── 隐私屏蔽子组件 ───────────────────────────────────────────────────────────
 
@@ -1244,6 +1245,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   };
   const [diagRunning, setDiagRunning] = useState(false);
   const [diag, setDiag] = useState<DiagResult | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const runDiag = async () => {
     setDiagRunning(true);
     try {
@@ -2014,8 +2016,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         <div className="flex items-center gap-2 mb-3">
           <Stethoscope size={18} className="text-[#07c160]" />
           <h3 className="text-base font-bold text-[#1d1d1f] dk-text">诊断</h3>
+          <button
+            onClick={() => setFeedbackOpen(true)}
+            data-feedback-open
+            className="ml-auto text-xs text-[#07c160] hover:underline flex items-center gap-1"
+            title="带上诊断报告一起反馈问题"
+          >
+            反馈问题 →
+          </button>
         </div>
-        <p className="text-sm text-gray-400 mb-4">一键检查数据目录、索引状态、LLM 配置和磁盘占用</p>
+        <p className="text-sm text-gray-400 mb-4">一键检查数据目录、索引状态、LLM 配置和磁盘占用；遇到问题可把诊断结果附到反馈</p>
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 dk-card dk-border">
           <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
             <span className="text-sm text-gray-500">
@@ -2361,6 +2371,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           )}
         </div>
       </section>
+
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} appVersion={appVersion} />
     </div>
   );
 };

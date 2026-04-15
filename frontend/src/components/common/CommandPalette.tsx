@@ -270,6 +270,14 @@ export const CommandPalette: React.FC<Props> = ({
         fn: () => onToggleDark() },
       { label: '打开 Skills', keys: ['skills'], icon: <Database size={14} className="text-gray-400" />,
         fn: () => onTabChange('skills') },
+      { label: '反馈问题 / 发送建议', keys: ['feedback', '反馈', '问题', 'issue', 'bug'],
+        icon: <Hash size={14} className="text-gray-400" />,
+        fn: () => {
+          onTabChange('settings');
+          setTimeout(() => {
+            document.querySelector<HTMLButtonElement>('[data-feedback-open]')?.click();
+          }, 300);
+        } },
     ];
     for (const a of actions) {
       if (lower && !a.keys.some(k => k.toLowerCase().includes(lower)) && !a.label.toLowerCase().includes(lower)) continue;
