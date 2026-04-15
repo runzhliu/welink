@@ -583,6 +583,7 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 			}
 			if ext.TotalMessages > 0 {
 				ext.FirstMessage = s.formatTime(globalFirstTs); ext.LastMessage = s.formatTime(globalLastTs)
+				ext.FirstMessageTs = globalFirstTs; ext.LastMessageTs = globalLastTs
 				for m, cnt := range monthly {
 					if int64(cnt) > ext.PeakMonthly { ext.PeakMonthly = int64(cnt); ext.PeakPeriod = m }
 				}
@@ -759,6 +760,7 @@ func (s *ContactService) AnalyzeWithFilter(from, to int64) *FilteredStats {
 			}
 			if ext.TotalMessages > 0 {
 				ext.FirstMessage = s.formatTime(globalFirstTs); ext.LastMessage = s.formatTime(globalLastTs)
+				ext.FirstMessageTs = globalFirstTs; ext.LastMessageTs = globalLastTs
 				ext.TypePct = make(map[string]float64)
 				ext.TypeCnt = make(map[string]int)
 				for k, v := range typeCounts {
@@ -2420,8 +2422,10 @@ type GroupInfo struct {
 	SmallHeadURL  string `json:"small_head_url"`
 	TotalMessages int64  `json:"total_messages"`
 	MemberCount   int    `json:"member_count"`
-	FirstMessage  string `json:"first_message_time"`
-	LastMessage   string `json:"last_message_time"`
+	FirstMessage   string `json:"first_message_time"`
+	LastMessage    string `json:"last_message_time"`
+	FirstMessageTs int64  `json:"first_message_ts,omitempty"`
+	LastMessageTs  int64  `json:"last_message_ts,omitempty"`
 }
 
 type MemberStat struct {
@@ -2430,6 +2434,8 @@ type MemberStat struct {
 	Count            int64  `json:"count"`
 	LastMessageTime  string `json:"last_message_time,omitempty"`  // "2024-03-15 14:23"
 	FirstMessageTime string `json:"first_message_time,omitempty"` // 首次发言时间（近似加群时间）
+	LastMessageTs    int64  `json:"last_message_ts,omitempty"`    // Unix 秒
+	FirstMessageTs   int64  `json:"first_message_ts,omitempty"`
 }
 
 type GroupDetail struct {
@@ -2542,6 +2548,7 @@ func (s *ContactService) loadGroups() []GroupInfo {
 				Username: g.uname, Name: name, SmallHeadURL: g.avatar,
 				TotalMessages: total, MemberCount: realMemberCount,
 				FirstMessage: s.formatTime(firstTs), LastMessage: s.formatTime(lastTs),
+				FirstMessageTs: firstTs, LastMessageTs: lastTs,
 			})
 			mu.Unlock()
 		}(g)
@@ -2742,6 +2749,8 @@ func (s *ContactService) computeGroupDetail(username string) {
 			Count:            cnt,
 			LastMessageTime:  lastTime,
 			FirstMessageTime: firstTime,
+			LastMessageTs:    memberLastTs[wxid],
+			FirstMessageTs:   memberFirstTs[wxid],
 		})
 	}
 	sort.Slice(detail.MemberRank, func(i, j int) bool { return detail.MemberRank[i].Count > detail.MemberRank[j].Count })

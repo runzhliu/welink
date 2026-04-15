@@ -21,6 +21,8 @@ export interface ContactStats extends Contact {
   my_chars?: number;
   first_message_time: string;
   last_message_time: string;
+  first_message_ts?: number;  // Unix 秒，RelativeTime 显示用
+  last_message_ts?: number;
   first_msg?: string;
   type_pct?: Record<string, number>;
   type_cnt?: Record<string, number>;
@@ -321,6 +323,8 @@ export interface GroupInfo {
   member_count: number;
   first_message_time?: string;
   last_message_time: string;
+  first_message_ts?: number;
+  last_message_ts?: number;
 }
 
 export interface MemberStat {
@@ -329,6 +333,8 @@ export interface MemberStat {
   count: number;
   last_message_time?: string;
   first_message_time?: string;
+  last_message_ts?: number;
+  first_message_ts?: number;
 }
 
 export interface GroupDetail {

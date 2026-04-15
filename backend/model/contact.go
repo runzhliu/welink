@@ -20,4 +20,7 @@ type ContactStats struct {
 	MyChars        int64  `json:"my_chars"`
 	FirstMessage   string `json:"first_message_time"`
 	LastMessage    string `json:"last_message_time"`
+	// Unix 秒时间戳版本，前端做相对时间显示用；0 表示没有消息或未知
+	FirstMessageTs int64  `json:"first_message_ts,omitempty"`
+	LastMessageTs  int64  `json:"last_message_ts,omitempty"`
 }
