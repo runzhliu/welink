@@ -7,6 +7,7 @@ import { X, Loader2 } from 'lucide-react';
 import type { GroupChatMessage } from '../../types';
 import { groupsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { useEscape } from '../../hooks/useEscape';
 
 interface GroupDayChatPanelProps {
   username: string;
@@ -34,6 +35,8 @@ export const GroupDayChatPanel: React.FC<GroupDayChatPanelProps> = ({
   const [messages, setMessages] = useState<GroupChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const topRef = useRef<HTMLDivElement>(null);
+
+  useEscape(true, onClose);
 
   useEffect(() => {
     setLoading(true);

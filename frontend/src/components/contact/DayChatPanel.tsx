@@ -7,6 +7,7 @@ import { X, Loader2 } from 'lucide-react';
 import type { ChatMessage } from '../../types';
 import { contactsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { useEscape } from '../../hooks/useEscape';
 
 interface DayChatPanelProps {
   username: string;
@@ -23,6 +24,8 @@ export const DayChatPanel: React.FC<DayChatPanelProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const topRef = useRef<HTMLDivElement>(null);
+
+  useEscape(true, onClose);
 
   useEffect(() => {
     setLoading(true);

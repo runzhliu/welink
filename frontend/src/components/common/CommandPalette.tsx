@@ -18,6 +18,7 @@ import { appApi } from '../../services/appApi';
 import { emitToast } from './Toast';
 import { canReveal } from '../../utils/reveal';
 import { buildPinyinIndex, matchPinyin } from '../../utils/pinyin';
+import { useEscape } from '../../hooks/useEscape';
 
 interface Props {
   open: boolean;
@@ -84,6 +85,8 @@ export const CommandPalette: React.FC<Props> = ({
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEscape(open, onClose);
 
   // 打开时自动 focus + 读最近记录
   useEffect(() => {
@@ -305,25 +308,22 @@ export const CommandPalette: React.FC<Props> = ({
     setActiveIdx(0);
   }, [q, aiHits.length]);
 
-  // 键盘导航
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setActiveIdx(i => Math.min(items.length - 1, i + 1));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setActiveIdx(i => Math.max(0, i - 1));
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        items[activeIdx]?.onSelect();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, items, activeIdx, onClose]);
+  // 键盘导航：直接挂在 input 的 onKeyDown（输入框有焦点时 100% 可靠），
+  // 不依赖 window listener —— 之前 items 每次按键都变，effect 频繁重挂，
+  // 理论上不会丢事件，但实测确实有 Docker / App 模式下丢失 Escape 的情况。
+  const handleInputKey: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIdx(i => Math.min(items.length - 1, i + 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIdx(i => Math.max(0, i - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      items[activeIdx]?.onSelect();
+    }
+  };
 
   // 让选中项始终可见
   useEffect(() => {
@@ -337,6 +337,8 @@ export const CommandPalette: React.FC<Props> = ({
     <div
       className="fixed inset-0 z-[200] bg-black/30 flex items-start justify-center pt-[12vh]"
       onClick={onClose}
+      onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } }}
+      tabIndex={-1}
     >
       <div
         className="w-full max-w-xl bg-white dark:bg-[#1d1d1f] rounded-2xl shadow-2xl overflow-hidden dk-border border border-gray-100"
@@ -348,6 +350,7 @@ export const CommandPalette: React.FC<Props> = ({
             ref={inputRef}
             value={q}
             onChange={e => setQ(e.target.value)}
+            onKeyDown={handleInputKey}
             placeholder="搜索联系人 / 群聊 / AI 对话，输入命令跳转…"
             className="flex-1 bg-transparent outline-none text-sm text-[#1d1d1f] dk-text placeholder:text-gray-400"
           />
