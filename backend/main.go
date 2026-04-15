@@ -1037,6 +1037,23 @@ func serverMain() {
 		c.JSON(http.StatusOK, gin.H{"messages": msgs})
 	})
 
+	// GET /api/ai/conversations/search?q=xxx&limit=30 — 在所有 AI 对话里做子串搜索
+	api.GET("/ai/conversations/search", func(c *gin.Context) {
+		q := c.Query("q")
+		limit := 30
+		if l := c.Query("limit"); l != "" {
+			if v, err := strconv.Atoi(l); err == nil {
+				limit = v
+			}
+		}
+		hits, err := SearchAIConversations(q, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"hits": hits})
+	})
+
 	// PUT /api/ai/conversations  body: {key, messages}
 	api.PUT("/ai/conversations", func(c *gin.Context) {
 		var body struct {
