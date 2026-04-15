@@ -8,6 +8,7 @@ import type { ChatMessage, GroupChatMessage } from '../../types';
 import { contactsApi, groupsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { exportDayMessagesCsv, exportDayMessagesTxt, parseExportResult } from '../../utils/exportChat';
+import { useEscape } from '../../hooks/useEscape';
 
 export interface SearchContextTarget {
   username: string;
@@ -52,6 +53,8 @@ export const SearchContextModal: React.FC<Props> = ({
   const [loading, setLoading] = useState(true);
   const [exportMsg, setExportMsg] = useState<{ ok: boolean; message: string } | null>(null);
   const [showExportPanel, setShowExportPanel] = useState(false);
+
+  useEscape(true, onClose);
   const exportPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

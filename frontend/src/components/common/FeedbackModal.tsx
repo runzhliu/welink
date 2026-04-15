@@ -12,6 +12,7 @@ import axios from 'axios';
 import { X, Bug, Github, Copy, Download, Loader2, CheckCircle2 } from 'lucide-react';
 import { useToast } from './Toast';
 import { canReveal } from '../../utils/reveal';
+import { useEscape } from '../../hooks/useEscape';
 
 interface Props {
   open: boolean;
@@ -72,6 +73,8 @@ export const FeedbackModal: React.FC<Props> = ({ open, onClose, appVersion }) =>
   const [diag, setDiag] = useState<DiagResult | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  useEscape(open, onClose);
 
   // 打开时拉一次诊断（失败不阻塞）
   useEffect(() => {
@@ -176,7 +179,12 @@ export const FeedbackModal: React.FC<Props> = ({ open, onClose, appVersion }) =>
   const tooLong = urlLen > GITHUB_URL_BUDGET;
 
   return (
-    <div className="fixed inset-0 z-[250] bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[250] bg-black/40 flex items-center justify-center p-4"
+      onClick={onClose}
+      onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } }}
+      tabIndex={-1}
+    >
       <div
         className="w-full max-w-2xl max-h-[85vh] bg-white dark:bg-[#1d1d1f] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
