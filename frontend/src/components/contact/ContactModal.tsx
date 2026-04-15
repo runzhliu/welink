@@ -298,9 +298,8 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
           <div className="flex flex-col items-center justify-center gap-3" style={{ minHeight: 400 }}>
             <Loader2 size={28} className="animate-spin text-[#07c160]" />
             <div className="text-sm font-bold text-[#1d1d1f] dk-text">正在分析聊天记录</div>
-            <p className="text-xs text-gray-400 text-center max-w-xs">
-              聊天记录越多，分析时间越长。<br/>
-              消息量大的联系人首次加载可能需要 1-3 分钟，请耐心等待。
+            <p className="text-xs text-gray-400 text-center max-w-md leading-relaxed" style={{ textWrap: 'pretty' } as React.CSSProperties}>
+              聊天记录越多分析时间越长，消息量大的联系人首次加载可能需要 1–3 分钟，请耐心等待。
             </p>
           </div>
         ) : (

@@ -8,6 +8,7 @@ import { MessageCircle, Clock, TrendingUp, Users, ChevronUp, ChevronDown, Bot, L
 import type { ContactStats } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { subscribeAnalysis, getAnalysisSnapshot } from '../../stores/llmAnalysisStore';
+import { RelativeTime } from '../common/RelativeTime';
 import { avatarSrc } from '../../utils/avatar';
 
 interface ContactTableProps {
@@ -259,7 +260,9 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                   )}
                 </td>
                 <td className="px-8 py-5">
-                  <span className="text-sm font-medium text-gray-600">{contact.last_message_time || '-'}</span>
+                  <span className="text-sm font-medium text-gray-600">
+                    <RelativeTime ts={contact.last_message_ts} placeholder={contact.last_message_time || '-'} />
+                  </span>
                 </td>
                 <td className="px-8 py-5">
                   <div className="flex flex-col gap-1.5 items-start">
@@ -291,7 +294,9 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
               )}
               <div className="min-w-0">
                 <div className={`font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>{contact.remark || contact.nickname || contact.username}</div>
-                <div className="text-xs text-gray-400 mt-0.5">{contact.last_message_time || '-'}</div>
+                <div className="text-xs text-gray-400 mt-0.5">
+                  <RelativeTime ts={contact.last_message_ts} placeholder={contact.last_message_time || '-'} />
+                </div>
               </div>
             </div>
             <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">

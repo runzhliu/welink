@@ -20,6 +20,7 @@ import {
 } from '../common/SettingsPage';
 import { LLMAnalysisTab } from '../contact/LLMAnalysisTab';
 import { GroupSimChat } from './GroupSimChat';
+import { RelativeTime } from '../common/RelativeTime';
 import { GroupComparePanel } from './GroupComparePanel';
 import { ForgeSkillModal } from '../contact/ForgeSkillModal';
 import { AIAnalysisBadge } from '../dashboard/ContactTable';
@@ -339,14 +340,14 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             <h3 className={`dk-text text-2xl sm:text-3xl font-black text-[#1d1d1f]${privacyMode ? ' privacy-blur' : ''}`}>{group.name}</h3>
             <p className="text-xs text-gray-400 mt-1 flex flex-wrap items-center gap-1.5">
               <span>{group.total_messages.toLocaleString()} 条消息</span>
-              {group.first_message_time && (
+              {(group.first_message_ts || group.first_message_time) && (
                 <>
                   <span className="text-gray-300">·</span>
-                  <span>始于 {group.first_message_time}</span>
+                  <span>始于 <RelativeTime ts={group.first_message_ts} placeholder={group.first_message_time || '-'} /></span>
                 </>
               )}
               <span className="text-gray-300">·</span>
-              <span>最近 {group.last_message_time}</span>
+              <span>最近 <RelativeTime ts={group.last_message_ts} placeholder={group.last_message_time || '-'} /></span>
             </p>
           </div>
         </div>
@@ -623,7 +624,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                           <span className={`text-[10px] w-24 text-right flex-shrink-0 tabular-nums ${
                             isSilent ? 'text-red-300' : days > 180 ? 'text-red-400 font-bold' : days > 30 ? 'text-orange-400' : 'text-gray-300'
                           }`}>
-                            {m.last_message_time ? m.last_message_time.slice(5) : '从未发言'}
+                            {m.last_message_ts ? <RelativeTime ts={m.last_message_ts} /> : (m.last_message_time ? m.last_message_time.slice(5) : '从未发言')}
                           </span>
                         </div>
                       );
