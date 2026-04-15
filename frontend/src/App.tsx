@@ -128,13 +128,28 @@ function App() {
     return localStorage.getItem('welink_hasStarted') === 'true';
   });
 
-  // Cmd+K 命令面板
+  // Cmd+K 命令面板 + Cmd/Ctrl+1..9 tab 切换
   const [paletteOpen, setPaletteOpen] = useState(false);
   useEffect(() => {
+    // ⌘1..⌘9 映射到 VALID_TABS 的前 9 项；顺序对应 Sidebar 上的常用 tab
+    const TAB_ORDER: TabType[] = ['dashboard', 'stats', 'contacts', 'groups', 'search', 'timeline', 'calendar', 'skills', 'settings'];
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      // 在输入框里按 ⌘1 之类不拦截（浏览器默认也会被某些组件拦截）
+      const target = e.target as HTMLElement | null;
+      const isEditable = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if (e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setPaletteOpen(p => !p);
+        return;
+      }
+      if (!isEditable && /^[1-9]$/.test(e.key)) {
+        const idx = Number(e.key) - 1;
+        const t = TAB_ORDER[idx];
+        if (t) {
+          e.preventDefault();
+          setActiveTab(t);
+        }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -438,6 +453,8 @@ function App() {
         onContactClick={setSelectedContact}
         onGroupClick={setSelectedGroup}
         onTabChange={setActiveTab}
+        dark={dark}
+        onToggleDark={toggleDark}
       />
 
       {/* Contact Detail Modal */}

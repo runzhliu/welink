@@ -5,7 +5,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   X, Plus, ShieldOff, User, Users,
-  FolderOpen, Loader2, Database, FileText, AlertCircle, RotateCcw, CheckCircle2, EyeOff, BarChart2, Bot, Check, LogIn, LogOut, Stethoscope, AlertTriangle, XCircle,
+  FolderOpen, Loader2, Database, FileText, AlertCircle, RotateCcw, CheckCircle2, EyeOff, BarChart2, Bot, Check, LogIn, LogOut, Stethoscope, AlertTriangle, XCircle, Copy,
   Settings, Clock, Cpu, Save, RefreshCw,
 } from 'lucide-react';
 import axios from 'axios';
@@ -17,6 +17,8 @@ export const DEFAULT_RANK_LIMIT = 10;
 export const DEFAULT_NAME_WIDTH = 144; // px, roughly w-36
 import { appApi } from '../../services/appApi';
 import type { ContactStats, GroupInfo } from '../../types';
+import { useToast } from './Toast';
+import { RelativeTime } from './RelativeTime';
 
 // ─── 隐私屏蔽子组件 ───────────────────────────────────────────────────────────
 
@@ -1153,6 +1155,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   fontSize = 16,
   onFontSizeChange,
 }) => {
+  const toast = useToast();
   // 显示设置
   const [rankLimit, setRankLimit] = useState<number>(() =>
     Number(localStorage.getItem(MEMBER_RANK_LIMIT_KEY)) || DEFAULT_RANK_LIMIT
@@ -1249,9 +1252,56 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     } catch (e: unknown) {
       const anyE = e as { message?: string };
       setDiag(null);
-      alert('诊断失败：' + (anyE?.message || String(e)));
+      toast.error('诊断失败：' + (anyE?.message || String(e)));
     } finally {
       setDiagRunning(false);
+    }
+  };
+
+  const diagToMarkdown = (d: DiagResult): string => {
+    const statusEmoji = (s: string) => s === 'ok' ? '✅' : s === 'warn' ? '⚠️' : s === 'skipped' ? '⏭️' : '❌';
+    const lines: string[] = [];
+    lines.push(`# WeLink 诊断报告`);
+    lines.push(`> 生成时间：${new Date(d.generated_at).toLocaleString()}`);
+    lines.push('');
+    lines.push(`## ${statusEmoji(d.data_dir.status)} 数据目录`);
+    lines.push(`- 状态：**${d.data_dir.message}**`);
+    if (d.data_dir.path) lines.push('- 路径：`' + d.data_dir.path + '`');
+    if (d.data_dir.warnings?.length) {
+      lines.push('- 警告：');
+      d.data_dir.warnings.forEach(w => lines.push(`  - ${w}`));
+    }
+    lines.push('');
+    lines.push(`## ${statusEmoji(d.index.status)} 索引`);
+    lines.push(`- 状态：**${d.index.message}**`);
+    lines.push(`- is_initialized=${d.index.is_initialized}, is_indexing=${d.index.is_indexing}, total_cached=${d.index.total_cached}`);
+    if (d.index.last_error) lines.push('- last_error：`' + d.index.last_error + '`');
+    lines.push('');
+    lines.push(`## LLM Profiles`);
+    if (d.llm_profiles.length === 0) {
+      lines.push('- 未配置任何 LLM profile');
+    } else {
+      d.llm_profiles.forEach(p => {
+        lines.push(`- ${statusEmoji(p.status)} **${p.name}**（${p.provider} / ${p.model || '?'}）— ${p.message}`);
+        if (p.base_url) lines.push('  - base_url：`' + p.base_url + '`');
+        lines.push(`  - api_key：${p.has_api_key ? '已配置' : '未配置'}`);
+        if (p.latency_ms) lines.push(`  - 延迟：${p.latency_ms}ms`);
+      });
+    }
+    lines.push('');
+    lines.push(`## ${statusEmoji(d.disk.status)} 磁盘`);
+    lines.push(`- ${d.disk.message}`);
+    lines.push('- AI 分析库：`' + d.disk.ai_analysis_db_path + '`');
+    return lines.join('\n');
+  };
+
+  const copyDiagMd = async () => {
+    if (!diag) return;
+    try {
+      await navigator.clipboard.writeText(diagToMarkdown(diag));
+      toast.success('已复制诊断报告到剪贴板（Markdown 格式）');
+    } catch (e: unknown) {
+      toast.error('复制失败：' + (e as Error).message);
     }
   };
   const [loadingCfg, setLoadingCfg] = useState(isAppMode);
@@ -1864,6 +1914,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         {active && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#07c160] text-white font-bold">使用中</span>}
                       </div>
                       <div className="text-[10px] text-gray-400 font-mono truncate">{p.path}</div>
+                      {p.last_indexed_at ? (
+                        <div className="text-[10px] text-gray-400 mt-0.5">
+                          最近索引：<RelativeTime ts={p.last_indexed_at} />
+                        </div>
+                      ) : null}
                     </div>
                     <button
                       onClick={() => switchToProfile(p.id)}
@@ -1955,24 +2010,37 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       </section>
 
       {/* ── 诊断 ── */}
-      <section className="mb-8">
+      <section className="mb-8" data-diag-anchor>
         <div className="flex items-center gap-2 mb-3">
           <Stethoscope size={18} className="text-[#07c160]" />
           <h3 className="text-base font-bold text-[#1d1d1f] dk-text">诊断</h3>
         </div>
         <p className="text-sm text-gray-400 mb-4">一键检查数据目录、索引状态、LLM 配置和磁盘占用</p>
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 dk-card dk-border">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
             <span className="text-sm text-gray-500">
-              {diag ? `上次检查：${new Date(diag.generated_at).toLocaleTimeString()}` : '尚未运行'}
+              {diag ? <>上次检查：<RelativeTime ts={Math.floor(new Date(diag.generated_at).getTime() / 1000)} /></> : '尚未运行'}
             </span>
-            <button
-              onClick={runDiag}
-              disabled={diagRunning}
-              className="px-4 py-2 rounded-xl bg-[#07c160] text-white text-sm font-semibold hover:bg-[#06ad56] disabled:opacity-50 transition-colors flex items-center gap-1.5"
-            >
-              {diagRunning ? <><Loader2 size={14} className="animate-spin" />检查中…</> : <><RefreshCw size={14} />运行诊断</>}
-            </button>
+            <div className="flex gap-2">
+              {diag && (
+                <button
+                  onClick={copyDiagMd}
+                  className="px-3 py-2 rounded-xl bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-white/15 transition-colors flex items-center gap-1.5"
+                  title="复制为 Markdown（贴到 issue / Slack 友好）"
+                >
+                  <Copy size={14} />
+                  复制为 Markdown
+                </button>
+              )}
+              <button
+                onClick={runDiag}
+                disabled={diagRunning}
+                data-diag-run
+                className="px-4 py-2 rounded-xl bg-[#07c160] text-white text-sm font-semibold hover:bg-[#06ad56] disabled:opacity-50 transition-colors flex items-center gap-1.5"
+              >
+                {diagRunning ? <><Loader2 size={14} className="animate-spin" />检查中…</> : <><RefreshCw size={14} />运行诊断</>}
+              </button>
+            </div>
           </div>
           {diag && (() => {
             const StatusIcon = ({ s }: { s: string }) => {
@@ -2272,7 +2340,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     if (r.error) throw new Error(r.error);
                     setBundlePath(r.path);
                   } catch (e: any) {
-                    alert('打包失败：' + (e?.message || '未知错误'));
+                    toast.error('打包失败：' + (e?.message || '未知错误'));
                   } finally {
                     setBundling(false);
                   }

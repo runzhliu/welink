@@ -11,9 +11,12 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Hash, User, Users, Bot, Settings, Sparkles, Database, X } from 'lucide-react';
+import { Search, Hash, User, Users, Bot, Settings, Sparkles, Database, Download, RefreshCw, Moon, Sun, X, Clock } from 'lucide-react';
 import axios from 'axios';
 import type { ContactStats, GroupInfo, TabType } from '../../types';
+import { appApi } from '../../services/appApi';
+import { emitToast } from './Toast';
+import { canReveal } from '../../utils/reveal';
 
 interface Props {
   open: boolean;
@@ -23,7 +26,26 @@ interface Props {
   onContactClick: (c: ContactStats) => void;
   onGroupClick: (g: GroupInfo) => void;
   onTabChange: (t: TabType) => void;
-  onReveal?: () => void; // 预留钩子；当前未接入特定入口
+  dark: boolean;
+  onToggleDark: () => void;
+}
+
+const RECENT_KEY = 'welink_palette_recent';
+const RECENT_LIMIT = 6;
+
+type RecentItem = { id: string; title: string; subtitle?: string; kind: 'contact' | 'group'; payload: string };
+
+function loadRecent(): RecentItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+function pushRecent(item: RecentItem) {
+  const list = loadRecent().filter(x => x.id !== item.id);
+  list.unshift(item);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_LIMIT)));
 }
 
 type ActionItem = {
@@ -53,20 +75,22 @@ const TAB_ITEMS: { tab: TabType; label: string; keywords: string[] }[] = [
 ];
 
 export const CommandPalette: React.FC<Props> = ({
-  open, onClose, contacts, groups, onContactClick, onGroupClick, onTabChange,
+  open, onClose, contacts, groups, onContactClick, onGroupClick, onTabChange, dark, onToggleDark,
 }) => {
   const [q, setQ] = useState('');
   const [aiHits, setAiHits] = useState<AIHit[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [recent, setRecent] = useState<RecentItem[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
-  // 打开时自动 focus
+  // 打开时自动 focus + 读最近记录
   useEffect(() => {
     if (open) {
       setQ('');
       setAiHits([]);
       setActiveIdx(0);
+      setRecent(loadRecent());
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
@@ -90,10 +114,44 @@ export const CommandPalette: React.FC<Props> = ({
     return () => clearTimeout(handle);
   }, [q, open]);
 
+  const openContact = (c: ContactStats) => {
+    pushRecent({
+      kind: 'contact', id: 'contact:' + c.username, payload: c.username,
+      title: c.remark || c.nickname || c.username, subtitle: `联系人 · ${c.total_messages ?? 0} 条`,
+    });
+    onContactClick(c); onClose();
+  };
+  const openGroup = (g: GroupInfo) => {
+    pushRecent({ kind: 'group', id: 'group:' + g.username, payload: g.username, title: g.name, subtitle: '群聊' });
+    onGroupClick(g); onClose();
+  };
+
   // 所有项目的扁平列表（按类型分段渲染）
   const items = useMemo<ActionItem[]>(() => {
     const lower = q.trim().toLowerCase();
     const result: ActionItem[] = [];
+
+    // 无查询时：展示最近打开
+    if (!lower && recent.length > 0) {
+      for (const r of recent) {
+        result.push({
+          kind: r.kind,
+          id: 'recent:' + r.id,
+          title: r.title,
+          subtitle: '最近 · ' + (r.subtitle || ''),
+          icon: <Clock size={14} className="text-gray-400" />,
+          onSelect: () => {
+            if (r.kind === 'contact') {
+              const c = contacts.find(cc => cc.username === r.payload);
+              if (c) openContact(c); else onClose();
+            } else {
+              const g = groups.find(gg => gg.username === r.payload);
+              if (g) openGroup(g); else onClose();
+            }
+          },
+        });
+      }
+    }
 
     // 联系人（限制 6 条）
     if (lower) {
@@ -107,7 +165,7 @@ export const CommandPalette: React.FC<Props> = ({
           title: c.remark || c.nickname || c.username,
           subtitle: `联系人 · ${c.total_messages ?? 0} 条消息`,
           icon: <User size={14} className="text-[#07c160]" />,
-          onSelect: () => { onContactClick(c); onClose(); },
+          onSelect: () => openContact(c),
         });
       }
     }
@@ -122,20 +180,22 @@ export const CommandPalette: React.FC<Props> = ({
           title: g.name,
           subtitle: '群聊',
           icon: <Users size={14} className="text-[#07c160]" />,
-          onSelect: () => { onGroupClick(g); onClose(); },
+          onSelect: () => openGroup(g),
         });
       }
     }
 
     // AI 对话片段（限制 6 条）
     for (const h of aiHits.slice(0, 6)) {
-      // 从 key 里提取友好标签（如 "contact:wxid_xxx" → "对话：wxid_xxx"）
       const [kind, ...rest] = h.key.split(':');
       const who = rest.join(':');
-      const title = kind === 'contact' ? `对话（${who}）`
-        : kind === 'ai-home' ? 'AI 首页对话'
-        : kind === 'calendar' ? `时光机（${who}）`
-        : h.key;
+      let title = h.key;
+      if (kind === 'contact' || kind === 'calendar') {
+        const c = contacts.find(cc => cc.username === who);
+        title = (kind === 'calendar' ? '时光机 · ' : '对话 · ') + (c ? (c.remark || c.nickname || who) : who);
+      } else if (kind === 'ai-home') {
+        title = 'AI 首页对话';
+      }
       result.push({
         kind: 'ai-conv',
         id: 'ai:' + h.key,
@@ -143,13 +203,13 @@ export const CommandPalette: React.FC<Props> = ({
         subtitle: h.snippets[0] || h.preview,
         icon: <Bot size={14} className="text-[#576b95]" />,
         onSelect: () => {
-          // 目前没有跨 tab 的"跳到对话"入口，回落到对应 tab；把 key 复制到剪贴板辅助定位
+          // 精准跳转：有联系人就打开联系人弹窗，key 里有 date 的暂时跳 calendar tab
           if (kind === 'contact') {
             const c = contacts.find(cc => cc.username === who);
-            if (c) { onContactClick(c); onClose(); return; }
+            if (c) { openContact(c); return; }
           }
-          if (kind === 'ai-home') { onTabChange('dashboard'); onClose(); return; }
           if (kind === 'calendar') { onTabChange('calendar'); onClose(); return; }
+          if (kind === 'ai-home') { onTabChange('dashboard'); onClose(); return; }
           onClose();
         },
       });
@@ -171,26 +231,57 @@ export const CommandPalette: React.FC<Props> = ({
       });
     }
 
-    // 常用动作（只在查询为空或匹配时显示）
-    const actions: { label: string; keys: string[]; icon: React.ReactNode; fn: () => void }[] = [
+    // 常用动作
+    const actions: { label: string; keys: string[]; icon: React.ReactNode; fn: () => void | Promise<void> }[] = [
       { label: '打开设置', keys: ['settings', '设置'], icon: <Settings size={14} className="text-gray-400" />,
-        fn: () => { onTabChange('settings'); } },
+        fn: () => onTabChange('settings') },
       { label: '运行诊断', keys: ['diagnostics', '诊断'], icon: <Sparkles size={14} className="text-[#07c160]" />,
-        fn: () => { onTabChange('settings'); /* 诊断在 settings 里 */ } },
+        fn: () => {
+          onTabChange('settings');
+          // 跳到 settings 后，滚到诊断 section + 自动触发
+          setTimeout(() => {
+            document.querySelector('[data-diag-anchor]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            document.querySelector<HTMLButtonElement>('[data-diag-run]')?.click();
+          }, 300);
+        } },
+      { label: '备份 AI 数据', keys: ['backup', '备份'], icon: <Download size={14} className="text-[#07c160]" />,
+        fn: async () => {
+          if (canReveal()) {
+            try {
+              const r = await appApi.aiBackup();
+              if (r.error) emitToast('error', 'AI 备份失败：' + r.error);
+              else emitToast('success', '已备份到 ' + r.path);
+            } catch (e) {
+              emitToast('error', 'AI 备份失败：' + (e as Error).message);
+            }
+          } else {
+            window.location.href = '/api/ai-backup-download';
+          }
+        } },
+      { label: '刷新索引', keys: ['refresh', 'reindex', '刷新', '索引'], icon: <RefreshCw size={14} className="text-gray-400" />,
+        fn: async () => {
+          try {
+            await axios.post('/api/init', { from: 0, to: 0 });
+            emitToast('info', '已触发重新索引');
+          } catch (e) { emitToast('error', '触发索引失败：' + (e as Error).message); }
+        } },
+      { label: dark ? '切换浅色模式' : '切换深色模式', keys: ['dark', 'theme', '深色', '主题'],
+        icon: dark ? <Sun size={14} className="text-gray-400" /> : <Moon size={14} className="text-gray-400" />,
+        fn: () => onToggleDark() },
       { label: '打开 Skills', keys: ['skills'], icon: <Database size={14} className="text-gray-400" />,
-        fn: () => { onTabChange('skills'); } },
+        fn: () => onTabChange('skills') },
     ];
     for (const a of actions) {
       if (lower && !a.keys.some(k => k.toLowerCase().includes(lower)) && !a.label.toLowerCase().includes(lower)) continue;
       result.push({
         kind: 'action', id: 'action:' + a.label,
         title: a.label, icon: a.icon,
-        onSelect: () => { a.fn(); onClose(); },
+        onSelect: async () => { await a.fn(); onClose(); },
       });
     }
 
     return result;
-  }, [q, aiHits, contacts, groups, onContactClick, onGroupClick, onTabChange, onClose]);
+  }, [q, aiHits, contacts, groups, recent, dark, onToggleDark, onTabChange, onContactClick, onGroupClick, onClose]);
 
   // 每次 items 变化把 activeIdx 钳回
   useEffect(() => {

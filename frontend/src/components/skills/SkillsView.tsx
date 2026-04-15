@@ -7,6 +7,7 @@ import { Sparkles, Download, Trash2, Loader2, Package, User, Users, Bot, AlertCi
 import { skillsApi, type SkillRecord } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { RevealLink } from '../common/RevealLink';
+import { RelativeTime } from '../common/RelativeTime';
 
 type SortKey = 'target_name' | 'skill_type' | 'format' | 'created_at' | 'file_size' | 'status';
 type SortDir = 'asc' | 'desc';
@@ -422,7 +423,7 @@ export const SkillsView: React.FC = () => {
 
                   {/* 时间 */}
                   <div className="w-36 text-right text-[10px] text-gray-400 tabular-nums">
-                    {formatTime(rec.created_at)}
+                    <RelativeTime ts={rec.created_at} />
                   </div>
 
                   {/* 操作 */}
