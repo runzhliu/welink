@@ -41,4 +41,28 @@ export const appApi = {
 
   reveal: (path: string) =>
     api.post<{ status: string; error?: string }>('/app/reveal', { path }).then((r) => r.data),
+
+  // 数据目录 profile（多账号切换）
+  listProfiles: () =>
+    api.get<{ profiles: { id: string; name: string; path: string; last_indexed_at?: number }[]; active_dir: string }>('/app/data-profiles')
+      .then((r) => r.data),
+
+  saveProfiles: (profiles: { id?: string; name: string; path: string }[]) =>
+    api.put<{ profiles: { id: string; name: string; path: string }[] }>('/app/data-profiles', { profiles })
+      .then((r) => r.data),
+
+  switchProfile: (id: string) =>
+    api.post<{ status?: string; warnings?: string[]; active_dir?: string; error?: string }>('/app/switch-profile', { id })
+      .then((r) => r.data),
+
+  aiBackup: () =>
+    api.post<{ path?: string; size?: number; error?: string }>('/app/ai-backup').then((r) => r.data),
+
+  aiRestore: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post<{ status?: string; error?: string }>('/app/ai-restore', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data);
+  },
 };

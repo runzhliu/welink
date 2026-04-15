@@ -10,6 +10,7 @@ import { statsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { avatarSrc } from '../../utils/avatar';
 import QRCode from 'qrcode';
+import { RevealLink } from '../common/RevealLink';
 
 interface Props {
   contacts: ContactStats[];
@@ -665,6 +666,7 @@ export const YearInReview: React.FC<Props> = ({ contacts, globalStats, onClose }
           {savedPath && (
             <div className="text-[10px] text-white/50 text-center max-w-xs break-all select-all">
               已保存到：{savedPath}
+              <RevealLink path={savedPath} className="ml-2 text-white" />
             </div>
           )}
         </div>

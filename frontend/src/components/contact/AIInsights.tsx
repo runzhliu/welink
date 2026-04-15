@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { generateShareImage } from '../../utils/shareImage';
+import { RevealLink } from '../common/RevealLink';
 import { getPrompt, loadCustomPrompts } from '../../utils/promptTemplates';
 
 interface Props {
@@ -42,6 +43,7 @@ export const AIInsights: React.FC<Props> = ({ username, displayName, avatarUrl, 
   const [error, setError] = useState('');
   const [sharing, setSharing] = useState(false);
   const [shared, setShared] = useState(false);
+  const [savedPath, setSavedPath] = useState<string | null>(null);
   const [diaryDate, setDiaryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [profileId, setProfileId] = useState('');
   const [profiles, setProfiles] = useState<{ id: string; provider: string; model?: string }[]>([]);
@@ -226,14 +228,15 @@ export const AIInsights: React.FC<Props> = ({ username, displayName, avatarUrl, 
     if (!result || sharing) return;
     setSharing(true);
     try {
-      await generateShareImage({
+      const p = await generateShareImage({
         question: INSIGHT_TABS.find(t => t.key === type)?.label + ` — ${displayName}`,
         answer: result,
         contactName: displayName,
         avatarUrl,
       });
+      setSavedPath(p);
       setShared(true);
-      setTimeout(() => setShared(false), 2000);
+      setTimeout(() => { setShared(false); setSavedPath(null); }, 6000);
     } catch (e) { console.error(e); }
     finally { setSharing(false); }
   }, [result, sharing, type, displayName, avatarUrl]);
@@ -333,7 +336,8 @@ export const AIInsights: React.FC<Props> = ({ username, displayName, avatarUrl, 
       {(result || loading) && (
         <div className="relative">
           {result && !loading && (
-            <div className="absolute top-2 right-2 flex gap-1">
+            <div className="absolute top-2 right-2 flex gap-1 items-center">
+              {shared && savedPath && <RevealLink path={savedPath} className="text-[10px] text-[#07c160]" />}
               <button
                 onClick={handleShare}
                 disabled={sharing}

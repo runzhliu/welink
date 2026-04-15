@@ -9,7 +9,7 @@ import { ConversationHistory } from './ConversationHistory';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateShareImage } from '../../utils/shareImage';
-import { canReveal, revealPath } from '../../utils/reveal';
+import { RevealLink } from '../common/RevealLink';
 import { avatarSrc } from '../../utils/avatar';
 import type { ContactStats, TimeRange, ChatMessage, GroupInfo, GroupChatMessage } from '../../types';
 import { contactsApi, groupsApi } from '../../services/api';
@@ -301,7 +301,7 @@ const MessageBubble: React.FC<{
       setShareMsg({
         ok: true,
         text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载',
-        path: isAppMode && canReveal() ? savedPath : undefined,
+        path: isAppMode ? savedPath : undefined,
       });
     } catch (err) {
       setShareMsg({ ok: false, text: `生成失败：${(err as Error).message}` });
@@ -390,14 +390,7 @@ const MessageBubble: React.FC<{
       {shareMsg && (
         <p className={`text-[10px] font-medium ml-9 break-all leading-relaxed ${shareMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
           {shareMsg.text}
-          {shareMsg.path && (
-            <button
-              onClick={() => revealPath(shareMsg.path!)}
-              className="ml-2 underline hover:no-underline"
-            >
-              在 Finder 中显示
-            </button>
-          )}
+          {shareMsg.path && <RevealLink path={shareMsg.path} className="ml-2" />}
         </p>
       )}
     </div>

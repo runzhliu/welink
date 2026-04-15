@@ -56,5 +56,7 @@ export const useBackendStatus = (pollInterval = 1000) => {
     isInitialized: status?.is_initialized ?? false,
     isIndexing: status?.is_indexing ?? false,
     totalCached: status?.total_cached ?? 0,
+    progress: status?.progress,
+    lastError: status?.last_error,
   };
 };

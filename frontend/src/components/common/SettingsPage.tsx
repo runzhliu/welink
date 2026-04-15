@@ -2,10 +2,10 @@
  * 设置页 — 隐私屏蔽（两种模式通用）+ App 配置（仅 App 模式）
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   X, Plus, ShieldOff, User, Users,
-  FolderOpen, Loader2, Database, FileText, AlertCircle, RotateCcw, CheckCircle2, EyeOff, BarChart2, Bot, Check, LogIn, LogOut,
+  FolderOpen, Loader2, Database, FileText, AlertCircle, RotateCcw, CheckCircle2, EyeOff, BarChart2, Bot, Check, LogIn, LogOut, Stethoscope, AlertTriangle, XCircle,
   Settings, Clock, Cpu, Save, RefreshCw,
 } from 'lucide-react';
 import axios from 'axios';
@@ -1166,9 +1166,136 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [logDir, setLogDir] = useState('');
   const [downloadDir, setDownloadDir] = useState('');
   const [downloadDirEffective, setDownloadDirEffective] = useState('');
+
+  // 数据目录 profile（多账号）
+  type Profile = { id: string; name: string; path: string; last_indexed_at?: number };
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [activeDir, setActiveDir] = useState('');
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
+  const [profileMsg, setProfileMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const refreshProfiles = useCallback(async () => {
+    try {
+      const r = await appApi.listProfiles();
+      setProfiles(r.profiles || []);
+      setActiveDir(r.active_dir || '');
+    } catch { /* ignore */ }
+  }, []);
+  useEffect(() => { refreshProfiles(); }, [refreshProfiles]);
+
+  // Docker / 浏览器模式：name + path 两个字段都让用户填
+  const addProfileManual = async () => {
+    const name = prompt('给数据目录起个名字（如 "主号"、"老婆账号"）');
+    if (!name?.trim()) return;
+    const defaultPath = dataDir.trim() || activeDir;
+    const path = prompt('decrypted/ 目录的绝对路径', defaultPath);
+    if (!path?.trim()) return;
+    const next = [...profiles, { name: name.trim(), path: path.trim() }];
+    try {
+      const r = await appApi.saveProfiles(next);
+      setProfiles(r.profiles);
+      setProfileMsg({ ok: true, text: '已添加' });
+    } catch (e: unknown) {
+      const anyE = e as { response?: { data?: { error?: string } } };
+      setProfileMsg({ ok: false, text: anyE?.response?.data?.error || '添加失败' });
+    }
+  };
+  const removeProfile = async (id: string) => {
+    if (!confirm('确定移除这个数据目录？只是从列表里删除，磁盘文件不会动。')) return;
+    const next = profiles.filter(p => p.id !== id);
+    try {
+      const r = await appApi.saveProfiles(next);
+      setProfiles(r.profiles);
+    } catch { /* ignore */ }
+  };
+  const switchToProfile = async (id: string) => {
+    setSwitchingId(id);
+    setProfileMsg(null);
+    try {
+      const r = await appApi.switchProfile(id);
+      if (r.error) {
+        setProfileMsg({ ok: false, text: r.error });
+      } else {
+        setActiveDir(r.active_dir || '');
+        setDataDir(r.active_dir || '');
+        setProfileMsg({ ok: true, text: '切换成功，正在重新索引…' });
+        // 切换后清空 hasStarted，让用户看到 InitializingScreen 的进度
+        localStorage.removeItem('welink_hasStarted');
+        setTimeout(() => window.location.reload(), 800);
+      }
+    } catch (e: unknown) {
+      const anyE = e as { response?: { data?: { error?: string } } };
+      setProfileMsg({ ok: false, text: anyE?.response?.data?.error || '切换失败' });
+    } finally {
+      setSwitchingId(null);
+    }
+  };
+
+  // 诊断
+  type DiagSection = { status: 'ok' | 'warn' | 'error' | 'skipped'; message: string };
+  type DiagResult = {
+    generated_at: string;
+    data_dir: DiagSection & { path: string; warnings?: string[] };
+    index: DiagSection & { is_initialized: boolean; is_indexing: boolean; total_cached: number; last_error?: string };
+    llm_profiles: (DiagSection & { name: string; provider: string; model: string; base_url?: string; has_api_key: boolean; latency_ms?: number })[];
+    disk: DiagSection & { ai_analysis_db_path: string; ai_analysis_db_size: number; avatar_cache_dir: string; avatar_cache_size: number; avatar_cache_file_count: number };
+  };
+  const [diagRunning, setDiagRunning] = useState(false);
+  const [diag, setDiag] = useState<DiagResult | null>(null);
+  const runDiag = async () => {
+    setDiagRunning(true);
+    try {
+      const { data } = await axios.get<DiagResult>('/api/diagnostics');
+      setDiag(data);
+    } catch (e: unknown) {
+      const anyE = e as { message?: string };
+      setDiag(null);
+      alert('诊断失败：' + (anyE?.message || String(e)));
+    } finally {
+      setDiagRunning(false);
+    }
+  };
   const [loadingCfg, setLoadingCfg] = useState(isAppMode);
   const [bundling, setBundling] = useState(false);
   const [bundlePath, setBundlePath] = useState<string | null>(null);
+  // AI 数据备份/恢复
+  const [aiBackuping, setAiBackuping] = useState(false);
+  const [aiBackupResult, setAiBackupResult] = useState<{ ok: boolean; text: string; path?: string } | null>(null);
+  const aiRestoreInputRef = useRef<HTMLInputElement | null>(null);
+  const handleAIBackup = async () => {
+    setAiBackuping(true);
+    setAiBackupResult(null);
+    try {
+      const r = await appApi.aiBackup();
+      if (r.error) {
+        setAiBackupResult({ ok: false, text: r.error });
+      } else {
+        setAiBackupResult({ ok: true, text: `已备份到 ${r.path}（${((r.size || 0) / 1024 / 1024).toFixed(2)} MB）`, path: r.path });
+      }
+    } catch (e: unknown) {
+      const anyE = e as { response?: { data?: { error?: string } }; message?: string };
+      setAiBackupResult({ ok: false, text: anyE?.response?.data?.error || anyE?.message || '备份失败' });
+    } finally {
+      setAiBackuping(false);
+    }
+  };
+  const handleAIRestore = async (file: File) => {
+    if (!confirm(`即将用 "${file.name}" 覆盖当前 AI 数据，原文件会自动备份为 .bak。确定继续？`)) return;
+    setAiBackuping(true);
+    setAiBackupResult(null);
+    try {
+      const r = await appApi.aiRestore(file);
+      if (r.error) {
+        setAiBackupResult({ ok: false, text: r.error });
+      } else {
+        setAiBackupResult({ ok: true, text: '恢复成功，原文件已备份为 .bak。' });
+      }
+    } catch (e: unknown) {
+      const anyE = e as { response?: { data?: { error?: string } }; message?: string };
+      setAiBackupResult({ ok: false, text: anyE?.response?.data?.error || anyE?.message || '恢复失败' });
+    } finally {
+      setAiBackuping(false);
+    }
+  };
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<{
     has_update: boolean; latest: string; changelog: string; url: string;
@@ -1695,6 +1822,222 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
       </section>
 
+      {/* ── 数据目录 / 多账号（App 与 Docker 通用） ── */}
+      <section className="mb-8">
+        <div className="flex items-center gap-2 mb-3">
+          <Users size={18} className="text-[#07c160]" />
+          <h3 className="text-base font-bold text-[#1d1d1f] dk-text">数据目录 · 多账号切换</h3>
+        </div>
+        <p className="text-sm text-gray-400 mb-4">
+          {isAppMode
+            ? '把多个 decrypted/ 目录加入列表，就能在不同账号之间切换（无需重启）'
+            : '把多个挂载在容器内的 decrypted 目录加入列表（要求 Docker 同时挂载它们）'}
+        </p>
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 dk-card dk-border">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-semibold text-[#1d1d1f] dk-text">已保存的数据目录</span>
+            <button
+              onClick={addProfileManual}
+              className="text-xs text-[#07c160] hover:underline"
+            >
+              + 添加目录
+            </button>
+          </div>
+          {profiles.length === 0 ? (
+            <p className="text-xs text-gray-400 py-2">尚无 profile，点击右上角添加</p>
+          ) : (
+            <div className="space-y-1.5">
+              {profiles.map(p => {
+                const active = p.path === activeDir;
+                return (
+                  <div
+                    key={p.id}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
+                      active
+                        ? 'border-[#07c160]/40 bg-[#07c160]/5'
+                        : 'border-gray-100 bg-[#f8f9fb] dk-bg-soft'
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-[#1d1d1f] dk-text truncate">{p.name}</span>
+                        {active && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#07c160] text-white font-bold">使用中</span>}
+                      </div>
+                      <div className="text-[10px] text-gray-400 font-mono truncate">{p.path}</div>
+                    </div>
+                    <button
+                      onClick={() => switchToProfile(p.id)}
+                      disabled={active || switchingId !== null}
+                      className="text-xs text-[#07c160] hover:underline disabled:opacity-30 disabled:no-underline whitespace-nowrap"
+                    >
+                      {switchingId === p.id ? '切换中…' : active ? '当前' : '切换到'}
+                    </button>
+                    <button
+                      onClick={() => removeProfile(p.id)}
+                      disabled={active}
+                      className="text-xs text-gray-400 hover:text-red-500 disabled:opacity-30 whitespace-nowrap"
+                    >
+                      移除
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {profileMsg && (
+            <p className={`mt-2 text-xs ${profileMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>{profileMsg.text}</p>
+          )}
+        </div>
+      </section>
+
+      {/* ── AI 数据备份 / 恢复（App 与 Docker 通用） ── */}
+      <section className="mb-8">
+        <div className="flex items-center gap-2 mb-3">
+          <Bot size={18} className="text-[#07c160]" />
+          <h3 className="text-base font-bold text-[#1d1d1f] dk-text">AI 数据备份</h3>
+        </div>
+        <p className="text-sm text-gray-400 mb-4">Skills、聊天历史、记忆都在 ai_analysis.db；建议定期导出</p>
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 dk-card dk-border">
+          <div className="flex flex-wrap gap-2 items-center">
+            <button
+              onClick={() => {
+                if (isAppMode) {
+                  handleAIBackup();
+                } else {
+                  // Docker / 浏览器：直接触发流式下载
+                  window.location.href = '/api/ai-backup-download';
+                }
+              }}
+              disabled={aiBackuping}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#07c160] text-white text-sm font-semibold hover:bg-[#06ad56] disabled:opacity-50 transition-colors"
+            >
+              {aiBackuping ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
+              {isAppMode ? '导出备份到下载目录' : '下载备份'}
+            </button>
+            <button
+              onClick={() => aiRestoreInputRef.current?.click()}
+              disabled={aiBackuping}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-white/15 disabled:opacity-50 transition-colors"
+            >
+              <FolderOpen size={14} />
+              从备份恢复
+            </button>
+            <input
+              ref={aiRestoreInputRef}
+              type="file"
+              accept=".db,.sqlite"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleAIRestore(f);
+                e.target.value = '';
+              }}
+            />
+            <span className="text-[10px] text-gray-400 ml-auto">
+              {isAppMode ? '导出会写到设置里的下载目录' : '浏览器会触发文件下载'}
+            </span>
+          </div>
+          {aiBackupResult && (
+            <p className={`mt-3 text-xs break-all ${aiBackupResult.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
+              {aiBackupResult.text}
+              {aiBackupResult.path && isAppMode && (
+                <button
+                  type="button"
+                  onClick={async () => { await axios.post('/api/app/reveal', { path: aiBackupResult.path }); }}
+                  className="ml-2 underline hover:no-underline"
+                >
+                  在 Finder 中显示
+                </button>
+              )}
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* ── 诊断 ── */}
+      <section className="mb-8">
+        <div className="flex items-center gap-2 mb-3">
+          <Stethoscope size={18} className="text-[#07c160]" />
+          <h3 className="text-base font-bold text-[#1d1d1f] dk-text">诊断</h3>
+        </div>
+        <p className="text-sm text-gray-400 mb-4">一键检查数据目录、索引状态、LLM 配置和磁盘占用</p>
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 dk-card dk-border">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-sm text-gray-500">
+              {diag ? `上次检查：${new Date(diag.generated_at).toLocaleTimeString()}` : '尚未运行'}
+            </span>
+            <button
+              onClick={runDiag}
+              disabled={diagRunning}
+              className="px-4 py-2 rounded-xl bg-[#07c160] text-white text-sm font-semibold hover:bg-[#06ad56] disabled:opacity-50 transition-colors flex items-center gap-1.5"
+            >
+              {diagRunning ? <><Loader2 size={14} className="animate-spin" />检查中…</> : <><RefreshCw size={14} />运行诊断</>}
+            </button>
+          </div>
+          {diag && (() => {
+            const StatusIcon = ({ s }: { s: string }) => {
+              if (s === 'ok') return <CheckCircle2 size={16} className="text-[#07c160] flex-shrink-0" />;
+              if (s === 'warn') return <AlertTriangle size={16} className="text-amber-500 flex-shrink-0" />;
+              if (s === 'skipped') return <AlertCircle size={16} className="text-gray-400 flex-shrink-0" />;
+              return <XCircle size={16} className="text-red-500 flex-shrink-0" />;
+            };
+            const Row = ({ label, status, message, sub }: { label: string; status: string; message: string; sub?: React.ReactNode }) => (
+              <div className="flex items-start gap-3 py-2.5 border-t border-gray-100 dk-border first:border-t-0">
+                <StatusIcon s={status} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-sm font-semibold text-[#1d1d1f] dk-text">{label}</span>
+                    <span className={`text-xs ${status === 'ok' ? 'text-[#07c160]' : status === 'warn' ? 'text-amber-600' : status === 'skipped' ? 'text-gray-400' : 'text-red-500'}`}>{message}</span>
+                  </div>
+                  {sub && <div className="text-xs text-gray-500 mt-1">{sub}</div>}
+                </div>
+              </div>
+            );
+            return (
+              <div>
+                <Row
+                  label="数据目录"
+                  status={diag.data_dir.status}
+                  message={diag.data_dir.message}
+                  sub={
+                    <>
+                      {diag.data_dir.path && <div className="font-mono break-all">{diag.data_dir.path}</div>}
+                      {diag.data_dir.warnings?.map((w, i) => <div key={i} className="text-amber-600">⚠ {w}</div>)}
+                    </>
+                  }
+                />
+                <Row
+                  label="索引"
+                  status={diag.index.status}
+                  message={diag.index.message}
+                  sub={diag.index.last_error && <div className="text-red-500">{diag.index.last_error}</div>}
+                />
+                {diag.llm_profiles.length === 0 ? (
+                  <Row label="LLM" status="warn" message="未配置任何 LLM profile" />
+                ) : (
+                  diag.llm_profiles.map((p, i) => (
+                    <Row
+                      key={i}
+                      label={`LLM · ${p.name}`}
+                      status={p.status}
+                      message={p.message}
+                      sub={
+                        <>
+                          <div>{p.provider} / {p.model || '(未指定 model)'}</div>
+                          {p.base_url && <div className="font-mono text-[10px] text-gray-400 break-all">{p.base_url}</div>}
+                          {!p.has_api_key && <div className="text-amber-600">未配置 API Key</div>}
+                        </>
+                      }
+                    />
+                  ))
+                )}
+                <Row label="磁盘" status={diag.disk.status} message={diag.disk.message} />
+              </div>
+            );
+          })()}
+        </div>
+      </section>
+
       {/* ── App 配置（仅 App 模式） ── */}
       {isAppMode && (
         <section>
@@ -1912,6 +2255,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             )}
           </div>
         )}
+
+        {/* AI 备份已移出到独立 section（在「数据目录·多账号」和「应用配置」之间） */}
 
         {/* 日志打包 */}
         <div className="flex flex-wrap items-center justify-between gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-white/10">

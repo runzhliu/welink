@@ -16,3 +16,8 @@ export async function revealPath(path: string): Promise<void> {
     /* 忽略 */
   }
 }
+
+/** 路径是否看起来像后端写出来的绝对路径（区分 App 模式 vs 浏览器返回的纯文件名） */
+export function isAbsoluteSavedPath(p: string): boolean {
+  return p.startsWith('/') || /^[A-Z]:\\/i.test(p);
+}

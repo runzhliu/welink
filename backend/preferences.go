@@ -63,6 +63,14 @@ func migrateConfigYAML() {
 	}
 }
 
+// DataDirProfile 单个数据目录配置项（用于多账号切换）。
+type DataDirProfile struct {
+	ID            string `json:"id"`               // 短 UUID，前端用作 key
+	Name          string `json:"name"`             // 用户起的别名，如「主号」「老婆账号」
+	Path          string `json:"path"`             // 解密后 decrypted/ 目录的绝对路径
+	LastIndexedAt int64  `json:"last_indexed_at,omitempty"` // 上次成功索引的 Unix 秒
+}
+
 // LLMProfile 单个 LLM 配置项，支持多 provider 并行配置与一键切换。
 type LLMProfile struct {
 	ID       string `json:"id"`
@@ -83,6 +91,8 @@ type Preferences struct {
 	LogDir      string `json:"log_dir,omitempty"`
 	DownloadDir string `json:"download_dir,omitempty"` // 导出图片/文件的保存目录；留空 = 平台默认（~/Downloads）
 	DemoMode    bool   `json:"demo_mode,omitempty"`
+	// 多账号 / 多数据目录支持。当前激活的目录（DataDir）一定也存在于这个列表中。
+	DataDirProfiles []DataDirProfile `json:"data_dir_profiles,omitempty"`
 
 	// 服务器配置（修改后需重启）
 	Port    string `json:"port,omitempty"`     // 默认 8080，环境变量 PORT 覆盖

@@ -8,6 +8,7 @@ import type { ContactStats, GlobalStats, HealthStatus } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { generateReportImage } from '../../utils/shareImage';
+import { RevealLink } from '../common/RevealLink';
 
 interface Props {
   contacts: ContactStats[];
@@ -23,6 +24,7 @@ export default function SocialReport({ contacts, globalStats, healthStatus }: Pr
   const { privacyMode } = usePrivacyMode();
   const [sharing, setSharing] = useState(false);
   const [shared, setShared] = useState(false);
+  const [savedPath, setSavedPath] = useState<string | null>(null);
 
   const totalContacts = useMemo(
     () => healthStatus.hot + healthStatus.warm + healthStatus.cooling + healthStatus.silent + healthStatus.cold,
@@ -133,7 +135,7 @@ export default function SocialReport({ contacts, globalStats, healthStatus }: Pr
     if (sharing) return;
     setSharing(true);
     try {
-      await generateReportImage({
+      const path = await generateReportImage({
         score,
         scoreLabel,
         stats: [
@@ -147,8 +149,9 @@ export default function SocialReport({ contacts, globalStats, healthStatus }: Pr
         topContactMessages: topContact?.total_messages,
         highlights,
       });
+      setSavedPath(path);
       setShared(true);
-      setTimeout(() => setShared(false), 2000);
+      setTimeout(() => { setShared(false); setSavedPath(null); }, 6000);
     } catch (e) {
       console.error('Share failed', e);
     } finally {
@@ -187,6 +190,12 @@ export default function SocialReport({ contacts, globalStats, healthStatus }: Pr
               )}
             </button>
           </div>
+          {savedPath && (
+            <div className="mt-2 text-[10px] text-white/80 font-medium break-all">
+              已保存至 {savedPath}
+              <RevealLink path={savedPath} className="ml-2 text-white" />
+            </div>
+          )}
         </div>
 
         <div className="p-5 space-y-5">

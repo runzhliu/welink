@@ -14,6 +14,7 @@ import { Hourglass, MessageSquare, ChevronLeft, ChevronRight, X, Users, Messages
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateShareImage } from '../../utils/shareImage';
+import { RevealLink } from '../common/RevealLink';
 import { calendarApi } from '../../services/api';
 import type { CalendarDayEntry, ContactStats, ChatMessage, GroupChatMessage } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
@@ -208,7 +209,7 @@ const DayAssistantBubble: React.FC<{
 }> = ({ msg, date, prevQuestion }) => {
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string; path?: string } | null>(null);
 
   const handleCopy = () => {
     if (!msg.content) return;
@@ -236,7 +237,7 @@ const DayAssistantBubble: React.FC<{
         } : undefined,
       });
       const isAppMode = savedPath.startsWith('/') || /^[A-Z]:\\/i.test(savedPath);
-      setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载' });
+      setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载', path: isAppMode ? savedPath : undefined });
     } catch (err) {
       setShareMsg({ ok: false, text: `生成失败：${(err as Error).message}` });
     } finally {
@@ -294,6 +295,7 @@ const DayAssistantBubble: React.FC<{
       {shareMsg && (
         <p className={`text-[10px] font-medium ml-8 break-all leading-relaxed ${shareMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
           {shareMsg.text}
+          {shareMsg.path && <RevealLink path={shareMsg.path} className="ml-2" />}
         </p>
       )}
     </div>

@@ -185,10 +185,19 @@ export interface TableData {
   total: number;
 }
 
+export interface IndexProgress {
+  done: number;
+  total: number;
+  current_contact: string;
+  elapsed_ms: number;
+}
+
 export interface BackendStatus {
   is_indexing: boolean;
   is_initialized: boolean;
   total_cached: number;
+  progress?: IndexProgress;
+  last_error?: string;
 }
 
 export type TabType = 'dashboard' | 'stats' | 'contacts' | 'db' | 'groups' | 'search' | 'timeline' | 'calendar' | 'anniversary' | 'urls' | 'skills' | 'settings';

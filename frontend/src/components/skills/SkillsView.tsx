@@ -6,6 +6,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { Sparkles, Download, Trash2, Loader2, Package, User, Users, Bot, AlertCircle, Clock, Search, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { skillsApi, type SkillRecord } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { RevealLink } from '../common/RevealLink';
 
 type SortKey = 'target_name' | 'skill_type' | 'format' | 'created_at' | 'file_size' | 'status';
 type SortDir = 'asc' | 'desc';
@@ -51,7 +52,7 @@ export const SkillsView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string; path?: string } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // 搜索 + 排序 + 筛选
   const [query, setQuery] = useState('');
@@ -90,9 +91,9 @@ export const SkillsView: React.FC = () => {
     }
   }, [skills, loadSkills]);
 
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToast({ type, text });
-    setTimeout(() => setToast(null), 3000);
+  const showToast = (type: 'success' | 'error', text: string, path?: string) => {
+    setToast({ type, text, path });
+    setTimeout(() => setToast(null), path ? 8000 : 3000);
   };
 
   const handleDownload = async (rec: SkillRecord) => {
@@ -113,7 +114,7 @@ export const SkillsView: React.FC = () => {
           });
           if (saveResp.ok) {
             const d = await saveResp.json() as { path?: string };
-            showToast('success', `已保存到 ${d.path ?? rec.filename}`);
+            showToast('success', `已保存到 ${d.path ?? rec.filename}`, d.path);
           } else {
             showToast('error', '保存失败');
           }
@@ -299,6 +300,7 @@ export const SkillsView: React.FC = () => {
             : 'bg-red-50 text-red-500 border border-red-200 dark:bg-red-900/20 dark:border-red-800'
         }`}>
           {toast.type === 'success' ? '✓ ' : '✕ '}{toast.text}
+          {toast.path && <RevealLink path={toast.path} className="ml-2" />}
         </div>
       )}
 

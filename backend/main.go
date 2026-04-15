@@ -21,6 +21,7 @@ package main
 import (
 	"archive/zip"
 	"crypto/md5"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -3080,7 +3081,233 @@ func serverMain() {
 			c.JSON(200, gin.H{"status": "indexing"})
 		})
 
+		// 取消正在进行的索引（前端 InitializingScreen 的「取消」按钮）
+		prot.POST("/cancel-index", func(c *gin.Context) {
+			cancelled := getSvc().CancelIndexing()
+			c.JSON(200, gin.H{"cancelled": cancelled})
+		})
+
 	}
+
+	// 诊断：聚合「数据目录健康 / 索引状态 / LLM 探活 / 磁盘大小」一次返回
+	// 不需要服务层就绪（数据目录无效时也要能跑），所以挂在 api 而不是 prot 上
+	api.GET("/diagnostics", func(c *gin.Context) {
+		var indexStatus map[string]interface{}
+		if svc := getSvc(); svc != nil {
+			indexStatus = svc.GetStatus()
+		}
+		diag := runDiagnostics(prefs.DataDir, indexStatus)
+		c.JSON(http.StatusOK, diag)
+	})
+
+	// 数据目录 profile 管理（多账号切换）
+	api.GET("/app/data-profiles", func(c *gin.Context) {
+		p := loadPreferences()
+		c.JSON(http.StatusOK, gin.H{
+			"profiles":   p.DataDirProfiles,
+			"active_dir": p.DataDir,
+		})
+	})
+
+	// 新增 / 更新 / 删除一个 profile（按 id 匹配；id 为空表示新增）
+	api.PUT("/app/data-profiles", func(c *gin.Context) {
+		var body struct {
+			Profiles []DataDirProfile `json:"profiles"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		// 给所有缺 id 的 profile 补一个简单的时间戳 id
+		for i := range body.Profiles {
+			if body.Profiles[i].ID == "" {
+				body.Profiles[i].ID = fmt.Sprintf("p%d", time.Now().UnixNano())
+			}
+		}
+		existing := loadPreferences()
+		existing.DataDirProfiles = body.Profiles
+		if err := savePreferences(existing); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"profiles": existing.DataDirProfiles})
+	})
+
+	// 切换激活的数据目录（热替换 contactSvc，无需重启）
+	api.POST("/app/switch-profile", func(c *gin.Context) {
+		var body struct {
+			ID string `json:"id"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.ID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少 profile id"})
+			return
+		}
+		existing := loadPreferences()
+		var picked *DataDirProfile
+		for i := range existing.DataDirProfiles {
+			if existing.DataDirProfiles[i].ID == body.ID {
+				picked = &existing.DataDirProfiles[i]
+				break
+			}
+		}
+		if picked == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "profile 不存在"})
+			return
+		}
+		// 复用 setup 的预检逻辑
+		warnings, verr := validateDataDir(picked.Path)
+		if verr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": verr.Error()})
+			return
+		}
+		// 热替换：新建 DBManager + ContactService
+		merged := effectiveConfig(existing)
+		merged.DataDir = picked.Path
+		os.Unsetenv("DEMO_MODE")
+		if err := reinitSvc(merged.DataDir, analysisParamsFromPrefs(merged), 0, 0); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "切换失败：" + err.Error()})
+			return
+		}
+		// 更新 prefs
+		existing.DataDir = picked.Path
+		existing.DemoMode = false
+		picked.LastIndexedAt = time.Now().Unix()
+		if err := savePreferences(existing); err != nil {
+			log.Printf("[PROFILE] Failed to save active profile: %v", err)
+		}
+		prefs.DataDir = picked.Path
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "warnings": warnings, "active_dir": picked.Path})
+	})
+
+	// 流式下载 AI 数据库（Docker / 浏览器模式专用）。
+	// App 模式应优先用 POST /app/ai-backup（写到下载目录），
+	// 因为 macOS WebView 对 attachment 下载的支持很差。
+	api.GET("/ai-backup-download", func(c *gin.Context) {
+		src := aiAnalysisDBPath()
+		if _, err := os.Stat(src); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "AI 数据库不存在：" + err.Error()})
+			return
+		}
+		fname := fmt.Sprintf("welink-ai-backup-%s.db", time.Now().Format("20060102-150405"))
+		// 用 VACUUM INTO 生成自洽快照到临时文件后再 stream，避免 stream 中途有写入
+		tmp := src + ".download.tmp"
+		_ = os.Remove(tmp)
+		tdb, err := sql.Open("sqlite", src+"?mode=ro")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "打开 AI 库失败：" + err.Error()})
+			return
+		}
+		_, err = tdb.Exec("VACUUM INTO ?", tmp)
+		tdb.Close()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "导出失败：" + err.Error()})
+			return
+		}
+		defer os.Remove(tmp)
+		c.Header("Content-Disposition", "attachment; filename=\""+fname+"\"")
+		c.Header("Content-Type", "application/octet-stream")
+		c.File(tmp)
+	})
+
+	// AI 数据备份（App 模式）：把 ai_analysis.db 复制到下载目录，返回路径供前端展示 + reveal
+	api.POST("/app/ai-backup", func(c *gin.Context) {
+		if !hasFrontend {
+			c.JSON(http.StatusNotFound, gin.H{"error": "App 模式专用，Docker 请用 GET /api/ai-backup-download"})
+			return
+		}
+		src := aiAnalysisDBPath()
+		if _, err := os.Stat(src); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "AI 数据库不存在：" + err.Error()})
+			return
+		}
+		dlDir, err := resolveDownloadDir()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		fname := fmt.Sprintf("welink-ai-backup-%s.db", time.Now().Format("20060102-150405"))
+		dst := filepath.Join(dlDir, fname)
+		// 用 SQLite VACUUM INTO 而不是裸 cp，保证生成自洽快照（避免 WAL/journal 半完成状态）
+		// 注意：VACUUM INTO 要求目标文件不存在
+		_ = os.Remove(dst)
+		// 用一个临时新连接执行（不走业务连接池，避免 PRAGMA 状态干扰）
+		tdb, err := sql.Open("sqlite", src+"?mode=ro")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "打开 AI 库失败：" + err.Error()})
+			return
+		}
+		defer tdb.Close()
+		if _, err := tdb.Exec("VACUUM INTO ?", dst); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "导出失败：" + err.Error()})
+			return
+		}
+		info, _ := os.Stat(dst)
+		size := int64(0)
+		if info != nil {
+			size = info.Size()
+		}
+		c.JSON(http.StatusOK, gin.H{"path": dst, "size": size})
+	})
+
+	// AI 数据恢复：上传 .db 文件覆盖现有 ai_analysis.db
+	// 步骤：1) 写入临时文件；2) 用只读连接 sanity-check（确保是 sqlite + 含 skills 表）；
+	//        3) 当前 ai_analysis.db rename 为 .bak；4) 临时文件 rename 为正式路径；5) InitAIDB 重新打开
+	api.POST("/app/ai-restore", func(c *gin.Context) {
+		// 上传走 multipart，无论 App / Docker / 浏览器都能用
+		fileHeader, err := c.FormFile("file")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "未上传文件"})
+			return
+		}
+		if fileHeader.Size > 500*1024*1024 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "文件超过 500MB，恢复已中止"})
+			return
+		}
+		dst := aiAnalysisDBPath()
+		tmp := dst + ".restore.tmp"
+		_ = os.Remove(tmp)
+		if err := c.SaveUploadedFile(fileHeader, tmp); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "写入临时文件失败：" + err.Error()})
+			return
+		}
+		// sanity check
+		tdb, err := sql.Open("sqlite", tmp+"?mode=ro")
+		if err != nil {
+			os.Remove(tmp)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "不是有效的 SQLite 文件：" + err.Error()})
+			return
+		}
+		var hasSkills int
+		err = tdb.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('skills','mem_facts','chat_history')").Scan(&hasSkills)
+		tdb.Close()
+		if err != nil || hasSkills == 0 {
+			os.Remove(tmp)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "不是 WeLink 的 AI 备份文件（找不到预期的表）"})
+			return
+		}
+		// 关闭当前 AI 连接 + 重命名
+		if err := CloseAIDB(); err != nil {
+			log.Printf("[AI-RESTORE] CloseAIDB warn: %v", err)
+		}
+		if _, err := os.Stat(dst); err == nil {
+			bak := dst + "." + time.Now().Format("20060102-150405") + ".bak"
+			if err := os.Rename(dst, bak); err != nil {
+				os.Remove(tmp)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "备份原文件失败：" + err.Error()})
+				return
+			}
+			log.Printf("[AI-RESTORE] 原 AI 库已备份为：%s", bak)
+		}
+		if err := os.Rename(tmp, dst); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "替换文件失败：" + err.Error()})
+			return
+		}
+		if err := InitAIDB(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "恢复后重新打开数据库失败：" + err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 
 	// /api/status：未配置时也返回 200，前端 useBackendStatus 靠它判断后端是否可达
 	api.GET("/status", func(c *gin.Context) {

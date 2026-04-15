@@ -100,6 +100,19 @@ func InitAIDB() error {
 	return nil
 }
 
+// CloseAIDB 关闭 AI 数据库连接（恢复备份时需要先释放文件句柄才能 rename）。
+// 调用后 aiDB 为 nil，下次请求会触发 InitAIDB 重新打开。
+func CloseAIDB() error {
+	aiDBMu.Lock()
+	defer aiDBMu.Unlock()
+	if aiDB == nil {
+		return nil
+	}
+	err := aiDB.Close()
+	aiDB = nil
+	return err
+}
+
 // GetAIConversation 返回指定 key 的历史消息，不存在时返回空切片。
 func GetAIConversation(key string) ([]AIMessage, error) {
 	aiDBMu.Lock()

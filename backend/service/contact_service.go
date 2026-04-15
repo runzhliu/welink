@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -189,6 +190,13 @@ type ContactService struct {
 	cacheMu          sync.RWMutex
 	isIndexing       bool
 	isInitialized    bool // 标记初始化是否完成
+	// 进度快照（由 performAnalysis 更新，/api/status 读取）
+	progressTotal    int    // 本轮总联系人数，0 = 未开始
+	progressDone     int    // 已完成联系人数
+	progressCurrent  string // 正在处理的联系人 username（显示用）
+	progressStart    time.Time
+	cancelFn         func() // 中止当前 performAnalysis；未在索引时为 nil
+	lastInitErr      string
 	groupListCache       []GroupInfo                      // 群聊列表缓存
 	groupListReady       bool
 	groupDetailCache     map[string]*GroupDetail          // 群聊详情内存缓存（lazy load）
@@ -322,11 +330,22 @@ func (s *ContactService) UpdateParams(p AnalysisParams) {
 
 // Reinitialize 用新的时间范围重新索引（前端调用）
 func (s *ContactService) Reinitialize(from, to int64) {
+	// 若已有索引任务在跑，先打断，避免两个 performAnalysis 同时刷新缓存互相覆盖
 	s.cacheMu.Lock()
+	if s.cancelFn != nil {
+		s.cancelFn()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancelFn = cancel
 	s.filterFrom = from
 	s.filterTo = to
 	s.isInitialized = false
 	s.isIndexing = true
+	s.progressTotal = 0
+	s.progressDone = 0
+	s.progressCurrent = ""
+	s.progressStart = time.Now()
+	s.lastInitErr = ""
 	s.cacheMu.Unlock()
 
 	// 清空群聊缓存
@@ -363,16 +382,28 @@ func (s *ContactService) Reinitialize(from, to int64) {
 				s.cacheMu.Lock()
 				s.isIndexing = false
 				s.isInitialized = true // 标记完成，让前端能进入主界面（功能会 503，但至少不卡死）
+				s.lastInitErr = fmt.Sprintf("panic: %v", r)
+				s.cancelFn = nil
 				s.cacheMu.Unlock()
 			}
 		}()
 		log.Printf("[INIT] Reinitializing with from=%d to=%d", from, to)
-		s.performAnalysis()
+		s.performAnalysisCtx(ctx)
 		s.cacheMu.Lock()
 		s.isIndexing = false
-		s.isInitialized = true
+		if ctx.Err() != nil {
+			// 被取消：不标记 isInitialized=true，前端会回到"未索引"状态，
+			// 但 lastInitErr 会告诉它原因，避免死循环重触发索引
+			s.isInitialized = false
+			s.lastInitErr = "indexing cancelled"
+			log.Println("[INIT] Reinitialization cancelled by user.")
+		} else {
+			s.isInitialized = true
+			s.lastInitErr = ""
+			log.Println("[INIT] Reinitialization complete.")
+		}
+		s.cancelFn = nil
 		s.cacheMu.Unlock()
-		log.Println("[INIT] Reinitialization complete.")
 	}()
 }
 
@@ -380,7 +411,7 @@ func (s *ContactService) fullAnalysisTask() {
 	// 首次启动立即执行分析
 	log.Println("[INIT] Starting initial data analysis...")
 	s.isIndexing = true
-	s.performAnalysis()
+	s.performAnalysisCtx(context.Background())
 	s.isIndexing = false
 
 	// 标记初始化完成
@@ -394,7 +425,7 @@ func (s *ContactService) fullAnalysisTask() {
 		time.Sleep(30 * time.Minute)
 		log.Println("[REFRESH] Background refresh starting...")
 		s.isIndexing = true
-		s.performAnalysis()
+		s.performAnalysisCtx(context.Background())
 		s.isIndexing = false
 	}
 }
@@ -411,7 +442,7 @@ func (s *ContactService) timeWhere() string {
 	return ""
 }
 
-func (s *ContactService) performAnalysis() {
+func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 	rows, err := s.dbMgr.ContactDB.Query("SELECT username, nick_name, remark, COALESCE(alias,''), flag, COALESCE(big_head_url,''), COALESCE(small_head_url,'') FROM contact WHERE verify_flag=0")
 	if err != nil { return }
 	defer rows.Close()
@@ -441,17 +472,32 @@ func (s *ContactService) performAnalysis() {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, s.params.WorkerCount)
 
-	// 进度日志：完成数 + 当前正在处理的联系人，方便卡住时定位
+	// 进度：同步到 service 字段（/api/status 读）+ 日志
 	log.Printf("[INIT] performAnalysis 开始：%d 个联系人，%d 工作协程", len(contacts), s.params.WorkerCount)
 	startedAt := time.Now()
+	s.cacheMu.Lock()
+	s.progressTotal = len(contacts)
+	s.progressDone = 0
+	s.progressStart = startedAt
+	s.cacheMu.Unlock()
 	var done int64
 	var doneMu sync.Mutex
 
 	for i := range contacts {
+		// 取消信号：每个联系人处理前检查一下，取消后 goroutine 立刻退出不领新任务
+		if ctx.Err() != nil {
+			break
+		}
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done(); sem <- struct{}{}; defer func() { <-sem }()
+			if ctx.Err() != nil { // 进入 worker 后再检查一次
+				return
+			}
 			c := contacts[idx]
+			s.cacheMu.Lock()
+			s.progressCurrent = c.Username
+			s.cacheMu.Unlock()
 			contactStart := time.Now()
 			defer func() {
 				elapsed := time.Since(contactStart)
@@ -459,6 +505,9 @@ func (s *ContactService) performAnalysis() {
 				done++
 				cur := done
 				doneMu.Unlock()
+				s.cacheMu.Lock()
+				s.progressDone = int(cur)
+				s.cacheMu.Unlock()
 				// 慢联系人单独打 warn，其它每 50 个汇报一次
 				if elapsed > 10*time.Second {
 					log.Printf("[INIT] 联系人 %d/%d 处理较慢：%s 耗时 %s", cur, len(contacts), c.Username, elapsed.Round(time.Millisecond))
@@ -2311,11 +2360,37 @@ func (s *ContactService) GetGlobal() GlobalStats {
 func (s *ContactService) GetStatus() map[string]interface{} {
 	s.cacheMu.RLock()
 	defer s.cacheMu.RUnlock()
-	return map[string]interface{}{
+	status := map[string]interface{}{
 		"is_indexing":    s.isIndexing,
 		"is_initialized": s.isInitialized,
 		"total_cached":   len(s.cache),
 	}
+	if s.isIndexing && s.progressTotal > 0 {
+		elapsedMs := time.Since(s.progressStart).Milliseconds()
+		status["progress"] = map[string]interface{}{
+			"done":            s.progressDone,
+			"total":           s.progressTotal,
+			"current_contact": s.progressCurrent,
+			"elapsed_ms":      elapsedMs,
+		}
+	}
+	if s.lastInitErr != "" {
+		status["last_error"] = s.lastInitErr
+	}
+	return status
+}
+
+// CancelIndexing 请求中止当前正在进行的 performAnalysis；等待 goroutine 退出后返回。
+// 非索引状态下调用是 no-op。
+func (s *ContactService) CancelIndexing() bool {
+	s.cacheMu.Lock()
+	fn := s.cancelFn
+	s.cacheMu.Unlock()
+	if fn == nil {
+		return false
+	}
+	fn()
+	return true
 }
 
 func (s *ContactService) formatTime(ts int64) string {

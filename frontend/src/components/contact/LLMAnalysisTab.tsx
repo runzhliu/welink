@@ -7,6 +7,7 @@ import { Bot, Send, RotateCcw, Loader2, AlertTriangle, Info, Copy, Check, Calend
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateShareImage } from '../../utils/shareImage';
+import { RevealLink } from '../common/RevealLink';
 import { contactsApi, groupsApi } from '../../services/api';
 import { CalendarRangePicker } from './CalendarRangePicker';
 import {
@@ -206,7 +207,7 @@ const AssistantMessage: React.FC<{
 }> = ({ msg, displayName, avatarUrl, prevQuestion, currentProvider, currentModel, onDelete }) => {
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string; path?: string } | null>(null);
   const [thinkingOpen, setThinkingOpen] = useState(false);
 
   const handleCopy = () => {
@@ -237,7 +238,7 @@ const AssistantMessage: React.FC<{
         } : undefined,
       });
       const isAppMode = savedPath.startsWith('/') || /^[A-Z]:\\/i.test(savedPath);
-      setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载' });
+      setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载', path: isAppMode ? savedPath : undefined });
     } catch (err) {
       setShareMsg({ ok: false, text: `生成失败：${(err as Error).message}` });
     } finally {
@@ -368,6 +369,7 @@ const AssistantMessage: React.FC<{
       {shareMsg && (
         <p className={`text-[10px] font-medium ml-9 break-all leading-relaxed ${shareMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
           {shareMsg.text}
+          {shareMsg.path && <RevealLink path={shareMsg.path} className="ml-2" />}
         </p>
       )}
     </div>

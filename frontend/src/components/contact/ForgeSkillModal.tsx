@@ -6,6 +6,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Loader2, Download, Sparkles, Info } from 'lucide-react';
 import { forgeSkill, skillsApi, groupsApi } from '../../services/api';
 import type { MemberStat } from '../../types';
+import { RevealLink } from '../common/RevealLink';
 
 interface Props {
   open: boolean;
@@ -444,8 +445,9 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
                 <code className="block text-[10px] bg-white dark:bg-black/20 px-2 py-1 rounded font-mono text-[#07c160] break-all select-all">
                   {savedPath}
                 </code>
-                <div className="text-gray-400 text-[10px] mt-1">
-                  解压后按 README 说明安装到对应工具。也可以在「Skills」页面重新下载。
+                <div className="text-gray-400 text-[10px] mt-1 flex items-center gap-3">
+                  <span>解压后按 README 说明安装到对应工具。也可以在「Skills」页面重新下载。</span>
+                  <RevealLink path={savedPath} className="text-[#07c160] flex-shrink-0" />
                 </div>
               </>
             ) : (

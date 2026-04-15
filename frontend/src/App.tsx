@@ -132,7 +132,7 @@ function App() {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
 
   // Backend Status Hook
-  const { isInitialized, isIndexing, backendReady, startPolling } = useBackendStatus(1000);
+  const { isInitialized, isIndexing, backendReady, startPolling, progress } = useBackendStatus(1000);
 
   // Privacy settings
   const {
@@ -323,7 +323,13 @@ function App() {
 
   // 已选择时间范围，等待索引完成
   if (!isInitialized || isIndexing) {
-    return <InitializingScreen message={`正在建立索引（${timeRange.label}）...`} />;
+    return (
+      <InitializingScreen
+        message={`正在建立索引（${timeRange.label}）...`}
+        progress={progress}
+        cancellable
+      />
+    );
   }
 
   return (

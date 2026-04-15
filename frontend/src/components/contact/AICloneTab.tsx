@@ -9,6 +9,7 @@ import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { avatarSrc } from '../../utils/avatar';
 import { contactsApi } from '../../services/api';
 import { generateCloneChatImage } from '../../utils/shareImage';
+import { RevealLink } from '../common/RevealLink';
 import type { GroupInfo } from '../../types';
 
 interface Props {
@@ -67,7 +68,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
   const [profiles, setProfiles] = useState<{ id: string; provider: string; model?: string }[]>([]);
   const [profileId, setProfileId] = useState('');
   const [sharing, setSharing] = useState(false);
-  const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string; path?: string } | null>(null);
   // 对话续写
   const [continueMode, setContinueMode] = useState(false);
   const [continueLoading, setContinueLoading] = useState(false);
@@ -648,7 +649,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
                     model: llmInfo.model,
                   });
                   const isAppMode = savedPath.startsWith('/') || /^[A-Z]:\\/i.test(savedPath);
-                  setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载' });
+                  setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载', path: isAppMode ? savedPath : undefined });
                 } catch (e) {
                   setShareMsg({ ok: false, text: `生成失败：${(e as Error).message}` });
                 }
@@ -678,6 +679,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
       {shareMsg && (
         <div className={`text-xs px-3 py-1.5 rounded-lg ${shareMsg.ok ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300'}`}>
           {shareMsg.text}
+          {shareMsg.path && <RevealLink path={shareMsg.path} className="ml-2" />}
         </div>
       )}
 

@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { searchApi, calendarApi } from '../../services/api';
 import { generateShareImage } from '../../utils/shareImage';
+import { RevealLink } from '../common/RevealLink';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { ConversationHistory } from './ConversationHistory';
 
@@ -51,6 +52,7 @@ export const CrossContactQA: React.FC<Props> = ({ onOpenSettings, onContactClick
   const [profiles, setProfiles] = useState<{ id: string; provider: string; model?: string }[]>([]);
   const [sharingIdx, setSharingIdx] = useState(-1);
   const [sharedIdx, setSharedIdx] = useState(-1);
+  const [savedPath, setSavedPath] = useState<string | null>(null);
   const [conversationKey, setConversationKey] = useState<string | null>(null);
   const [copiedIdx, setCopiedIdx] = useState(-1);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -446,13 +448,14 @@ export const CrossContactQA: React.FC<Props> = ({ onOpenSettings, onContactClick
                       setSharingIdx(i);
                       try {
                         const userMsg = messages.slice(0, i).reverse().find(m => m.role === 'user');
-                        await generateShareImage({
+                        const p = await generateShareImage({
                           question: userMsg?.content ?? '跨联系人问答',
                           answer: msg.content,
                           contactName: '跨联系人问答',
                         });
+                        setSavedPath(p);
                         setSharedIdx(i);
-                        setTimeout(() => setSharedIdx(-1), 2000);
+                        setTimeout(() => { setSharedIdx(-1); setSavedPath(null); }, 6000);
                       } catch (e) { console.error(e); }
                       finally { setSharingIdx(-1); }
                     }}
@@ -462,6 +465,9 @@ export const CrossContactQA: React.FC<Props> = ({ onOpenSettings, onContactClick
                     {sharingIdx === i ? <Loader2 size={12} className="animate-spin" /> : sharedIdx === i ? <Check size={12} className="text-[#07c160]" /> : <Share2 size={12} />}
                     {sharedIdx === i ? '已保存' : '分享'}
                   </button>
+                  {sharedIdx === i && savedPath && (
+                    <RevealLink path={savedPath} className="text-xs text-gray-400 hover:text-[#07c160]" />
+                  )}
                 </div>
               )}
               {/* 搜索结果完整列表 */}

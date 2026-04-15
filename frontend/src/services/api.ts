@@ -192,6 +192,12 @@ export const globalApi = {
     api.post<void, { status: string }>('/init', { from: from ?? 0, to: to ?? 0 }),
 
   /**
+   * 取消正在进行的索引
+   */
+  cancelIndex: () =>
+    api.post<void, { cancelled: boolean }>('/cancel-index'),
+
+  /**
    * 获取全局统计数据
    */
   getStats: () =>
