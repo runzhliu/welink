@@ -17,6 +17,7 @@ import type { ContactStats, GroupInfo, TabType } from '../../types';
 import { appApi } from '../../services/appApi';
 import { emitToast } from './Toast';
 import { canReveal } from '../../utils/reveal';
+import { buildPinyinIndex, matchPinyin } from '../../utils/pinyin';
 
 interface Props {
   open: boolean;
@@ -114,6 +115,16 @@ export const CommandPalette: React.FC<Props> = ({
     return () => clearTimeout(handle);
   }, [q, open]);
 
+  // 拼音索引：contacts/groups 变化时重建一次（内部还有缓存，同名不会重复 parse）
+  const contactIndex = useMemo(() => contacts.map(c => ({
+    c,
+    idx: buildPinyinIndex([c.remark, c.nickname, c.username].filter(Boolean).join(' ')),
+  })), [contacts]);
+  const groupIndex = useMemo(() => groups.map(g => ({
+    g,
+    idx: buildPinyinIndex(g.name || g.username),
+  })), [groups]);
+
   const openContact = (c: ContactStats) => {
     pushRecent({
       kind: 'contact', id: 'contact:' + c.username, payload: c.username,
@@ -153,12 +164,10 @@ export const CommandPalette: React.FC<Props> = ({
       }
     }
 
-    // 联系人（限制 6 条）
+    // 联系人（限制 6 条）— 原名 / 全拼 / 首字母三路匹配（"zw" 能搜到 "张伟"）
     if (lower) {
-      const matched = contacts
-        .filter(c => (c.remark + c.nickname + c.username).toLowerCase().includes(lower))
-        .slice(0, 6);
-      for (const c of matched) {
+      const matched = contactIndex.filter(({ idx }) => matchPinyin(idx, lower)).slice(0, 6);
+      for (const { c } of matched) {
         result.push({
           kind: 'contact',
           id: 'contact:' + c.username,
@@ -172,8 +181,8 @@ export const CommandPalette: React.FC<Props> = ({
 
     // 群聊（限制 5 条）
     if (lower) {
-      const matched = groups.filter(g => g.name.toLowerCase().includes(lower)).slice(0, 5);
-      for (const g of matched) {
+      const matched = groupIndex.filter(({ idx }) => matchPinyin(idx, lower)).slice(0, 5);
+      for (const { g } of matched) {
         result.push({
           kind: 'group',
           id: 'group:' + g.username,
@@ -289,7 +298,7 @@ export const CommandPalette: React.FC<Props> = ({
     }
 
     return result;
-  }, [q, aiHits, contacts, groups, recent, dark, onToggleDark, onTabChange, onContactClick, onGroupClick, onClose]);
+  }, [q, aiHits, contacts, groups, contactIndex, groupIndex, recent, dark, onToggleDark, onTabChange, onContactClick, onGroupClick, onClose]);
 
   // 每次 items 变化把 activeIdx 钳回
   useEffect(() => {
