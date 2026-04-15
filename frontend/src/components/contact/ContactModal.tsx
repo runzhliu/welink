@@ -524,7 +524,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f0fdf4] border border-[#07c16030] text-[#07c160] text-xs font-semibold hover:bg-[#07c16015] transition-colors"
               >
                 {g.small_head_url ? (
-                  <img src={avatarSrc(g.small_head_url)} alt="" className="w-4 h-4 rounded-sm object-cover"
+                  <img loading="lazy" src={avatarSrc(g.small_head_url)} alt="" className="w-4 h-4 rounded-sm object-cover"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
                   <Users size={11} strokeWidth={2} />

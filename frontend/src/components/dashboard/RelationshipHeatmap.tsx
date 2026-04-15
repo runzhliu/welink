@@ -25,7 +25,7 @@ const Avatar: React.FC<{ contact: ContactStats; onClick?: () => void }> = ({ con
       className="w-8 h-8 rounded-full ring-2 ring-white flex-shrink-0 overflow-hidden -ml-2 first:ml-0 hover:ring-[#07c160] hover:z-10 relative transition-all"
     >
       {url ? (
-        <img src={url} alt={name} className="w-full h-full object-cover"
+        <img loading="lazy" src={url} alt={name} className="w-full h-full object-cover"
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
       ) : (
         <div className="w-full h-full bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-xs font-black">

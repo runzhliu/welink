@@ -211,7 +211,7 @@ export const YearInReview: React.FC<Props> = ({ contacts, globalStats, onClose }
                 <span className="text-2xl font-black opacity-60 w-8">{i + 1}</span>
                 <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white/30">
                   {c.small_head_url ? (
-                    <img src={avatarSrc(c.small_head_url)} alt="" className="w-full h-full object-cover" />
+                    <img loading="lazy" src={avatarSrc(c.small_head_url)} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full bg-white/20 flex items-center justify-center text-sm font-bold">
                       {displayName(c).charAt(0)}
@@ -308,7 +308,7 @@ export const YearInReview: React.FC<Props> = ({ contacts, globalStats, onClose }
                 <div key={c.username} className="flex flex-col items-center gap-1">
                   <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-white/20">
                     {c.small_head_url ? (
-                      <img src={avatarSrc(c.small_head_url)} alt="" className="w-full h-full object-cover" />
+                      <img loading="lazy" src={avatarSrc(c.small_head_url)} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full bg-white/20 flex items-center justify-center text-xs font-bold">
                         {displayName(c).charAt(0)}

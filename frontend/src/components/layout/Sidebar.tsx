@@ -90,7 +90,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
             onClick={() => openExternal('https://welink.click')}
             title="官方文档"
           >
-            <img src="/favicon.svg" alt="WeLink" className="w-full h-full" />
+            <img loading="lazy" src="/favicon.svg" alt="WeLink" className="w-full h-full" />
           </div>
           {expanded && (
             <span className="text-sm font-black text-[#1d1d1f] tracking-tight flex-1 truncate">WeLink</span>

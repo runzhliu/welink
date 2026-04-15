@@ -328,7 +328,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         {/* Header */}
         <div className="flex items-center gap-4 mb-6 pr-10">
           {group.small_head_url ? (
-            <img src={avatarSrc(group.small_head_url)} alt="" className="w-14 h-14 rounded-2xl object-cover flex-shrink-0"
+            <img loading="lazy" src={avatarSrc(group.small_head_url)} alt="" className="w-14 h-14 rounded-2xl object-cover flex-shrink-0"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           ) : (
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#10aeff] to-[#0e8dd6] flex items-center justify-center text-white flex-shrink-0">
@@ -1087,7 +1087,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
                   >
                     <span className="text-base flex-shrink-0">{medals[i]}</span>
                     {g.small_head_url ? (
-                      <img src={avatarSrc(g.small_head_url)} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
+                      <img loading="lazy" src={avatarSrc(g.small_head_url)} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     ) : (
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#10aeff] to-[#0e8dd6] flex items-center justify-center text-white flex-shrink-0">
@@ -1196,7 +1196,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
                         />
                       )}
                       {group.small_head_url ? (
-                        <img src={avatarSrc(group.small_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0"
+                        <img loading="lazy" src={avatarSrc(group.small_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       ) : (
                         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#10aeff] to-[#0e8dd6] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
@@ -1246,7 +1246,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
             >
               <div className="flex items-center gap-3 min-w-0">
                 {group.small_head_url ? (
-                  <img src={avatarSrc(group.small_head_url)} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0"
+                  <img loading="lazy" src={avatarSrc(group.small_head_url)} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#10aeff] to-[#0e8dd6] flex items-center justify-center text-white flex-shrink-0">

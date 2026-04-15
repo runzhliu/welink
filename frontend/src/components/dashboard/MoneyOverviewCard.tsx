@@ -158,7 +158,7 @@ export const MoneyOverviewCard: React.FC<Props> = ({ blockedUsers = [], blockedD
                 <span className={`text-xs font-black w-5 text-center flex-shrink-0 ${
                   i === 0 ? 'text-[#ff9500]' : i === 1 ? 'text-[#8b5cf6]' : i === 2 ? 'text-[#10aeff]' : 'text-gray-300'
                 }`}>{i + 1}</span>
-                <img src={avatarSrc(c.avatar)} className="w-7 h-7 rounded-full flex-shrink-0" alt="" />
+                <img loading="lazy" src={avatarSrc(c.avatar)} className="w-7 h-7 rounded-full flex-shrink-0" alt="" />
                 <div className="flex-1 min-w-0">
                   <div className={`text-sm font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>
                     {c.name}

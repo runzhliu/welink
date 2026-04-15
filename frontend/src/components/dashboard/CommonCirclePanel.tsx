@@ -59,7 +59,7 @@ export const CommonCirclePanel: React.FC<Props> = ({ contacts, onClose }) => {
       const name = selected.remark || selected.nickname || selected.username;
       return (
         <div className="bg-[#f8f9fb] dark:bg-white/5 rounded-2xl p-3 flex items-center gap-3">
-          <img src={avatarSrc(selected.small_head_url)} className="w-10 h-10 rounded-full flex-shrink-0" alt="" />
+          <img loading="lazy" src={avatarSrc(selected.small_head_url)} className="w-10 h-10 rounded-full flex-shrink-0" alt="" />
           <div className="flex-1 min-w-0">
             <div className={`text-sm font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>
               {name}
@@ -98,7 +98,7 @@ export const CommonCirclePanel: React.FC<Props> = ({ contacts, onClose }) => {
                   onClick={() => { setSelected(c); setSearch(''); }}
                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-left transition-colors"
                 >
-                  <img src={avatarSrc(c.small_head_url)} className="w-6 h-6 rounded-full flex-shrink-0" alt="" />
+                  <img loading="lazy" src={avatarSrc(c.small_head_url)} className="w-6 h-6 rounded-full flex-shrink-0" alt="" />
                   <span className={`text-sm text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>
                     {name}
                   </span>
@@ -194,7 +194,7 @@ export const CommonCirclePanel: React.FC<Props> = ({ contacts, onClose }) => {
                   <div key={g.username} className="bg-[#f8f9fb] dark:bg-white/5 rounded-2xl px-4 py-3">
                     <div className="flex items-center gap-3">
                       {g.small_head_url && (
-                        <img src={avatarSrc(g.small_head_url)} className="w-8 h-8 rounded-lg flex-shrink-0" alt=""
+                        <img loading="lazy" src={avatarSrc(g.small_head_url)} className="w-8 h-8 rounded-lg flex-shrink-0" alt=""
                           onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       )}
                       <div className="flex-1 min-w-0">

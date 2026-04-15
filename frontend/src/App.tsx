@@ -33,6 +33,7 @@ import { WelcomePage } from './components/common/WelcomePage';
 import { AppSetupPage } from './components/common/AppSetupPage';
 import { SetupRequiredPage } from './components/common/SetupRequiredPage';
 import { CommandPalette } from './components/common/CommandPalette';
+import { ReleaseNotesModal } from './components/common/ReleaseNotesModal';
 import { SettingsPage } from './components/common/SettingsPage';
 
 // App API
@@ -130,6 +131,9 @@ function App() {
 
   // Cmd+K 命令面板 + Cmd/Ctrl+1..9 tab 切换
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Release notes：启动时后台检查，有新版本且用户没 dismiss 过就弹 Modal
+  const [releaseInfo, setReleaseInfo] = useState<{ current: string; latest: string; changelog: string; url: string } | null>(null);
   useEffect(() => {
     // ⌘1..⌘9 映射到 VALID_TABS 的前 9 项；顺序对应 Sidebar 上的常用 tab
     const TAB_ORDER: TabType[] = ['dashboard', 'stats', 'contacts', 'groups', 'search', 'timeline', 'calendar', 'skills', 'settings'];
@@ -304,6 +308,27 @@ function App() {
     localStorage.removeItem('welink_timeRange');
   };
 
+  // 启动后 5s 检查一次新版本（避免与首次索引抢带宽）
+  useEffect(() => {
+    if (!backendReady || !appInfo?.ready) return;
+    const timer = setTimeout(async () => {
+      try {
+        const r = await fetch('/api/app/check-update');
+        const d = await r.json() as { has_update?: boolean; current?: string; latest?: string; changelog?: string; url?: string };
+        if (!d.has_update || !d.latest) return;
+        const dismissed = localStorage.getItem('welink_dismissed_version');
+        if (dismissed === d.latest) return;
+        setReleaseInfo({
+          current: d.current || appInfo.version || '',
+          latest: d.latest,
+          changelog: d.changelog || '',
+          url: d.url || `https://github.com/runzhliu/welink/releases/tag/${d.latest}`,
+        });
+      } catch { /* 网络挂了静默 */ }
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [backendReady, appInfo?.ready, appInfo?.version]);
+
   // 后端就绪后获取 App 模式信息
   useEffect(() => {
     if (backendReady) {
@@ -443,6 +468,18 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Release notes */}
+      {releaseInfo && (
+        <ReleaseNotesModal
+          open={!!releaseInfo}
+          onClose={() => setReleaseInfo(null)}
+          currentVersion={releaseInfo.current}
+          latestVersion={releaseInfo.latest}
+          changelog={releaseInfo.changelog}
+          url={releaseInfo.url}
+        />
+      )}
 
       {/* Cmd+K 命令面板 */}
       <CommandPalette

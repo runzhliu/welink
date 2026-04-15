@@ -361,6 +361,9 @@ WeLink 内置 [MCP（Model Context Protocol）](https://modelcontextprotocol.io/
 | **导出目录可配置** | 设置 → 导出图片保存位置 | 默认 `~/Downloads`，可改成任意 Home 下目录；保存后 toast 里有「在 Finder 中显示」 |
 | **启动自动探测** | — | 找不到数据目录时，Docker / App 各自展示针对性引导；只读盘会给出警告 |
 | **一键反馈问题** | 设置 → 诊断 → 反馈问题，或 ⌘K「反馈」 | 自动附带诊断报告 + 环境信息；没 GitHub 账号可复制 md / 下载文件贴到任意地方 |
+| **界面崩溃自救** | — | ErrorBoundary 接住异常，不会白屏；可一键带 stack 反馈 |
+| **设置页内搜索** | 设置页顶部搜索框 | 输入"下载"/"LLM" 等关键词过滤 section |
+| **自动检查新版本** | 启动 5s 后后台 GitHub API 轮询 | 有新版本弹 Release Notes Modal 展示 changelog；「我先用着」记住版本不再烦人 |
 
 ---
 

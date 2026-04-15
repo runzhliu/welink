@@ -196,7 +196,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                 <td className="px-8 py-5">
                   <div className="flex items-center gap-3">
                     {(contact.small_head_url || contact.big_head_url) ? (
-                      <img src={avatarSrc(contact.small_head_url || contact.big_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                      <img loading="lazy" src={avatarSrc(contact.small_head_url || contact.big_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
                     ) : (
                       <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
                         {(contact.remark || contact.nickname || contact.username).charAt(0)}
@@ -283,7 +283,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
           >
             <div className="flex items-center gap-3 min-w-0">
               {(contact.small_head_url || contact.big_head_url) ? (
-                <img src={avatarSrc(contact.small_head_url || contact.big_head_url)} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
+                <img loading="lazy" src={avatarSrc(contact.small_head_url || contact.big_head_url)} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
               ) : (
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
                   {(contact.remark || contact.nickname || contact.username).charAt(0)}
