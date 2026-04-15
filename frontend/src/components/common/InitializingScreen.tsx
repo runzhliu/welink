@@ -61,7 +61,7 @@ export const InitializingScreen: React.FC<InitializingScreenProps> = ({
 
         {/* Logo 区 */}
         <div className="flex items-center gap-4 mb-10">
-          <img src="/favicon.svg" alt="WeLink" className="w-16 h-16 rounded-2xl shadow-lg shadow-green-100" />
+          <img loading="lazy" src="/favicon.svg" alt="WeLink" className="w-16 h-16 rounded-2xl shadow-lg shadow-green-100" />
           <div>
             <h1 className="text-3xl font-black text-[#1d1d1f] tracking-tight leading-none mb-1">
               WeLink

@@ -135,7 +135,7 @@ const MessagesView: React.FC<MessagesViewProps> = ({ date, entry, onBack }) => {
         </button>
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {entry.small_head_url ? (
-            <img src={avatarSrc(entry.small_head_url)} alt="" className="w-7 h-7 rounded-lg object-cover flex-shrink-0"
+            <img loading="lazy" src={avatarSrc(entry.small_head_url)} alt="" className="w-7 h-7 rounded-lg object-cover flex-shrink-0"
               onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           ) : (
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-xs font-black flex-shrink-0">
@@ -617,7 +617,7 @@ const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, on
       onClick={() => setViewEntry(entry)}
     >
       {entry.small_head_url ? (
-        <img src={avatarSrc(entry.small_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0"
+        <img loading="lazy" src={avatarSrc(entry.small_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0"
           onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
       ) : (
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black flex-shrink-0">

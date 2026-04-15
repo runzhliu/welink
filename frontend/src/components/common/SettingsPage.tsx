@@ -1157,6 +1157,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onFontSizeChange,
 }) => {
   const toast = useToast();
+  // Settings 页内搜索
+  const [settingsQuery, setSettingsQuery] = useState('');
+  const settingsRootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const root = settingsRootRef.current;
+    if (!root) return;
+    const q = settingsQuery.trim().toLowerCase();
+    const sections = root.querySelectorAll<HTMLElement>('[data-settings-tags]');
+    sections.forEach(s => {
+      const tags = (s.dataset.settingsTags || '').toLowerCase();
+      // 不光搜 tags，也搜 section 内部的文本（隐私屏蔽里的姓名字段除外）
+      const text = tags + ' ' + (s.textContent || '').toLowerCase();
+      s.style.display = !q || text.includes(q) ? '' : 'none';
+    });
+  }, [settingsQuery]);
+
   // 显示设置
   const [rankLimit, setRankLimit] = useState<number>(() =>
     Number(localStorage.getItem(MEMBER_RANK_LIMIT_KEY)) || DEFAULT_RANK_LIMIT
@@ -1493,11 +1509,24 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   }
 
   return (
-    <div className="max-w-2xl">
-      <h2 className="text-2xl font-black text-[#1d1d1f] dk-text mb-8">设置</h2>
+    <div className="max-w-2xl" ref={settingsRootRef}>
+      <div className="flex items-center justify-between gap-4 mb-8 flex-wrap">
+        <h2 className="text-2xl font-black text-[#1d1d1f] dk-text">设置</h2>
+        <div className="relative flex-1 max-w-xs">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" strokeLinecap="round" />
+          </svg>
+          <input
+            value={settingsQuery}
+            onChange={e => setSettingsQuery(e.target.value)}
+            placeholder="搜索设置项…（例：下载 / 诊断 / LLM）"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-white/10 rounded-xl bg-[#f8f9fb] dk-input focus:outline-none focus:border-[#07c160]"
+          />
+        </div>
+      </div>
 
       {/* ── 录屏模式 ── */}
-      <section className="mb-8">
+      <section className="mb-8" data-settings-tags="隐私 录屏 privacy 屏蔽马赛克">
         <div className="flex items-center gap-2 mb-3">
           <EyeOff size={18} className="text-[#07c160]" />
           <h3 className="text-base font-bold text-[#1d1d1f] dk-text">录屏模式</h3>
@@ -1518,7 +1547,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       </section>
 
       {/* ── 显示设置 ── */}
-      <section className="mb-8">
+      <section className="mb-8" data-settings-tags="显示 暗色 主题 字号 group 群成员 宽度 name 暗黑">
         <div className="flex items-center gap-2 mb-3">
           <BarChart2 size={18} className="text-[#07c160]" />
           <h3 className="text-base font-bold text-[#1d1d1f] dk-text">显示设置</h3>
@@ -1614,7 +1643,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       </section>
 
       {/* ── 基本配置 + 分析参数 ── */}
-      <section className="mb-8">
+      <section className="mb-8" data-settings-tags="基本 配置 端口 port 时区 深夜 worker 工作协程 gin 日志级别 port">
         <div className="flex items-center gap-2 mb-3">
           <Settings size={18} className="text-[#07c160]" />
           <h3 className="text-base font-bold text-[#1d1d1f] dk-text">服务配置</h3>
@@ -1814,7 +1843,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       <AIConfigGroup />
 
       {/* ── 隐私屏蔽 ── */}
-      <section className="mb-8">
+      <section className="mb-8" data-settings-tags="隐私 屏蔽 blocked 黑名单 mask privacy">
         <div className="flex items-center gap-2 mb-3">
           <ShieldOff size={18} className="text-[#07c160]" />
           <h3 className="text-base font-bold text-[#1d1d1f] dk-text">隐私屏蔽</h3>
@@ -1875,7 +1904,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       </section>
 
       {/* ── 数据目录 / 多账号（App 与 Docker 通用） ── */}
-      <section className="mb-8">
+      <section className="mb-8" data-settings-tags="数据目录 多账号 profile 切换 decrypted path 目录">
         <div className="flex items-center gap-2 mb-3">
           <Users size={18} className="text-[#07c160]" />
           <h3 className="text-base font-bold text-[#1d1d1f] dk-text">数据目录 · 多账号切换</h3>
@@ -1948,7 +1977,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       </section>
 
       {/* ── AI 数据备份 / 恢复（App 与 Docker 通用） ── */}
-      <section className="mb-8">
+      <section className="mb-8" data-settings-tags="AI 备份 恢复 backup restore skills 记忆 memories 对话历史 ai_analysis">
         <div className="flex items-center gap-2 mb-3">
           <Bot size={18} className="text-[#07c160]" />
           <h3 className="text-base font-bold text-[#1d1d1f] dk-text">AI 数据备份</h3>
@@ -2012,7 +2041,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       </section>
 
       {/* ── 诊断 ── */}
-      <section className="mb-8" data-diag-anchor>
+      <section className="mb-8" data-diag-anchor data-settings-tags="诊断 diagnostics 健康检查 反馈 问题 feedback issue bug llm">
         <div className="flex items-center gap-2 mb-3">
           <Stethoscope size={18} className="text-[#07c160]" />
           <h3 className="text-base font-bold text-[#1d1d1f] dk-text">诊断</h3>
@@ -2118,7 +2147,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
       {/* ── App 配置（仅 App 模式） ── */}
       {isAppMode && (
-        <section>
+        <section data-settings-tags="应用配置 数据目录 日志 log 下载 download reveal finder 打包日志 更新 version">
           <div className="flex items-center gap-2 mb-3">
             <Database size={18} className="text-[#07c160]" />
             <h3 className="text-base font-bold text-[#1d1d1f] dk-text">应用配置</h3>

@@ -123,7 +123,7 @@ export const ComparePanel: React.FC<Props> = ({ contacts, onClose }) => {
                 style={{ backgroundColor: `${COLORS[i % COLORS.length]}15` }}>
                 <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
                   {(c.small_head_url || c.big_head_url) ? (
-                    <img src={avatarSrc(c.small_head_url || c.big_head_url)} alt="" className="w-full h-full object-cover"
+                    <img loading="lazy" src={avatarSrc(c.small_head_url || c.big_head_url)} alt="" className="w-full h-full object-cover"
                       onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-white text-xs font-bold"

@@ -8,6 +8,7 @@ import { skillsApi, type SkillRecord } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { RevealLink } from '../common/RevealLink';
 import { RelativeTime } from '../common/RelativeTime';
+import { EmptyState } from '../common/EmptyState';
 
 type SortKey = 'target_name' | 'skill_type' | 'format' | 'created_at' | 'file_size' | 'status';
 type SortDir = 'asc' | 'desc';
@@ -314,13 +315,11 @@ export const SkillsView: React.FC = () => {
 
       {/* 空状态 */}
       {!loading && skills.length === 0 && (
-        <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl p-12 text-center">
-          <Package size={48} className="mx-auto text-gray-300 mb-3" />
-          <p className="text-gray-400 text-sm mb-1">还没有炼化过 Skill</p>
-          <p className="text-gray-300 text-xs">
-            在联系人、群聊或洞察页点击 <Sparkles size={10} className="inline text-[#07c160]" /> 按钮开始炼化
-          </p>
-        </div>
+        <EmptyState
+          icon={<Package size={24} />}
+          title="还没有炼化过 Skill"
+          description="Skill 把聊天记录的人物风格打包成 Claude Code / Codex / Cursor 等工具能用的文件。在联系人、群聊或洞察页点紫色 Sparkles 图标开始炼化。"
+        />
       )}
 
       {/* Skill 列表 */}

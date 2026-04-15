@@ -18,6 +18,8 @@ interface Props {
   open: boolean;
   onClose: () => void;
   appVersion?: string;
+  initialTitle?: string;
+  initialBody?: string;
 }
 
 // GitHub URL 长度预算：实测 issue new 接口 URL 上限约 8200 chars；保守用 7000
@@ -63,7 +65,7 @@ function diagToMarkdown(d: DiagResult): string {
   return lines.join('\n');
 }
 
-export const FeedbackModal: React.FC<Props> = ({ open, onClose, appVersion }) => {
+export const FeedbackModal: React.FC<Props> = ({ open, onClose, appVersion, initialTitle, initialBody }) => {
   const toast = useToast();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -86,6 +88,14 @@ export const FeedbackModal: React.FC<Props> = ({ open, onClose, appVersion }) =>
       .catch(() => { /* 后端未就绪时允许继续，勾选就会跳过 */ })
       .finally(() => setDiagLoading(false));
   }, [open, includeDiag]);
+
+  // 打开时用 initial 预填（ErrorBoundary 触发的反馈会预填 stack）
+  useEffect(() => {
+    if (open) {
+      if (initialTitle) setTitle(initialTitle);
+      if (initialBody) setBody(initialBody);
+    }
+  }, [open, initialTitle, initialBody]);
 
   // 关闭时清状态
   useEffect(() => {

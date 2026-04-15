@@ -372,7 +372,7 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
                   >
                     <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-gray-200">
                       {group.small_head_url ? (
-                        <img src={avatarSrc(group.small_head_url)} alt="" className="w-full h-full object-cover"
+                        <img loading="lazy" src={avatarSrc(group.small_head_url)} alt="" className="w-full h-full object-cover"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       ) : (
                         <div className={`w-full h-full flex items-center justify-center text-white text-xs font-black

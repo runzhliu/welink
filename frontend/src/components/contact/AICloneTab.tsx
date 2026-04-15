@@ -408,7 +408,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
       <div className="flex flex-col items-center py-10 gap-6">
         <div className="relative">
           {avatarUrl ? (
-            <img src={avatarSrc(avatarUrl)} alt="" className="w-20 h-20 rounded-full object-cover opacity-60" />
+            <img loading="lazy" src={avatarSrc(avatarUrl)} alt="" className="w-20 h-20 rounded-full object-cover opacity-60" />
           ) : (
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center text-white text-2xl font-bold opacity-60">
               {displayName[0]}
@@ -459,7 +459,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
       <div className="flex flex-col items-center py-6 gap-5">
         <div className="relative">
           {avatarUrl ? (
-            <img src={avatarSrc(avatarUrl)} alt="" className="w-20 h-20 rounded-full object-cover" />
+            <img loading="lazy" src={avatarSrc(avatarUrl)} alt="" className="w-20 h-20 rounded-full object-cover" />
           ) : (
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center text-white text-2xl font-bold">
               {displayName[0]}
@@ -529,7 +529,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
                   }`}
                 >
                   {g.small_head_url ? (
-                    <img src={avatarSrc(g.small_head_url)} alt="" className="w-4 h-4 rounded-sm object-cover" />
+                    <img loading="lazy" src={avatarSrc(g.small_head_url)} alt="" className="w-4 h-4 rounded-sm object-cover" />
                   ) : <Users size={12} />}
                   <span className={privacyMode ? 'privacy-blur' : ''}>{g.name}</span>
                 </button>
@@ -600,7 +600,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
       <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 dk-border">
         <div className="flex items-center gap-2 min-w-0">
           {avatarUrl ? (
-            <img src={avatarSrc(avatarUrl)} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+            <img loading="lazy" src={avatarSrc(avatarUrl)} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
           ) : (
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
               {displayName[0]}
@@ -701,7 +701,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-2`}>
             {msg.role === 'assistant' && (
               avatarUrl ? (
-                <img src={avatarSrc(avatarUrl)} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0 mt-1" />
+                <img loading="lazy" src={avatarSrc(avatarUrl)} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0 mt-1" />
               ) : (
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-1">
                   {displayName[0]}

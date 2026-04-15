@@ -220,7 +220,7 @@ export const AnniversaryPage: React.FC<Props> = ({ contacts, onContactClick }) =
                   {daysLabel(item.daysUntil)}
                 </span>
                 {item.avatar ? (
-                  <img src={avatarSrc(item.avatar)} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                  <img loading="lazy" src={avatarSrc(item.avatar)} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#ff9500] to-[#fa5151] flex items-center justify-center text-white flex-shrink-0">
@@ -263,7 +263,7 @@ export const AnniversaryPage: React.FC<Props> = ({ contacts, onContactClick }) =
                   onClick={() => handleContactClick(e.username)}
                 >
                   {e.avatar_url ? (
-                    <img src={avatarSrc(e.avatar_url)} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                    <img loading="lazy" src={avatarSrc(e.avatar_url)} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   ) : (
                     <div className="w-8 h-8 rounded-full bg-pink-50 flex items-center justify-center flex-shrink-0">
@@ -313,7 +313,7 @@ export const AnniversaryPage: React.FC<Props> = ({ contacts, onContactClick }) =
                   >
                     <div className="flex items-center gap-3">
                       {m.avatar_url ? (
-                        <img src={avatarSrc(m.avatar_url)} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                        <img loading="lazy" src={avatarSrc(m.avatar_url)} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       ) : (
                         <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">

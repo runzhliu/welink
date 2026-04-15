@@ -127,7 +127,7 @@ const SubjectPicker: React.FC<{
           return (
             <div key={id} className="flex items-center gap-1 pl-1 pr-1 py-0.5 bg-[#f0faf4] dark:bg-[#07c160]/15 border border-[#07c160]/25 rounded-full">
               {avatar
-                ? <img src={avatarSrc(avatar)} className="w-5 h-5 rounded-full object-cover flex-shrink-0" alt={name} />
+                ? <img loading="lazy" src={avatarSrc(avatar)} className="w-5 h-5 rounded-full object-cover flex-shrink-0" alt={name} />
                 : item.kind === 'group'
                   ? <div className="w-5 h-5 rounded-full bg-[#576b95]/15 flex items-center justify-center flex-shrink-0"><Users size={10} className="text-[#576b95]" /></div>
                   : <div className="w-5 h-5 rounded-full bg-[#07c160] flex items-center justify-center text-white text-[9px] font-black flex-shrink-0">{name[0]}</div>
@@ -192,7 +192,7 @@ const SubjectPicker: React.FC<{
                     onMouseDown={e => { e.preventDefault(); onAdd({ kind: 'contact', data: c }); setQuery(''); setOpen(false); }}
                   >
                     {avatar
-                      ? <img src={avatarSrc(avatar)} className="w-7 h-7 rounded-full object-cover flex-shrink-0" alt={name} />
+                      ? <img loading="lazy" src={avatarSrc(avatar)} className="w-7 h-7 rounded-full object-cover flex-shrink-0" alt={name} />
                       : <div className="w-7 h-7 rounded-full bg-[#07c160]/20 flex items-center justify-center text-[#07c160] text-sm font-black flex-shrink-0">{name[0]}</div>
                     }
                     <div className="flex-1 min-w-0">
@@ -217,7 +217,7 @@ const SubjectPicker: React.FC<{
                     onMouseDown={e => { e.preventDefault(); onAdd({ kind: 'group', data: g }); setQuery(''); setOpen(false); }}
                   >
                     {avatar
-                      ? <img src={avatarSrc(avatar)} className="w-7 h-7 rounded-full object-cover flex-shrink-0" alt={name} />
+                      ? <img loading="lazy" src={avatarSrc(avatar)} className="w-7 h-7 rounded-full object-cover flex-shrink-0" alt={name} />
                       : <div className="w-7 h-7 rounded-full bg-[#576b95]/20 flex items-center justify-center flex-shrink-0"><Users size={14} className="text-[#576b95]" /></div>
                     }
                     <div className="flex-1 min-w-0">
@@ -871,7 +871,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
                   else if (item.kind === 'group' && onGroupClick) onGroupClick(item.data);
                 };
                 const avatar = headerAvatar
-                  ? <img src={avatarSrc(headerAvatar)} className="w-6 h-6 rounded-full object-cover flex-shrink-0" alt={headerTitle} />
+                  ? <img loading="lazy" src={avatarSrc(headerAvatar)} className="w-6 h-6 rounded-full object-cover flex-shrink-0" alt={headerTitle} />
                   : item.kind === 'group'
                     ? <div className="w-6 h-6 rounded-full bg-[#576b95]/20 flex items-center justify-center flex-shrink-0"><Users size={13} className="text-[#576b95]" /></div>
                     : <div className="w-6 h-6 rounded-full bg-[#07c160] flex items-center justify-center text-white text-[10px] font-black flex-shrink-0">{headerTitle[0]}</div>;
@@ -892,7 +892,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
                       const av = itemAvatar(item);
                       const nm = itemName(item);
                       return av
-                        ? <img key={i} src={avatarSrc(av)} className="w-6 h-6 rounded-full object-cover border-2 border-white dark:border-[#1c1c1e] flex-shrink-0" alt={nm} />
+                        ? <img loading="lazy" key={i} src={avatarSrc(av)} className="w-6 h-6 rounded-full object-cover border-2 border-white dark:border-[#1c1c1e] flex-shrink-0" alt={nm} />
                         : item.kind === 'group'
                           ? <div key={i} className="w-6 h-6 rounded-full bg-[#576b95]/20 border-2 border-white dark:border-[#1c1c1e] flex items-center justify-center flex-shrink-0"><Users size={10} className="text-[#576b95]" /></div>
                           : <div key={i} className="w-6 h-6 rounded-full bg-[#07c160] border-2 border-white dark:border-[#1c1c1e] flex items-center justify-center text-white text-[8px] font-black flex-shrink-0">{nm[0]}</div>;
@@ -944,7 +944,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
       {/* Hero */}
       <div className="text-center mb-8">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 shadow-lg shadow-green-100 overflow-hidden">
-          <img src="/favicon.svg" alt="WeLink" className="w-full h-full" />
+          <img loading="lazy" src="/favicon.svg" alt="WeLink" className="w-full h-full" />
         </div>
         <h1 className="text-3xl font-black text-[#1d1d1f] dark:text-gray-100 tracking-tight">WeLink</h1>
         <p className="text-gray-400 mt-1.5 text-sm font-medium">想了解哪段关系？直接问我</p>
@@ -1052,7 +1052,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
                 >
                   <div className="relative">
                     {avatar
-                      ? <img src={avatarSrc(avatar)} className="w-10 h-10 rounded-full object-cover" alt={name} />
+                      ? <img loading="lazy" src={avatarSrc(avatar)} className="w-10 h-10 rounded-full object-cover" alt={name} />
                       : item.kind === 'group'
                         ? <div className="w-10 h-10 rounded-full bg-[#576b95]/15 flex items-center justify-center"><Users size={18} className="text-[#576b95]" /></div>
                         : <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black">{name[0]}</div>

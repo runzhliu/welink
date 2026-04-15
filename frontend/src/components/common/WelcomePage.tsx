@@ -56,7 +56,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
         {/* Logo & Title */}
         <div className="text-center mb-10">
           <div className="inline-block w-16 h-16 rounded-2xl mb-4 shadow-lg shadow-green-200 overflow-hidden">
-            <img src="/favicon.svg" alt="WeLink" className="w-full h-full" />
+            <img loading="lazy" src="/favicon.svg" alt="WeLink" className="w-full h-full" />
           </div>
           <h1 className="text-4xl font-black text-[#1d1d1f] dk-text tracking-tight">WeLink</h1>
           <p className="text-gray-400 mt-2 text-sm font-medium">微信聊天记录 AI 助手</p>
