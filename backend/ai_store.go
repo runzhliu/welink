@@ -320,6 +320,94 @@ func SearchAIConversations(query string, limit int) ([]AIConvSearchHit, error) {
 	return results, nil
 }
 
+// AIUsageStats 是所有 ai_conversations 里 assistant 消息的聚合统计。
+// Tokens 的估算：tokens_per_sec * elapsed_secs（LLM 返回的 stream 速率），
+// 不准确但够用来展示"大致用了多少"。
+type AIUsageStats struct {
+	TotalConversations int                   `json:"total_conversations"`
+	TotalAssistantMsgs int                   `json:"total_assistant_msgs"`
+	TotalChars         int64                 `json:"total_chars"`
+	TotalTokens        int64                 `json:"total_tokens"`
+	TotalElapsedSec    float64               `json:"total_elapsed_sec"`
+	ByProvider         []AIUsageProviderStat `json:"by_provider"`
+}
+
+// AIUsageProviderStat 单个 provider 的小计
+type AIUsageProviderStat struct {
+	Provider    string  `json:"provider"`
+	Model       string  `json:"model,omitempty"`
+	Count       int     `json:"count"`
+	Chars       int64   `json:"chars"`
+	Tokens      int64   `json:"tokens"`
+	ElapsedSec  float64 `json:"elapsed_sec"`
+}
+
+// GetAIUsageStats 扫描所有 ai_conversations 汇总用量。数据量小（每联系人至多 1 条），
+// 全表扫 + 每行 JSON 解析是可接受的。
+func GetAIUsageStats() (*AIUsageStats, error) {
+	aiDBMu.Lock()
+	defer aiDBMu.Unlock()
+	if aiDB == nil {
+		return nil, fmt.Errorf("ai_store: database not initialized")
+	}
+
+	rows, err := aiDB.Query("SELECT messages FROM ai_conversations")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	stats := &AIUsageStats{}
+	byProvider := map[string]*AIUsageProviderStat{} // key: provider|model
+
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			continue
+		}
+		var msgs []AIMessage
+		if err := json.Unmarshal([]byte(raw), &msgs); err != nil {
+			continue
+		}
+		stats.TotalConversations++
+		for _, m := range msgs {
+			if m.Role != "assistant" || m.Content == "" {
+				continue
+			}
+			stats.TotalAssistantMsgs++
+			chars := int64(m.CharCount)
+			if chars == 0 {
+				chars = int64(len([]rune(m.Content)))
+			}
+			tokens := int64(float64(m.TokensPerSec) * m.ElapsedSecs)
+			stats.TotalChars += chars
+			stats.TotalTokens += tokens
+			stats.TotalElapsedSec += m.ElapsedSecs
+
+			key := m.Provider + "|" + m.Model
+			if m.Provider == "" {
+				key = "未知|"
+			}
+			p := byProvider[key]
+			if p == nil {
+				p = &AIUsageProviderStat{Provider: m.Provider, Model: m.Model}
+				if p.Provider == "" {
+					p.Provider = "未知"
+				}
+				byProvider[key] = p
+			}
+			p.Count++
+			p.Chars += chars
+			p.Tokens += tokens
+			p.ElapsedSec += m.ElapsedSecs
+		}
+	}
+	for _, v := range byProvider {
+		stats.ByProvider = append(stats.ByProvider, *v)
+	}
+	return stats, nil
+}
+
 // DeleteAIConversation 删除指定 key 的记录。
 func DeleteAIConversation(key string) error {
 	aiDBMu.Lock()

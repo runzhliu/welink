@@ -247,6 +247,81 @@ var tools = []Tool{
 			Required: []string{"from", "to"},
 		},
 	},
+	{
+		Name:        "get_self_portrait",
+		Description: "获取本人自画像：总发送量、平均消息长度、活跃时段、最常联系的人等，用于「我自己是怎样的社交者」这类问题。",
+		InputSchema: InputSchema{Type: "object"},
+	},
+	{
+		Name:        "get_money_overview",
+		Description: "获取红包和转账的全局概览，包括各联系人收发金额统计。",
+		InputSchema: InputSchema{Type: "object"},
+	},
+	{
+		Name:        "get_urls",
+		Description: "获取聊天记录里分享过的所有 URL 链接，包含域名分布和每条链接的上下文。用于「我都被分享过哪些链接」。",
+		InputSchema: InputSchema{Type: "object"},
+	},
+	{
+		Name:        "get_cooling_contacts",
+		Description: "获取关系降温榜：曾经高互动但最近消息量大幅下降的联系人。用于「谁和我渐行渐远」。",
+		InputSchema: InputSchema{Type: "object"},
+	},
+	{
+		Name:        "get_companion_time",
+		Description: "获取每个联系人的陪伴时长（基于 session 切分估算的累计聊天分钟数），以及 Top 排名。",
+		InputSchema: InputSchema{Type: "object"},
+	},
+	{
+		Name:        "get_common_circle",
+		Description: "分析两个联系人的共同社交圈：共同的群聊 + 推测的共同好友。",
+		InputSchema: InputSchema{
+			Type: "object",
+			Properties: map[string]Property{
+				"user1": {Type: "string", Description: "第一个联系人的 username"},
+				"user2": {Type: "string", Description: "第二个联系人的 username"},
+			},
+			Required: []string{"user1", "user2"},
+		},
+	},
+	{
+		Name:        "get_contact_similarity",
+		Description: "找出哪些联系人彼此「最像」（基于活跃时段、消息长度等特征）。返回 Top N 对。",
+		InputSchema: InputSchema{
+			Type: "object",
+			Properties: map[string]Property{
+				"top": {Type: "string", Description: "返回前 N 对，默认 20"},
+			},
+		},
+	},
+	{
+		Name:        "search_messages",
+		Description: "跨所有联系人/群聊全局搜索消息内容。用于「我有没有和谁聊过 xxx」。",
+		InputSchema: InputSchema{
+			Type: "object",
+			Properties: map[string]Property{
+				"q":    {Type: "string", Description: "搜索关键字"},
+				"type": {Type: "string", Description: "搜索范围：all（默认）| contact | group"},
+			},
+			Required: []string{"q"},
+		},
+	},
+	{
+		Name:        "get_ai_usage_stats",
+		Description: "获取 WeLink 本地 AI 对话的用量统计（字符数、估算 tokens，按 provider/model 分组）。",
+		InputSchema: InputSchema{Type: "object"},
+	},
+	{
+		Name:        "get_relationship_forecast",
+		Description: "获取关系动态预测：基于过去 6 个月消息节奏给每个联系人打 4 档（升温/稳定/降温/濒危）。默认返回「建议主动联系」的 Top N。include_all=1 时返回全 4 档完整列表 + 每人最近 12 月消息数折线。",
+		InputSchema: InputSchema{
+			Type: "object",
+			Properties: map[string]Property{
+				"top":         {Type: "string", Description: "默认 5；建议主动联系的条数"},
+				"include_all": {Type: "string", Description: "填 1 返回全 4 档 + 12 月折线；默认 0 只返回 Top N"},
+			},
+		},
+	},
 }
 
 // ─── Tool 调用处理 ───────────────────────────────────────────────────
@@ -338,6 +413,66 @@ func (s *Server) callTool(name string, args json.RawMessage) CallToolResult {
 			return errorResult("to 必须是 Unix 时间戳（整数）")
 		}
 		raw, err = s.fetch("/api/stats/filter", map[string]string{"from": from, "to": to})
+
+	case "get_self_portrait":
+		raw, err = s.fetch("/api/contacts/self-portrait", nil)
+
+	case "get_money_overview":
+		raw, err = s.fetch("/api/contacts/money-overview", nil)
+
+	case "get_urls":
+		raw, err = s.fetch("/api/contacts/urls", nil)
+
+	case "get_cooling_contacts":
+		raw, err = s.fetch("/api/contacts/cooling", nil)
+
+	case "get_companion_time":
+		raw, err = s.fetch("/api/fun/companion-time", nil)
+
+	case "get_common_circle":
+		u1 := argMap["user1"]
+		u2 := argMap["user2"]
+		if u1 == "" || u2 == "" {
+			return errorResult("缺少参数: user1 和 user2")
+		}
+		raw, err = s.fetch("/api/contacts/common-circle", map[string]string{"user1": u1, "user2": u2})
+
+	case "get_contact_similarity":
+		params := map[string]string{}
+		if t := argMap["top"]; t != "" {
+			if _, e := strconv.Atoi(t); e != nil {
+				return errorResult("top 必须是整数")
+			}
+			params["top"] = t
+		}
+		raw, err = s.fetch("/api/contacts/similarity", params)
+
+	case "search_messages":
+		q := argMap["q"]
+		if q == "" {
+			return errorResult("缺少参数: q")
+		}
+		params := map[string]string{"q": q}
+		if t := argMap["type"]; t != "" {
+			params["type"] = t
+		}
+		raw, err = s.fetch("/api/search", params)
+
+	case "get_ai_usage_stats":
+		raw, err = s.fetch("/api/ai/usage-stats", nil)
+
+	case "get_relationship_forecast":
+		params := map[string]string{}
+		if t := argMap["top"]; t != "" {
+			if _, e := strconv.Atoi(t); e != nil {
+				return errorResult("top 必须是整数")
+			}
+			params["top"] = t
+		}
+		if argMap["include_all"] == "1" {
+			params["include_all"] = "1"
+		}
+		raw, err = s.fetch("/api/contacts/relationship-forecast", params)
 
 	default:
 		return errorResult("未知工具: " + name)

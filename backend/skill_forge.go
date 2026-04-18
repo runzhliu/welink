@@ -42,7 +42,13 @@ type SkillPackage struct {
 	DisplayName  string    `json:"display_name"`  // 人类可读名
 	Description  string    `json:"description"`   // 一句话描述
 	GeneratedAt  time.Time `json:"generated_at"`
-	MessageCount int       `json:"message_count"` // 分析用的消息数
+	// MessageCount 是喂给 LLM 前可用的文本样本数（sanitize 之前、smartSample 之后的 outer 值）。
+	// 非文本消息（图片/表情/红包/小程序分享）已被排除 —— footer 文案明确写成"文本消息"
+	// 避免用户看到"6751 条发言却只生成 132"的困惑。
+	MessageCount int `json:"message_count"`
+	// LLMSawCount 是 LLM 实际吃进去的条数；若走了内容风控重试会显著小于 MessageCount
+	// 仅写入 skill-metadata.json，不显示在 footer（避免给用户添堵）。
+	LLMSawCount int `json:"llm_saw_count,omitempty"`
 
 	// LLM 抽取的画像
 	Personality        string   `json:"personality"`         // 性格特征
@@ -254,7 +260,10 @@ func extractSkillPackage(
 		Name:               slugify(displayName),
 		DisplayName:        displayName,
 		GeneratedAt:        time.Now(),
+		// MessageCount 这里先填"LLM 实际看到的条数"；ForgeSkillZip 会用 outer samples 覆盖
+		// 成用户可见的"总可用文本数"。两个值都会进 metadata，便于排障。
 		MessageCount:       len(samples),
+		LLMSawCount:        len(samples),
 		Personality:        extract.Personality,
 		Style:              extract.Style,
 		Vocabulary:         extract.Vocabulary,
@@ -894,8 +903,17 @@ func buildMainBody(pkg *SkillPackage) string {
 	}
 
 	sb.WriteString("---\n\n")
-	sb.WriteString(fmt.Sprintf("_由 WeLink 基于 %d 条聊天记录自动生成 · %s_\n",
-		pkg.MessageCount, pkg.GeneratedAt.Format("2006-01-02 15:04")))
+	// 明确写"文本消息"：非文本（图片/表情/红包/链接等）已被过滤掉，避免用户看到
+	// 群里"6751 条发言"但这里只有 132 而困惑。
+	footer := fmt.Sprintf("_由 WeLink 基于 %d 条文本消息自动生成（非文本类消息已过滤）· %s_\n",
+		pkg.MessageCount, pkg.GeneratedAt.Format("2006-01-02 15:04"))
+	if pkg.LLMSawCount > 0 && pkg.LLMSawCount < pkg.MessageCount {
+		// LLM 实际吃进去的比采样池小：内容风控触发 + 降级重试。
+		// 告诉用户一声，便于判断为什么风格"味道"不够。
+		footer = fmt.Sprintf("_由 WeLink 基于 %d 条文本消息生成（非文本已过滤；因内容风控，LLM 实际采用 %d 条）· %s_\n",
+			pkg.MessageCount, pkg.LLMSawCount, pkg.GeneratedAt.Format("2006-01-02 15:04"))
+	}
+	sb.WriteString(footer)
 	return sb.String()
 }
 

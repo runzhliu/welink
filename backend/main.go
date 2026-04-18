@@ -300,6 +300,16 @@ func serverMain() {
 		if hasFrontend {
 			needsSetup = !configured || !ready
 		}
+		// "我"的信息（wxid + 头像 + 昵称）：服务就绪时从私聊消息 sender 反推
+		var selfInfo interface{}
+		if ready {
+			svcMu.RLock()
+			if contactSvc != nil {
+				selfInfo = contactSvc.GetSelfInfo()
+			}
+			svcMu.RUnlock()
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"app_mode":     hasFrontend,
 			"needs_setup":  needsSetup,
@@ -309,7 +319,8 @@ func serverMain() {
 			"data_dir":     prefs.DataDir,
 			"reason":       reason,
 			"probed_paths": probeDataDirs(prefs.DataDir),
-			"can_demo":     hasFrontend, // 桌面版可一键切 Demo；Docker 用户走 docker-compose.demo.yml
+			"can_demo":     hasFrontend,
+			"self_info":    selfInfo,
 		})
 	})
 
@@ -355,20 +366,18 @@ func serverMain() {
 			return
 		}
 
-		// 构建资产下载链接（含 GitHub 直链和镜像加速）
+		// 构建资产下载链接（仅 GitHub 官方直链，不再提供第三方加速镜像）
 		type assetInfo struct {
-			Name      string `json:"name"`
-			Size      int64  `json:"size"`
-			URL       string `json:"url"`
-			MirrorURL string `json:"mirror_url"`
+			Name string `json:"name"`
+			Size int64  `json:"size"`
+			URL  string `json:"url"`
 		}
 		var assets []assetInfo
 		for _, a := range release.Assets {
 			assets = append(assets, assetInfo{
-				Name:      a.Name,
-				Size:      a.Size,
-				URL:       a.BrowserDownloadURL,
-				MirrorURL: "https://ghfast.top/" + a.BrowserDownloadURL,
+				Name: a.Name,
+				Size: a.Size,
+				URL:  a.BrowserDownloadURL,
 			})
 		}
 
@@ -793,6 +802,27 @@ func serverMain() {
 		c.JSON(http.StatusOK, resp)
 	})
 
+	// 关系预测「不再推荐此人」名单保存
+	api.PUT("/preferences/forecast-ignored", func(c *gin.Context) {
+		var body struct {
+			ForecastIgnored []string `json:"forecast_ignored"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		if body.ForecastIgnored == nil {
+			body.ForecastIgnored = []string{}
+		}
+		existing := loadPreferences()
+		existing.ForecastIgnored = body.ForecastIgnored
+		if err := savePreferences(existing); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"forecast_ignored": existing.ForecastIgnored})
+	})
+
 	// 自定义纪念日保存
 	api.PUT("/preferences/anniversaries", func(c *gin.Context) {
 		var body struct {
@@ -1035,6 +1065,16 @@ func serverMain() {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"messages": msgs})
+	})
+
+	// GET /api/ai/usage-stats — 汇总所有 AI 对话的 token / 字符用量
+	api.GET("/ai/usage-stats", func(c *gin.Context) {
+		stats, err := GetAIUsageStats()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, stats)
 	})
 
 	// GET /api/ai/conversations/search?q=xxx&limit=30 — 在所有 AI 对话里做子串搜索
@@ -2669,6 +2709,23 @@ func serverMain() {
 			c.JSON(http.StatusOK, getSvc().GetWordCloud(uname, includeMine))
 		})
 
+		// 秘语雷达 — 某联系人相对活跃联系人池的 TF-IDF Top 5"专属词"
+		// 首次调用会同步构建全局 DF（扫描 Top 50 活跃联系人词云，可能需要几秒），之后命中缓存
+		prot.GET("/contacts/secret-words", func(c *gin.Context) {
+			uname := c.Query("username")
+			if uname == "" {
+				c.JSON(400, gin.H{"error": "username required"})
+				return
+			}
+			topN := 5
+			if v := c.Query("top"); v != "" {
+				if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 30 {
+					topN = n
+				}
+			}
+			c.JSON(http.StatusOK, gin.H{"words": getSvc().GetSecretWords(uname, topN)})
+		})
+
 		// 群聊列表
 		prot.GET("/groups", func(c *gin.Context) {
 			c.JSON(http.StatusOK, getSvc().GetGroups())
@@ -2679,6 +2736,18 @@ func serverMain() {
 
 		// 纪念日 & 提醒
 		registerAnniversaryRoutes(prot, getSvc)
+
+		// 关系动态预测
+		registerForecastRoutes(prot, getSvc)
+
+		// AI 开场白草稿
+		registerIcebreakerRoutes(prot, getSvc)
+
+		// 群聊 AI 年报
+		registerGroupYearReviewRoutes(prot, getSvc)
+
+		// 导出中心（Markdown / Notion / 飞书）
+		registerExportRoutes(prot, getSvc)
 
 		// 群聊某天聊天记录
 		prot.GET("/groups/messages", func(c *gin.Context) {
@@ -3084,6 +3153,174 @@ func serverMain() {
 			c.JSON(http.StatusOK, result)
 		})
 
+		// POST /api/databases/nl-query — 自然语言查数据：LLM 生成 SQL → 执行 → 返回
+		// 支持两种模式：
+		//   mode="direct"          — 单库直查（LLM 返回 {db, sql}）
+		//   mode="contact_messages" — 跨库联系人消息查询（LLM 返回 {contact_hint, message_sql}，
+		//                             后端自动查联系人 → 计算 Chat_ 表名 → 找到 message DB → 执行）
+		prot.POST("/databases/nl-query", func(c *gin.Context) {
+			if isDemoMode {
+				demoBlockRawSQL(c)
+				return
+			}
+			var body struct {
+				Question  string `json:"question"`
+				ProfileID string `json:"profile_id"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil || strings.TrimSpace(body.Question) == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "请输入问题"})
+				return
+			}
+
+			prefs := loadPreferences()
+			cfg := llmConfigForProfile(body.ProfileID, prefs)
+			if cfg.provider == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
+				return
+			}
+
+			schema := getMgr().GetSchemaContext()
+			systemPrompt := `你是一个 SQLite 专家。用户会用中文问关于微信聊天数据的问题。
+你要根据提供的数据库 schema，生成可执行的查询。
+
+支持两种模式（根据问题自动选择）：
+
+模式 1 — 单库直查（不涉及特定联系人的消息内容时用这个）：
+  {"mode":"direct", "db":"数据库名.db", "sql":"SELECT ...", "explain":"说明"}
+
+模式 2 — 联系人消息查询（涉及"某个人的消息/聊天记录"时用这个）：
+  {"mode":"contact_messages", "contact_hint":"老婆", "message_sql":"SELECT ... FROM [{{TABLE}}] ...", "explain":"说明"}
+  - contact_hint 是联系人的备注名/昵称/关键词（后端会自动在 contact 表里模糊查找）
+  - message_sql 里用 {{TABLE}} 占位符代替实际表名（后端会自动替换为 Chat_<md5>）
+  - 后端会自动找到正确的 message_N.db 并执行
+
+规则：
+1. 只返回裸 JSON，不要 markdown code fence
+2. 只允许 SELECT / PRAGMA
+3. LIMIT 50（除非用户要更多）
+4. 时间戳转日期：datetime(create_time, 'unixepoch', 'localtime')
+5. 如果无法回答：{"mode":"direct", "db":"", "sql":"", "explain":"无法回答：原因"}`
+
+			userPrompt := fmt.Sprintf("数据库 schema：\n%s\n用户问题：%s", schema, body.Question)
+
+			raw, err := CompleteLLM([]LLMMessage{
+				{Role: "system", Content: systemPrompt},
+				{Role: "user", Content: userPrompt},
+			}, prefs)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "LLM 调用失败：" + err.Error()})
+				return
+			}
+
+			// 清理 markdown fence
+			raw = strings.TrimSpace(raw)
+			if strings.HasPrefix(raw, "```") {
+				if idx := strings.Index(raw, "\n"); idx >= 0 { raw = raw[idx+1:] }
+				if idx := strings.LastIndex(raw, "```"); idx >= 0 { raw = raw[:idx] }
+				raw = strings.TrimSpace(raw)
+			}
+
+			var parsed struct {
+				Mode         string `json:"mode"`
+				DB           string `json:"db"`
+				SQL          string `json:"sql"`
+				ContactHint  string `json:"contact_hint"`
+				MessageSQL   string `json:"message_sql"`
+				Explain      string `json:"explain"`
+			}
+			if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+				c.JSON(http.StatusOK, gin.H{"generated_sql": raw, "error": "LLM 返回格式异常"})
+				return
+			}
+
+			switch parsed.Mode {
+			case "contact_messages":
+				// 跨库联系人消息查询
+				if parsed.ContactHint == "" || parsed.MessageSQL == "" {
+					c.JSON(http.StatusOK, gin.H{"explain": parsed.Explain, "error": "缺少 contact_hint 或 message_sql"})
+					return
+				}
+				// Step 1: 查联系人
+				hint := parsed.ContactHint
+				contactResult := getMgr().ExecQuery("contact.db", fmt.Sprintf(
+					"SELECT username, COALESCE(remark,'') AS remark, nick_name FROM contact WHERE remark LIKE '%%%s%%' OR nick_name LIKE '%%%s%%' LIMIT 1",
+					hint, hint))
+				if contactResult.Error != "" || len(contactResult.Rows) == 0 {
+					c.JSON(http.StatusOK, gin.H{
+						"explain": parsed.Explain,
+						"error":   fmt.Sprintf("找不到匹配「%s」的联系人", hint),
+					})
+					return
+				}
+				username := ""
+				if s, ok := contactResult.Rows[0][0].(string); ok { username = s }
+				if username == "" {
+					c.JSON(http.StatusOK, gin.H{"error": "联系人 username 为空"})
+					return
+				}
+				contactName := ""
+				if s, ok := contactResult.Rows[0][1].(string); ok && s != "" { contactName = s }
+				if contactName == "" {
+					if s, ok := contactResult.Rows[0][2].(string); ok { contactName = s }
+				}
+
+				// Step 2: 计算表名 + 找到 DB + 执行
+				tableName := db.GetTableName(username)
+				finalSQL := strings.ReplaceAll(parsed.MessageSQL, "{{TABLE}}", tableName)
+
+				// 遍历 message DBs 找到有这张表的那个
+				var result *db.QueryResult
+				var usedDB string
+				for _, mdb := range getMgr().MessageDBs {
+					var cnt int
+					if err := mdb.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='%s'", tableName)).Scan(&cnt); err != nil || cnt == 0 {
+						continue
+					}
+					// 找到了，直接在这个连接上执行
+					r := db.ExecQueryOnDB(mdb, finalSQL)
+					result = r
+					// 找 DB 文件名
+					dbRows, _ := mdb.Query("PRAGMA database_list")
+					if dbRows != nil {
+						for dbRows.Next() {
+							var seq int; var name, file string
+							dbRows.Scan(&seq, &name, &file)
+							if seq == 0 { usedDB = filepath.Base(file); break }
+						}
+						dbRows.Close()
+					}
+					break
+				}
+				if result == nil {
+					c.JSON(http.StatusOK, gin.H{
+						"explain": fmt.Sprintf("联系人「%s」(%s) 的消息表 %s 未找到", contactName, username, tableName),
+						"error":   "消息表不存在",
+					})
+					return
+				}
+				c.JSON(http.StatusOK, gin.H{
+					"generated_sql": fmt.Sprintf("-- 联系人: %s (%s)\n-- 表: %s @ %s\n%s", contactName, username, tableName, usedDB, finalSQL),
+					"db":            usedDB,
+					"explain":       fmt.Sprintf("%s（联系人: %s）", parsed.Explain, contactName),
+					"result":        result,
+				})
+
+			default:
+				// 单库直查（原逻辑）
+				if parsed.SQL == "" || parsed.DB == "" {
+					c.JSON(http.StatusOK, gin.H{"explain": parsed.Explain, "error": parsed.Explain})
+					return
+				}
+				result := getMgr().ExecQuery(parsed.DB, parsed.SQL)
+				c.JSON(http.StatusOK, gin.H{
+					"generated_sql": parsed.SQL,
+					"db":            parsed.DB,
+					"explain":       parsed.Explain,
+					"result":        result,
+				})
+			}
+		})
+
 		// 初始化/重新索引（前端传入时间范围后调用）
 		prot.POST("/init", func(c *gin.Context) {
 			var body struct {
@@ -3102,6 +3339,66 @@ func serverMain() {
 		prot.POST("/cancel-index", func(c *gin.Context) {
 			cancelled := getSvc().CancelIndexing()
 			c.JSON(200, gin.H{"cancelled": cancelled})
+		})
+
+		// GET /api/fun/companion-time — 每个联系人的陪伴时长（session-based）
+		// 内部缓存 10 分钟；refresh=1 强制刷新
+		prot.GET("/fun/companion-time", func(c *gin.Context) {
+			refresh := c.Query("refresh") == "1"
+			stats, err := getSvc().GetCompanionStats(refresh)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, stats)
+		})
+
+		// GET /api/fun/ghost-months — 曾经熟悉、后来忽然"消失"的朋友（单月消息骤降 ≥80%）
+		// 内部缓存 30 分钟；refresh=1 强制刷新。
+		prot.GET("/fun/ghost-months", func(c *gin.Context) {
+			refresh := c.Query("refresh") == "1"
+			result, err := getSvc().GetGhostMonths(refresh)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, result)
+		})
+
+		// GET /api/fun/like-me — 聊天风格最接近"我的平均对话基线"的联系人 Top 5
+		// 内部缓存 30 分钟；refresh=1 强制刷新。
+		prot.GET("/fun/like-me", func(c *gin.Context) {
+			refresh := c.Query("refresh") == "1"
+			result, err := getSvc().GetLikeMeFriends(refresh)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, result)
+		})
+
+		// GET /api/fun/word-almanac — 每年"我发送的消息"的代表词（最高频词 + 亚军）
+		// 缓存 2 小时。
+		prot.GET("/fun/word-almanac", func(c *gin.Context) {
+			refresh := c.Query("refresh") == "1"
+			result, err := getSvc().GetWordAlmanac(refresh)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, result)
+		})
+
+		// GET /api/fun/insomnia-top — 凌晨 2-4 点我呼叫后最常被回应的 Top 5
+		// 缓存 30 分钟。
+		prot.GET("/fun/insomnia-top", func(c *gin.Context) {
+			refresh := c.Query("refresh") == "1"
+			result, err := getSvc().GetInsomniaTop(refresh)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, result)
 		})
 
 	}
@@ -3467,14 +3764,20 @@ func serverMain() {
 		})
 	}
 
-	log.Printf("WeLink Backend serving on :%s", prefs.Port)
+	// 默认仅监听 127.0.0.1，避免新增的 /api/export/* 等端点暴露在 LAN 上
+	// 造成凭据/聊天数据泄漏。Docker/反代部署可显式打开 WELINK_LISTEN_LAN=1。
+	bindAddr := "127.0.0.1:" + prefs.Port
+	if os.Getenv("WELINK_LISTEN_LAN") == "1" {
+		bindAddr = ":" + prefs.Port
+	}
+	log.Printf("WeLink Backend serving on %s", bindAddr)
 
 	if hasFrontend {
 		// App 模式：通知 webview 服务器已就绪，然后阻塞
-		go r.Run(":" + prefs.Port) //nolint:errcheck
+		go r.Run(bindAddr) //nolint:errcheck
 		signalServerReady(prefs.Port)
 		select {} // 等 webview 窗口关闭后 os.Exit
 	}
 
-	r.Run(":" + prefs.Port) //nolint:errcheck
+	r.Run(bindAddr) //nolint:errcheck
 }

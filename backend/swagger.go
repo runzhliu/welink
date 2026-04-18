@@ -18,12 +18,15 @@ func swaggerSpec() []byte {
   "tags": [
     { "name": "初始化", "description": "索引与状态" },
     { "name": "联系人", "description": "好友统计与分析" },
+    { "name": "关系预测", "description": "4 档趋势 + 建议主动联系 + AI 开场白" },
     { "name": "群聊", "description": "群聊分析" },
+    { "name": "有趣发现", "description": "趣味统计卡片" },
     { "name": "日历", "description": "时光机 / 日历 / 纪念日" },
     { "name": "搜索", "description": "消息全文搜索" },
     { "name": "AI", "description": "AI 对话分析与补全" },
     { "name": "AI 分身", "description": "学习联系人风格并模拟对话" },
     { "name": "AI 群聊模拟", "description": "按群友风格模拟群聊" },
+    { "name": "Skills", "description": "技能包炼化与管理" },
     { "name": "RAG", "description": "FTS5 全文检索 + 向量混合检索" },
     { "name": "向量检索", "description": "语义向量嵌入与相似度搜索" },
     { "name": "记忆提炼", "description": "LLM 提炼关键事实并持久化" },
@@ -31,6 +34,7 @@ func swaggerSpec() []byte {
     { "name": "偏好设置", "description": "用户偏好（LLM 配置、屏蔽名单等）" },
     { "name": "应用管理", "description": "App 模式配置与日志（macOS/Windows 桌面端）" },
     { "name": "数据库", "description": "原始数据库管理与 SQL 查询" },
+    { "name": "导出中心", "description": "年度回顾/对话归档/AI 历史/记忆图谱 × Markdown/Notion/飞书/WebDAV/S3/Dropbox/Google Drive/OneDrive" },
     { "name": "系统", "description": "头像代理、健康检查等" }
   ],
   "paths": {
@@ -256,6 +260,25 @@ func swaggerSpec() []byte {
         "description": "走预校验 + reinitSvc 热替换，无需重启进程。前端应清掉 hasStarted 并 reload。",
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "id": { "type": "string" } } } } } },
         "responses": { "200": { "description": "OK" }, "400": { "description": "profile 无效或校验失败" } }
+      }
+    },
+    "/fun/companion-time": {
+      "get": {
+        "tags": ["联系人"],
+        "summary": "陪伴时长统计（基于 session）",
+        "description": "把每个联系人的消息按 SessionGapSeconds 切成会话，累加各会话的时长，得到总陪伴分钟数。结果缓存 10 分钟；传 refresh=1 强制重算。",
+        "parameters": [
+          { "name": "refresh", "in": "query", "required": false, "schema": { "type": "integer", "enum": [0, 1] } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/ai/usage-stats": {
+      "get": {
+        "tags": ["AI"],
+        "summary": "AI 用量统计",
+        "description": "聚合所有 ai_conversations 里 assistant 消息的字符数和估算 tokens（tokens_per_sec × elapsed_secs），按 provider/model 分组。",
+        "responses": { "200": { "description": "用量统计" } }
       }
     },
     "/ai/conversations/search": {
@@ -1064,6 +1087,181 @@ func swaggerSpec() []byte {
           "400": { "description": "缺少 sql 参数或数据库不存在" }
         }
       }
+    },
+    "/contacts/self-portrait": {
+      "get": { "tags": ["联系人"], "summary": "本人自画像（发送量/活跃时段/最常联系）", "responses": { "200": { "description": "自画像数据" } } }
+    },
+    "/contacts/money-overview": {
+      "get": { "tags": ["联系人"], "summary": "红包 / 转账全局概览", "responses": { "200": { "description": "月度趋势 + 联系人排行" } } }
+    },
+    "/contacts/urls": {
+      "get": { "tags": ["联系人"], "summary": "聊天里的所有 URL 按域名聚合", "responses": { "200": { "description": "URL 列表 + 上下文" } } }
+    },
+    "/contacts/social-breadth": {
+      "get": { "tags": ["联系人"], "summary": "每日社交广度曲线", "responses": { "200": { "description": "每日联系过的不同人数" } } }
+    },
+    "/contacts/similarity": {
+      "get": {
+        "tags": ["联系人"], "summary": "联系人两两相似度排行（18 维余弦）",
+        "parameters": [{ "name": "top", "in": "query", "schema": { "type": "integer", "default": 20 } }],
+        "responses": { "200": { "description": "Top N 对" } }
+      }
+    },
+    "/contacts/common-circle": {
+      "get": {
+        "tags": ["联系人"], "summary": "两人的共同社交圈（共同群 + 共同好友推测）",
+        "parameters": [
+          { "name": "user1", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "user2", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "共同圈子数据" } }
+      }
+    },
+    "/contacts/secret-words": {
+      "get": {
+        "tags": ["联系人"], "summary": "秘语雷达（TF-IDF 专属词云）",
+        "parameters": [{ "name": "username", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "词云数据" } }
+      }
+    },
+    "/contacts/ai-summary": {
+      "get": {
+        "tags": ["联系人"], "summary": "低 token 关系摘要（/ai/analyze 打底）",
+        "parameters": [{ "name": "username", "in": "query", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "摘要 JSON" } }
+      }
+    },
+    "/contacts/relationship-forecast": {
+      "get": {
+        "tags": ["关系预测"], "summary": "4 档趋势 + 建议主动联系",
+        "parameters": [
+          { "name": "top", "in": "query", "schema": { "type": "integer", "default": 5 } },
+          { "name": "include_all", "in": "query", "schema": { "type": "string", "enum": ["0", "1"] }, "description": "1 时返回全档 + 12 月折线" }
+        ],
+        "responses": { "200": { "description": "预测结果" } }
+      }
+    },
+    "/contacts/icebreaker": {
+      "post": {
+        "tags": ["关系预测"], "summary": "LLM 起草 4 条破冰开场白",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "properties": {
+            "username": { "type": "string" }, "profile_id": { "type": "string" }
+          }, "required": ["username"] } } }
+        },
+        "responses": { "200": { "description": "drafts + display_name + days_since_last" } }
+      }
+    },
+    "/groups/year-review": {
+      "get": {
+        "tags": ["群聊"], "summary": "AI 群聊年度回顾（Wrapped 风格）",
+        "parameters": [
+          { "name": "username", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } },
+          { "name": "profile_id", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Top 成员/最忙一天/月度趋势/AI 金句/年度叙事" } }
+      }
+    },
+    "/fun/ghost-months": {
+      "get": { "tags": ["有趣发现"], "summary": "Ghost 月：单月消息骤降 ≥80%", "responses": { "200": { "description": "列表" } } }
+    },
+    "/fun/like-me": {
+      "get": { "tags": ["有趣发现"], "summary": "最像我的朋友 Top 5", "responses": { "200": { "description": "列表" } } }
+    },
+    "/fun/word-almanac": {
+      "get": { "tags": ["有趣发现"], "summary": "词语年鉴（按年分桶代表词）", "responses": { "200": { "description": "按年分组" } } }
+    },
+    "/fun/insomnia-top": {
+      "get": { "tags": ["有趣发现"], "summary": "失眠陪聊榜（凌晨 2-4 点响应率 Top 5）", "responses": { "200": { "description": "列表" } } }
+    },
+    "/databases/nl-query": {
+      "post": {
+        "tags": ["数据库"], "summary": "自然语言查数据（中文问 AI 写 SQL）",
+        "description": "LLM 读 schema → 输出 {db, sql, explain} JSON → 后端执行只读 SQL 并返回结果。严格限 SELECT/PRAGMA + LIMIT 50。mode=contact_messages 时自动跨库定位。",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "properties": {
+            "question": { "type": "string" }, "profile_id": { "type": "string" }
+          }, "required": ["question"] } } }
+        },
+        "responses": { "200": { "description": "db/sql/explain/columns/rows" } }
+      }
+    },
+    "/preferences/forecast-ignored": {
+      "put": {
+        "tags": ["偏好设置"], "summary": "关系预测忽略名单保存",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "properties": {
+            "forecast_ignored": { "type": "array", "items": { "type": "string" } }
+          } } } }
+        },
+        "responses": { "200": { "description": "{ ok: true }" } }
+      }
+    },
+    "/preferences/prompts": {
+      "put": { "tags": ["偏好设置"], "summary": "自定义 Prompt 模板保存", "responses": { "200": { "description": "{ ok: true }" } } }
+    },
+    "/preferences/config": {
+      "put": { "tags": ["偏好设置"], "summary": "基本配置保存（端口/日志/时区/worker 等）", "responses": { "200": { "description": "{ ok: true }" } } }
+    },
+    "/ai/forge-skill": {
+      "post": { "tags": ["Skills"], "summary": "异步炼化 Skill 包", "responses": { "200": { "description": "skill_id + 初始状态" } } }
+    },
+    "/skills": {
+      "get": { "tags": ["Skills"], "summary": "Skills 列表（状态/耗时/错误）", "responses": { "200": { "description": "数组" } } }
+    },
+    "/skills/{id}": {
+      "get": { "tags": ["Skills"], "summary": "单个 Skill 详情", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "详情" } } },
+      "delete": { "tags": ["Skills"], "summary": "删除 Skill（含本地文件）", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "{ ok: true }" } } }
+    },
+    "/skills/{id}/download": {
+      "get": { "tags": ["Skills"], "summary": "下载 Skill zip 包", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "application/zip" } } }
+    },
+    "/export/preview": {
+      "post": { "tags": ["导出中心"], "summary": "预览 Markdown（不写文件）", "responses": { "200": { "description": "docs[]" } } }
+    },
+    "/export/markdown": {
+      "post": { "tags": ["导出中心"], "summary": "下载 Markdown（单文件 .md / 多文件 .zip）", "responses": { "200": { "description": "文件流" } } }
+    },
+    "/export/notion": {
+      "post": { "tags": ["导出中心"], "summary": "推送到 Notion（每 doc 新建 Page）", "responses": { "200": { "description": "results[]" } } }
+    },
+    "/export/feishu": {
+      "post": { "tags": ["导出中心"], "summary": "导入飞书云空间（upload_all + import_tasks 异步轮询）", "responses": { "200": { "description": "results[] + docx URL" } } }
+    },
+    "/export/webdav": {
+      "post": { "tags": ["导出中心"], "summary": "上传 WebDAV（坚果云/Nextcloud/群晖等）", "responses": { "200": { "description": "results[]" } } }
+    },
+    "/export/s3": {
+      "post": { "tags": ["导出中心"], "summary": "上传 S3 兼容（AWS/R2/OSS/COS/七牛/MinIO）", "responses": { "200": { "description": "results[]" } } }
+    },
+    "/export/dropbox": {
+      "post": { "tags": ["导出中心"], "summary": "上传 Dropbox（PAT 模式）", "responses": { "200": { "description": "results[]" } } }
+    },
+    "/export/gdrive": {
+      "post": { "tags": ["导出中心"], "summary": "上传 Google Drive（OAuth 2.0，先走 /oauth/gdrive/start 授权）", "responses": { "200": { "description": "results[]" } } }
+    },
+    "/export/onedrive": {
+      "post": { "tags": ["导出中心"], "summary": "上传 OneDrive（Microsoft Identity OAuth）", "responses": { "200": { "description": "results[]" } } }
+    },
+    "/export/config": {
+      "get": { "tags": ["导出中心"], "summary": "获取脱敏配置（secret → __HAS_KEY__ 占位符）", "responses": { "200": { "description": "ExportConfigDTO" } } },
+      "put": { "tags": ["导出中心"], "summary": "保存配置（遇占位符保留原值）", "responses": { "200": { "description": "{ ok: true }" } } }
+    },
+    "/export/oauth/gdrive/start": {
+      "get": { "tags": ["导出中心"], "summary": "跳转到 Google OAuth 授权页", "responses": { "302": { "description": "Redirect" } } }
+    },
+    "/export/oauth/gdrive/callback": {
+      "get": { "tags": ["导出中心"], "summary": "接收授权码换 access + refresh token", "responses": { "200": { "description": "授权成功 HTML" } } }
+    },
+    "/export/oauth/onedrive/start": {
+      "get": { "tags": ["导出中心"], "summary": "跳转到 Microsoft Identity OAuth 授权页", "responses": { "302": { "description": "Redirect" } } }
+    },
+    "/export/oauth/onedrive/callback": {
+      "get": { "tags": ["导出中心"], "summary": "接收授权码换 token", "responses": { "200": { "description": "授权成功 HTML" } } }
     }
   },
   "components": {
