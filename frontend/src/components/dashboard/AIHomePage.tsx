@@ -3,9 +3,10 @@
  */
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Bot, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, Share2, Users, Plus, ChevronDown, ChevronRight, BrainCircuit, Globe } from 'lucide-react';
+import { Bot, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, Share2, Users, Plus, ChevronDown, ChevronRight, BrainCircuit, Globe, Sparkles } from 'lucide-react';
 import { CrossContactQA } from './CrossContactQA';
 import { ConversationHistory } from './ConversationHistory';
+import { TodayPanel } from './TodayPanel';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateShareImage } from '../../utils/shareImage';
@@ -256,6 +257,16 @@ const MessageBubble: React.FC<{
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [thinkingOpen, setThinkingOpen] = useState(false);
+  const [showPerfMetrics, setShowPerfMetrics] = useState<boolean>(() => {
+    try { return localStorage.getItem('welink_home_perf_metrics') === '1'; } catch { return false; }
+  });
+  const togglePerfMetrics = () => {
+    setShowPerfMetrics(v => {
+      const next = !v;
+      try { localStorage.setItem('welink_home_perf_metrics', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   if (msg.role === 'user') {
     return (
@@ -346,7 +357,7 @@ const MessageBubble: React.FC<{
                 : ''}
             {msg.stats && !msg.streaming && (
               <div className="flex flex-col items-end gap-0.5 mt-2 text-[10px] text-gray-400 not-prose">
-                {msg.stats.provider && (
+                {showPerfMetrics && msg.stats.provider && (
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium">{msg.stats.provider}{msg.stats.model ? ` · ${msg.stats.model}` : ''}</span>
                     <span className="text-gray-300">·</span>
@@ -359,7 +370,20 @@ const MessageBubble: React.FC<{
                 )}
                 {msg.stats.timestamp && (() => {
                   const d = new Date(msg.stats!.timestamp!);
-                  return <span>{d.getFullYear()}年{d.getMonth()+1}月{d.getDate()}日{d.getHours()}点{String(d.getMinutes()).padStart(2,'0')}分</span>;
+                  return (
+                    <div className="flex items-center gap-1.5">
+                      <span>{d.getFullYear()}年{d.getMonth()+1}月{d.getDate()}日{d.getHours()}点{String(d.getMinutes()).padStart(2,'0')}分</span>
+                      {msg.stats.provider && (
+                        <button
+                          onClick={togglePerfMetrics}
+                          title={showPerfMetrics ? '隐藏性能详情' : '显示性能详情'}
+                          className="text-gray-300 hover:text-[#07c160] transition-colors"
+                        >
+                          {showPerfMetrics ? '▴ 详情' : 'ℹ 详情'}
+                        </button>
+                      )}
+                    </div>
+                  );
                 })()}
               </div>
             )}
@@ -405,6 +429,7 @@ export interface AIHomePageProps {
   onReselect: () => void;
   onContactClick?: (contact: ContactStats) => void;
   onGroupClick?: (group: GroupInfo) => void;
+  onNavigateToAnniversary?: () => void;
 }
 
 export const AIHomePage: React.FC<AIHomePageProps> = ({
@@ -413,6 +438,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   onReselect,
   onContactClick,
   onGroupClick,
+  onNavigateToAnniversary,
 }) => {
   const { privacyMode } = usePrivacyMode();
   const [mode, setMode] = useState<'contact' | 'cross'>('contact');
@@ -424,6 +450,40 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   const [loading, setLoading] = useState(false);
   const [homeMsgLimit, setHomeMsgLimit] = useState<number | null>(200); // null = 全部
   const [ctxLoading, setCtxLoading] = useState(false);
+  // 快捷 prompt 展开状态：默认 collapsed（只显示前 3 个 + 「更多」），用户可展开全部
+  const [presetsExpanded, setPresetsExpanded] = useState<boolean>(() => {
+    try { return localStorage.getItem('welink_home_presets_expanded') === '1'; } catch { return false; }
+  });
+  const togglePresets = () => {
+    setPresetsExpanded(v => {
+      const next = !v;
+      try { localStorage.setItem('welink_home_presets_expanded', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  // 新用户引导：从未选过任何分析对象 ⇒ 给 SubjectPicker 加 pulse 动画和提示条
+  const [onboarded, setOnboarded] = useState<boolean>(() => {
+    try { return localStorage.getItem('welink_home_onboarded_v1') === '1'; } catch { return true; }
+  });
+  const markOnboarded = () => {
+    setOnboarded(true);
+    try { localStorage.setItem('welink_home_onboarded_v1', '1'); } catch { /* ignore */ }
+  };
+
+  // 高级选项（消息量预设）默认收起，localStorage 记忆用户偏好
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(() => {
+    try { return localStorage.getItem('welink_home_advanced_open') === '1'; } catch { return false; }
+  });
+  const toggleAdvanced = () => {
+    setShowAdvanced(v => {
+      const next = !v;
+      try { localStorage.setItem('welink_home_advanced_open', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  // 性能指标详情展开状态在 MessageBubble 内部管理（localStorage 全局共享）
   const [conversationKey, setConversationKey] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -474,6 +534,63 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
     }).slice(0, 14);
   }, [contacts, groups]);
 
+  // 智能第一个问题：基于 Top 3 联系人和群聊生成个性化建议
+  const smartSuggestions = useMemo(() => {
+    const topContacts = [...contacts]
+      .filter(c => c.total_messages > 20)
+      .sort((a, b) => b.total_messages - a.total_messages)
+      .slice(0, 3);
+    const topGroup = [...groups]
+      .sort((a, b) => b.total_messages - a.total_messages)[0];
+
+    type Sug = { label: string; prompt: string; target: SelectableItem };
+    const out: Sug[] = [];
+
+    if (topContacts[0]) {
+      const c = topContacts[0];
+      const name = c.remark || c.nickname || c.username;
+      out.push({
+        label: `分析我和${name}的关系`,
+        prompt: `请分析我和${name}的聊天记录：互动频率、话题偏好、情感倾向、关系发展阶段。`,
+        target: { kind: 'contact', data: c },
+      });
+    }
+    if (topContacts[1]) {
+      const c = topContacts[1];
+      const name = c.remark || c.nickname || c.username;
+      out.push({
+        label: `${name} 的聊天风格`,
+        prompt: `${name}有什么说话特点？用词习惯、句子长短、表情使用和常提到的话题。`,
+        target: { kind: 'contact', data: c },
+      });
+    }
+    if (topGroup) {
+      out.push({
+        label: `${topGroup.name} 最近在聊什么`,
+        prompt: `${topGroup.name}这个群最近一个月聊的最多的话题有哪些？主要发言的人是谁？`,
+        target: { kind: 'group', data: topGroup },
+      });
+    }
+    if (topContacts[2]) {
+      const c = topContacts[2];
+      const name = c.remark || c.nickname || c.username;
+      out.push({
+        label: `和${name}的趣味瞬间`,
+        prompt: `用轻松有趣的方式总结我和${name}的聊天，挑 3-5 个印象深刻的对话片段或梗。`,
+        target: { kind: 'contact', data: c },
+      });
+    }
+    return out;
+  }, [contacts, groups]);
+
+  // 智能建议一键用：自动选目标 + 填 prompt（不自动发，让用户确认）
+  const applySmartSuggestion = (sug: { prompt: string; target: SelectableItem }) => {
+    setSelectedItems([sug.target]);
+    setInput(sug.prompt);
+    markOnboarded();
+    setTimeout(() => textareaRef.current?.focus(), 30);
+  };
+
   const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   }, []);
@@ -493,6 +610,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   const handleAddItem = (item: SelectableItem) => {
     const id = itemId(item);
     setSelectedItems(prev => prev.some(s => itemId(s) === id) ? prev : [...prev, item]);
+    markOnboarded(); // 选过对象就不再是新用户
   };
 
   const handleRemoveItem = (id: string) => {
@@ -703,7 +821,11 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter 发送；Shift+Enter 换行；Ctrl/Cmd+Enter 也发送（适合粘了多行后一键提交）
     if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSend();
     }
@@ -759,8 +881,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
             disabled={loading}
             placeholder={
               ctxLoading ? '正在加载聊天记录…'
-              : noSelectionHint ? '请先在上方选择分析对象↑'
-              : hasChatHistory ? '继续提问…（Enter 发送）'
+              : noSelectionHint ? '请先在上方选择分析对象 ↑'
               : '想问什么？（Enter 发送，Shift+Enter 换行）'
             }
             className={`w-full resize-none bg-transparent text-sm outline-none leading-relaxed transition-colors ${
@@ -809,33 +930,45 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
           )}
         </div>
       </div>
-      {/* 消息条数选择 */}
-      <div className="mt-3 flex items-center justify-center gap-1.5 flex-wrap">
-        <span className="text-[10px] text-gray-300">消息量:</span>
-        {([100, 500, 1000] as const).map(n => (
-          <button key={n} onClick={() => setHomeMsgLimit(n)}
-            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-              homeMsgLimit === n ? 'bg-[#07c160] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-400 hover:bg-gray-200 dark:hover:bg-white/20'
-            }`}>
-            最近 {n} 条
-          </button>
-        ))}
-        <button onClick={() => setHomeMsgLimit(null)}
-          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-            homeMsgLimit === null ? 'bg-[#ff9500] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-400 hover:bg-gray-200 dark:hover:bg-white/20'
-          }`}>
-          全部
+      {/* 高级选项（消息量 + 说明）—— 默认收起，避免新用户被预设按钮吓到 */}
+      <div className="mt-2 text-center">
+        <button
+          onClick={toggleAdvanced}
+          className="text-[10px] text-gray-300 hover:text-[#07c160] transition-colors font-medium"
+        >
+          消息量：{homeMsgLimit === null ? '全部' : `最近 ${homeMsgLimit} 条`} · 高级 {showAdvanced ? '▴' : '▾'}
         </button>
-      </div>
-      <p className="mt-1.5 text-center text-[10px] text-gray-300 font-medium">
-        {homeMsgLimit === null
-          ? '将使用时间范围内全部记录，消息量大时 token 消耗较高'
-          : `每个联系人/群取最近 ${homeMsgLimit} 条`}
-        {' · '}手机号等敏感信息自动脱敏
-        {homeMsgLimit === null && (
-          <span className="text-orange-400"> · 大量消息建议去联系人页面用混合检索分析</span>
+        {showAdvanced && (
+          <div className="mt-2 mx-auto max-w-xl">
+            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+              <span className="text-[10px] text-gray-300">消息量:</span>
+              {([100, 500, 1000] as const).map(n => (
+                <button key={n} onClick={() => setHomeMsgLimit(n)}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                    homeMsgLimit === n ? 'bg-[#07c160] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-400 hover:bg-gray-200 dark:hover:bg-white/20'
+                  }`}>
+                  最近 {n} 条
+                </button>
+              ))}
+              <button onClick={() => setHomeMsgLimit(null)}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                  homeMsgLimit === null ? 'bg-[#ff9500] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-400 hover:bg-gray-200 dark:hover:bg-white/20'
+                }`}>
+                全部
+              </button>
+            </div>
+            <p className="mt-1.5 text-[10px] text-gray-300 font-medium">
+              {homeMsgLimit === null
+                ? '将使用时间范围内全部记录，消息量大时 token 消耗较高'
+                : `每个联系人/群取最近 ${homeMsgLimit} 条`}
+              {' · '}手机号等敏感信息自动脱敏
+              {homeMsgLimit === null && (
+                <span className="text-orange-400"> · 大量消息建议去联系人页面用混合检索分析</span>
+              )}
+            </p>
+          </div>
         )}
-      </p>
+      </div>
     </div>
   );
 
@@ -941,6 +1074,13 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   return (
     <div className="min-h-full flex flex-col items-center justify-center px-4 py-16">
 
+      {/* 右侧聚合面板：建议主动联系 / 纪念日 / 每周摘要（带 tab、可收起） */}
+      <TodayPanel
+        contacts={contacts}
+        onContactClick={onContactClick}
+        onNavigateToAnniversary={onNavigateToAnniversary}
+      />
+
       {/* Hero */}
       <div className="text-center mb-8">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 shadow-lg shadow-green-100 overflow-hidden">
@@ -1006,21 +1146,73 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         className="w-full max-w-xl mx-auto mb-4"
       />
 
+      {/* 新用户引导条：仅在首次访问 + 无选中对象时显示，标记首条用户动作后消失 */}
+      {!onboarded && selectedItems.length === 0 && (
+        <div className="w-full max-w-xl mx-auto mb-3 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#fff9e6] to-[#fff3cc] dark:from-[#ff9500]/10 dark:to-[#ff9500]/15 border border-[#ff9500]/25 flex items-center justify-between gap-2 welink-onboard-pulse">
+          <span className="text-xs font-bold text-[#ff9500] flex items-center gap-1.5">
+            👋 第一次来？先选一个联系人 / 群聊，再在下方输入问题
+          </span>
+          <button
+            onClick={markOnboarded}
+            className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors whitespace-nowrap"
+          >
+            不再提示
+          </button>
+        </div>
+      )}
+
       {/* 输入卡片 */}
       {inputCard}
 
-      {/* 快捷 Prompt 胶囊 */}
-      <div className="flex flex-wrap gap-2 mt-6 justify-center max-w-xl">
-        {PRESETS.map(p => (
-          <button
-            key={p.label}
-            onClick={() => handleChip(p.prompt)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-[#07c160] hover:text-[#07c160] hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 transition-colors"
-          >
-            <Bot size={11} />
-            {p.label}
-          </button>
-        ))}
+      {/* 智能建议 + 通用快捷提问 */}
+      <div className="mt-6 max-w-xl w-full flex flex-col items-center gap-3">
+        {/* 智能建议（基于用户 Top 联系人，最多 4 条） */}
+        {smartSuggestions.length > 0 && (
+          <div className="w-full">
+            <div className="text-[10px] font-bold text-[#576b95] uppercase tracking-widest mb-2 text-center flex items-center justify-center gap-1.5">
+              <Sparkles size={11} /> 推荐第一个问题
+            </div>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {smartSuggestions.slice(0, 4).map((s, i) => (
+                <button
+                  key={i}
+                  onClick={() => applySmartSuggestion(s)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors
+                    bg-gradient-to-r from-[#576b95]/8 to-[#07c160]/8 border-[#576b95]/25 text-[#576b95]
+                    hover:border-[#576b95] hover:bg-[#576b95]/12${privacyMode ? ' privacy-blur' : ''}`}
+                  title="点击自动选中对象 + 填入问题"
+                >
+                  <span>{s.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 通用快捷提问：默认前 3 个可见 + 「更多」展开剩余 */}
+        <div className="w-full">
+          <div className="text-[10px] font-bold text-gray-300 uppercase tracking-widest mb-2 text-center">通用快捷</div>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {PRESETS.slice(0, presetsExpanded ? PRESETS.length : 3).map(p => (
+              <button
+                key={p.label}
+                onClick={() => handleChip(p.prompt)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-[#07c160] hover:text-[#07c160] hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 transition-colors"
+              >
+                <Bot size={11} />
+                {p.label}
+              </button>
+            ))}
+            {PRESETS.length > 3 && (
+              <button
+                onClick={togglePresets}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold text-gray-400 hover:text-[#07c160] transition-colors"
+              >
+                {presetsExpanded ? '收起 ▴' : `更多 ${PRESETS.length - 3} 条 ▾`}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* 最近聊天（联系人 + 群聊混合） */}

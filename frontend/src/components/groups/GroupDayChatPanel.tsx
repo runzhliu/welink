@@ -7,6 +7,7 @@ import { X, Loader2 } from 'lucide-react';
 import type { GroupChatMessage } from '../../types';
 import { groupsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { avatarSrc } from '../../utils/avatar';
 import { useEscape } from '../../hooks/useEscape';
 
 interface GroupDayChatPanelProps {
@@ -94,12 +95,16 @@ export const GroupDayChatPanel: React.FC<GroupDayChatPanelProps> = ({
                 <div key={i} className="flex items-start gap-2">
                   {/* 头像占位（保持对齐） */}
                   {showHeader ? (
-                    <div
-                      className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-black mt-0.5"
-                      style={{ background: color }}
-                    >
-                      <span className={privacyMode ? 'privacy-blur' : ''}>{msg.speaker.charAt(0)}</span>
-                    </div>
+                    msg.avatar_url ? (
+                      <img src={avatarSrc(msg.avatar_url)} alt="" className="w-8 h-8 rounded-full flex-shrink-0 object-cover mt-0.5" />
+                    ) : (
+                      <div
+                        className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-black mt-0.5"
+                        style={{ background: color }}
+                      >
+                        <span className={privacyMode ? 'privacy-blur' : ''}>{msg.speaker.charAt(0)}</span>
+                      </div>
+                    )
                   ) : (
                     <div className="w-8 flex-shrink-0" />
                   )}

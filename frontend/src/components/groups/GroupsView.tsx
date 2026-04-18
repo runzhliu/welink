@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Users, MessageSquare, MessageCircle, Clock, ChevronRight, ChevronUp, ChevronDown, Loader2, X, BarChart2, EyeOff, Search, Download, Bot, TrendingUp, Flame, Calendar, Crown, Maximize2, Minimize2, Sparkles } from 'lucide-react';
+import { Users, MessageSquare, MessageCircle, Clock, ChevronRight, ChevronUp, ChevronDown, Loader2, X, BarChart2, EyeOff, Search, Download, Bot, TrendingUp, Flame, Calendar, Crown, Maximize2, Minimize2, Sparkles, Heart, BookOpen, Zap } from 'lucide-react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { GroupInfo, GroupDetail, ContactStats, GroupChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
@@ -11,6 +11,11 @@ import { groupsApi } from '../../services/api';
 import { exportGroupCsv, exportGroupTxt, EXPORT_LIMIT, parseExportResult } from '../../utils/exportChat';
 import { CalendarHeatmap } from '../contact/CalendarHeatmap';
 import { GroupDayChatPanel } from './GroupDayChatPanel';
+import { GroupChatReplay } from './GroupChatReplay';
+import { ClockFingerprint } from './ClockFingerprint';
+import { GroupYearReviewModal } from './GroupYearReviewModal';
+import { getGroupPersonaTags, toneClasses } from '../../utils/groupPersona';
+import { Section } from '../common/Section';
 import { MessageTypePieChart } from '../common/MessageTypePieChart';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { RelationshipGraphPanel } from './RelationshipGraphPanel';
@@ -23,6 +28,7 @@ import { GroupSimChat } from './GroupSimChat';
 import { RelativeTime } from '../common/RelativeTime';
 import { GroupComparePanel } from './GroupComparePanel';
 import { ForgeSkillModal } from '../contact/ForgeSkillModal';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { AIAnalysisBadge } from '../dashboard/ContactTable';
 import { avatarSrc } from '../../utils/avatar';
 
@@ -64,9 +70,11 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
       c.username === displayName
     ) ?? null;
   };
-  const [tab, setTab] = useState<'portrait' | 'search' | 'ai' | 'relationships' | 'sim'>('portrait');
+  const [tab, setTab] = useState<'portrait' | 'search' | 'ai' | 'relationships' | 'sim' | 'replay'>('portrait');
+  const [showYearReview, setShowYearReview] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [forgeOpen, setForgeOpen] = useState(false);
+  const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [memberSort, setMemberSort] = useState<'count' | 'last' | 'name'>('count');
   const [memberSortAsc, setMemberSortAsc] = useState(false);
   const toggleSort = (key: 'count' | 'last' | 'name') => {
@@ -314,7 +322,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
           </button>
           {onBlock && (
             <button
-              onClick={() => { onBlock(group.username); onClose(); }}
+              onClick={() => setBlockConfirmOpen(true)}
               className="p-2 rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors duration-200"
               title="屏蔽该群聊"
             >
@@ -354,7 +362,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
 
         {/* Tab bar */}
         <div className="flex gap-2 border-b border-gray-100 dk-border">
-          {(['portrait', 'relationships', 'search', 'ai', 'sim'] as const).map((t) => (
+          {(['portrait', 'relationships', 'search', 'replay', 'ai', 'sim'] as const).map((t) => (
             <button
               key={t}
               onClick={() => {
@@ -367,7 +375,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             >
               {t === 'ai' && <Bot size={13} className="flex-shrink-0" />}
               {t === 'sim' && <Users size={13} className="flex-shrink-0" />}
-              {t === 'portrait' ? '群聊画像' : t === 'relationships' ? '人物关系' : t === 'search' ? '搜索记录' : t === 'sim' ? 'AI 群聊' : 'AI 分析'}
+              {t === 'portrait' ? '群聊画像' : t === 'relationships' ? '人物关系' : t === 'search' ? '搜索记录' : t === 'replay' ? '回放' : t === 'sim' ? 'AI 群聊' : 'AI 分析'}
               {t === 'ai' && <AIAnalysisBadge username={group.username} isGroup={true} />}
             </button>
           ))}
@@ -387,6 +395,10 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             totalMessages={group.total_messages}
             onOpenSettings={onOpenSettings}
           />
+        )}
+
+        {tab === 'replay' && (
+          <GroupChatReplay username={group.username} groupName={group.name} />
         )}
 
         {tab === 'sim' && (
@@ -465,9 +477,13 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                       })}
                       title="点击查看当天完整对话"
                     >
-                      <div className="w-7 h-7 rounded-full bg-[#576b95] flex items-center justify-center text-white text-[9px] font-black flex-shrink-0 mt-0.5">
-                        {msg.speaker.charAt(0)}
-                      </div>
+                      {msg.avatar_url ? (
+                        <img src={avatarSrc(msg.avatar_url)} alt="" className="w-7 h-7 rounded-full flex-shrink-0 object-cover mt-0.5" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-[#576b95] flex items-center justify-center text-white text-[9px] font-black flex-shrink-0 mt-0.5">
+                          {msg.speaker.charAt(0)}
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-2 mb-0.5">
                           <span className="text-xs font-bold text-gray-600 dark:text-gray-300">{msg.speaker}</span>
@@ -495,6 +511,115 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
           </div>
         ) : tab === 'portrait' && detail ? (
           <div className="space-y-6">
+            {/* 群号称卡 + 时钟指纹 + 影响力 + 年报入口 —— 挂在画像顶部 */}
+            {(() => {
+              const tags = getGroupPersonaTags(detail);
+              const weeklyHourly = detail.weekly_hourly_dist;
+              const infl = detail.my_influence_score ?? -1;
+              const myRate = detail.my_reply_rate ?? 0;
+              const baseRate = detail.group_base_reply_rate ?? 0;
+              const show = tags.length > 0 || (weeklyHourly && weeklyHourly.length === 7) || infl >= 0;
+              if (!show) return null;
+              return (
+                <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <Zap size={14} className="text-[#ff9500]" />
+                      <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">这个群的指纹</h4>
+                    </div>
+                    <button
+                      onClick={() => setShowYearReview(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-[#ff9500] to-[#fa5151] text-white hover:opacity-90 transition-opacity"
+                    >
+                      <BookOpen size={12} /> AI 年报
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {/* 群号称标签 */}
+                    {tags.length > 0 && (
+                      <div className="md:col-span-2 space-y-2">
+                        <div className="text-[11px] text-gray-400">群号称</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {tags.map(t => (
+                            <span key={t.label} className={`px-2 py-1 rounded-full text-xs font-bold ${toneClasses(t.tone)}`}>
+                              {t.emoji} {t.label}
+                            </span>
+                          ))}
+                        </div>
+                        {infl >= 0 && (
+                          <div className="pt-2">
+                            <div className="text-[11px] text-gray-400 mb-1">我的影响力</div>
+                            <div className="flex items-baseline gap-2 flex-wrap">
+                              <span className={`text-lg font-black ${infl >= 70 ? 'text-[#07c160]' : infl >= 40 ? 'text-[#576b95]' : 'text-gray-400'}`}>
+                                {infl}
+                              </span>
+                              <span className="text-[11px] text-gray-400">
+                                ({myRate >= 0 ? `我发言 ${Math.round(myRate * 100)}% 有回应` : '样本不足'}
+                                {baseRate > 0 ? ` · 群基线 ${Math.round(baseRate * 100)}%` : ''})
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* 时钟指纹 */}
+                    {weeklyHourly && weeklyHourly.length === 7 && (
+                      <div className="space-y-1">
+                        <div className="text-[11px] text-gray-400">时钟指纹 · 7×24</div>
+                        <div className="overflow-x-auto">
+                          <ClockFingerprint matrix={weeklyHourly} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 我的群 CP —— 仅在有 ≥1 个入选时显示 */}
+            {(detail.my_cps?.length ?? 0) > 0 && (
+              <div className="dk-subtle bg-gradient-to-br from-[#fff5f7] to-[#f0faf4] dark:from-[#fa5151]/10 dark:to-[#07c160]/10 rounded-2xl p-4 border border-[#fa5151]/10 dark:border-white/10">
+                <div className="flex items-center gap-2 mb-3">
+                  <Heart size={14} className="text-[#fa5151]" />
+                  <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    群内 · 我的 CP
+                  </h4>
+                  <span className="text-[10px] text-gray-400">跟我引用互动最多</span>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {detail.my_cps!.map((cp) => {
+                    const contact = allContacts.find(c => c.username === cp.username);
+                    const clickable = !!contact;
+                    return (
+                      <div
+                        key={cp.username}
+                        onClick={clickable ? () => onContactClick?.(contact!) : undefined}
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white dark:bg-white/10 shadow-sm ${clickable ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all' : ''}`}
+                      >
+                        {cp.avatar_url ? (
+                          <img
+                            loading="lazy"
+                            src={cp.avatar_url}
+                            alt=""
+                            className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-[#fa5151]/10 flex items-center justify-center flex-shrink-0">
+                            <Heart size={12} className="text-[#fa5151]" />
+                          </div>
+                        )}
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-bold text-[#1d1d1f] dk-text truncate">{cp.display_name}</span>
+                          <span className="text-[10px] text-gray-400">引用互动 {cp.replies} 次</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* 成员发言排行 */}
             {(detail.member_rank?.length ?? 0) > 0 && (() => {
               const activeCount = sortedMembers.filter(m => m.count > 0).length;
@@ -758,11 +883,9 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
               );
             })()}
 
-            {/* 高频词 */}
+            {/* 高频词（默认展开） */}
             {(detail.top_words?.length ?? 0) > 0 && (
-              <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
-                <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase mb-1 tracking-wider">高频词汇</h4>
-                <p className="text-xs text-gray-400 mb-3">全部文本消息分词统计，已过滤停用词与表情符号</p>
+              <Section title="高频词汇" subtitle="全部文本消息分词统计，已过滤停用词与表情符号">
                 <div className="flex flex-wrap gap-2">
                   {detail.top_words.map((w, i) => {
                     const maxCnt = detail.top_words[0].count;
@@ -780,67 +903,68 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                     );
                   })}
                 </div>
-              </div>
+              </Section>
             )}
 
-            {/* 消息类型分布 */}
+            {/* 消息类型分布（默认折叠） */}
             {detail.type_dist && Object.keys(detail.type_dist).length > 0 && (
-              <MessageTypePieChart
-                typeData={detail.type_dist}
-                totalMessages={Object.values(detail.type_dist).reduce((a, b) => a + b, 0)}
-              />
+              <Section title="消息类型分布" subtitle="文本 / 图片 / 表情 / 链接 / 红包等占比" defaultOpen={false}>
+                <MessageTypePieChart
+                  typeData={detail.type_dist}
+                  totalMessages={Object.values(detail.type_dist).reduce((a, b) => a + b, 0)}
+                />
+              </Section>
             )}
 
-            {/* 24h + 周分布 并排 */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
-                <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase mb-1 tracking-wider">24 小时活跃分布</h4>
-                <p className="text-xs text-gray-400 mb-3">按消息发送时间统计，深色为深夜 0–5 点</p>
-                <ResponsiveContainer width="100%" height={90}>
-                  <BarChart data={hourlyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
-                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#bbb' }} tickLine={false} interval={3} />
-                    <YAxis tick={false} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v) => [`${v} 条`, '']} labelFormatter={(l) => `${l}:00`} />
-                    <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={14}>
-                      {hourlyData.map((entry, i) => (
-                        <Cell key={i} fill={entry.isLateNight ? '#576b95' : '#10aeff'} opacity={0.8} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+            {/* 24h + 周分布（默认折叠，并排） */}
+            <Section title="时间分布" subtitle="24 小时活跃度 + 一周各天的消息总量" defaultOpen={false}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-xs text-gray-500 font-semibold mb-1.5">24 小时</div>
+                  <ResponsiveContainer width="100%" height={90}>
+                    <BarChart data={hourlyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
+                      <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#bbb' }} tickLine={false} interval={3} />
+                      <YAxis tick={false} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v) => [`${v} 条`, '']} labelFormatter={(l) => `${l}:00`} />
+                      <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={14}>
+                        {hourlyData.map((entry, i) => (
+                          <Cell key={i} fill={entry.isLateNight ? '#576b95' : '#10aeff'} opacity={0.8} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 font-semibold mb-1.5">每周</div>
+                  <ResponsiveContainer width="100%" height={90}>
+                    <BarChart data={weeklyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
+                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#999' }} tickLine={false} />
+                      <YAxis tick={false} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v) => [`${v} 条`, '']} />
+                      <Bar dataKey="value" fill="#07c160" radius={[4, 4, 0, 0]} maxBarSize={28} opacity={0.8} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-
-              <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
-                <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase mb-1 tracking-wider">每周活跃分布</h4>
-                <p className="text-xs text-gray-400 mb-3">一周各天的消息总量分布</p>
-                <ResponsiveContainer width="100%" height={90}>
-                  <BarChart data={weeklyData} margin={{ top: 0, right: 0, bottom: 0, left: -30 }}>
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#999' }} tickLine={false} />
-                    <YAxis tick={false} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v) => [`${v} 条`, '']} />
-                    <Bar dataKey="value" fill="#07c160" radius={[4, 4, 0, 0]} maxBarSize={28} opacity={0.8} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            </Section>
 
             {/* 日历热力图 */}
             {Object.keys(detail.daily_heatmap).length > 0 && (
-              <div className="dk-subtle bg-[#f8f9fb] rounded-2xl p-4">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="text-sm font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">聊天日历</h4>
-                  {peakDay && (
-                    <button
-                      onClick={() => setDayPanel({ date: peakDay[0], count: peakDay[1] })}
-                      className="flex items-center gap-1.5 text-[10px] font-bold text-[#07c160] bg-[#07c16012] hover:bg-[#07c16022] px-2.5 py-1 rounded-full transition-colors"
-                      title="查看最密集那天的聊天记录"
-                    >
-                      <span>🔥</span>
-                      <span>最密集：{peakDay[0]}（{peakDay[1].toLocaleString()} 条）</span>
-                    </button>
-                  )}
-                </div>
-                <p className="text-xs text-gray-400 mb-3">每格代表一天，颜色越深表示当天消息越多，点击可查看具体数量</p>
+              <Section
+                title="聊天日历"
+                subtitle="每格代表一天，颜色越深表示当天消息越多"
+                defaultOpen={false}
+                action={peakDay ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDayPanel({ date: peakDay[0], count: peakDay[1] }); }}
+                    className="flex items-center gap-1.5 text-[10px] font-bold text-[#07c160] bg-[#07c16012] hover:bg-[#07c16022] px-2.5 py-1 rounded-full transition-colors"
+                    title="查看最密集那天的聊天记录"
+                  >
+                    <span>🔥</span>
+                    <span>最密集：{peakDay[0]}（{peakDay[1].toLocaleString()} 条）</span>
+                  </button>
+                ) : undefined}
+              >
                 <CalendarHeatmap
                   data={detail.daily_heatmap}
                   onDayClick={(date, count) => setDayPanel({ date, count })}
@@ -852,7 +976,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                   ))}
                   <span>多</span>
                 </div>
-              </div>
+              </Section>
             )}
           </div>
         ) : tab === 'portrait' ? (
@@ -886,6 +1010,24 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
           skillType="group"
           username={group.username}
           displayName={group.name}
+        />
+      )}
+
+      <ConfirmDialog
+        open={blockConfirmOpen}
+        title="屏蔽群聊"
+        message={`确定屏蔽「${group.name || group.username}」？\n屏蔽后该群聊不会出现在统计和排行里。`}
+        hint="如需取消，可前往 设置 → 隐私屏蔽 移除。"
+        confirmText="屏蔽"
+        danger
+        onConfirm={() => { setBlockConfirmOpen(false); onBlock?.(group.username); onClose(); }}
+        onCancel={() => setBlockConfirmOpen(false)}
+      />
+      {showYearReview && (
+        <GroupYearReviewModal
+          username={group.username}
+          fallbackName={group.name}
+          onClose={() => setShowYearReview(false)}
         />
       )}
     </div>
@@ -993,7 +1135,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
       : <ChevronDown size={11} className="ml-1 text-[#07c160]" />;
   };
 
-  const thClass = "px-8 py-5 text-left text-xs font-black text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-[#07c160] transition-colors";
+  const thClass = "px-3 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-[#07c160] transition-colors whitespace-nowrap";
 
   if (loading) {
     return (
@@ -1159,7 +1301,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
                   <div className="flex items-center gap-1"><MessageCircle size={14} />消息数<SortIcon col="total_messages" /></div>
                 </th>
                 <th className={thClass} onClick={() => handleSort('last_message_time')}>
-                  <div className="flex items-center gap-1"><Clock size={14} />最后消息<SortIcon col="last_message_time" /></div>
+                  <div className="flex items-center gap-1"><Clock size={14} />最后联系<SortIcon col="last_message_time" /></div>
                 </th>
                 <th className={thClass} onClick={() => handleSort('status')}>
                   <div className="flex items-center gap-1">状态<SortIcon col="status" /></div>
@@ -1186,7 +1328,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
                     compareMode && compareSelected.has(group.username) ? 'bg-[#e7f8f0] dark:bg-[#07c160]/10' : ''
                   }`}
                 >
-                  <td className="px-8 py-5">
+                  <td className="px-3 py-3.5 text-sm">
                     <div className="flex items-center gap-3">
                       {compareMode && (
                         <input
@@ -1207,25 +1349,58 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
                       <div className={`font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>{group.name}</div>
                     </div>
                   </td>
-                  <td className="px-8 py-5">
+                  <td className="px-3 py-3.5 text-sm">
                     {(group.member_count ?? 0) > 0 ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
-                        <Users size={11} />{group.member_count}
-                      </span>
+                      <div className="flex flex-col items-start gap-0.5">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+                          <Users size={11} />{group.member_count}
+                        </span>
+                        {(group.my_rank ?? 0) > 0 && group.total_messages > 0 && (
+                          <span className="text-[10px] text-gray-400 px-1">
+                            我 #{group.my_rank}
+                            {group.my_messages ? ` · ${((group.my_messages / group.total_messages) * 100).toFixed(1)}%` : ''}
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-sm text-gray-300">-</span>
                     )}
                   </td>
-                  <td className="px-8 py-5">
-                    <span className="font-bold dk-text text-[#1d1d1f]">{group.total_messages.toLocaleString()}</span>
-                  </td>
-                  <td className="px-8 py-5">
-                    <div className="text-xs text-gray-400 leading-5">
-                      {group.first_message_time && <div>始于 {group.first_message_time}</div>}
-                      <div>最近 {group.last_message_time}</div>
+                  <td className="px-3 py-3.5 text-sm">
+                    <div className="flex flex-col items-start gap-0.5">
+                      <span className="font-bold dk-text text-[#1d1d1f]">{group.total_messages.toLocaleString()}</span>
+                      {((group.recent_30d_messages ?? 0) > 0 || (group.recent_trend_pct ?? 0) !== 0) && (
+                        <span className="flex items-center gap-1 text-[10px]">
+                          {(group.recent_30d_messages ?? 0) > 0 && (
+                            <span className="text-gray-400">30天 {group.recent_30d_messages}</span>
+                          )}
+                          {(group.recent_trend_pct !== undefined && group.recent_trend_pct !== 0) && (
+                            <span className={`font-bold ${
+                              group.recent_trend_pct >= 999 ? 'text-[#10aeff]' :
+                              group.recent_trend_pct > 20 ? 'text-[#07c160]' :
+                              group.recent_trend_pct < -20 ? 'text-[#fa5151]' :
+                              'text-gray-400'
+                            }`}>
+                              {group.recent_trend_pct >= 999 ? '新群' :
+                               group.recent_trend_pct > 0 ? `↑${group.recent_trend_pct}%` :
+                               `↓${Math.abs(group.recent_trend_pct)}%`}
+                            </span>
+                          )}
+                        </span>
+                      )}
                     </div>
                   </td>
-                  <td className="px-8 py-5">
+                  <td className="px-3 py-3.5 text-sm">
+                    <div className="flex flex-col items-start gap-0.5">
+                      <RelativeTime ts={group.last_message_ts} placeholder={group.last_message_time || '-'} />
+                      {(group.my_last_message_ts ?? 0) > 0 && group.my_last_message_ts !== group.last_message_ts && (
+                        <span className="text-[10px] text-gray-400">
+                          我：<RelativeTime ts={group.my_last_message_ts} />
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3.5 text-sm">
                     <div className="flex flex-col gap-1.5 items-start">
                       {GROUP_STATUS_BADGES[getGroupStatusTier(group)]}
                       <AIAnalysisBadge username={group.username} isGroup />
@@ -1256,14 +1431,26 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
                 )}
                 <div className="min-w-0">
                   <div className={`font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>{group.name}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    {(group.member_count ?? 0) > 0 && <span>{group.member_count} 人发言 · </span>}
-                    {group.total_messages.toLocaleString()} 条 · {group.last_message_time}
+                  <div className="text-xs text-gray-400 mt-0.5 truncate">
+                    {(group.member_count ?? 0) > 0 && <span>{group.member_count} 人 · </span>}
+                    {group.total_messages.toLocaleString()} 条
+                    {(group.recent_30d_messages ?? 0) > 0 && <span> · 30天 {group.recent_30d_messages}</span>}
+                    {(group.my_rank ?? 0) > 0 && group.total_messages > 0 && (
+                      <span className="text-[#07c160]"> · 我 #{group.my_rank}</span>
+                    )}
                   </div>
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
                 <span className="text-sm font-bold text-[#1d1d1f] dk-text">{group.total_messages.toLocaleString()}</span>
+                {(group.recent_trend_pct !== undefined && group.recent_trend_pct !== 0 && group.recent_trend_pct < 999) && (
+                  <span className={`text-[10px] font-bold ${
+                    group.recent_trend_pct > 20 ? 'text-[#07c160]' :
+                    group.recent_trend_pct < -20 ? 'text-[#fa5151]' : 'text-gray-400'
+                  }`}>
+                    {group.recent_trend_pct > 0 ? `↑${group.recent_trend_pct}%` : `↓${Math.abs(group.recent_trend_pct)}%`}
+                  </span>
+                )}
                 {GROUP_STATUS_BADGES[getGroupStatusTier(group)]}
                 <AIAnalysisBadge username={group.username} isGroup />
               </div>

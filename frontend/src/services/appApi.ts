@@ -2,6 +2,12 @@ import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api', timeout: 120000 });
 
+export interface SelfInfo {
+  wxid: string;
+  avatar_url: string;
+  nickname: string;
+}
+
 export interface AppInfo {
   app_mode: boolean;
   needs_setup: boolean;
@@ -12,6 +18,7 @@ export interface AppInfo {
   reason?: string;         // 最近一次初始化失败的原因
   probed_paths?: string[]; // 后端探测过的候选 decrypted 路径
   can_demo?: boolean;      // 是否支持一键切到 Demo（目前仅桌面版）
+  self_info?: SelfInfo;    // 当前登录微信账号的 wxid + 头像 + 昵称
 }
 
 export interface AppConfig {

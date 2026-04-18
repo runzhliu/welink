@@ -300,18 +300,42 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
             {groupTarget === 'member' && (
               <div>
                 {selectedMember ? (
-                  <div className="flex items-center gap-3 p-3 bg-[#07c160]/5 rounded-xl border border-[#07c160]/30">
-                    <div className="w-8 h-8 rounded-full bg-[#07c160] flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                      {selectedMember.speaker.charAt(0)}
+                  <>
+                    <div className="flex items-center gap-3 p-3 bg-[#07c160]/5 rounded-xl border border-[#07c160]/30">
+                      <div className="w-8 h-8 rounded-full bg-[#07c160] flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                        {selectedMember.speaker.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold text-[#1d1d1f] dk-text truncate">{selectedMember.speaker}</div>
+                        <div className="text-[10px] text-gray-400">
+                          {selectedMember.count.toLocaleString()} 条发言
+                          {selectedMember.text_count != null && (
+                            <>
+                              {' · '}
+                              <span className={selectedMember.text_count < 100 ? 'text-amber-500 font-semibold' : ''}>
+                                {selectedMember.text_count.toLocaleString()} 条文本
+                              </span>
+                              <span className="text-gray-300">（炼化用）</span>
+                            </>
+                          )}
+                          {selectedMember.username ? ` · ${selectedMember.username}` : ''}
+                        </div>
+                      </div>
+                      <button onClick={() => setSelectedMember(null)} className="p-1 text-gray-400 hover:text-gray-600">
+                        <X size={14} />
+                      </button>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-[#1d1d1f] dk-text truncate">{selectedMember.speaker}</div>
-                      <div className="text-[10px] text-gray-400">{selectedMember.count.toLocaleString()} 条发言{selectedMember.username ? ` · ${selectedMember.username}` : ''}</div>
-                    </div>
-                    <button onClick={() => setSelectedMember(null)} className="p-1 text-gray-400 hover:text-gray-600">
-                      <X size={14} />
-                    </button>
-                  </div>
+                    {/* 文本消息太少时给出预警，避免用户炼出来发现"味道"不对 */}
+                    {selectedMember.text_count != null && selectedMember.text_count < 100 && (
+                      <div className="mt-2 flex items-start gap-2 p-2.5 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg">
+                        <Info size={13} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                        <div className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                          这位成员只有 <b>{selectedMember.text_count}</b> 条文本消息，发言以图片/表情/链接为主。
+                          Skill 炼化只用文本，生成的风格可能"味道"不够 —— 建议换一个发言更活跃的文字派成员，或将此结果作为参考。
+                        </div>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <>
                     <input
@@ -337,7 +361,13 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
                           </div>
                           <div className="flex-1 min-w-0 text-left">
                             <div className="text-sm font-semibold text-[#1d1d1f] dk-text truncate">{m.speaker}</div>
-                            <div className="text-[10px] text-gray-400">{m.count.toLocaleString()} 条{m.username ? ` · ${m.username}` : ''}</div>
+                            <div className="text-[10px] text-gray-400">
+                              {m.count.toLocaleString()} 条
+                              {m.text_count != null && (
+                                <> · <span className={m.text_count < 100 ? 'text-amber-500' : ''}>{m.text_count.toLocaleString()} 文本</span></>
+                              )}
+                              {m.username ? ` · ${m.username}` : ''}
+                            </div>
                           </div>
                         </button>
                       ))}

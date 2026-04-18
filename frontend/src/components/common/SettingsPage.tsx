@@ -6,7 +6,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   X, Plus, ShieldOff, User, Users,
   FolderOpen, Loader2, Database, FileText, AlertCircle, RotateCcw, CheckCircle2, EyeOff, BarChart2, Bot, Check, LogIn, LogOut, Stethoscope, AlertTriangle, XCircle, Copy,
-  Settings, Clock, Cpu, Save, RefreshCw,
+  Settings, Clock, Cpu, Save, RefreshCw, Sparkles,
 } from 'lucide-react';
 import axios from 'axios';
 import { PROMPT_TEMPLATES } from '../../utils/promptTemplates';
@@ -1050,7 +1050,7 @@ const PromptTemplateSection: React.FC = () => {
   };
 
   return (
-    <section className="bg-white rounded-3xl border border-gray-100 p-6 sm:p-8 dk-card dk-border">
+    <section className="mb-8 bg-white rounded-3xl border border-gray-100 p-6 sm:p-8 dk-card dk-border" data-settings-tags="prompt 模板 提示词 AI 自定义">
       <h2 className="text-lg font-black text-[#1d1d1f] dk-text mb-1 flex items-center gap-2">
         <Bot size={18} className="text-gray-400" />
         Prompt 模板
@@ -1322,6 +1322,28 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       toast.error('复制失败：' + (e as Error).message);
     }
   };
+
+  // LLM 用量统计
+  type UsageStats = {
+    total_conversations: number;
+    total_assistant_msgs: number;
+    total_chars: number;
+    total_tokens: number;
+    total_elapsed_sec: number;
+    by_provider: { provider: string; model?: string; count: number; chars: number; tokens: number; elapsed_sec: number }[];
+  };
+  const [usage, setUsage] = useState<UsageStats | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const loadUsage = useCallback(async () => {
+    setUsageLoading(true);
+    try {
+      const { data } = await axios.get<UsageStats>('/api/ai/usage-stats');
+      setUsage(data);
+    } catch { /* ignore */ }
+    finally { setUsageLoading(false); }
+  }, []);
+  useEffect(() => { loadUsage(); }, [loadUsage]);
+  const fmtNum = (n: number) => n.toLocaleString('zh-CN');
   const [loadingCfg, setLoadingCfg] = useState(isAppMode);
   const [bundling, setBundling] = useState(false);
   const [bundlePath, setBundlePath] = useState<string | null>(null);
@@ -1367,7 +1389,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<{
     has_update: boolean; latest: string; changelog: string; url: string;
-    assets: { name: string; size: number; url: string; mirror_url: string }[];
+    assets: { name: string; size: number; url: string }[];
     error?: string;
   } | null>(null);
   const [browsing, setBrowsing] = useState<'data' | 'log' | 'download' | null>(null);
@@ -1498,6 +1520,30 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     return g ? g.name : id;
   };
 
+  // 关系预测「不再推荐此人」名单
+  const [forecastIgnored, setForecastIgnored] = useState<string[]>([]);
+  useEffect(() => {
+    fetch('/api/preferences').then(r => r.json()).then(d => {
+      if (Array.isArray(d?.forecast_ignored)) setForecastIgnored(d.forecast_ignored);
+    }).catch(() => {});
+  }, []);
+  const saveForecastIgnored = useCallback(async (next: string[]) => {
+    try {
+      await fetch('/api/preferences/forecast-ignored', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forecast_ignored: next }),
+      });
+      setForecastIgnored(next);
+    } catch { /* ignore */ }
+  }, []);
+  const handleRemoveForecastIgnored = useCallback((username: string) => {
+    saveForecastIgnored(forecastIgnored.filter(u => u !== username));
+  }, [forecastIgnored, saveForecastIgnored]);
+  const handleClearForecastIgnored = useCallback(() => {
+    saveForecastIgnored([]);
+  }, [saveForecastIgnored]);
+
   if (restarting) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4 text-gray-500 dark:text-gray-400">
@@ -1508,22 +1554,114 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     );
   }
 
+  const jumpToSection = (keyword: string) => {
+    const el = settingsRootRef.current?.querySelector<HTMLElement>(`[data-settings-tags*="${keyword}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const SECTION_JUMPS = [
+    { title: '录屏',       kw: '录屏' },
+    { title: '显示',       kw: '显示 暗色' },
+    { title: '基本配置',   kw: '基本 配置' },
+    { title: '隐私屏蔽',   kw: 'blocked' },
+    { title: '关系预测',   kw: 'forecast 忽略' },
+    { title: '多账号',     kw: '多账号' },
+    { title: 'AI 备份',    kw: 'backup' },
+    { title: 'LLM 用量',   kw: 'LLM 用量' },
+    { title: 'Prompt 模板',kw: 'prompt 模板' },
+    { title: '诊断',       kw: '诊断' },
+    { title: '应用配置',   kw: '应用配置' },
+    { title: '关于',       kw: '关于' },
+  ];
+
+  // IntersectionObserver 检测当前视口内的 section，用于高亮左栏活跃项
+  const [activeJumpKw, setActiveJumpKw] = useState<string>('');
+  useEffect(() => {
+    const root = settingsRootRef.current;
+    if (!root) return;
+    // 按 kw 找到对应的 section element
+    const sectionEls: { kw: string; el: HTMLElement }[] = [];
+    for (const s of SECTION_JUMPS) {
+      const el = root.querySelector<HTMLElement>(`[data-settings-tags*="${s.kw}"]`);
+      if (el) sectionEls.push({ kw: s.kw, el });
+    }
+    if (sectionEls.length === 0) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        // 取最靠上的正在相交的 section
+        const visible = entries
+          .filter(e => e.isIntersecting)
+          .map(e => ({ kw: sectionEls.find(s => s.el === e.target)?.kw ?? '', y: (e.target as HTMLElement).offsetTop }))
+          .filter(x => x.kw !== '')
+          .sort((a, b) => a.y - b.y);
+        if (visible.length > 0) setActiveJumpKw(visible[0].kw);
+      },
+      { rootMargin: '-20% 0px -60% 0px', threshold: 0 }
+    );
+    sectionEls.forEach(s => io.observe(s.el));
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <div className="max-w-2xl" ref={settingsRootRef}>
-      <div className="flex items-center justify-between gap-4 mb-8 flex-wrap">
-        <h2 className="text-2xl font-black text-[#1d1d1f] dk-text">设置</h2>
-        <div className="relative flex-1 max-w-xs">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" strokeLinecap="round" />
-          </svg>
-          <input
-            value={settingsQuery}
-            onChange={e => setSettingsQuery(e.target.value)}
-            placeholder="搜索设置项…（例：下载 / 诊断 / LLM）"
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-white/10 rounded-xl bg-[#f8f9fb] dk-input focus:outline-none focus:border-[#07c160]"
-          />
+    <div className="lg:flex lg:gap-6" ref={settingsRootRef}>
+      {/* 左栏导航（lg+ sticky 左侧）*/}
+      <aside className="hidden lg:block w-44 flex-shrink-0 sticky top-0 self-start pt-2 pb-6 max-h-[calc(100vh-2rem)] overflow-y-auto">
+        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-2">设置目录</div>
+        <nav className="flex flex-col gap-0.5">
+          {SECTION_JUMPS.map(s => {
+            const active = activeJumpKw === s.kw;
+            return (
+              <button
+                key={s.kw}
+                onClick={() => jumpToSection(s.kw)}
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-left transition-colors ${
+                  active
+                    ? 'bg-[#07c160]/10 text-[#07c160]'
+                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-700 dk-text'
+                }`}
+              >
+                <span className={`w-1 h-4 rounded-full transition-colors ${active ? 'bg-[#07c160]' : 'bg-transparent'}`} />
+                {s.title}
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
+
+      {/* 主内容区 */}
+      <div className="max-w-2xl flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+          <h2 className="text-2xl font-black text-[#1d1d1f] dk-text">设置</h2>
+          <div className="relative flex-1 max-w-xs">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" strokeLinecap="round" />
+            </svg>
+            <input
+              value={settingsQuery}
+              onChange={e => setSettingsQuery(e.target.value)}
+              placeholder="搜索设置项…（例：下载 / 诊断 / LLM）"
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-white/10 rounded-xl bg-[#f8f9fb] dk-input focus:outline-none focus:border-[#07c160]"
+            />
+          </div>
         </div>
-      </div>
+
+        {/* 小屏兼容：横向快速跳转栏（sticky，lg+ 隐藏，用左栏代替） */}
+        <div className="lg:hidden sticky top-0 z-10 bg-white dark:bg-[#1c1c1e] -mx-2 px-2 py-2 mb-6 border-b border-gray-100 dark:border-white/5 overflow-x-auto whitespace-nowrap">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-bold text-gray-400 flex-shrink-0">快速跳转</span>
+            {SECTION_JUMPS.map(s => (
+              <button
+                key={s.kw}
+                onClick={() => jumpToSection(s.kw)}
+                className="flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:bg-[#07c160]/10 hover:text-[#07c160] transition-colors"
+              >
+                {s.title}
+              </button>
+            ))}
+          </div>
+        </div>
 
       {/* ── 录屏模式 ── */}
       <section className="mb-8" data-settings-tags="隐私 录屏 privacy 屏蔽马赛克">
@@ -1903,6 +2041,47 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
       </section>
 
+      {/* ── 关系预测 · 忽略名单 ── */}
+      <section className="mb-8" data-settings-tags="关系预测 forecast 忽略 不再推荐 冷却">
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles size={18} className="text-[#07c160]" />
+          <h3 className="text-base font-bold text-[#1d1d1f] dk-text">关系预测 · 忽略名单</h3>
+        </div>
+        <p className="text-sm text-gray-400 mb-4">
+          在首页「建议主动联系」卡片点「不再推荐此人」加入这里。被忽略的联系人仍在其他页面可见，只是首页 forecast 不再提醒。
+        </p>
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 dk-card dk-border">
+          <div className="flex items-center gap-2 mb-4">
+            <EyeOff size={16} className="text-gray-400" />
+            <h4 className="font-bold text-[#1d1d1f] dk-text">忽略的联系人</h4>
+            {forecastIgnored.length > 0 && (
+              <>
+                <span className="ml-auto text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400">
+                  {forecastIgnored.length} 位
+                </span>
+                <button
+                  onClick={() => {
+                    if (confirm(`确定清空全部 ${forecastIgnored.length} 个忽略联系人？`)) {
+                      handleClearForecastIgnored();
+                    }
+                  }}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  清空
+                </button>
+              </>
+            )}
+          </div>
+          <TagList
+            items={forecastIgnored}
+            onRemove={handleRemoveForecastIgnored}
+            emptyText="暂无忽略联系人"
+            labelFor={userLabelFor}
+            privacyMode={privacyMode}
+          />
+        </div>
+      </section>
+
       {/* ── 数据目录 / 多账号（App 与 Docker 通用） ── */}
       <section className="mb-8" data-settings-tags="数据目录 多账号 profile 切换 decrypted path 目录">
         <div className="flex items-center gap-2 mb-3">
@@ -2145,9 +2324,73 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         </div>
       </section>
 
+      {/* ── LLM 用量统计 ── */}
+      <section className="mb-8" data-settings-tags="LLM 用量 token 字符 统计 usage">
+        <div className="flex items-center gap-2 mb-3">
+          <Bot size={18} className="text-[#07c160]" />
+          <h3 className="text-base font-bold text-[#1d1d1f] dk-text">LLM 用量</h3>
+          <button
+            onClick={loadUsage}
+            disabled={usageLoading}
+            className="ml-auto text-xs text-gray-400 hover:text-[#07c160] disabled:opacity-50"
+          >
+            {usageLoading ? '加载中…' : '刷新'}
+          </button>
+        </div>
+        <p className="text-sm text-gray-400 mb-4">累计所有 AI 对话（首页、联系人分析、时光机等）的字符和 token 估算</p>
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 dk-card dk-border">
+          {!usage ? (
+            <p className="text-sm text-gray-400 text-center py-4">{usageLoading ? '加载中…' : '暂无数据'}</p>
+          ) : usage.total_assistant_msgs === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">还没有 AI 对话记录</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">对话线程</div>
+                  <div className="text-lg font-bold text-[#1d1d1f] dk-text">{fmtNum(usage.total_conversations)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">AI 回复条数</div>
+                  <div className="text-lg font-bold text-[#1d1d1f] dk-text">{fmtNum(usage.total_assistant_msgs)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">总字符数</div>
+                  <div className="text-lg font-bold text-[#1d1d1f] dk-text">{fmtNum(usage.total_chars)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">估算 tokens</div>
+                  <div className="text-lg font-bold text-[#1d1d1f] dk-text">{fmtNum(usage.total_tokens)}</div>
+                </div>
+              </div>
+              {usage.by_provider.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">按 Provider 分布</div>
+                  <div className="space-y-1.5">
+                    {usage.by_provider.sort((a, b) => b.tokens - a.tokens).map((p, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span className="font-semibold text-[#1d1d1f] dk-text w-24 truncate">{p.provider}</span>
+                        <span className="text-gray-400 flex-1 truncate">{p.model || '—'}</span>
+                        <span className="text-gray-500 tabular-nums">{fmtNum(p.count)} 条</span>
+                        <span className="text-gray-500 tabular-nums w-20 text-right">{fmtNum(p.chars)} 字</span>
+                        <span className="text-[#07c160] tabular-nums w-24 text-right">~{fmtNum(p.tokens)} tok</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="mt-4 text-[10px] text-gray-400 leading-relaxed">
+                Token 估算 = 平均吐字速率 × 生成耗时，仅为近似值；实际扣费请以 provider 后台为准。
+                此数据仅来自本地 <code className="font-mono">ai_analysis.db</code>，不含后续"清除历史"之前已删的对话。
+              </p>
+            </>
+          )}
+        </div>
+      </section>
+
       {/* ── App 配置（仅 App 模式） ── */}
       {isAppMode && (
-        <section data-settings-tags="应用配置 数据目录 日志 log 下载 download reveal finder 打包日志 更新 version">
+        <section className="mb-8" data-settings-tags="应用配置 数据目录 日志 log 下载 download reveal finder 打包日志 更新 version">
           <div className="flex items-center gap-2 mb-3">
             <Database size={18} className="text-[#07c160]" />
             <h3 className="text-base font-bold text-[#1d1d1f] dk-text">应用配置</h3>
@@ -2276,7 +2519,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       <PromptTemplateSection />
 
       {/* 版本信息 + 日志打包 */}
-      <section className="bg-white rounded-3xl border border-gray-100 p-6 sm:p-8 dk-card dk-border">
+      <section className="mb-8 bg-white rounded-3xl border border-gray-100 p-6 sm:p-8 dk-card dk-border" data-settings-tags="版本 关于 about version 日志 log 更新 update">
         <h2 className="text-lg font-black text-[#1d1d1f] dk-text mb-4 flex items-center gap-2">
           <FileText size={18} className="text-gray-400" />
           关于 WeLink
@@ -2340,13 +2583,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       <div key={a.name} className="flex items-center gap-2 text-xs">
                         <span className="text-gray-600 dark:text-gray-300 font-mono truncate flex-1">{a.name}</span>
                         <span className="text-gray-400 flex-shrink-0">{(a.size / 1024 / 1024).toFixed(1)} MB</span>
-                        <a href={a.mirror_url} target="_blank" rel="noreferrer"
-                          className="px-2 py-0.5 rounded-lg bg-[#07c160] text-white font-bold hover:bg-[#06ad56] transition-colors flex-shrink-0">
-                          加速下载
-                        </a>
                         <a href={a.url} target="_blank" rel="noreferrer"
-                          className="px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-white/10 text-gray-500 font-bold hover:bg-gray-200 transition-colors flex-shrink-0">
-                          GitHub
+                          className="px-2 py-0.5 rounded-lg bg-[#07c160] text-white font-bold hover:bg-[#06ad56] transition-colors flex-shrink-0">
+                          GitHub 下载
                         </a>
                       </div>
                     ))}
@@ -2402,6 +2641,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       </section>
 
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} appVersion={appVersion} />
+      </div>{/* /主内容区 */}
     </div>
   );
 };

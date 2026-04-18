@@ -7,6 +7,7 @@ import { Play, Pause, SkipForward, X, Clock, Gauge } from 'lucide-react';
 import type { ChatMessage } from '../../types';
 import { contactsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { useSelfInfo } from '../../contexts/SelfInfoContext';
 import { avatarSrc } from '../../utils/avatar';
 
 interface Props {
@@ -29,6 +30,7 @@ const MAX_GAP_MS = 5000; // 最大间隔 5 秒（即使实时间隔更长也不�
 
 export const ChatReplay: React.FC<Props> = ({ username, displayName, avatarUrl, onClose }) => {
   const { privacyMode } = usePrivacyMode();
+  const selfInfo = useSelfInfo();
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]);
   const [visibleCount, setVisibleCount] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -201,8 +203,21 @@ export const ChatReplay: React.FC<Props> = ({ username, displayName, avatarUrl, 
                         <span className="text-[10px] text-gray-400 bg-white dark:bg-gray-800 px-3 py-0.5 rounded-full shadow-sm">{msg.date}</span>
                       </div>
                     )}
-                    <div className={`flex gap-2 ${msg.is_mine ? 'flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                      <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words ${
+                    <div className={`flex items-start gap-2 ${msg.is_mine ? 'flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                      {msg.is_mine ? (
+                        selfInfo?.avatar_url ? (
+                          <img src={avatarSrc(selfInfo.avatar_url)} alt="" className="w-7 h-7 rounded-full flex-shrink-0 object-cover mt-0.5" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black bg-[#07c160] mt-0.5">我</div>
+                        )
+                      ) : avatarUrl ? (
+                        <img src={avatarSrc(avatarUrl)} alt="" className="w-7 h-7 rounded-full flex-shrink-0 object-cover mt-0.5" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black bg-[#576b95] mt-0.5">
+                          {displayName.charAt(0)}
+                        </div>
+                      )}
+                      <div className={`max-w-[72%] px-3 py-2 rounded-2xl text-sm break-words ${
                         msg.is_mine
                           ? 'bg-[#07c160] text-white rounded-br-sm'
                           : 'bg-white dark:bg-gray-800 text-[#1d1d1f] dark:text-gray-100 rounded-bl-sm shadow-sm'

@@ -17,6 +17,7 @@ import { generateShareImage } from '../../utils/shareImage';
 import { RevealLink } from '../common/RevealLink';
 import { calendarApi } from '../../services/api';
 import type { CalendarDayEntry, ContactStats, ChatMessage, GroupChatMessage } from '../../types';
+import { Section } from '../common/Section';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { avatarSrc } from '../../utils/avatar';
 
@@ -1009,13 +1010,14 @@ export const ChatCalendarPage: React.FC<Props> = () => {
           </div>
         </div>
 
-        {/* 折线图 */}
-        <div className="dk-card bg-white dark:bg-[#1c1c1e] border border-gray-100 dark:border-white/10 rounded-3xl p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <Hourglass size={14} className="text-[#07c160]" strokeWidth={2.5} />
-            <span className="font-black text-sm text-[#1d1d1f] dark:text-white">消息趋势</span>
-            <span className="text-gray-400 text-xs">{navLabel}</span>
-          </div>
+        {/* 折线图（可折叠） */}
+        <Section
+          title="消息趋势"
+          subtitle={navLabel}
+          icon={<Hourglass size={14} strokeWidth={2.5} />}
+          defaultOpen={false}
+          className="bg-white dark:bg-[#1c1c1e] border border-gray-100 dark:border-white/10 !rounded-3xl"
+        >
           {loading ? (
             <div className="h-28 flex items-center justify-center text-gray-300 animate-pulse text-sm">加载中...</div>
           ) : (
@@ -1038,7 +1040,7 @@ export const ChatCalendarPage: React.FC<Props> = () => {
               </AreaChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </Section>
       </div>
 
       {/* ── 右侧面板 ─────────────────────────────────────────────────────────── */}

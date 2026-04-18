@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { Bot, BarChart2, Database, Sun, Moon, MessagesSquare, MessageCircle, BookOpen, Github, Search, GitCommitHorizontal, Hourglass, Heart, Link2, X, Settings, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { Bot, BarChart2, Database, Sun, Moon, MessagesSquare, MessageCircle, BookOpen, Github, Search, GitCommitHorizontal, Hourglass, Heart, Link2, X, Settings, ChevronLeft, ChevronRight, Sparkles, Download } from 'lucide-react';
 import type { TabType } from '../../types';
 
 interface SidebarProps {
@@ -50,6 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
     { tab: 'search',      icon: <Search size={20} strokeWidth={2} />,         label: '搜索' },
     { tab: 'urls',        icon: <Link2 size={20} strokeWidth={2} />,           label: '链接' },
     { tab: 'skills',      icon: <Sparkles size={20} strokeWidth={2} />,        label: 'Skills' },
+    { tab: 'export',      icon: <Download size={20} strokeWidth={2} />,        label: '导出中心' },
     { tab: 'db',        icon: <Database size={20} strokeWidth={2} />,         label: '数据库' },
     { tab: 'settings',  icon: <Settings size={20} strokeWidth={2} />,         label: '设置' },
   ];
@@ -86,18 +87,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
         {/* Logo 区 */}
         <div className={`flex items-center gap-3 px-3 mb-4 ${expanded ? 'justify-between' : 'justify-center flex-col gap-2'}`}>
           <div
-            className="w-9 h-9 rounded-xl overflow-hidden shadow-md shadow-green-100/50 cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
+            className="w-9 h-9 rounded-xl overflow-hidden shadow-md shadow-green-100/50 dark:shadow-none cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
             onClick={() => openExternal('https://welink.click')}
             title="官方文档"
           >
             <img loading="lazy" src="/favicon.svg" alt="WeLink" className="w-full h-full" />
           </div>
           {expanded && (
-            <span className="text-sm font-black text-[#1d1d1f] tracking-tight flex-1 truncate">WeLink</span>
+            <span className="text-sm font-black text-[#1d1d1f] dark:text-white tracking-tight flex-1 truncate">WeLink</span>
           )}
           <button
             onClick={toggleExpanded}
-            className="flex-shrink-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+            className="flex-shrink-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-all"
             title={expanded ? '收起侧边栏' : '展开侧边栏'}
           >
             {expanded ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}

@@ -135,7 +135,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
       : <ChevronDown size={11} className="ml-1 text-[#07c160]" />;
   };
 
-  const thClass = "px-8 py-5 text-left text-xs font-black text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-[#07c160] transition-colors";
+  const thClass = "px-3 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-[#07c160] transition-colors whitespace-nowrap";
 
   return (
     <div className="dk-card dk-border bg-white rounded-2xl sm:rounded-3xl border border-gray-100 overflow-hidden">
@@ -194,7 +194,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                     />
                   </td>
                 )}
-                <td className="px-8 py-5">
+                <td className="px-3 py-3.5 text-sm">
                   <div className="flex items-center gap-3">
                     {(contact.small_head_url || contact.big_head_url) ? (
                       <img loading="lazy" src={avatarSrc(contact.small_head_url || contact.big_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
@@ -211,10 +211,10 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                     </div>
                   </div>
                 </td>
-                <td className="px-8 py-5">
+                <td className="px-3 py-3.5 text-sm">
                   <span className="font-bold text-[#1d1d1f] dk-text">{contact.total_messages.toLocaleString()}</span>
                 </td>
-                <td className="px-8 py-5">
+                <td className="px-3 py-3.5 text-sm">
                   {(contact.shared_groups_count ?? 0) > 0 ? (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600">
                       <Users size={11} />{contact.shared_groups_count}
@@ -223,7 +223,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                     <span className="text-sm text-gray-300">-</span>
                   )}
                 </td>
-                <td className="px-8 py-5">
+                <td className="px-3 py-3.5 text-sm">
                   {(contact.money_count ?? 0) > 0 ? (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-orange-600">
                       <Gift size={11} />{contact.money_count}
@@ -232,7 +232,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                     <span className="text-sm text-gray-300">-</span>
                   )}
                 </td>
-                <td className="px-8 py-5">
+                <td className="px-3 py-3.5 text-sm">
                   {(contact.peak_monthly ?? 0) > 0 ? (
                     <div>
                       <span className="font-bold text-[#1d1d1f] dk-text">{contact.peak_monthly!.toLocaleString()}</span>
@@ -245,26 +245,26 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                     <span className="text-sm text-gray-300">-</span>
                   )}
                 </td>
-                <td className="px-8 py-5">
+                <td className="px-3 py-3.5 text-sm">
                   {(contact.recent_monthly ?? 0) > 0 ? (
                     <span className="font-bold text-[#07c160]">{contact.recent_monthly!.toLocaleString()}<span className="text-xs text-gray-400 ml-1 font-normal">条</span></span>
                   ) : (
                     <span className="text-sm text-gray-300">0</span>
                   )}
                 </td>
-                <td className="px-8 py-5">
+                <td className="px-3 py-3.5 text-sm">
                   {(contact.avg_msg_len ?? 0) > 0 ? (
                     <span className="font-bold text-[#1d1d1f] dk-text">{contact.avg_msg_len!.toFixed(1)}<span className="text-xs text-gray-400 ml-1 font-normal">字</span></span>
                   ) : (
                     <span className="text-sm text-gray-300">-</span>
                   )}
                 </td>
-                <td className="px-8 py-5">
+                <td className="px-3 py-3.5 text-sm">
                   <span className="text-sm font-medium text-gray-600">
                     <RelativeTime ts={contact.last_message_ts} placeholder={contact.last_message_time || '-'} />
                   </span>
                 </td>
-                <td className="px-8 py-5">
+                <td className="px-3 py-3.5 text-sm">
                   <div className="flex flex-col gap-1.5 items-start">
                     {getStatusBadge(contact)}
                     <AIAnalysisBadge username={contact.username} />

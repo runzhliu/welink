@@ -13,6 +13,9 @@ import { WordCloudCanvas } from './WordCloudCanvas';
 import { LLMAnalysisTab } from './LLMAnalysisTab';
 import { AICloneTab } from './AICloneTab';
 import { ForgeSkillModal } from './ForgeSkillModal';
+import { RelationshipThermometer } from './RelationshipThermometer';
+import { SecretWordsCard } from './SecretWordsCard';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { AIInsights } from './AIInsights';
 import { ContactDetailCharts } from './ContactDetailCharts';
 import { SentimentChart } from './SentimentChart';
@@ -53,6 +56,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
   const { data: wordData, loading: isAnalysing, fetch: fetchWordCloud } = useWordCloud();
   const [tab, setTab] = useState<ModalTab>(initialTab ?? 'wordcloud');
   const [fullscreen, setFullscreen] = useState(false);
+  const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   // showReplay removed — now a tab
   const [forgeOpen, setForgeOpen] = useState(false);
 
@@ -279,7 +283,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
           </button>
           {onBlock && (
             <button
-              onClick={() => { onBlock(contact.username); onClose(); }}
+              onClick={() => setBlockConfirmOpen(true)}
               className="p-2 rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors duration-200"
               title="屏蔽该联系人"
             >
@@ -326,9 +330,12 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
             </div>
           )}
           <div>
-            <h3 className={`dk-text text-xl sm:text-3xl font-black tracking-tight text-[#1d1d1f] mb-0.5${privacyMode ? ' privacy-blur' : ''}`}>
-              {displayName}
-            </h3>
+            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+              <h3 className={`dk-text text-xl sm:text-3xl font-black tracking-tight text-[#1d1d1f]${privacyMode ? ' privacy-blur' : ''}`}>
+                {displayName}
+              </h3>
+              <RelationshipThermometer contact={contact} />
+            </div>
             {contact.remark && contact.nickname && (
               <p className={`text-sm text-gray-400 mb-1${privacyMode ? ' privacy-blur' : ''}`}>{contact.nickname}</p>
             )}
@@ -598,6 +605,8 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                 </p>
               </div>
 
+              <SecretWordsCard username={contact.username} />
+
               {contact.type_cnt && Object.keys(contact.type_cnt).length > 0 && (
                 <MessageTypePieChart
                   typeData={contact.type_cnt}
@@ -619,6 +628,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
               totalMessages={contact.total_messages}
               username={contact.username}
               contactName={displayName}
+              contactAvatarUrl={contact.small_head_url || contact.big_head_url}
             />
           ) : (
             <div className="text-center text-gray-300 py-12">暂无深度数据</div>
@@ -792,6 +802,17 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         displayName={displayName}
       />
     )}
+
+    <ConfirmDialog
+      open={blockConfirmOpen}
+      title="屏蔽联系人"
+      message={`确定屏蔽「${displayName}」？\n屏蔽后该联系人不会出现在统计和排行里。`}
+      hint="如需取消，可前往 设置 → 隐私屏蔽 移除。"
+      confirmText="屏蔽"
+      danger
+      onConfirm={() => { setBlockConfirmOpen(false); onBlock?.(contact.username); onClose(); }}
+      onCancel={() => setBlockConfirmOpen(false)}
+    />
   </>
   );
 };

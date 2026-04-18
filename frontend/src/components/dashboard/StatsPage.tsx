@@ -14,7 +14,6 @@ import { KPICard } from './KPICard';
 import { RelationshipHeatmap } from './RelationshipHeatmap';
 import { MonthlyTrendChart } from './MonthlyTrendChart';
 import { HourlyHeatmap } from './HourlyHeatmap';
-import { LateNightRanking } from './LateNightRanking';
 import SocialReport from './SocialReport';
 import { DriftingApart } from './DriftingApart';
 import { LateNightGuard } from './LateNightGuard';
@@ -24,6 +23,11 @@ import { RecallRanking } from './RecallRanking';
 import { SelfPortraitCard } from './SelfPortraitCard';
 import { SocialBreadthCard } from './SocialBreadthCard';
 import { formatCompactNumber } from '../../utils/formatters';
+import {
+  CharCountCard, BusiestDayCard, InteractionTierCard, CompanionTimeCard,
+  FirstEncountersCard, EmojiDensityCard, MonologueCard, WordAlmanacCard, InsomniaTopCard,
+} from './FunStatsPage';
+import { RelationshipForecastSection } from './RelationshipForecastSection';
 
 type Layouts = { lg: LayoutItem[]; md: LayoutItem[] };
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -39,6 +43,35 @@ interface StatsPageProps {
 
 const LAYOUT_KEY = 'welink_stats_layout_v3';
 const HIDDEN_KEY = 'welink_stats_hidden_v1';
+const VIEW_KEY = 'welink_stats_view_v1';
+const FUN_COLLAPSED_KEY = 'welink_stats_fun_collapsed_v1';
+
+// 视图预设：切换后自动算 hidden 集合
+type ViewPreset = 'full' | 'core' | 'compact' | 'fun' | 'custom';
+
+// 精简视图保留的 6 张代表性卡片
+const COMPACT_KEEP: Set<string> = new Set([
+  'kpi', 'heatmap', 'monthly', 'self', 'drifting', 'recall',
+]);
+
+const computeHiddenForPreset = (preset: ViewPreset, allIds: string[], customHidden: Set<string>): Set<string> => {
+  switch (preset) {
+    case 'full':
+      return new Set(); // 全开
+    case 'core':
+      // 隐藏所有 fun-* 卡片
+      return new Set(allIds.filter(id => id.startsWith('fun-')));
+    case 'compact':
+      // 只保留 COMPACT_KEEP 里的卡，其他全隐藏（包括 section）
+      return new Set(allIds.filter(id => !COMPACT_KEEP.has(id)));
+    case 'fun':
+      // 只保留 fun-* 卡，其他全隐藏
+      return new Set(allIds.filter(id => !id.startsWith('fun-')));
+    case 'custom':
+    default:
+      return customHidden;
+  }
+};
 
 // 每个卡片定义 + 默认布局（12 列栅格）
 interface CardMeta {
@@ -51,19 +84,28 @@ interface CardMeta {
 // 一个 h 单位 = rowHeight(30) + margin[1](8) = 38px
 // 实际高度 = h * 30 + (h-1) * 8
 const CARD_METAS: CardMeta[] = [
-  { id: 'kpi',              title: 'KPI 卡片',       defaultLg: { x: 0, y: 0,  w: 12, h: 5  }, defaultMd: { x: 0, y: 0,  w: 12, h: 5  } }, // 182px
-  { id: 'heatmap',          title: '关系热度分布',   defaultLg: { x: 0, y: 5,  w: 12, h: 9  }, defaultMd: { x: 0, y: 5,  w: 12, h: 9  } }, // 334px
-  { id: 'monthly',          title: '月度消息趋势',   defaultLg: { x: 0, y: 14, w: 6,  h: 10 }, defaultMd: { x: 0, y: 14, w: 12, h: 10 } }, // 372px
+  { id: 'kpi',              title: 'KPI 卡片',       defaultLg: { x: 0, y: 0,  w: 12, h: 5  }, defaultMd: { x: 0, y: 0,  w: 12, h: 5  } },
+  { id: 'heatmap',          title: '关系热度分布',   defaultLg: { x: 0, y: 5,  w: 12, h: 9  }, defaultMd: { x: 0, y: 5,  w: 12, h: 9  } },
+  { id: 'monthly',          title: '月度消息趋势',   defaultLg: { x: 0, y: 14, w: 6,  h: 10 }, defaultMd: { x: 0, y: 14, w: 12, h: 10 } },
   { id: 'hourly',           title: '24 小时活跃度',  defaultLg: { x: 6, y: 14, w: 6,  h: 10 }, defaultMd: { x: 0, y: 24, w: 12, h: 10 } },
-  { id: 'self',             title: '个人自画像',     defaultLg: { x: 0, y: 24, w: 6,  h: 12 }, defaultMd: { x: 0, y: 34, w: 12, h: 12 } }, // 448px
-  { id: 'breadth',          title: '每日社交广度',   defaultLg: { x: 6, y: 24, w: 6,  h: 9  }, defaultMd: { x: 0, y: 46, w: 12, h: 9  } }, // 334px
-  { id: 'social-report',    title: '社交体检报告',   defaultLg: { x: 0, y: 36, w: 6,  h: 11 }, defaultMd: { x: 0, y: 55, w: 12, h: 11 } }, // 410px
+  { id: 'self',             title: '个人自画像',     defaultLg: { x: 0, y: 24, w: 6,  h: 12 }, defaultMd: { x: 0, y: 34, w: 12, h: 12 } },
+  { id: 'breadth',          title: '每日社交广度',   defaultLg: { x: 6, y: 24, w: 6,  h: 9  }, defaultMd: { x: 0, y: 46, w: 12, h: 9  } },
+  { id: 'social-report',    title: '社交体检报告',   defaultLg: { x: 0, y: 36, w: 6,  h: 11 }, defaultMd: { x: 0, y: 55, w: 12, h: 11 } },
   { id: 'drifting',         title: '渐行渐远',       defaultLg: { x: 6, y: 36, w: 6,  h: 11 }, defaultMd: { x: 0, y: 66, w: 12, h: 11 } },
-  { id: 'late-night-rank',  title: '深夜排行',       defaultLg: { x: 0, y: 47, w: 6,  h: 11 }, defaultMd: { x: 0, y: 77, w: 12, h: 11 } },
-  { id: 'late-night-guard', title: '深夜守护',       defaultLg: { x: 6, y: 47, w: 6,  h: 11 }, defaultMd: { x: 0, y: 88, w: 12, h: 11 } },
-  { id: 'similarity',       title: '谁最像谁',       defaultLg: { x: 0, y: 58, w: 6,  h: 12 }, defaultMd: { x: 0, y: 99, w: 12, h: 12 } },
-  { id: 'money',            title: '红包/转账总览',  defaultLg: { x: 6, y: 58, w: 6,  h: 13 }, defaultMd: { x: 0, y: 111, w: 12, h: 13 } }, // 486px
+  { id: 'late-night-guard', title: '深夜守护',       defaultLg: { x: 0, y: 47, w: 12, h: 11 }, defaultMd: { x: 0, y: 77, w: 12, h: 11 } },
+  { id: 'similarity',       title: '谁最像谁',       defaultLg: { x: 0, y: 58, w: 6,  h: 12 }, defaultMd: { x: 0, y: 88, w: 12, h: 12 } },
+  { id: 'money',            title: '红包/转账总览',  defaultLg: { x: 6, y: 58, w: 6,  h: 13 }, defaultMd: { x: 0, y: 111, w: 12, h: 13 } },
   { id: 'recall',           title: '消息撤回排行',   defaultLg: { x: 0, y: 71, w: 12, h: 10 }, defaultMd: { x: 0, y: 124, w: 12, h: 10 } },
+  // ── 以下为从旧「有趣发现」section 拍平进来的卡片，默认与其它卡并列参与拖拽/隐藏 ──
+  { id: 'fun-charcount',      title: '你打过多少字',     defaultLg: { x: 0, y: 81, w: 6,  h: 8  }, defaultMd: { x: 0, y: 134, w: 12, h: 8  } },
+  { id: 'fun-busiestday',     title: '最话痨的一天',     defaultLg: { x: 6, y: 81, w: 6,  h: 12 }, defaultMd: { x: 0, y: 142, w: 12, h: 12 } },
+  { id: 'fun-interactiontier',title: '互动档位',         defaultLg: { x: 0, y: 89, w: 6,  h: 10 }, defaultMd: { x: 0, y: 154, w: 12, h: 10 } },
+  { id: 'fun-companiontime',  title: '微信陪伴时长',     defaultLg: { x: 0, y: 99, w: 6,  h: 12 }, defaultMd: { x: 0, y: 164, w: 12, h: 12 } },
+  { id: 'fun-firstencounters',title: '首次相遇时间胶囊', defaultLg: { x: 6, y: 93, w: 6,  h: 14 }, defaultMd: { x: 0, y: 176, w: 12, h: 14 } },
+  { id: 'fun-emojidensity',   title: '表情包浓度',       defaultLg: { x: 0, y: 111,w: 6,  h: 11 }, defaultMd: { x: 0, y: 190, w: 12, h: 11 } },
+  { id: 'fun-monologue',      title: '独白指数',         defaultLg: { x: 6, y: 107,w: 6,  h: 12 }, defaultMd: { x: 0, y: 201, w: 12, h: 12 } },
+  { id: 'fun-insomniatop',    title: '失眠陪聊榜',       defaultLg: { x: 0, y: 122,w: 6,  h: 11 }, defaultMd: { x: 0, y: 213, w: 12, h: 11 } },
+  { id: 'fun-wordalmanac',    title: '词语年鉴',         defaultLg: { x: 6, y: 119,w: 6,  h: 13 }, defaultMd: { x: 0, y: 224, w: 12, h: 13 } },
 ];
 
 function buildDefaultLayouts(): Layouts {
@@ -88,9 +130,13 @@ export const StatsPage: React.FC<StatsPageProps> = ({
       const saved = localStorage.getItem(LAYOUT_KEY);
       if (saved) {
         const parsed = JSON.parse(saved) as Layouts;
-        // 合并：补全新增的 card id
+        // 合并：补全新增的 card id + 清掉已被删除的卡片（旧版 late-night-rank 等）
         const defaults = buildDefaultLayouts();
-        const result: Layouts = { lg: [...(parsed.lg || [])], md: [...(parsed.md || [])] };
+        const validIds = new Set(defaults.lg.map(l => l.i));
+        const result: Layouts = {
+          lg: (parsed.lg || []).filter(l => validIds.has(l.i)),
+          md: (parsed.md || []).filter(l => validIds.has(l.i)),
+        };
         for (const bp of ['lg', 'md'] as const) {
           const savedIds = new Set(result[bp].map(l => l.i));
           const missing = defaults[bp].filter(l => !savedIds.has(l.i));
@@ -109,6 +155,53 @@ export const StatsPage: React.FC<StatsPageProps> = ({
     } catch {/* ignore */}
     return new Set();
   });
+
+  // 当前视图预设：custom = 用户手动编辑过的状态
+  const [viewPreset, setViewPreset] = useState<ViewPreset>(() => {
+    try {
+      const v = localStorage.getItem(VIEW_KEY) as ViewPreset | null;
+      if (v && ['full', 'core', 'compact', 'fun', 'custom'].includes(v)) return v;
+    } catch {/* ignore */}
+    return 'custom';
+  });
+
+  // 非编辑模式下趣味派生组是否折叠
+  const [funCollapsed, setFunCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem(FUN_COLLAPSED_KEY) === '1'; } catch { return false; }
+  });
+
+  const toggleFunCollapsed = () => {
+    setFunCollapsed(v => {
+      const next = !v;
+      try { localStorage.setItem(FUN_COLLAPSED_KEY, next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  const applyViewPreset = (preset: ViewPreset) => {
+    setViewPreset(preset);
+    try { localStorage.setItem(VIEW_KEY, preset); } catch { /* ignore */ }
+    if (preset === 'custom') return; // custom 保持当前 hiddenCards
+    const allIds = [...CARD_METAS.map(c => c.id), 'section-forecast'];
+    const next = computeHiddenForPreset(preset, allIds, hiddenCards);
+    setHiddenCards(next);
+    try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(next))); } catch { /* ignore */ }
+  };
+
+  // 批量隐藏/显示一组
+  const setGroupHidden = (ids: string[], hide: boolean) => {
+    setHiddenCards(prev => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (hide) next.add(id);
+        else next.delete(id);
+      }
+      try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(next))); } catch { /* ignore */ }
+      return next;
+    });
+    setViewPreset('custom');
+    try { localStorage.setItem(VIEW_KEY, 'custom'); } catch { /* ignore */ }
+  };
 
   const saveTimer = useRef<number | null>(null);
   const handleLayoutChange = (_: Layout, allLayouts: ResponsiveLayouts) => {
@@ -131,6 +224,9 @@ export const StatsPage: React.FC<StatsPageProps> = ({
       localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(next)));
       return next;
     });
+    // 手动 toggle 自动切到 custom 视图
+    setViewPreset('custom');
+    try { localStorage.setItem(VIEW_KEY, 'custom'); } catch { /* ignore */ }
   };
 
   const resetLayout = () => {
@@ -138,8 +234,12 @@ export const StatsPage: React.FC<StatsPageProps> = ({
       const defaults = buildDefaultLayouts();
       setLayouts(defaults);
       setHiddenCards(new Set());
+      setViewPreset('full');
+      setFunCollapsed(false);
       localStorage.removeItem(LAYOUT_KEY);
       localStorage.removeItem(HIDDEN_KEY);
+      localStorage.removeItem(VIEW_KEY);
+      localStorage.removeItem(FUN_COLLAPSED_KEY);
     }
   };
 
@@ -171,15 +271,13 @@ export const StatsPage: React.FC<StatsPageProps> = ({
       case 'hourly':
         return <HourlyHeatmap data={globalStats} />;
       case 'self':
-        return <SelfPortraitCard blockedDisplayNames={blockedDisplayNames} />;
+        return <SelfPortraitCard blockedDisplayNames={blockedDisplayNames} contacts={contacts} globalStats={globalStats} />;
       case 'breadth':
         return <SocialBreadthCard />;
       case 'social-report':
         return <SocialReport contacts={contacts} globalStats={globalStats} healthStatus={healthStatus} />;
       case 'drifting':
         return <DriftingApart contacts={contacts} onContactClick={onContactClick} />;
-      case 'late-night-rank':
-        return <LateNightRanking data={globalStats} contacts={contacts} onContactClick={onContactClick} />;
       case 'late-night-guard':
         return <LateNightGuard globalStats={globalStats} contacts={contacts} onContactClick={onContactClick} />;
       case 'similarity':
@@ -188,6 +286,24 @@ export const StatsPage: React.FC<StatsPageProps> = ({
         return <MoneyOverviewCard blockedUsers={blockedUsers} blockedDisplayNames={blockedDisplayNames} onContactClick={u => { const c = contacts.find(cc => cc.username === u); if (c) onContactClick(c); }} />;
       case 'recall':
         return <RecallRanking contacts={contacts} onContactClick={onContactClick} />;
+      case 'fun-charcount':
+        return <CharCountCard contacts={contacts} />;
+      case 'fun-busiestday':
+        return <BusiestDayCard />;
+      case 'fun-interactiontier':
+        return <InteractionTierCard contacts={contacts} />;
+      case 'fun-companiontime':
+        return <CompanionTimeCard contacts={contacts} onContactClick={onContactClick} />;
+      case 'fun-firstencounters':
+        return <FirstEncountersCard contacts={contacts} onContactClick={onContactClick} />;
+      case 'fun-emojidensity':
+        return <EmojiDensityCard contacts={contacts} onContactClick={onContactClick} />;
+      case 'fun-monologue':
+        return <MonologueCard contacts={contacts} onContactClick={onContactClick} />;
+      case 'fun-insomniatop':
+        return <InsomniaTopCard contacts={contacts} onContactClick={onContactClick} />;
+      case 'fun-wordalmanac':
+        return <WordAlmanacCard />;
       default:
         return null;
     }
@@ -217,51 +333,69 @@ export const StatsPage: React.FC<StatsPageProps> = ({
 
   // 经典视图：按两两分组的 full/half 布局渲染，保持原先的经典排版
   const renderClassicLayout = () => {
-    // 按原顺序将卡片两两分组（w=12 的独占一行；w=6 的两个一行）
     const metaMap = new Map(CARD_METAS.map(c => [c.id, c]));
     const layoutItems = layouts.lg.filter(l => !hiddenCards.has(l.i));
-    const sorted = [...layoutItems].sort((a, b) => a.y - b.y || a.x - b.x);
 
-    const rows: Array<{ full?: CardMeta; left?: CardMeta; right?: CardMeta }> = [];
-    let i = 0;
-    while (i < sorted.length) {
-      const cur = sorted[i];
-      const meta = metaMap.get(cur.i);
-      if (!meta) { i++; continue; }
-      if (cur.w >= 12) {
-        rows.push({ full: meta });
-        i++;
-      } else {
-        // 尝试和下一个 w=6 的合并为一行
-        const next = sorted[i + 1];
-        const nextMeta = next ? metaMap.get(next.i) : undefined;
-        if (next && nextMeta && next.w < 12) {
-          rows.push({ left: meta, right: nextMeta });
-          i += 2;
-        } else {
+    // 拆两组分别分行：核心 + 趣味
+    const coreItems = layoutItems.filter(l => !l.i.startsWith('fun-'));
+    const funItems = layoutItems.filter(l => l.i.startsWith('fun-'));
+
+    const buildRows = (items: LayoutItem[]): Array<{ full?: CardMeta; left?: CardMeta; right?: CardMeta }> => {
+      const sorted = [...items].sort((a, b) => a.y - b.y || a.x - b.x);
+      const rows: Array<{ full?: CardMeta; left?: CardMeta; right?: CardMeta }> = [];
+      let i = 0;
+      while (i < sorted.length) {
+        const cur = sorted[i];
+        const meta = metaMap.get(cur.i);
+        if (!meta) { i++; continue; }
+        if (cur.w >= 12) {
           rows.push({ full: meta });
           i++;
+        } else {
+          const next = sorted[i + 1];
+          const nextMeta = next ? metaMap.get(next.i) : undefined;
+          if (next && nextMeta && next.w < 12) {
+            rows.push({ left: meta, right: nextMeta });
+            i += 2;
+          } else {
+            rows.push({ full: meta });
+            i++;
+          }
         }
       }
-    }
+      return rows;
+    };
+
+    const renderRows = (rows: Array<{ full?: CardMeta; left?: CardMeta; right?: CardMeta }>) =>
+      rows.map((row, idx) => {
+        if (row.full) return <div key={idx}>{renderCard(row.full.id)}</div>;
+        return (
+          <div key={idx} className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            {row.left && <div>{renderCard(row.left.id)}</div>}
+            {row.right && <div>{renderCard(row.right.id)}</div>}
+          </div>
+        );
+      });
+
+    const coreRows = buildRows(coreItems);
+    const funRows = buildRows(funItems);
 
     return (
       <div className="space-y-4 sm:space-y-6">
-        {rows.map((row, idx) => {
-          if (row.full) {
-            return (
-              <div key={idx} className={row.full.id === 'kpi' ? '' : ''}>
-                {renderCard(row.full.id)}
-              </div>
-            );
-          }
-          return (
-            <div key={idx} className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              {row.left && <div>{renderCard(row.left.id)}</div>}
-              {row.right && <div>{renderCard(row.right.id)}</div>}
-            </div>
-          );
-        })}
+        {renderRows(coreRows)}
+        {/* 趣味派生折叠按钮：只在有可见 fun 卡且非编辑模式时出现 */}
+        {funItems.length > 0 && (
+          <button
+            onClick={toggleFunCollapsed}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-dashed border-[#ff9500]/30 bg-[#fff9e6] dark:bg-[#ff9500]/10 text-xs font-bold text-[#ff9500] hover:bg-[#fff3cc] dark:hover:bg-[#ff9500]/15 transition-colors"
+          >
+            {funCollapsed ? <Eye size={14} /> : <EyeOff size={14} />}
+            {funCollapsed
+              ? `趣味派生 · ${funItems.length} 张卡已收起 · 点击展开`
+              : `趣味派生 · ${funItems.length} 张卡 · 点击收起`}
+          </button>
+        )}
+        {!funCollapsed && renderRows(funRows)}
       </div>
     );
   };
@@ -275,7 +409,29 @@ export const StatsPage: React.FC<StatsPageProps> = ({
             {editMode ? '拖拽卡片移动，右下角拖拽调整大小' : '聊天记录统计与分析'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* 视图预设 */}
+          <div className="flex items-center gap-1 bg-gray-100 dark:bg-white/5 rounded-full p-0.5">
+            {([
+              ['full', '完整'],
+              ['core', '仅核心'],
+              ['compact', '精简'],
+              ['fun', '仅趣味'],
+              ['custom', '自定义'],
+            ] as [ViewPreset, string][]).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => applyViewPreset(key)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all ${
+                  viewPreset === key
+                    ? 'bg-white dark:bg-[#1d1d1f] text-[#07c160] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => setShowYearReview(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[#07c160] text-white hover:bg-[#06ad56] hover:shadow-md transition-all"
@@ -304,30 +460,65 @@ export const StatsPage: React.FC<StatsPageProps> = ({
         </div>
       </div>
 
-      {editMode && (
-        <div className="mb-4 p-4 bg-white dk-card border border-gray-100 dk-border rounded-2xl">
-          <div className="text-xs font-bold text-gray-500 mb-2">显示 / 隐藏卡片</div>
-          <div className="flex flex-wrap gap-2">
-            {CARD_METAS.map(c => {
-              const hidden = hiddenCards.has(c.id);
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => toggleHidden(c.id)}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                    hidden
-                      ? 'bg-gray-100 dark:bg-white/5 text-gray-400 line-through'
-                      : 'bg-[#07c160]/10 text-[#07c160]'
-                  }`}
-                >
-                  {hidden ? <EyeOff size={11} /> : <Eye size={11} />}
-                  {c.title}
-                </button>
-              );
-            })}
+      {editMode && (() => {
+        const coreIds = CARD_METAS.filter(c => !c.id.startsWith('fun-')).map(c => c.id);
+        const funIds = CARD_METAS.filter(c => c.id.startsWith('fun-')).map(c => c.id);
+        const allCoreHidden = coreIds.every(id => hiddenCards.has(id));
+        const allFunHidden = funIds.every(id => hiddenCards.has(id));
+        const renderGroup = (title: string, ids: string[], metas: { id: string; title: string }[], colorCls: { hidden: string; visible: string }, allHidden: boolean) => (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="text-xs font-bold text-gray-500">{title}</div>
+              <button
+                onClick={() => setGroupHidden(ids, !allHidden)}
+                className="text-[10px] font-bold text-gray-400 hover:text-[#07c160] underline-offset-2 hover:underline transition-colors"
+              >
+                {allHidden ? '全部显示' : '全部隐藏'}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {metas.map(c => {
+                const hidden = hiddenCards.has(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => toggleHidden(c.id)}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${hidden ? `${colorCls.hidden} line-through` : colorCls.visible}`}
+                  >
+                    {hidden ? <EyeOff size={11} /> : <Eye size={11} />}
+                    {c.title}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+        return (
+          <div className="mb-4 p-4 bg-white dk-card border border-gray-100 dk-border rounded-2xl space-y-3">
+            {renderGroup(
+              '核心卡片',
+              coreIds,
+              CARD_METAS.filter(c => !c.id.startsWith('fun-')),
+              { hidden: 'bg-gray-100 dark:bg-white/5 text-gray-400', visible: 'bg-[#07c160]/10 text-[#07c160]' },
+              allCoreHidden,
+            )}
+            {renderGroup(
+              '趣味派生',
+              funIds,
+              CARD_METAS.filter(c => c.id.startsWith('fun-')),
+              { hidden: 'bg-gray-100 dark:bg-white/5 text-gray-400', visible: 'bg-[#ff9500]/10 text-[#ff9500]' },
+              allFunHidden,
+            )}
+            {renderGroup(
+              '独立版块',
+              ['section-forecast'],
+              [{ id: 'section-forecast', title: '关系动态预测' }],
+              { hidden: 'bg-gray-100 dark:bg-white/5 text-gray-400', visible: 'bg-[#576b95]/10 text-[#576b95]' },
+              hiddenCards.has('section-forecast'),
+            )}
+          </div>
+        );
+      })()}
 
       {editMode ? (
         <ResponsiveGridLayout
@@ -397,6 +588,13 @@ export const StatsPage: React.FC<StatsPageProps> = ({
           globalStats={globalStats}
           onClose={() => setShowYearReview(false)}
         />
+      )}
+
+      {/* ── 关系动态预测（不在 grid 里，整段 show/hide） ── */}
+      {!hiddenCards.has('section-forecast') && (
+        <div className="mt-10">
+          <RelationshipForecastSection contacts={contacts} onContactClick={onContactClick} />
+        </div>
       )}
     </div>
   );
