@@ -7,12 +7,15 @@
 
 - [初始化与状态](#初始化与状态)
 - [联系人分析](#联系人分析)
+- [关系预测](#关系预测)
 - [群聊分析](#群聊分析)
+- [有趣发现](#有趣发现)
 - [日历 / 时光机](#日历--时光机)
 - [全局搜索](#全局搜索)
 - [AI 分析](#ai-分析)
 - [AI 分身](#ai-分身)
 - [AI 群聊模拟](#ai-群聊模拟)
+- [Skills（技能包）](#skills技能包)
 - [RAG 检索](#rag-检索)
 - [向量检索](#向量检索)
 - [记忆提炼](#记忆提炼)
@@ -20,6 +23,7 @@
 - [用户偏好](#用户偏好)
 - [Gemini OAuth](#gemini-oauth)
 - [数据库浏览器](#数据库浏览器)
+- [导出中心](#导出中心)
 - [App 管理（桌面版）](#app-管理桌面版)
 - [系统](#系统)
 - [错误响应格式](#错误响应格式)
@@ -134,6 +138,74 @@
 
 自定义时间范围统计（不更新缓存，即时计算返回）。
 
+### `GET /api/contacts/self-portrait`
+
+本人自画像：总发送量、平均消息长度、活跃时段、社交体检分、最常联系的人等。
+
+### `GET /api/contacts/money-overview`
+
+红包 / 转账全局概览：总数、月度趋势、按联系人排行（发红包 / 收红包 / 发转账 / 收转账）。
+
+### `GET /api/contacts/urls`
+
+聊天记录里分享过的所有 URL（按域名聚合 + 每条链接上下文）。
+
+### `GET /api/contacts/social-breadth`
+
+每日联系人数的年度曲线（每天和多少个不同的人说过话），附日均 / 最广日。
+
+### `GET /api/contacts/similarity?top=20`
+
+联系人两两相似度排行（18 维特征向量 + 余弦相似度），返回 Top N 对。
+
+### `GET /api/contacts/common-circle?user1=x&user2=y`
+
+两个联系人的共同社交圈：共同群聊列表 + 基于多群共现推测的共同好友。
+
+### `GET /api/contacts/secret-words?username=wxid`
+
+秘语雷达：某联系人的 TF-IDF 专属词云（Top 50 活跃联系人词池，计分 `log((N+1)/(1+df))`，缓存 1h）。
+
+### `GET /api/contacts/ai-summary?username=wxid`
+
+AI 关系摘要（低 token 统计预处理，给 `/ai/analyze` 打底）。
+
+
+## 关系预测
+
+### `GET /api/contacts/relationship-forecast?top=5&include_all=1`
+
+基于最近 6 个月消息节奏，给每个联系人打 4 档：`rising` / `stable` / `cooling` / `endangered`。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `top` | int | 默认 5；建议主动联系列表的条数 |
+| `include_all` | `0/1` | `1` 时额外返回 `all[]`（全档）+ 每个 entry 的 12 月消息折线 `monthly_12` |
+
+响应 entry 包含：`status` / `score` / `trend_pct` / `recent_3m` / `prior_3m` / `days_since_last` / `initiator_recent` / `initiator_prior` / `initiator_trend` / `their_latency_recent_sec` / `their_latency_prior_sec` / `mine_latency_*` / `reason` / `suggestion`。
+
+### `POST /api/contacts/icebreaker`
+
+给降温 / 濒危联系人用 LLM 起草 4 条不同调性（关心 / 回忆 / 调侃 / 约见）的破冰开场白。
+
+**请求体**
+
+```json
+{ "username": "wxid_xxx", "profile_id": "" }
+```
+
+采样最近 40 条文本消息 + 相识年数 + 沉默天数，走严格 JSON 输出。
+
+**响应**
+
+```json
+{
+  "drafts": [{ "tone": "关心近况", "text": "..." }],
+  "display_name": "小李",
+  "days_since_last": 72
+}
+```
+
 
 ## 群聊分析
 
@@ -159,7 +231,36 @@
 
 ### `GET /api/groups/relationships?username=xxx@chatroom`
 
+力导向人物关系图（Louvain 社区检测 + 模块度 Q 兜底）。节点按小圈子着色，`Q<0.3` 时返回提示而非强凑圈。
+
+### `GET /api/groups/year-review?username=xxx@chatroom&year=2025&profile_id=`
+
+AI 群聊年度回顾（Spotify Wrapped 风格）。扫该年所有消息算：Top 3 发言成员 / 最忙一天 / 高频词 Top 3 / 月度消息量；调 LLM 生成 3 条原文金句 + 60-100 字年度叙事。
+
 群聊人物关系图（成员节点 + 交互边，含回复和提及权重）。
+
+
+## 有趣发现
+
+### `GET /api/fun/companion-time`
+
+每个联系人的累计陪伴时长（按 session gap 切分估算）+ Top 排行。缓存 10 分钟。
+
+### `GET /api/fun/ghost-months`
+
+Ghost 月：单月消息骤降 ≥80% 的"失联月"。
+
+### `GET /api/fun/like-me`
+
+最像我的朋友 Top 5：18 维特征向量距我加权基线最近的联系人。
+
+### `GET /api/fun/word-almanac`
+
+词语年鉴：Top 30 活跃联系人里我发的文本按年分桶分词，每年取 #1 代表词 + 亚军 3 个。缓存 2h。
+
+### `GET /api/fun/insomnia-top`
+
+失眠陪聊榜：凌晨 2-4 点我发消息后，对方 30 分钟内回应率 + 中位响应时延 Top 5。缓存 30min。
 
 
 ## 日历 / 时光机
@@ -300,6 +401,31 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 **SSE 响应**：每条 `data:` 为 `{ speaker, content }`，最后 `{ done: true }`。
 
 
+## Skills（技能包）
+
+把聊天记录炼化为 Claude Code / Codex / Cursor 等 AI 工具的 Skill 文件包。
+
+### `POST /api/ai/forge-skill`
+
+异步炼化任务。请求体主要字段：`skill_type`（`contact` / `self` / `group`）、`username`、`profile_id`、`msg_limit`、`output_format`（`claude-skill` / `claude-agent` / `codex` / `opencode` / `cursor` / `generic`）。返回 `skill_id`，用于后续查状态。
+
+### `GET /api/skills`
+
+已炼化的 Skill 列表（含状态 / 耗时 / 错误原因）。支持搜索、筛选、排序。
+
+### `GET /api/skills/:id`
+
+单个 Skill 详情（含元数据 + 生成的文件清单）。
+
+### `GET /api/skills/:id/download`
+
+下载 Skill 产物 zip 包。
+
+### `DELETE /api/skills/:id`
+
+删除单个 Skill（同时删除本地文件）。
+
+
 ## RAG 检索
 
 ### `GET /api/ai/rag/index-status?key=contact:wxid`
@@ -375,6 +501,23 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 
 删除指定的 AI 对话历史。
 
+### `GET /api/ai/usage-stats`
+
+聚合所有 `ai_conversations` 里 `assistant` 消息的字符数和估算 tokens，按 `provider / model` 分组。token 估算 = `tokens_per_sec × elapsed_secs`，仅近似值。
+
+```json
+{
+  "total_conversations": 42,
+  "total_assistant_msgs": 178,
+  "total_chars": 324510,
+  "total_tokens": 162000,
+  "total_elapsed_sec": 1230.5,
+  "by_provider": [
+    { "provider": "deepseek", "model": "deepseek-chat", "count": 120, "chars": 220000, "tokens": 110000, "elapsed_sec": 820.0 }
+  ]
+}
+```
+
 ### `GET /api/ai/conversations/search?q=关键词&limit=30`
 
 在所有 AI 对话里做子串搜索（LIKE），返回命中的对话及前后 ~40 字符上下文片段。`limit` 默认 30，最大 100。
@@ -411,6 +554,18 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 ### `PUT /api/preferences/anniversaries`
 
 保存自定义纪念日。
+
+### `PUT /api/preferences/forecast-ignored`
+
+关系预测「不再推荐此人」名单保存。请求体 `{ "forecast_ignored": ["wxid1", "wxid2"] }`。
+
+### `PUT /api/preferences/prompts`
+
+保存自定义 Prompt 模板。请求体 `{ "prompt_templates": { "insight_report": "...", ... } }`。
+
+### `PUT /api/preferences/config`
+
+保存基本配置（端口 / 日志级别 / 时区 / worker 数等）。修改端口后需重启生效。
 
 ### `GET /api/preferences/download-dir`
 
@@ -461,6 +616,112 @@ OAuth 回调处理（交换 token）。
 ### `POST /api/databases/:dbName/query`
 
 执行只读 SQL（仅允许 SELECT / PRAGMA / EXPLAIN，最多 500 行）。
+
+### `POST /api/databases/nl-query`
+
+自然语言查数据。用中文问题（如 "我和老婆的第一条消息是什么时候"）→ LLM 生成 SQL 后端执行。
+
+**请求体**
+
+```json
+{ "question": "...", "profile_id": "" }
+```
+
+**响应**
+
+```json
+{
+  "db": "contact",
+  "sql": "SELECT ...",
+  "mode": "direct",
+  "explain": "AI 一句话解释",
+  "columns": ["..."],
+  "rows": [["..."]]
+}
+```
+
+`mode=contact_messages` 时后端自动跨库定位：先查 contact.db 找 username → md5 算 `Chat_<hash>` 表名 → 遍历 message_N.db 执行 SQL（`{{TABLE}}` 占位符替换）。严格限 SELECT / PRAGMA + LIMIT 50。
+
+
+## 导出中心
+
+把年度回顾、对话归档、AI 历史、记忆图谱四类内容导出到 Markdown / Notion / 飞书 + 5 个云盘。
+
+### `POST /api/export/preview`
+
+把请求里每项 item 渲染成 Markdown 返回预览，不写文件不发请求。
+
+### `POST /api/export/markdown`
+
+单文件 → 直接返回 `.md`；多文件 → 打成 `.zip` 下载。
+
+### `POST /api/export/notion`
+
+每个 doc 作为新 Page 推送到 Notion 指定 Parent 下。自实现 Markdown→Blocks（标题 / 列表 / 引用 / 代码 / 表格）。
+
+### `POST /api/export/feishu`
+
+走 `upload_all` → `import_tasks` 异步轮询，获得飞书 docx URL。
+
+### `POST /api/export/webdav`
+
+HTTP PUT + Basic Auth，递归 MKCOL 建前缀目录。兼容坚果云 / Nextcloud / ownCloud / 群晖等。
+
+### `POST /api/export/s3`
+
+基于 minio-go v7。覆盖 AWS S3 / Cloudflare R2 / 阿里云 OSS / 腾讯 COS / 七牛 / MinIO / Backblaze B2。支持 path-style / virtual-host 切换。
+
+### `POST /api/export/dropbox`
+
+`files/upload` API + App Console 长期 Access Token（PAT 模式，免 OAuth 回调）。
+
+### `POST /api/export/gdrive`
+
+Google Drive multipart upload。授权走 OAuth 2.0 流程（见下方 oauth endpoints），refresh token 自动刷新。
+
+### `POST /api/export/onedrive`
+
+OneDrive `/me/drive/root:/<path>:/content` PUT。Microsoft Identity Platform v2 OAuth，个人 / 工作账号都支持。
+
+**所有 `/export/*` 共享请求体**
+
+```json
+{
+  "items": [
+    { "type": "year_review", "year": 2025 },
+    { "type": "conversation", "username": "wxid_x", "is_group": false, "from": 0, "to": 0 },
+    { "type": "ai_history", "ai_key": "contact:wxid_x" },
+    { "type": "memory_graph", "username": "wxid_x" }
+  ],
+  "target": "markdown",
+  "notion_parent_page": "xxx",
+  "feishu_folder_token": "xxx"
+}
+```
+
+### `GET /api/export/config`
+
+返回脱敏后的导出中心配置（前端回填表单用）。Secret 字段变成 `__HAS_KEY__` 占位符。
+
+### `PUT /api/export/config`
+
+保存导出中心配置。遇到占位符时保留原值，与 LLM 配置同逻辑。
+
+### `GET /api/export/oauth/gdrive/start`
+
+浏览器跳转到 Google OAuth 授权页。成功后回调到 callback endpoint 存 token。
+
+### `GET /api/export/oauth/gdrive/callback?code=...`
+
+接收授权码换 access + refresh token，存入 preferences。
+
+### `GET /api/export/oauth/onedrive/start`
+
+同上，但用 Microsoft Identity Platform v2。
+
+### `GET /api/export/oauth/onedrive/callback?code=...`
+
+接收授权码换 token，存入 preferences。
 
 
 ## App 管理（桌面版）

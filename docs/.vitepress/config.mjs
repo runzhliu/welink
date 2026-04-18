@@ -22,15 +22,47 @@ function getVersion() {
 
 const version = getVersion()
 
+const SITE_URL = 'https://welink.click'
+const OG_IMAGE = `${SITE_URL}/logo.svg`
+
 export default defineConfig({
   title: 'WeLink',
-  description: 'AI 驱动的微信聊天数据分析平台',
+  description: 'AI 驱动的微信聊天数据分析平台 · 本地优先 · AI 分身 / 关系预测 / 跨联系人问答',
   lang: 'zh-CN',
 
   ignoreDeadLinks: [/^http:\/\/localhost/],
 
+  // 生成 sitemap.xml 方便搜索引擎索引
+  sitemap: {
+    hostname: SITE_URL,
+  },
+
+  // 懒加载图片（VitePress 原生支持 img 的 loading=lazy）
+  markdown: {
+    image: {
+      lazyLoading: true,
+    },
+  },
+
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
+    // ─── SEO & Open Graph ─────────────────────────────────────────
+    ['meta', { name: 'author', content: 'WeLink contributors' }],
+    ['meta', { name: 'keywords', content: '微信聊天分析, AI 分身, 关系预测, MCP Server, 本地 AI, 微信数据, wechat decrypt, welink' }],
+    ['meta', { name: 'theme-color', content: '#07c160' }],
+    // Open Graph
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:site_name', content: 'WeLink' }],
+    ['meta', { property: 'og:title', content: 'WeLink · AI 驱动的微信聊天数据分析平台' }],
+    ['meta', { property: 'og:description', content: '选择聊天记录直接提问，让 AI 读懂每一段关系。本地优先 · AI 分身 · 关系预测 · MCP Server 集成' }],
+    ['meta', { property: 'og:url', content: SITE_URL }],
+    ['meta', { property: 'og:image', content: OG_IMAGE }],
+    ['meta', { property: 'og:locale', content: 'zh_CN' }],
+    // Twitter Card
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:title', content: 'WeLink · AI 驱动的微信聊天数据分析平台' }],
+    ['meta', { name: 'twitter:description', content: '本地优先 · AI 分身 / 关系预测 / 跨联系人问答 / MCP × Claude Code' }],
+    ['meta', { name: 'twitter:image', content: OG_IMAGE }],
   ],
 
   themeConfig: {
@@ -42,7 +74,14 @@ export default defineConfig({
       { text: '下载安装', link: '/install' },
       { text: 'MCP Server', link: '/mcp-server' },
       { text: 'API 接口', link: '/api' },
+      { text: 'FAQ', link: '/faq' },
+      { text: '更新日志', link: '/changelog' },
     ],
+
+    outline: {
+      level: [2, 3],
+      label: '本页目录',
+    },
 
     sidebar: [
       {
@@ -50,8 +89,19 @@ export default defineConfig({
         items: [
           { text: '产品概览', link: '/' },
           { text: '下载与安装', link: '/install' },
+          { text: 'macOS App 安装', link: '/install-macos' },
+          { text: 'Windows App 安装', link: '/install-windows' },
+          { text: 'Docker 部署', link: '/docker' },
           { text: '使用技巧', link: '/ux' },
           { text: '开发与构建', link: '/development' },
+        ],
+      },
+      {
+        text: '参考',
+        items: [
+          { text: '常见问题 (FAQ)', link: '/faq' },
+          { text: '贡献指南', link: '/contribute' },
+          { text: '更新日志', link: '/changelog' },
         ],
       },
       {
@@ -85,11 +135,27 @@ export default defineConfig({
     ],
 
     footer: {
-      message: 'WeLink — 所有数据仅在本地处理，不上传任何服务器',
+      message: `WeLink · AGPL-3.0 · 所有数据仅在本地处理，不上传任何服务器 · v${version}`,
+      copyright: '© 2025 WeLink contributors · <a href="https://github.com/runzhliu/welink">GitHub</a> · <a href="https://github.com/runzhliu/welink/issues">反馈问题</a> · <a href="https://demo.welink.click">在线 Demo</a>',
     },
 
     search: {
       provider: 'local',
     },
+
+    docFooter: {
+      prev: '上一篇',
+      next: '下一篇',
+    },
+
+    lastUpdated: {
+      text: '最后更新',
+      formatOptions: {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      },
+    },
   },
+
+  lastUpdated: true,
 })

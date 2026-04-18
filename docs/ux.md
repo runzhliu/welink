@@ -124,6 +124,40 @@ WeLink 启动会自动探测几个候选数据目录（当前配置、`WELINK_DA
 
 无论走哪条路，环境信息都不包含聊天正文、API Key、头像 URL 等敏感数据，可以放心分享。
 
+## 有趣发现
+
+统计页底部的趣味卡片合集（合并自早期独立「有趣」Tab）。数据来自已有统计，绝大多数不调 LLM：
+
+**轻量派生（纯前端）**
+
+1. **字数换算** — 累计发送字数 + 换算成"≈ 几本书"
+2. **最话痨的一天** — 单日消息数 Top 10（来自日历热力图）
+3. **互动档位** — 按日均消息数分"秒回 / 高频 / 日常 / 佛系 / 随缘"五档
+4. **微信 MBTI** — 主动率 / 深夜比 / 消息长度 / 表情密度四轴拼 4 字标签
+5. **首次相遇时间胶囊** — 按最早消息时间排序的前 10 位联系人 + 第一句话
+6. **沉默最久 Top 10** — 曾有 20+ 条聊天但现在最久没联系的人
+7. **表情包浓度** — 图片 + 表情占比 Top 5 / Bottom 3
+8. **独白指数** — 我发 / 对方发 ≥70% 的两个方向各 Top 3
+9. **我的人设** — 规则派生 3 个标签（专情 / 社交达人 / 字多党 / 深夜战士 / 倾听者 / 表情派）
+
+**重统计（后端 `/api/fun/*` 端点）**
+
+10. **陪伴时长**（`/api/fun/companion-time`） — 按 session 切片累加的总小时数 + 联系人排行，缓存 10 分钟
+11. **Ghost 月**（`/api/fun/ghost-months`） — 单月消息骤降 ≥80% 的"失联月"
+12. **最像我的朋友**（`/api/fun/like-me`） — 18 维特征向量距我加权基线最近 Top 5
+13. **词语年鉴**（`/api/fun/word-almanac`） — Top 30 活跃联系人里我发的文本按年分桶分词，每年取 #1 代表词 + 亚军 3 个，缓存 2h
+14. **失眠陪聊榜**（`/api/fun/insomnia-top`） — 凌晨 2-4 点我发消息后，对方 30 分钟内回应率 + 中位响应时延 Top 5，缓存 30min
+
+**重洞察（挂在联系人详情 / 统计页不同位置）**
+
+15. **关系温度计** — 每个联系人 5 档热度标签（热络/温和/平稳/渐淡/冷却）+ 升降箭头
+16. **秘语雷达**（`/api/contacts/secret-words`） — TF-IDF 专属词云
+17. **关系剧本**（洞察页 story tab） — AI 把一段关系提炼成 3-5 个章节式剧情节点
+
+## LLM 用量统计
+
+设置 → LLM 用量。累计所有 AI 对话的 assistant 消息字符数和估算 token，按 provider/model 分组。Token 估算 = 吐字速率 × 生成耗时，仅作近似值参考。
+
 ## 自动检查新版本
 
 启动 5 秒后后台访问 GitHub Releases API，发现新版本会弹一个 Release Notes Modal 展示 changelog。点「我先用着」会记住当前版本，下次启动不再提示同一个版本，直到又有更新。
@@ -142,6 +176,84 @@ WeLink 启动会自动探测几个候选数据目录（当前配置、`WELINK_DA
 ## 日志打包（App 模式）
 
 设置 → 应用日志 → 「一键打包日志」会把 `welink.log` + `frontend.log` 打成 ZIP，API Key 等敏感字段自动替换为 `[REDACTED]`，可以放心发给开发者排查问题。
+
+## 群聊四件套 · 这个群的指纹
+
+群聊详情页「群聊画像」tab 顶部新加一张「这个群的指纹」卡片，一次呈现四种维度：
+
+**群号称（群的 MBTI）** —— 基于 `hourly_dist / weekly_dist / type_dist / member_rank` 规则派生 2-4 条标签，零 LLM。命中条件举例：
+
+- 凌晨 0-3 点消息占比 >15% → `🌙 深夜话唠`
+- 工作日白天 ≥55% → `🏢 工作日正午群`
+- 表情包占比 >12% → `😂 表情包战场`
+- 红包+转账占比 >3% → `🧧 红包雨`
+- 链接分享占比 >8% → `🔗 链接集散地`
+- 日均消息 ≥200 → `🌊 消息洪流`
+- 60% 以上成员从未发言 → `🤿 潜水员联盟`
+
+**时钟指纹** —— 7 行（星期日→星期六）× 24 列（0h→23h）的热图徽章。log 压缩着色（绿色阶），一眼分辨"工作群"vs"深夜酒局群"vs"周末亲友群"。
+
+**我的影响力指数** —— 我发言后 30 分钟内有异发言者回应的比例（`myRate`）除以群整体基线（`baseRate`），映射到 0-100 分（1× = 50 分，2× = 100 分）。样本要求我发言 ≥5 条，群整体 ≥20 条。
+
+**AI 群年报** —— 右上角橙红渐变按钮。选一个年份（默认当前年），后端扫该年所有消息，分页展示：
+
+1. **年度概览**：总消息 / 活跃人数 / 最忙一天 / 年度热词 Top 3
+2. **年度话痨榜**：Top 3 成员 + 占比条
+3. **AI 精选金句**：LLM 从 80 条均匀采样里挑 3 条最能体现群氛围的原话
+4. **月度消息趋势**：12 根柱子 + 峰值标注
+5. **AI 年度叙事**：60-100 字 Wrapped 风格总结
+
+首次生成含 LLM 调用，大群需要 10-30 秒。
+
+## 关系动态预测
+
+**AI 首页「建议主动联系」** 卡片每次开首页自动刷新。点卡片直接打开联系人详情，点「🪄 写开场白」弹 modal 让 LLM 起草 4 条不同调性破冰开场白（关心 / 回忆 / 调侃 / 约见），每条一键复制。
+
+卡片右侧的 👁 按钮是「不再推荐此人」—— 保存后该联系人不再出现在这个卡片里。要撤销去**设置 → 关系预测 · 忽略名单**。
+
+**统计页底部「关系动态预测」** section 4 tab（濒危 / 降温 / 稳定 / 升温）完整列表。点每条右侧的小折线弹大图 modal：12 月柱状图 + 峰值标注 + 主动占比双进度条 + TA/我 的响应时延对比（变慢 >1.5× 红 / 变快 >1.5× 绿）。
+
+**连续冷却徽章** 🕐 — 客户端滚动 6 周快照，连续 ≥2 周处于 cooling/endangered 的联系人会显示「连续 N 周」红色徽章，比单周更硬。
+
+## 导出中心
+
+侧边栏「导出」页勾选内容 + 目标，共 **8 种目标** 可选，复用同一份 Markdown 产出，区别在"去哪里落地"。
+
+**笔记 / 文档平台**
+
+- **Markdown**：单文件直下 / 多文件自动打 .zip
+- **Notion**：填 Integration Token + Parent Page ID，走 `POST /v1/pages` + 自实现 Markdown→Blocks
+- **飞书文档**：填 App ID / App Secret + folder_token，走 `upload_all` → `import_tasks` 异步轮询
+
+**云盘 / 对象存储**
+
+- **WebDAV**：填服务器 URL + 用户名 + 应用密码（坚果云 / Nextcloud 建议生成专用应用密码）+ 上传前缀。首次会递归 MKCOL 创建前缀目录。兼容坚果云 / Nextcloud / ownCloud / 群晖等
+- **S3 兼容**：填 Endpoint（留空=AWS 官方）/ Region / Bucket / AccessKey / SecretKey / 路径前缀。MinIO / R2 / 七牛建议勾「Path-style URL」。覆盖 AWS S3 / Cloudflare R2 / 阿里云 OSS / 腾讯云 COS / 七牛 / Backblaze B2
+- **Dropbox**：App Console → Create app → 生成 "Generated access token"（长期）直接粘进来。无需 OAuth 回调流程
+- **Google Drive**：在 Google Cloud Console 创建 OAuth 2.0 Client，Authorized redirect URI 填 `http://127.0.0.1:<PORT>/api/export/oauth/gdrive/callback`（本地运行）或 `https://<你的域名>/api/export/oauth/gdrive/callback`（反代）。Client ID / Secret 粘进配置卡 → 保存 → 点「授权」→ 浏览器完成授权即可。refresh token 自动刷新，过期不用管
+- **OneDrive**：Azure Portal → App registrations → 新建应用，Redirect URI 同上规则填 `/api/export/oauth/onedrive/callback`，API 权限勾 `Microsoft Graph → Files.ReadWrite`（delegated）。Tenant 一般填 `common`。个人 / 工作账号都支持
+
+::: warning 反代场景需要显式配环境变量
+WeLink 不再读取 `X-Forwarded-Host` / `X-Forwarded-Proto` 请求头（防止 CSRF 劫持 OAuth 回调地址）。
+- 本地直跑 → 默认 `http://127.0.0.1:<PORT>` 自动工作
+- **反代到公网 / 局域网域名** → 必须设环境变量 `WELINK_PUBLIC_URL=https://your.domain`，否则授权按钮打开的链接里 `redirect_uri` 会是 127.0.0.1，Google / Microsoft 会拒绝
+:::
+
+Token / Secret 配置和 LLM 配置一样支持脱敏占位符 `__HAS_KEY__`，保存后不会泄露明文。
+
+## 数据库 · 自然语言查询
+
+侧边栏「数据库」页顶部的 NL 查询面板，用中文问问题：
+
+- 「我和老婆的第一条消息是什么时候」
+- 「今年跟我妈聊了多少条消息」
+- 「哪些群聊半年没发言了」
+
+LLM 读取 WCDB schema 摘要 → 输出 `{db, sql, explain}` JSON → 后端执行 SELECT/PRAGMA（严格限制，LIMIT 50）→ 返回结果表（≥2 列时可一键切图表）+ AI 解释。
+
+**跨库联系人消息**：问「我和 XX 的」这种跨库问题，LLM 返回 `mode=contact_messages`，后端自动完成"contact.db 模糊查 username → md5 算 Chat_xxx 表名 → 遍历 message_N.db 找到对应 DB 执行"三步跳转。
+
+下方的 SQL 编辑器收起在「高级」链接下，默认不打扰；展开后有 10 个预置模板 + 结果一键画图 + 磁盘占用环形饼图 + 执行历史 / 收藏。
 
 ## 当前已知的键盘导航
 

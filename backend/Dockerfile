@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 ARG APP_VERSION=dev
 ARG GIT_COMMIT=unknown
 WORKDIR /app
@@ -24,4 +24,7 @@ USER welink
 EXPOSE 8080
 ENV GIN_MODE=release
 ENV DATA_DIR=/app/data
+# 容器内必须监听 0.0.0.0 才能接收 docker 端口映射进来的流量；
+# 由 docker-compose.yml 里的 127.0.0.1:8080:8080 限制宿主机暴露范围。
+ENV WELINK_LISTEN_LAN=1
 CMD ["./welink-backend"]

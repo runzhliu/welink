@@ -2,71 +2,66 @@
 
 当前版本：**{{VERSION}}**　[查看所有版本](https://github.com/runzhliu/welink/releases)
 
+WeLink 提供三种部署方式，按你的场景选：
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin:24px 0;">
+
+<a href="/install-macos" style="text-decoration:none;border:1px solid var(--vp-c-divider);border-radius:12px;padding:20px;background:var(--vp-c-bg-soft);color:inherit;display:block;">
+  <div style="font-size:28px;margin-bottom:8px;">🍎</div>
+  <div style="font-size:16px;font-weight:800;margin-bottom:6px;">macOS App <Badge type="tip" text="推荐" /></div>
+  <div style="font-size:13px;color:var(--vp-c-text-2);line-height:1.6;">原生 DMG，双击即用。macOS 12+。内嵌 WebView，无需 Docker、无需命令行。</div>
+</a>
+
+<a href="/install-windows" style="text-decoration:none;border:1px solid var(--vp-c-divider);border-radius:12px;padding:20px;background:var(--vp-c-bg-soft);color:inherit;display:block;">
+  <div style="font-size:28px;margin-bottom:8px;">🪟</div>
+  <div style="font-size:16px;font-weight:800;margin-bottom:6px;">Windows App <Badge type="tip" text="推荐" /></div>
+  <div style="font-size:13px;color:var(--vp-c-text-2);line-height:1.6;">原生 EXE（内嵌 WebView2），解压即用。Windows 10 1903+。</div>
+</a>
+
+<a href="/docker" style="text-decoration:none;border:1px solid var(--vp-c-divider);border-radius:12px;padding:20px;background:var(--vp-c-bg-soft);color:inherit;display:block;">
+  <div style="font-size:28px;margin-bottom:8px;">🐳</div>
+  <div style="font-size:16px;font-weight:800;margin-bottom:6px;">Docker Compose</div>
+  <div style="font-size:13px;color:var(--vp-c-text-2);line-height:1.6;">Linux 服务器 / 容器化环境。支持反代 / HTTPS / 多 profile。</div>
+</a>
+
+</div>
+
 ---
 
-## macOS App <Badge type="tip" text="推荐" />
+## 快速试用（无需数据）
 
-> 系统要求：**macOS 12（Monterey）及以上**
+想先感受下 WeLink 的交互和分析能力，不用真实聊天数据？
 
-无需 Docker、无需命令行，下载即用的原生 App。
+**macOS / Windows App**：首次启动配置向导里点「使用演示数据，开始分析」。
 
-[下载 WeLink.dmg](https://github.com/runzhliu/welink/releases/download/{{VERSION}}/WeLink.dmg){ .btn-download }
+**Docker**：
 
-**安装步骤：**
-
-1. 双击 `WeLink.dmg`，将 `WeLink.app` 拖入 `/Applications`
-2. 双击运行
-
-::: warning 首次打开提示「无法打开」？
-macOS Gatekeeper 会拦截未经 Apple 公证的 App。右键点击 `WeLink.app` → 「打开」→ 再次点击「打开」即可。
-
-若右键仍无效，在终端执行：
 ```bash
-xattr -cr /Applications/WeLink.app
+docker compose -f docker-compose.demo.yml up
 ```
-:::
 
-**首次配置：**
+或直接访问在线 Demo：[https://demo.welink.click](https://demo.welink.click)
 
-App 启动后弹出配置向导：
-
-- **有解密好的微信数据库**：点击「浏览」选择 `decrypted/` 目录，点击「完成配置，开始分析」
-- **没有数据，只想看效果**：直接点击「使用演示数据，开始分析」，App 会自动生成示例数据
+Demo 数据以阿森纳 2025/26 赛季一线队球员与教练组为联系人，消息内容充满更衣室气息。**COYG！** 🔴⚪
 
 ---
 
-## Windows App <Badge type="tip" text="推荐" />
+## 解密微信数据库
 
-> 系统要求：**Windows 10 1903 及以上**（Windows 11 完全支持）
+所有部署方式（除 Demo 模式外）都需要先把手机上的聊天记录解密到 `decrypted/` 目录。
 
-无需 Docker、无需命令行，解压即用。
+**第一步** — 手机微信 → 「我」→「设置」→「通用」→「聊天记录迁移与备份」→「迁移到电脑」，把完整历史迁到电脑。迁移过程中保持电脑微信处于登录状态。
 
-[下载 WeLink-windows-amd64.zip](https://github.com/runzhliu/welink/releases/download/{{VERSION}}/WeLink-windows-amd64.zip){ .btn-download }
+**第二步** — 使用 [wechat-decrypt](https://github.com/ylytdeng/wechat-decrypt) 提取并解密：
 
-**安装步骤：**
+```bash
+git clone https://github.com/ylytdeng/wechat-decrypt
+cd wechat-decrypt
+sudo python3 main.py
+# 选择 decrypt 模式
+```
 
-1. 解压 `WeLink-windows-amd64.zip` 到任意目录
-2. 双击 `WeLink.exe` 运行
-
-::: info 提示缺少 WebView2 Runtime？
-Windows 11 及安装了 Microsoft Edge 的 Windows 10 已自带，无需额外安装。若提示缺少，前往 [Microsoft 官网](https://developer.microsoft.com/microsoft-edge/webview2/) 下载 Evergreen Bootstrapper（约 2 MB）安装后重试。
-:::
-
-**首次配置：**
-
-启动后弹出配置向导，与 macOS 相同：
-- **有数据**：选择 `decrypted\` 目录，开始分析
-- **只看效果**：点击「使用演示数据，开始分析」
-
----
-
-## Docker Compose
-
-> 适合 Linux 服务器部署，或偏好容器化环境的用户
-
-### 前提
-
-已完成微信数据库解密，`decrypted/` 目录结构如下：
+解密完成后得到如下目录结构：
 
 ```
 decrypted/
@@ -78,57 +73,8 @@ decrypted/
     └── ...
 ```
 
-将 `decrypted/` 放在 `welink/` 仓库**内部**：
-
-```
-welink/
-├── backend/
-├── frontend/
-├── docker-compose.yml
-└── decrypted/         ← 放在这里
-```
-
-### 启动
-
-```bash
-git clone https://github.com/runzhliu/welink
-cd welink
-docker compose up
-```
-
-首次启动会自动拉取镜像，无需本地编译。访问 [localhost:3418](http://localhost:3418) 开始分析。
-
-::: tip 端口说明
-- **Docker 模式**：前端默认映射到 **3418** 端口，后端 8080（容器内部）
-- **macOS / Windows App**：后端默认监听 **8080** 端口，内置 WebView 直连无需额外端口
-- 自定义端口：Docker 修改 `docker-compose.yml` 的 `ports` 映射；App 在设置页修改或设环境变量 `PORT=9090`
-:::
-
-### Demo 模式（无需真实数据）
-
-```bash
-docker compose -f docker-compose.demo.yml up
-```
-
----
-
-## 解密微信数据库
-
-所有部署方式（除 Demo 模式外）都需要先解密数据库。
-
-**第一步** — 确保电脑微信处于运行状态
-
-**第二步** — 使用 [wechat-decrypt](https://github.com/ylytdeng/wechat-decrypt) 提取并解密：
-
-```bash
-git clone https://github.com/ylytdeng/wechat-decrypt
-cd wechat-decrypt
-sudo python3 main.py
-# 选择 decrypt 模式
-```
-
-::: tip 推荐先同步完整聊天记录
-手机微信 → 「我」→「设置」→「通用」→「聊天记录迁移与备份」→「迁移到电脑」，可获得最完整的历史数据。
+::: tip 数据安全
+解密后的数据库文件包含你的所有聊天记录，请妥善保管。WeLink 所有分析都在本地进行，不会上传任何服务器。
 :::
 
 ---
@@ -142,3 +88,12 @@ sudo python3 main.py
 | 重度 | 200 万条以上 | 8 GB+ | 3–10 分钟 |
 
 首次使用建议先选「近 6 个月」体验，确认无误后再切换到「全部数据」。
+
+---
+
+## 下一步
+
+- [使用技巧](/ux)：命令面板、多账号切换、AI 数据备份等
+- [Docker 部署](/docker)：反代、HTTPS、多 profile、K8s 等生产部署
+- [AI 分身](/ai-clone)：让 AI 学习某人的聊天风格模拟对话
+- [MCP Server](/mcp-server)：在 Claude Code 里用中文直接查微信数据

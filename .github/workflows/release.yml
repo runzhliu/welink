@@ -116,6 +116,9 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
+      - name: 预检查 lockfile registry 白名单
+        run: node scripts/check-lockfile-registry.js frontend/package-lock.json
+
       - name: Build DMG
         run: make dmg
 
@@ -157,6 +160,9 @@ jobs:
       - name: Install goversioninfo
         run: go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
         working-directory: backend
+
+      - name: 预检查 lockfile registry 白名单
+        run: node scripts/check-lockfile-registry.js frontend/package-lock.json
 
       - name: Build EXE
         run: make exe

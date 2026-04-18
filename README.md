@@ -245,6 +245,110 @@ WeLink 内置 [MCP（Model Context Protocol）](https://modelcontextprotocol.io/
 
 ---
 
+## 💕 关系动态预测 — 谁在悄悄变冷，谁值得主动联系
+
+WeLink 不止告诉你"现在关系多热"，而是**前瞻性**地判断每段关系的走向，并给出具体行动建议。
+
+### 四档状态判定
+
+扫描每个联系人最近 6 个月的消息节奏，对比**最近 3 月 vs 前 3 月**自动打档：
+
+| 状态 | 判定条件 | 典型场景 |
+|---|---|---|
+| 🔥 **升温** | 最近 3 月消息增加 ≥50% | 新认识的人 / 深化中的关系 |
+| ✅ **稳定** | 波动 ±30% 内 | 日常长期好友 |
+| ❄️ **降温** | 最近 3 月消息量不到前期一半 | 开始疏远的信号 |
+| 🚨 **濒危** | 前期 ≥10 条但 60 天没说过话 | 长期联系人快失联 |
+
+### 多维度信号增强
+
+简单的「消息减少了」可能是双方都忙，结合多维信号才能识别**到底是谁在疏远谁**：
+
+- **主动占比趋势** — 过去你占 72%，现在降到 42% → 说明对方不再主动找你。差 ≥15pp 在 reason 里自动提示
+- **响应时延趋势** — TA 去年 10 分钟回你，现在平均 8 小时 → 「TA 回复从 X 分钟变成 Y 小时」（变慢 ≥3× 且原本 ≤1h 才提）
+- **连续冷却周数** — 基于客户端 localStorage 滚动 6 周快照，连续 ≥2 周处于 cooling/endangered 显示 🕐 红色徽章
+- **最后消息相对时间** — 30 / 60 / 90 天阶梯色阶
+
+reason 文案示例：
+> 最近 3 个月消息减少 65%（120 → 42）；原本你更主动（72%），现在对方说得更多（58%）；TA 回复从 12 分钟变成 8 小时
+
+### 两种入口
+
+- **AI 首页「建议主动联系」卡片** — Top 5 cooling + endangered，直接可点打开联系人详情。每张卡支持「🪄 写开场白」和「不再推荐此人」。「今日不再提醒」按日期关闭
+- **统计页「关系动态预测」section** — 4 tab 完整列表（濒危/降温/稳定/升温），每条带 12 月迷你折线，点 sparkline 弹大图 modal（12 月柱状图 + 峰值标注 + 主动占比双进度条 + 响应时延对比）
+
+### 🪄 AI 开场白草稿（行动闭环）
+
+对 cooling / endangered 联系人，点「写开场白」→ 取最近 40 条消息 + 相识年数 + 沉默天数 → LLM 写 4 条不同调性（关心 / 回忆 / 调侃 / 约见）的破冰草稿，一键复制粘到微信。
+
+### 每周变化摘要
+
+AI 首页顶部的小 banner，对比上次快照（≥5 天前）：「近 7 天变化：3 位关系降温 · 1 位回暖」。按 ISO 周关闭。
+
+### 管理忽略名单
+
+设置页加「关系预测 · 忽略名单」，首页点「不再推荐此人」后可在这里撤销。
+
+---
+
+## 📦 导出中心 — 数据一键搬家
+
+把年度回顾、对话归档、AI 对话历史、记忆图谱四类内容，统一打包导出到 **8 种目标**：
+
+**笔记 / 文档平台**
+
+| 目标 | 实现方式 | 输出 |
+|---|---|---|
+| **Markdown** | 本地打包 | 单文件直下 / 多文件自动 .zip |
+| **Notion** | `POST /v1/pages` + 自实现 Markdown→Blocks（标题/列表/引用/代码/表格） | 指定 Parent Page 下建新页 |
+| **飞书文档** | `upload_all` → `import_tasks` 异步轮询 | 获得 docx URL |
+
+**云盘 / 对象存储**
+
+| 目标 | 协议 / 认证 | 覆盖服务 |
+|---|---|---|
+| **WebDAV** | HTTP PUT + Basic Auth + 递归 MKCOL | 坚果云 / Nextcloud / ownCloud / 群晖等 |
+| **S3 兼容** | `minio-go` v7，支持 path-style / virtual-host 切换 | AWS S3 / Cloudflare R2 / 阿里云 OSS / 腾讯 COS / 七牛 / MinIO / Backblaze B2 |
+| **Dropbox** | `files/upload` API + App Console 长期 Access Token（PAT 模式免 OAuth 回调） | Dropbox |
+| **Google Drive** | 完整 OAuth 2.0 + multipart upload，refresh token 自动刷新 | Google Drive |
+| **OneDrive** | Microsoft Identity Platform v2 OAuth + Graph API PUT | OneDrive（个人 / 工作账号） |
+
+Token 配置与既有 LLM 配置一样支持脱敏占位符 `__HAS_KEY__`，保存后不会泄露明文。
+
+**OAuth 类目标（Google Drive / OneDrive）使用流程**
+1. 在目标平台的开发者控制台创建 OAuth Client，授权回调 URI 填 `http(s)://<你的 WeLink 地址>/api/export/oauth/<gdrive|onedrive>/callback`
+2. 把 Client ID / Secret 粘到导出中心配置卡 → 保存 → 点「授权」→ 浏览器跳转完成授权 → 自动回传 token
+3. 之后每次导出自动 refresh，token 过期不用管
+
+---
+
+## 🗄️ 数据库管理 — 分析师工作台
+
+SQLite 数据直接暴露给懂 SQL 的用户，配 **4 件套** 工具：
+
+- **SQL 模板**：10 个预置常用查询（消息排行、联系人列表、群聊列表、AI 对话历史、Skill 记录、记忆提炼等），点一下填入编辑器 + 自动选数据库
+- **结果一键画图**：结果 ≥2 列时点「图表」，第一列 X 轴 / 第一个数字列 Y 轴自动出柱状/折线（日期格式走折线）
+- **磁盘占用环形饼图**：每个 DB 文件占比 + Tooltip + 彩色图例
+- **SQL 历史 + 收藏**：自动记录最近 20 条执行历史；点「收藏」起名保存常用 SQL，列表置顶展示
+
+### 💬 自然语言查数据（中文问 AI 写 SQL）
+
+在面板里输入中文问题，例如：
+
+> 「我和老婆的第一条消息是什么时候」
+> 「今年跟我妈聊了多少条消息」
+
+LLM 会：
+1. 读取自动生成的 WCDB schema 摘要
+2. 输出 `{db, sql, explain}` JSON（严格限制 SELECT/PRAGMA only + LIMIT 50）
+3. 后端执行并返回结果表 / 自动画图
+
+**跨库联系人消息**（`mode=contact_messages`）：按备注模糊查 contact.db → md5 计算 `Chat_xxx` 表名 → 遍历 message_N.db 找到有该表的 DB 执行 SQL。"我和 XX 的..." 这类跨库问题现在也能直接回答。
+
+结果表支持**一键 CSV 下载**。
+
+---
+
 ## 数据分析功能
 
 **好友分析**
@@ -267,10 +371,24 @@ WeLink 内置 [MCP（Model Context Protocol）](https://modelcontextprotocol.io/
 **群聊分析 + 小团体检测 + 对比**
 - 成员发言排行、活跃时间分布、高频词
 - 人物关系力导向图：互动频率可视化，支持拖拽和悬停高亮
-- **小团体检测**：Label Propagation 社区检测算法自动识别群内小圈子，按社区着色节点
+- **小团体检测**：Louvain 社区检测 + 模块度 Q 兜底（Q<0.3 时不强行凑圈），基于真实 `refermsg/chatusr` 引用信号而非时间窗
 - **潜水成员检测**：显示每个成员的最后发言时间（>180天红色 / >30天橙色），支持按消息数/最后发言/名字排序，快捷筛选 Top 3/10/50/全部
+- **💕 群内「我的 CP」**：扫描引用消息（lt=49 `<refermsg><chatusr>`），列出跟我双向引用互动最多的成员 Top 3，挂在群画像顶部。比单纯 @ 或消息数更能识别"隐形聊友"
+- **🎬 群聊回放**：按最近 N 条 / 按日期范围加载群消息，6 档倍速（实时 ~ 100×）真实时间间隔回放，连续同发言人合并头像 + 日期分割线
 - **群聊搜索**：支持按发言人筛选，结果可导出 TXT/CSV
 - **群聊活跃度对比**：同时选中多个群对比消息量、成员数、日均消息、人均消息
+
+**群聊四件套 — 这个群的指纹**
+- **⚡ 群号称卡**（群的 MBTI）：基于 hourly_dist / weekly_dist / type_dist / member_rank 规则派生 2-4 条标签 —— 深夜话唠 / 工作日正午群 / 晚八点饭后群 / 周末活跃 / 工作日只上班群 / 表情包战场 / 图包王国 / 链接集散地 / 语音派对 / 红包雨 / 消息洪流 / 静默多数派 / 潜水员联盟 等。零 LLM 零后端
+- **🕐 时钟指纹**：7×24 小热图徽章，log 压缩着色，一眼识别「工作群作息 / 深夜局 / 周末亲友群」不同性格
+- **📊 群影响力指数**：我发言后 30 分钟内有异发言者回应的比例 vs 群整体基线，Score = min(myRate/baseRate, 2) × 50。看你在哪个群更"有号召力"
+- **📖 AI 群年报**：Spotify Wrapped 风格分页卡片 —— 年度概览 / 话痨榜 Top 3 / AI 精选 3 条金句（原文引用）/ 月度趋势柱状图 / 60-100 字 AI 叙事。每群每年可生成
+
+**群聊列表四维信息**
+- **我的参与度**：在每行副标展示「我 #N · X%」（在成员发言排行里的位置 + 消息占比）
+- **近期活跃度**：旁边一个「30天 N 条」区分"已死"和"活跃"群
+- **活跃趋势箭头**：最近 3 月 vs 前 3 月百分比变化，↑12% 绿 / ↓35% 红
+- **我最后发言时间**：不同于群最后消息 —— 显示我自己在这个群潜水了多久
 
 **回复节奏分析（联系人深度画像）**
 - 双向对比我 / 对方的回复速度（中位数、均值、秒回次数、慢回次数）
@@ -322,6 +440,7 @@ WeLink 内置 [MCP（Model Context Protocol）](https://modelcontextprotocol.io/
 - 自动检测生日（扫描"生日快乐"等关键词，按年份去重）
 - 友谊里程碑提醒（认识 100/365/1000/... 天）
 - 支持自定义纪念日（标题、日期、是否每年重复）
+- **AI 首页「今天的纪念日」banner**：客户端聚合 4 类当天命中（首条消息 MM-DD 对应的整周年 / 检测生日 / 0 天里程碑 / 自定义），Hero 上方小卡，单条点击直接开联系人，多条跳纪念日 tab，按日期关闭
 
 **全局搜索增强**
 - 跨联系人全局关键词搜索（热门推荐词 + 搜索历史持久化）
@@ -364,6 +483,12 @@ WeLink 内置 [MCP（Model Context Protocol）](https://modelcontextprotocol.io/
 | **界面崩溃自救** | — | ErrorBoundary 接住异常，不会白屏；可一键带 stack 反馈 |
 | **设置页内搜索** | 设置页顶部搜索框 | 输入"下载"/"LLM" 等关键词过滤 section |
 | **自动检查新版本** | 启动 5s 后后台 GitHub API 轮询 | 有新版本弹 Release Notes Modal 展示 changelog；「我先用着」记住版本不再烦人 |
+| **LLM 用量统计** | 设置 → LLM 用量 | 累计字符 / 估算 tokens，按 provider 分组 |
+| **有趣发现** | 统计页底部 | 字数换算 / 最话痨一天 / 互动档位 / 陪伴时长 / 微信 MBTI / 首次相遇 / 沉默最久 / Ghost 月 / 表情包浓度 / 独白指数 / 最像我的朋友 / 我的人设 / 秘语雷达 / 词语年鉴 / 失眠陪聊榜 |
+| **关系动态预测** | AI 首页 + 统计页底部 | 4 档趋势 + 建议主动联系 Top 5 + AI 开场白草稿 + 12 月折线大图 |
+| **导出中心** | 侧边栏「导出」 | 年度回顾 / 对话归档 / AI 历史 / 记忆图谱 × 8 种目标（Markdown / Notion / 飞书 / WebDAV / S3 / Dropbox / Google Drive / OneDrive） |
+| **数据库查询** | 侧边栏「数据库」 | SQL 模板 + 自然语言问 AI 写 SQL + 结果画图 + SQL 历史收藏 |
+| **真实头像** | 所有聊天回放 / 日聊面板 / 搜索上下文 | 对方和「我」都显示真实头像，无头像时降级彩色首字母圆圈 |
 
 ---
 
@@ -392,6 +517,8 @@ docker compose up
 
 访问 [localhost:3418](http://localhost:3418) 开始使用。
 
+> 完整 Docker 部署指南（环境变量 / Volume / 反代 HTTPS / 升级 / 多 profile / K8s 等）见 [docs/docker.md](docs/docker.md)。
+
 **macOS / Windows App**（无需 Docker）：前往 [GitHub Releases](https://github.com/runzhliu/welink/releases) 下载，启动后在设置页选择 `decrypted/` 目录即可。
 
 > **端口说明**：详见下方[端口与自定义](#端口与自定义)章节。
@@ -417,7 +544,7 @@ docker compose -f docker-compose.demo.yml up
 
 > **提示「无法打开」？** 右键 → 「打开」→ 再次点击「打开」。若仍无效：`xattr -cr /Applications/WeLink.app`
 
-从源码构建：`make dmg`（需 Go 1.22+ 和 Node.js 18+）
+完整指南（配置路径 / 端口自定义 / 升级 / 多 profile / FAQ）见 [docs/install-macos.md](docs/install-macos.md)。从源码构建：`make dmg`。
 
 ## Windows App 安装说明
 
@@ -425,8 +552,9 @@ docker compose -f docker-compose.demo.yml up
 
 1. 下载 `WeLink-windows-amd64.zip`，解压后双击 `WeLink.exe`
 2. 如提示缺少 WebView2，从 [Microsoft 官网](https://developer.microsoft.com/microsoft-edge/webview2/) 安装 Evergreen Bootstrapper
+3. SmartScreen 拦截时点「更多信息」→「仍要运行」
 
-从源码构建：`make exe`
+完整指南（`%APPDATA%\WeLink` 配置路径 / 端口自定义 / 升级 / 多 profile / FAQ）见 [docs/install-windows.md](docs/install-windows.md)。从源码构建：`make exe`。
 
 ---
 
