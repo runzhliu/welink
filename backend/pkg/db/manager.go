@@ -240,6 +240,12 @@ func (mgr *DBManager) GetTableData(dbName, tableName string, offset, limit int) 
 		result = append(result, row)
 	}
 
+	if columns == nil {
+		columns = []string{}
+	}
+	if result == nil {
+		result = [][]interface{}{}
+	}
 	return &TableData{
 		Columns: columns,
 		Rows:    result,
@@ -252,6 +258,60 @@ type QueryResult struct {
 	Columns []string        `json:"columns"`
 	Rows    [][]interface{} `json:"rows"`
 	Error   string          `json:"error,omitempty"`
+}
+
+// GetSchemaContext 生成所有数据库的 schema 摘要文本，用于喂给 LLM。
+// 只取核心表（跳过 Chat_xxx 消息表，因为太多且结构相同），返回一段人类可读的描述。
+func (mgr *DBManager) GetSchemaContext() string {
+	var sb strings.Builder
+	sb.WriteString("WeChat 数据库 schema 如下（SQLite）。共有 contact.db / message_N.db / ai_analysis.db 三类。\n\n")
+
+	// contact.db
+	sb.WriteString("【contact.db】联系人表。\n")
+	if cols, err := mgr.GetTableSchema("contact.db", "contact"); err == nil {
+		sb.WriteString("  contact(")
+		for i, c := range cols {
+			if i > 0 { sb.WriteString(", ") }
+			sb.WriteString(c.Name + " " + c.Type)
+		}
+		sb.WriteString(")\n")
+	}
+	// chatroom_member
+	if cols, err := mgr.GetTableSchema("contact.db", "chatroom_member"); err == nil && len(cols) > 0 {
+		sb.WriteString("  chatroom_member(")
+		for i, c := range cols {
+			if i > 0 { sb.WriteString(", ") }
+			sb.WriteString(c.Name)
+		}
+		sb.WriteString(")\n")
+	}
+	sb.WriteString("\n")
+
+	// message_0.db（代表所有 message DB）
+	sb.WriteString("【message_N.db】消息数据库（可能有多个，结构相同）。\n")
+	sb.WriteString("  Name2Id(rowid INTEGER PK, user_name TEXT) — wxid 到 rowid 的映射\n")
+	sb.WriteString("  Chat_<md5>(create_time INTEGER, local_type INTEGER, message_content BLOB,\n")
+	sb.WriteString("    WCDB_CT_message_content INTEGER, real_sender_id INTEGER)\n")
+	sb.WriteString("  — 每个联系人/群的消息存在独立的 Chat_<md5(username)> 表\n")
+	sb.WriteString("  — local_type: 1=文本, 3=图片, 34=语音, 43=视频, 47=表情, 49=应用消息\n")
+	sb.WriteString("  — create_time 是 Unix 时间戳（秒）\n")
+	sb.WriteString("  — real_sender_id 对应 Name2Id.rowid\n\n")
+
+	// ai_analysis.db
+	sb.WriteString("【ai_analysis.db】AI 分析数据。\n")
+	for _, tbl := range []string{"ai_conversations", "skill_records", "mem_facts"} {
+		cols, err := mgr.GetTableSchema("ai_analysis.db", tbl)
+		if err != nil || len(cols) == 0 { continue }
+		sb.WriteString("  " + tbl + "(")
+		for i, c := range cols {
+			if i > 0 { sb.WriteString(", ") }
+			sb.WriteString(c.Name + " " + c.Type)
+		}
+		sb.WriteString(")\n")
+	}
+	sb.WriteString("\n")
+	sb.WriteString("注意：每次查询只能指定一个数据库，不能跨库 JOIN。\n")
+	return sb.String()
 }
 
 // ExecQuery 在指定数据库执行只读 SQL（只允许 SELECT）
@@ -316,6 +376,46 @@ func (mgr *DBManager) ExecQuery(dbName, sql string) *QueryResult {
 		}
 	}
 
+	return &QueryResult{Columns: cols, Rows: result}
+}
+
+// ExecQueryOnDB 在给定的 *sql.DB 连接上执行只读 SQL。
+// 用于跨库联系人消息查询时直接操作已找到的 message DB 连接。
+func ExecQueryOnDB(conn *sql.DB, sqlStr string) *QueryResult {
+	trimmed := strings.TrimSpace(sqlStr)
+	upper := strings.ToUpper(trimmed)
+	if !strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "PRAGMA") && !strings.HasPrefix(upper, "EXPLAIN") {
+		return &QueryResult{Error: "只允许执行 SELECT / PRAGMA / EXPLAIN 语句"}
+	}
+	rows, err := conn.Query(trimmed)
+	if err != nil {
+		return &QueryResult{Error: err.Error()}
+	}
+	defer rows.Close()
+	cols, err := rows.Columns()
+	if err != nil {
+		return &QueryResult{Error: err.Error()}
+	}
+	var result [][]interface{}
+	for rows.Next() {
+		vals := make([]interface{}, len(cols))
+		ptrs := make([]interface{}, len(cols))
+		for i := range vals { ptrs[i] = &vals[i] }
+		if err := rows.Scan(ptrs...); err != nil { continue }
+		row := make([]interface{}, len(cols))
+		for i, v := range vals {
+			switch val := v.(type) {
+			case []byte:
+				s := string(val)
+				if len(val) < 1024 { row[i] = s } else { row[i] = fmt.Sprintf("<binary %d bytes>", len(val)) }
+			default:
+				row[i] = val
+			}
+		}
+		result = append(result, row)
+		if len(result) >= 500 { break }
+	}
+	if result == nil { result = [][]interface{}{} }
 	return &QueryResult{Columns: cols, Rows: result}
 }
 

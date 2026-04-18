@@ -85,7 +85,15 @@ type LLMProfile struct {
 // Preferences 是唯一的持久化结构体，合并了用户偏好和 App 配置。
 // App 模式存储在 ~/Library/Application Support/WeLink/preferences.json，
 // Docker/CLI 模式存储路径由环境变量 PREFERENCES_PATH 指定，默认为工作目录的 preferences.json。
+// CurrentSchemaVersion 是当前代码理解的 preferences.json 格式版本。
+// 每次做带破坏性语义的改动（字段语义翻转、删除、合并）时 +1，并在 migratePreferences 加对应 case。
+// 只加字段且 zero-value 兼容的改动不用升级版本。
+const CurrentSchemaVersion = 1
+
 type Preferences struct {
+	// 0 或缺失 = 旧版本（需要迁移）；>= CurrentSchemaVersion = 当前版本
+	SchemaVersion int `json:"schema_version,omitempty"`
+
 	// App 模式专用
 	DataDir     string `json:"data_dir,omitempty"`
 	LogDir      string `json:"log_dir,omitempty"`
@@ -117,6 +125,9 @@ type Preferences struct {
 	BlockedGroups []string `json:"blocked_groups"`
 	PrivacyMode   bool     `json:"privacy_mode,omitempty"`
 
+	// 关系预测「不再推荐此人」名单（仍可在联系人/群聊中看到，只是首页 forecast 不再提醒）
+	ForecastIgnored []string `json:"forecast_ignored,omitempty"`
+
 	// LLM 配置（多 provider，支持在 AI 分析页面切换）
 	LLMProfiles      []LLMProfile `json:"llm_profiles,omitempty"`
 	// 以下单配置字段保持向后兼容（自动同步为 LLMProfiles[0]）
@@ -146,6 +157,50 @@ type Preferences struct {
 
 	// 自定义 Prompt 模板（key → prompt 文本，为空则用默认值）
 	PromptTemplates map[string]string `json:"prompt_templates,omitempty"`
+
+	// 导出中心：第三方笔记/文档平台令牌
+	NotionToken      string `json:"notion_token,omitempty"`       // Notion Integration Token (secret_xxx)
+	NotionParentPage string `json:"notion_parent_page,omitempty"` // 默认上传到的 Page ID（也可在导出时覆盖）
+	FeishuAppID      string `json:"feishu_app_id,omitempty"`      // 飞书自建应用 App ID
+	FeishuAppSecret  string `json:"feishu_app_secret,omitempty"`  // 飞书自建应用 App Secret
+	FeishuFolderToken string `json:"feishu_folder_token,omitempty"` // 默认导入到的文件夹 Token（留空 = 我的空间根目录）
+
+	// 导出中心：云盘 / 对象存储
+	// WebDAV（坚果云 / Nextcloud / ownCloud / 群晖等）
+	WebDAVURL      string `json:"webdav_url,omitempty"`      // 完整 URL，例 https://dav.jianguoyun.com/dav/
+	WebDAVUsername string `json:"webdav_username,omitempty"`
+	WebDAVPassword string `json:"webdav_password,omitempty"` // 应用密码
+	WebDAVPath     string `json:"webdav_path,omitempty"`     // 上传前缀，例 WeLink-Export/
+
+	// S3 兼容（AWS S3 / Cloudflare R2 / 阿里 OSS / 腾讯 COS / 七牛 / MinIO / Backblaze）
+	S3Endpoint     string `json:"s3_endpoint,omitempty"`       // 主机名，空=AWS 官方；自定义端点用于国内云
+	S3Region       string `json:"s3_region,omitempty"`
+	S3Bucket       string `json:"s3_bucket,omitempty"`
+	S3AccessKey    string `json:"s3_access_key,omitempty"`
+	S3SecretKey    string `json:"s3_secret_key,omitempty"`
+	S3PathPrefix   string `json:"s3_path_prefix,omitempty"`    // 上传前缀，例 welink-export/
+	S3UsePathStyle bool   `json:"s3_use_path_style,omitempty"` // true=path-style（MinIO/R2），false=virtual-host（AWS 官方默认）
+
+	// Dropbox（用 App Console 生成的长期 access token）
+	DropboxToken string `json:"dropbox_token,omitempty"`
+	DropboxPath  string `json:"dropbox_path,omitempty"` // 上传前缀，例 /Apps/WeLink/
+
+	// Google Drive（OAuth 2.0，本地回调）
+	GDriveClientID     string `json:"gdrive_client_id,omitempty"`
+	GDriveClientSecret string `json:"gdrive_client_secret,omitempty"`
+	GDriveAccessToken  string `json:"gdrive_access_token,omitempty"`
+	GDriveRefreshToken string `json:"gdrive_refresh_token,omitempty"`
+	GDriveTokenExpiry  int64  `json:"gdrive_token_expiry,omitempty"`
+	GDriveFolderID     string `json:"gdrive_folder_id,omitempty"` // 留空=根目录
+
+	// OneDrive（OAuth 2.0，Microsoft Identity Platform）
+	OneDriveClientID     string `json:"onedrive_client_id,omitempty"`
+	OneDriveClientSecret string `json:"onedrive_client_secret,omitempty"`
+	OneDriveTenant       string `json:"onedrive_tenant,omitempty"` // 一般填 common
+	OneDriveAccessToken  string `json:"onedrive_access_token,omitempty"`
+	OneDriveRefreshToken string `json:"onedrive_refresh_token,omitempty"`
+	OneDriveTokenExpiry  int64  `json:"onedrive_token_expiry,omitempty"`
+	OneDriveFolderPath   string `json:"onedrive_folder_path,omitempty"` // 例 /WeLink-Export
 
 	// Gemini OAuth（可选，与 API Key 二选一）
 	GeminiClientID     string `json:"gemini_client_id,omitempty"`
@@ -180,12 +235,12 @@ func preferencesPath() string {
 func loadPreferences() Preferences {
 	data, err := os.ReadFile(preferencesPath())
 	if err != nil {
-		return Preferences{}
+		return defaultPreferences()
 	}
 	var p Preferences
 	if err := json.Unmarshal(data, &p); err != nil {
 		log.Printf("[PREFS] Failed to parse preferences.json: %v", err)
-		return Preferences{}
+		return defaultPreferences()
 	}
 	if p.BlockedUsers == nil {
 		p.BlockedUsers = []string{}
@@ -193,6 +248,38 @@ func loadPreferences() Preferences {
 	if p.BlockedGroups == nil {
 		p.BlockedGroups = []string{}
 	}
+	// 运行迁移并按需写回。迁移只在版本落后时真正做事；就位时 0 开销。
+	migrated := migratePreferences(p)
+	if migrated.SchemaVersion != p.SchemaVersion {
+		log.Printf("[PREFS] schema v%d → v%d 迁移完成", p.SchemaVersion, migrated.SchemaVersion)
+		if err := savePreferences(migrated); err != nil {
+			log.Printf("[PREFS] 迁移后写回失败，不影响运行：%v", err)
+		}
+	}
+	return migrated
+}
+
+// defaultPreferences 返回带有最新 schema_version 的空配置（首次启动用）。
+func defaultPreferences() Preferences {
+	return Preferences{
+		SchemaVersion: CurrentSchemaVersion,
+		BlockedUsers:  []string{},
+		BlockedGroups: []string{},
+	}
+}
+
+// migratePreferences 把老 schema 的 preferences 升到最新。每步 migration 只做
+// "本版本加进来的破坏性改动"，按版本号 case-by-case。新加字段但 zero-value 兼容
+// 的情况不需要在这里写东西；写在这里的都是语义翻转 / 字段合并 / 字段拆分之类。
+func migratePreferences(p Preferences) Preferences {
+	// v0 → v1：给第一次见到 schema_version 字段的老用户打版本号。
+	// 目前还没有破坏性改动，这里只是落版本号，为将来升级预留入口。
+	if p.SchemaVersion < 1 {
+		p.SchemaVersion = 1
+	}
+	// 未来升级在这里加：
+	// if p.SchemaVersion < 2 { ... ; p.SchemaVersion = 2 }
+	// if p.SchemaVersion < 3 { ... ; p.SchemaVersion = 3 }
 	return p
 }
 
@@ -252,6 +339,17 @@ func sanitizeForResponse(p Preferences) Preferences {
 	out.GeminiClientSecret = redact(out.GeminiClientSecret)
 	out.GeminiAccessToken = ""
 	out.GeminiRefreshToken = ""
+	out.NotionToken = redact(out.NotionToken)
+	out.FeishuAppSecret = redact(out.FeishuAppSecret)
+	out.WebDAVPassword = redact(out.WebDAVPassword)
+	out.S3SecretKey = redact(out.S3SecretKey)
+	out.DropboxToken = redact(out.DropboxToken)
+	out.GDriveClientSecret = redact(out.GDriveClientSecret)
+	out.GDriveAccessToken = ""
+	out.GDriveRefreshToken = ""
+	out.OneDriveClientSecret = redact(out.OneDriveClientSecret)
+	out.OneDriveAccessToken = ""
+	out.OneDriveRefreshToken = ""
 	if len(out.LLMProfiles) > 0 {
 		sanitized := make([]LLMProfile, len(out.LLMProfiles))
 		copy(sanitized, out.LLMProfiles)

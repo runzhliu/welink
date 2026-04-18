@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"regexp"
 	"runtime/debug"
 	"sort"
@@ -221,6 +222,25 @@ type ContactService struct {
 	socialBreadthMu    sync.RWMutex
 	urlCollectionCache *URLCollectionResult // URL 收藏夹缓存
 	urlCollectionMu    sync.RWMutex
+	monthlyByUsername  map[string]map[string]MonthBucket // 关系预测用：username -> "YYYY-MM" -> {total, mine}
+	monthlyByUserMu    sync.RWMutex
+	latencyByUsername  map[string]LatencyStats // 关系预测用：username -> 回复时延统计
+	latencyByUserMu    sync.RWMutex
+}
+
+// MonthBucket 单月消息桶，用于关系预测的主动占比分析
+type MonthBucket struct {
+	Total int // 总条数（我+对方）
+	Mine  int // 我发的条数
+}
+
+// LatencyStats 回复时延统计（关系预测用）
+// 秒数；-1 表示样本不足（<5 对转换）
+type LatencyStats struct {
+	TheirRecentMedSec int // TA 回复我（最近 3 月中位时延）
+	TheirPriorMedSec  int // TA 回复我（前 3 月，即 4-6 月前）
+	MineRecentMedSec  int // 我回复 TA（最近 3 月）
+	MinePriorMedSec   int // 我回复 TA（前 3 月）
 }
 
 // 强化的系统话术过滤词库
@@ -468,6 +488,8 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 	globalDaily := make(map[string]int)
 	globalHourly := [24]int{}
 	globalTypeMix := make(map[string]int)
+	monthlyByUser := make(map[string]map[string]MonthBucket, len(contacts))    // 关系预测用
+	latencyByUser := make(map[string]LatencyStats, len(contacts))              // 关系预测响应时延用
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, s.params.WorkerCount)
@@ -523,9 +545,17 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 			var globalLastTs int64 = 0
 			var lateNightCnt int64
 			typeCounts := make(map[string]int)
-			monthly := make(map[string]int)
+			monthly := make(map[string]MonthBucket)
 			recentCutoff := time.Now().In(s.tz).AddDate(0, -1, 0)
 			var totalTextLen, textCount int64
+			// 响应时延收集：最近 6 个月内的 (ts, isMine)，稍后排序算中位时延
+			latencyCutoff6 := time.Now().In(s.tz).AddDate(0, -6, 0).Unix()
+			latencyCutoff3 := time.Now().In(s.tz).AddDate(0, -3, 0).Unix()
+			type tsKind struct {
+				ts   int64
+				mine bool
+			}
+			var transitions []tsKind
 
 			for _, mdb := range s.dbMgr.MessageDBs {
 				var contactRowID int64 = -1
@@ -553,8 +583,15 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 					h := dt.Hour()
 					if h >= s.params.LateNightStartHour && h < s.params.LateNightEndHour { lateNightCnt++ }
 					mu.Lock(); globalDaily[dt.Format("2006-01-02")]++; globalHourly[h]++; mu.Unlock()
-					monthly[dt.Format("2006-01")]++
+					mk := dt.Format("2006-01")
+					b := monthly[mk]
+					b.Total++
+					if isMine { b.Mine++ }
+					monthly[mk] = b
 					if ts >= recentCutoff.Unix() { ext.RecentMonthly++ }
+					if ts >= latencyCutoff6 {
+						transitions = append(transitions, tsKind{ts, isMine})
+					}
 
 					typeName := classifyMsgType(lt, content)
 					if typeName == "文本" {
@@ -584,8 +621,8 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 			if ext.TotalMessages > 0 {
 				ext.FirstMessage = s.formatTime(globalFirstTs); ext.LastMessage = s.formatTime(globalLastTs)
 				ext.FirstMessageTs = globalFirstTs; ext.LastMessageTs = globalLastTs
-				for m, cnt := range monthly {
-					if int64(cnt) > ext.PeakMonthly { ext.PeakMonthly = int64(cnt); ext.PeakPeriod = m }
+				for m, b := range monthly {
+					if int64(b.Total) > ext.PeakMonthly { ext.PeakMonthly = int64(b.Total); ext.PeakPeriod = m }
 				}
 				if textCount > 0 { ext.AvgMsgLen = float64(totalTextLen) / float64(textCount) }
 				ext.TypePct = make(map[string]float64)
@@ -600,9 +637,67 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 			if name == "" { name = c.Username }
 			lateNightData[idx] = lateEntry{name: name, lateNightCount: lateNightCnt, totalMessages: ext.TotalMessages}
 			result[idx] = ext
+			if len(monthly) > 0 {
+				mu.Lock()
+				monthlyByUser[c.Username] = monthly
+				mu.Unlock()
+			}
+			// 计算响应时延（对多个 message_N.db 合并后再排序）
+			if len(transitions) >= 4 {
+				sort.Slice(transitions, func(i, j int) bool { return transitions[i].ts < transitions[j].ts })
+				var theirRecent, theirPrior, mineRecent, minePrior []int
+				for i := 1; i < len(transitions); i++ {
+					a, b := transitions[i-1], transitions[i]
+					if a.mine == b.mine {
+						continue // 同一方连续发言，不算响应
+					}
+					delay := int(b.ts - a.ts)
+					if delay <= 0 || delay > 86400*3 {
+						continue // 超过 3 天视为非直接响应
+					}
+					// delay 归属于 b（回复者）所在的窗口
+					bucket := &theirPrior
+					if b.mine {
+						// 我回复 TA
+						if b.ts >= latencyCutoff3 {
+							bucket = &mineRecent
+						} else {
+							bucket = &minePrior
+						}
+					} else {
+						// TA 回复我
+						if b.ts >= latencyCutoff3 {
+							bucket = &theirRecent
+						} else {
+							bucket = &theirPrior
+						}
+					}
+					*bucket = append(*bucket, delay)
+				}
+				stats := LatencyStats{
+					TheirRecentMedSec: medianOr(theirRecent, 5, -1),
+					TheirPriorMedSec:  medianOr(theirPrior, 5, -1),
+					MineRecentMedSec:  medianOr(mineRecent, 5, -1),
+					MinePriorMedSec:   medianOr(minePrior, 5, -1),
+				}
+				if stats.TheirRecentMedSec != -1 || stats.TheirPriorMedSec != -1 ||
+					stats.MineRecentMedSec != -1 || stats.MinePriorMedSec != -1 {
+					mu.Lock()
+					latencyByUser[c.Username] = stats
+					mu.Unlock()
+				}
+			}
 		}(i)
 	}
 	wg.Wait()
+
+	s.monthlyByUserMu.Lock()
+	s.monthlyByUsername = monthlyByUser
+	s.monthlyByUserMu.Unlock()
+
+	s.latencyByUserMu.Lock()
+	s.latencyByUsername = latencyByUser
+	s.latencyByUserMu.Unlock()
 
 	// 计算每个联系人的共同群聊数
 	sharedGroupCounts := s.buildSharedGroupCounts()
@@ -1762,6 +1857,7 @@ func (s *ContactService) exportGroupMessages(username string, from, to int64, li
 	tw := exportTimeWhere(from, to, s.timeWhere())
 
 	nameMap := s.loadContactNameMap()
+	avatarMap := s.loadContactAvatarMap()
 	var msgs []GroupChatMessage
 
 	for _, mdb := range s.dbMgr.MessageDBs {
@@ -1838,12 +1934,13 @@ func (s *ContactService) exportGroupMessages(username string, from, to int64, li
 			}
 			t := time.Unix(ts, 0).In(s.tz)
 			msgs = append(msgs, GroupChatMessage{
-				Date:    t.Format("2006-01-02"),
-				Time:    t.Format("15:04"),
-				Speaker: speaker,
-				Content: content,
-				IsMine:  false,
-				Type:    lt,
+				Date:      t.Format("2006-01-02"),
+				Time:      t.Format("15:04"),
+				Speaker:   speaker,
+				Content:   content,
+				IsMine:    false,
+				Type:      lt,
+				AvatarURL: avatarMap[speakerWxid],
 			})
 		}
 		rows.Close()
@@ -1989,6 +2086,113 @@ func (s *ContactService) GetWordCloud(username string, includeMine bool) []WordC
 func (s *ContactService) isSys(c string) bool {
 	for _, k := range SYSTEM_KEYS { if strings.Contains(c, k) { return true } }
 	return false
+}
+
+// ─── 秘语雷达（per-contact TF-IDF）────────────────────────────────────────
+// 目标：找出"你和 TA 聊得比跟任何人都多的词" —— 私密梗 / 昵称 / 共同人物 / 内部术语。
+// 口径：
+//   tf(w, c)   = 该词在当前联系人词云里的 count
+//   df(w)      = 词出现在多少个"活跃联系人"的 Top 词云里（只看消息量 Top 50 的联系人，
+//                避免 O(全量联系人 × 分词)，同时保证 df 的基数稳定）
+//   score      = tf · log((N + 1) / (1 + df))
+// 结果按 score 降序取 Top 5；用户视觉上就是"只有我和 TA 特别爱说的词"。
+
+// SecretWord 一个"秘语"词条
+type SecretWord struct {
+	Word    string  `json:"word"`
+	Count   int     `json:"count"`   // tf
+	DF      int     `json:"df"`      // 多少个活跃联系人的词云里也有
+	Score   float64 `json:"score"`   // TF-IDF 分
+}
+
+// secretWordsDocFreq 全局文档频率缓存；1 小时刷一次。
+// 第一次调用会同步扫描 Top 50 活跃联系人的词云（可能需要几秒到几十秒），后续命中走缓存。
+type secretWordsDF struct {
+	df     map[string]int
+	docN   int // 参与统计的联系人数 N
+	builtAt time.Time
+}
+
+var (
+	secretDFMu    sync.RWMutex
+	secretDFCache *secretWordsDF
+)
+
+// buildSecretWordsDF 扫描 Top 50 活跃联系人的词云，构建全局 DF 表。
+// 同步执行（调用方决定是否放到 goroutine 里）。
+func (s *ContactService) buildSecretWordsDF() *secretWordsDF {
+	s.cacheMu.RLock()
+	type cc struct {
+		username string
+		msgs     int64
+	}
+	cs := make([]cc, 0, len(s.cache))
+	for _, c := range s.cache {
+		if c.TotalMessages >= 50 {
+			cs = append(cs, cc{c.Username, c.TotalMessages})
+		}
+	}
+	s.cacheMu.RUnlock()
+	sort.Slice(cs, func(i, j int) bool { return cs[i].msgs > cs[j].msgs })
+	if len(cs) > 50 {
+		cs = cs[:50]
+	}
+	df := make(map[string]int)
+	for _, c := range cs {
+		wc := s.GetWordCloud(c.username, false) // 只看对方发的词
+		for _, w := range wc {
+			df[w.Word]++
+		}
+	}
+	return &secretWordsDF{df: df, docN: len(cs), builtAt: time.Now()}
+}
+
+// GetSecretWords 返回某联系人的"秘语"Top N（默认 5）。
+func (s *ContactService) GetSecretWords(username string, topN int) []SecretWord {
+	if topN <= 0 {
+		topN = 5
+	}
+
+	// 取/建 全局 DF 缓存
+	secretDFMu.RLock()
+	cache := secretDFCache
+	fresh := cache != nil && time.Since(cache.builtAt) < time.Hour
+	secretDFMu.RUnlock()
+	if !fresh {
+		built := s.buildSecretWordsDF()
+		secretDFMu.Lock()
+		secretDFCache = built
+		cache = built
+		secretDFMu.Unlock()
+	}
+
+	// 该联系人的词云
+	my := s.GetWordCloud(username, false)
+	if len(my) == 0 || cache.docN == 0 {
+		return []SecretWord{}
+	}
+
+	logN := math.Log(float64(cache.docN + 1))
+	result := make([]SecretWord, 0, len(my))
+	for _, w := range my {
+		df := cache.df[w.Word]
+		// 在所有 50 个里都出现的词（df ≈ N）就不是秘语了；log 对数自然处理
+		idf := logN - math.Log(float64(1+df))
+		if idf <= 0 {
+			continue
+		}
+		result = append(result, SecretWord{
+			Word:  w.Word,
+			Count: w.Count,
+			DF:    df,
+			Score: float64(w.Count) * idf,
+		})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Score > result[j].Score })
+	if len(result) > topN {
+		result = result[:topN]
+	}
+	return result
 }
 
 // ─── 联系人相似度分析（谁最像谁）─────────────────────────────────────────────
@@ -2426,12 +2630,22 @@ type GroupInfo struct {
 	LastMessage    string `json:"last_message_time"`
 	FirstMessageTs int64  `json:"first_message_ts,omitempty"`
 	LastMessageTs  int64  `json:"last_message_ts,omitempty"`
+
+	// 我在这个群的维度
+	MyMessages      int64 `json:"my_messages"`                  // 我的发言数（全类型）
+	MyRank          int   `json:"my_rank"`                      // 排名（1-based，0=未发言）
+	MyLastMessageTs int64 `json:"my_last_message_ts,omitempty"` // 我上次发言 Unix 秒
+
+	// 近期活跃度
+	Recent30Days   int64 `json:"recent_30d_messages"` // 近 30 天消息数
+	RecentTrendPct int   `json:"recent_trend_pct"`    // 最近 3 月 vs 前 3 月 %（-100..+999，999=新群）
 }
 
 type MemberStat struct {
 	Speaker          string `json:"speaker"`
 	Username         string `json:"username,omitempty"`           // wxid，用于区分同名不同人
-	Count            int64  `json:"count"`
+	Count            int64  `json:"count"`                        // 所有类型消息数（图片/表情/红包等也算）
+	TextCount        int64  `json:"text_count"`                   // 文本消息数（Type==1），Skill 炼化实际可用
 	LastMessageTime  string `json:"last_message_time,omitempty"`  // "2024-03-15 14:23"
 	FirstMessageTime string `json:"first_message_time,omitempty"` // 首次发言时间（近似加群时间）
 	LastMessageTs    int64  `json:"last_message_ts,omitempty"`    // Unix 秒
@@ -2445,6 +2659,25 @@ type GroupDetail struct {
 	MemberRank   []MemberStat      `json:"member_rank"`  // top 500 发言者
 	TopWords     []WordCount       `json:"top_words"`    // top 30 高频词
 	TypeDist     map[string]int    `json:"type_dist"`    // 消息类型分布（条数）
+	MyCPs        []MyCPEntry       `json:"my_cps"`       // 群内跟我引用互动最多的成员 Top 3
+
+	// 7×24 二维热图（星期×小时），用于时钟指纹；比独立 hourly+weekly 更精准
+	// weeklyHourlyDist[weekday][hour]，weekday 0=周日
+	WeeklyHourlyDist [7][24]int `json:"weekly_hourly_dist"`
+
+	// 群影响力指数：我发言后 30 分钟内有人回应的次数 / 我发言次数
+	// GroupReplyRate 是群的基线（任意成员发言后 30 分钟内有人接的比例）
+	MyInfluenceScore  int     `json:"my_influence_score"`   // 0-100，-1=样本不足
+	MyReplyRate       float64 `json:"my_reply_rate"`        // 我发言后 30 分钟内有回应的比例 0-1
+	GroupBaseReplyRate float64 `json:"group_base_reply_rate"` // 群整体基线 0-1
+}
+
+// MyCPEntry 群内「我的 CP」—— 跟我引用互动最多的成员
+type MyCPEntry struct {
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
+	Replies     int    `json:"replies"` // TA 引用回复我 + 我引用回复 TA 合计
 }
 
 // GetGroups 返回所有群聊列表（含消息量），只返回有消息的群
@@ -2476,6 +2709,18 @@ func (s *ContactService) loadGroups() []GroupInfo {
 		groups = append(groups, r)
 	}
 
+	// 先拿 selfWxid，稍后用于计算「我的发言」相关字段
+	selfWxid := ""
+	if si := s.GetSelfInfo(); si != nil {
+		selfWxid = si.Wxid
+	}
+
+	// 近期活跃度 cutoff（相对 wall clock，不受用户时间过滤影响）
+	nowSec := time.Now().Unix()
+	cutoff30 := nowSec - 30*86400
+	cutoff3m := nowSec - 90*86400
+	cutoff6m := nowSec - 180*86400
+
 	result := make([]GroupInfo, 0, len(groups))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -2505,14 +2750,15 @@ func (s *ContactService) loadGroups() []GroupInfo {
 			}
 			if total == 0 { return }
 			if firstTs == 9999999999 { firstTs = 0 }
-			// 统计群内发言人数（通过 Name2Id 映射到 wxid 后去重，避免跨 DB rowid 重复）
-			wxidSet := make(map[string]struct{})
-			memberQuery := "SELECT DISTINCT real_sender_id FROM [%s] WHERE real_sender_id > 0"
+			// 统计每成员发言数（GROUP BY real_sender_id），替代原 DISTINCT 查询
+			// 顺手得到：发言人数、我的发言数/最后发言时间、全员排名分布
+			memberCounts := make(map[string]int64)
+			var myTotal, myLastTs int64
+			groupMemberQuery := "SELECT real_sender_id, COUNT(*), MAX(create_time) FROM [%s] WHERE real_sender_id > 0 GROUP BY real_sender_id"
 			if twGroups != "" {
-				memberQuery = "SELECT DISTINCT real_sender_id FROM [%s]" + twGroups + " AND real_sender_id > 0"
+				groupMemberQuery = "SELECT real_sender_id, COUNT(*), MAX(create_time) FROM [%s]" + twGroups + " AND real_sender_id > 0 GROUP BY real_sender_id"
 			}
 			for _, mdb := range s.dbMgr.MessageDBs {
-				// 加载本 DB 的 rowid → wxid 映射
 				id2wxid := make(map[int64]string)
 				if nrows, nerr := mdb.Query("SELECT rowid, user_name FROM Name2Id"); nerr == nil {
 					for nrows.Next() {
@@ -2522,13 +2768,17 @@ func (s *ContactService) loadGroups() []GroupInfo {
 					}
 					nrows.Close()
 				}
-				mrows, merr := mdb.Query(fmt.Sprintf(memberQuery, tableName))
+				mrows, merr := mdb.Query(fmt.Sprintf(groupMemberQuery, tableName))
 				if merr != nil { continue }
 				for mrows.Next() {
-					var sid int64
-					mrows.Scan(&sid)
+					var sid, cnt, last int64
+					mrows.Scan(&sid, &cnt, &last)
 					if wxid, ok := id2wxid[sid]; ok && wxid != "" {
-						wxidSet[wxid] = struct{}{}
+						memberCounts[wxid] += cnt
+						if selfWxid != "" && wxid == selfWxid {
+							myTotal += cnt
+							if last > myLastTs { myLastTs = last }
+						}
 					}
 				}
 				mrows.Close()
@@ -2539,7 +2789,42 @@ func (s *ContactService) loadGroups() []GroupInfo {
 				`SELECT COUNT(*) FROM chatroom_member cm JOIN chat_room cr ON cr.id = cm.room_id WHERE cr.username = ?`,
 				g.uname).Scan(&realMemberCount)
 			if realMemberCount == 0 {
-				realMemberCount = len(wxidSet) // fallback: 用发言人数
+				realMemberCount = len(memberCounts) // fallback: 用发言人数
+			}
+
+			// 我的排名（在 memberCounts 里按 count 降序找 selfWxid 位置）
+			myRank := 0
+			if myTotal > 0 {
+				for _, cnt := range memberCounts {
+					if cnt > myTotal {
+						myRank++
+					}
+				}
+				myRank++ // 1-based
+			}
+
+			// 近期活跃度：30 天 / 最近 3 月 / 前 3 月（不带用户时间过滤，始终相对 wall clock）
+			var r30, r3m, p3m int64
+			for _, mdb := range s.dbMgr.MessageDBs {
+				var v30, v3m, vp3m int64
+				err := mdb.QueryRow(fmt.Sprintf(
+					"SELECT "+
+						"COALESCE(SUM(CASE WHEN create_time >= %d THEN 1 ELSE 0 END), 0), "+
+						"COALESCE(SUM(CASE WHEN create_time >= %d THEN 1 ELSE 0 END), 0), "+
+						"COALESCE(SUM(CASE WHEN create_time >= %d AND create_time < %d THEN 1 ELSE 0 END), 0) "+
+						"FROM [%s]",
+					cutoff30, cutoff3m, cutoff6m, cutoff3m, tableName)).Scan(&v30, &v3m, &vp3m)
+				if err == nil {
+					r30 += v30
+					r3m += v3m
+					p3m += vp3m
+				}
+			}
+			trendPct := 0
+			if p3m > 0 {
+				trendPct = int((r3m - p3m) * 100 / p3m)
+			} else if r3m > 0 {
+				trendPct = 999
 			}
 
 			name := g.remark; if name == "" { name = g.nick }; if name == "" { name = g.uname }
@@ -2549,6 +2834,11 @@ func (s *ContactService) loadGroups() []GroupInfo {
 				TotalMessages: total, MemberCount: realMemberCount,
 				FirstMessage: s.formatTime(firstTs), LastMessage: s.formatTime(lastTs),
 				FirstMessageTs: firstTs, LastMessageTs: lastTs,
+				MyMessages:      myTotal,
+				MyRank:          myRank,
+				MyLastMessageTs: myLastTs,
+				Recent30Days:    r30,
+				RecentTrendPct:  trendPct,
 			})
 			mu.Unlock()
 		}(g)
@@ -2573,6 +2863,102 @@ func (s *ContactService) loadContactNameMap() map[string]string {
 		nameMap[uname] = name
 	}
 	return nameMap
+}
+
+// SelfInfo 当前登录微信账号的基本信息（wxid + 头像）
+type SelfInfo struct {
+	Wxid      string `json:"wxid"`
+	AvatarURL string `json:"avatar_url"`
+	Nickname  string `json:"nickname"`
+}
+
+// GetSelfInfo 从私聊消息的发送者里推断"我"的 wxid，再从联系人表查头像。
+// 原理：任何一段私聊都只有 2 个 sender——对方（已知 wxid）和我。取不是对方的那个就是我。
+// 结果会被缓存，整个生命周期只算一次。
+func (s *ContactService) GetSelfInfo() *SelfInfo {
+	s.cacheMu.RLock()
+	var sampleUsername string
+	for _, c := range s.cache {
+		if c.TotalMessages >= 10 && !strings.Contains(c.Username, "@chatroom") {
+			sampleUsername = c.Username
+			break
+		}
+	}
+	s.cacheMu.RUnlock()
+	if sampleUsername == "" {
+		return &SelfInfo{}
+	}
+
+	tableName := db.GetTableName(sampleUsername)
+	for _, mdb := range s.dbMgr.MessageDBs {
+		id2wxid := make(map[int64]string)
+		rows, err := mdb.Query("SELECT rowid, user_name FROM Name2Id")
+		if err != nil {
+			continue
+		}
+		for rows.Next() {
+			var rid int64
+			var uname string
+			rows.Scan(&rid, &uname)
+			id2wxid[rid] = uname
+		}
+		rows.Close()
+
+		senderRows, err := mdb.Query(fmt.Sprintf(
+			"SELECT DISTINCT real_sender_id FROM [%s] WHERE real_sender_id > 0 LIMIT 10", tableName))
+		if err != nil {
+			continue
+		}
+		var senders []int64
+		for senderRows.Next() {
+			var sid int64
+			senderRows.Scan(&sid)
+			senders = append(senders, sid)
+		}
+		senderRows.Close()
+		if len(senders) == 0 {
+			continue
+		}
+
+		var contactRowID int64 = -1
+		for rid, wxid := range id2wxid {
+			if wxid == sampleUsername {
+				contactRowID = rid
+				break
+			}
+		}
+
+		for _, sid := range senders {
+			if sid != contactRowID {
+				if myWxid, ok := id2wxid[sid]; ok {
+					info := &SelfInfo{Wxid: myWxid}
+					s.dbMgr.ContactDB.QueryRow(
+						"SELECT COALESCE(small_head_url,''), COALESCE(nick_name,'') FROM contact WHERE username = ?", myWxid,
+					).Scan(&info.AvatarURL, &info.Nickname)
+					return info
+				}
+			}
+		}
+	}
+	return &SelfInfo{}
+}
+
+// loadContactAvatarMap 从联系人 DB 加载 wxid → small_head_url 映射
+func (s *ContactService) loadContactAvatarMap() map[string]string {
+	m := make(map[string]string)
+	rows, err := s.dbMgr.ContactDB.Query("SELECT username, COALESCE(small_head_url,'') FROM contact WHERE small_head_url != ''")
+	if err != nil {
+		return m
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var uname, url string
+		rows.Scan(&uname, &url)
+		if url != "" {
+			m[uname] = url
+		}
+	}
+	return m
 }
 
 // loadGroupAllMembers 从 chatroom_member 表获取群聊的完整成员列表（wxid → 显示名）
@@ -2650,13 +3036,30 @@ func (s *ContactService) computeGroupDetail(username string) {
 	tableName := db.GetTableName(username)
 	detail := &GroupDetail{DailyHeatmap: make(map[string]int), TypeDist: make(map[string]int), MemberRank: []MemberStat{}, TopWords: []WordCount{}}
 	// 用 wxid 作为 key，避免显示名重复导致的合并
-	memberMap := make(map[string]int64)      // wxid → 发言数
+	memberMap := make(map[string]int64)      // wxid → 发言数（全类型）
+	memberTextMap := make(map[string]int64)  // wxid → 文本消息数（Type==1），Skill 炼化真正能用的量
 	memberLastTs := make(map[string]int64)   // wxid → 最后发言 Unix 时间戳
 	memberFirstTs := make(map[string]int64)  // wxid → 首次发言 Unix 时间戳
 	memberNames := make(map[string]string)   // wxid → 显示名
 	wordCounts := make(map[string]int)
 
 	nameMap := s.loadContactNameMap()
+
+	// 群内「我的 CP」—— 引用消息里直接点名我 / 我点名他的，强信号
+	selfWxid := ""
+	if si := s.GetSelfInfo(); si != nil {
+		selfWxid = si.Wxid
+	}
+	myCPReplies := make(map[string]int) // otherWxid → 双向引用合计
+	myCPReferRe := regexp.MustCompile(`<chatusr>([^<]+)</chatusr>`)
+	const myCPMaxRaw = 128 * 1024
+
+	// 影响力指数：扫描阶段先收集 (ts, wxid)，扫完后排序算
+	type msgTsKind struct {
+		ts   int64
+		wxid string
+	}
+	var influenceSeq []msgTsKind
 
 	twDetail := s.timeWhere()
 	var textSamples []string
@@ -2686,17 +3089,25 @@ func (s *ContactService) computeGroupDetail(username string) {
 			dt := time.Unix(ts, 0).In(s.tz)
 			detail.HourlyDist[dt.Hour()]++
 			detail.WeeklyDist[int(dt.Weekday())]++
+			detail.WeeklyHourlyDist[int(dt.Weekday())][dt.Hour()]++
 			detail.DailyHeatmap[dt.Format("2006-01-02")]++
 			typeName := classifyMsgType(lt, content)
 			if typeName != "系统" { detail.TypeDist[typeName]++ }
 			if wxid, ok := idToWxid[senderID]; ok && wxid != "" {
 				memberMap[wxid]++
+				if (lt & 0xFFFF) == 1 {
+					memberTextMap[wxid]++
+				}
 				if ts > memberLastTs[wxid] { memberLastTs[wxid] = ts }
 				if cur, ok2 := memberFirstTs[wxid]; !ok2 || ts < cur { memberFirstTs[wxid] = ts }
 				if _, ok2 := memberNames[wxid]; !ok2 {
 					name := wxid
 					if n, ok3 := nameMap[wxid]; ok3 && n != "" { name = n }
 					memberNames[wxid] = name
+				}
+				// 影响力：收集时间 + 发言者，扫完后算
+				if typeName != "系统" {
+					influenceSeq = append(influenceSeq, msgTsKind{ts, wxid})
 				}
 			}
 			// 同时收集纯文本消息用于词云（合并到 Pass 1，避免第二次全表扫描）
@@ -2707,6 +3118,26 @@ func (s *ContactService) computeGroupDetail(username string) {
 				}
 				if txtForCloud != "" && !s.isSys(txtForCloud) {
 					textSamples = append(textSamples, wechatEmojiRe.ReplaceAllString(txtForCloud, ""))
+				}
+			}
+			// 「我的 CP」引用信号：lt=49 且 refermsg 里 chatusr 涉及我
+			// 严格限制 rawContent ≤128KB，避免对几 MB 的分享卡片跑 regex（40k 群 hang 教训）
+			if selfWxid != "" && (lt&0xFFFF) == 49 && len(rawContent) <= myCPMaxRaw && content != "" && strings.Contains(content, "<refermsg>") {
+				if wxid, ok := idToWxid[senderID]; ok && wxid != "" {
+					if m := myCPReferRe.FindStringSubmatch(content); len(m) == 2 {
+						refWxid := strings.TrimSpace(m[1])
+						if refWxid != "" && refWxid != wxid {
+							other := ""
+							if wxid == selfWxid {
+								other = refWxid
+							} else if refWxid == selfWxid {
+								other = wxid
+							}
+							if other != "" {
+								myCPReplies[other]++
+							}
+						}
+					}
 				}
 			}
 		}
@@ -2747,6 +3178,7 @@ func (s *ContactService) computeGroupDetail(username string) {
 			Speaker:          memberNames[wxid],
 			Username:         wxid,
 			Count:            cnt,
+			TextCount:        memberTextMap[wxid],
 			LastMessageTime:  lastTime,
 			FirstMessageTime: firstTime,
 			LastMessageTs:    memberLastTs[wxid],
@@ -2779,6 +3211,90 @@ func (s *ContactService) computeGroupDetail(username string) {
 	sort.Slice(detail.TopWords, func(i, j int) bool { return detail.TopWords[i].Count > detail.TopWords[j].Count })
 	if len(detail.TopWords) > 30 { detail.TopWords = detail.TopWords[:30] }
 
+	// 影响力指数：发言后 30 分钟内有别人回应的比例
+	detail.MyInfluenceScore = -1
+	if len(influenceSeq) >= 20 {
+		sort.Slice(influenceSeq, func(i, j int) bool { return influenceSeq[i].ts < influenceSeq[j].ts })
+		const replyWindow int64 = 1800 // 30 分钟
+		var myTotal, myReplied int
+		var grpTotal, grpReplied int
+		for i, m := range influenceSeq {
+			// 向后找第一条异于当前发言者且在 30min 内的消息
+			hasReply := false
+			for j := i + 1; j < len(influenceSeq); j++ {
+				if influenceSeq[j].ts-m.ts > replyWindow {
+					break
+				}
+				if influenceSeq[j].wxid != m.wxid {
+					hasReply = true
+					break
+				}
+			}
+			grpTotal++
+			if hasReply {
+				grpReplied++
+			}
+			if selfWxid != "" && m.wxid == selfWxid {
+				myTotal++
+				if hasReply {
+					myReplied++
+				}
+			}
+		}
+		if grpTotal > 0 {
+			detail.GroupBaseReplyRate = float64(grpReplied) / float64(grpTotal)
+		}
+		if myTotal >= 5 { // 我的发言 ≥5 条才算影响力
+			detail.MyReplyRate = float64(myReplied) / float64(myTotal)
+			// Score：我的回应率 / 群基线，封顶 2 倍后映射到 0-100
+			ratio := 1.0
+			if detail.GroupBaseReplyRate > 0 {
+				ratio = detail.MyReplyRate / detail.GroupBaseReplyRate
+			}
+			if ratio > 2 {
+				ratio = 2
+			}
+			detail.MyInfluenceScore = int(ratio * 50) // 1x = 50，2x = 100
+		}
+	}
+
+	// 我的群 CP Top 3（按引用双向合计降序；最少 2 次才入选）
+	if len(myCPReplies) > 0 {
+		type cpTmp struct {
+			wxid    string
+			replies int
+		}
+		all := make([]cpTmp, 0, len(myCPReplies))
+		for wxid, n := range myCPReplies {
+			if n >= 2 {
+				all = append(all, cpTmp{wxid, n})
+			}
+		}
+		sort.Slice(all, func(i, j int) bool { return all[i].replies > all[j].replies })
+		if len(all) > 3 {
+			all = all[:3]
+		}
+		if len(all) > 0 {
+			avatarMap := s.loadContactAvatarMap()
+			for _, c := range all {
+				name := memberNames[c.wxid]
+				if name == "" {
+					if n, ok := nameMap[c.wxid]; ok && n != "" {
+						name = n
+					} else {
+						name = c.wxid
+					}
+				}
+				detail.MyCPs = append(detail.MyCPs, MyCPEntry{
+					Username:    c.wxid,
+					DisplayName: name,
+					AvatarURL:   avatarMap[c.wxid],
+					Replies:     c.replies,
+				})
+			}
+		}
+	}
+
 	// 写入缓存，清除 computing 标记
 	s.groupDetailMu.Lock()
 	s.groupDetailCache[username] = detail
@@ -2788,12 +3304,13 @@ func (s *ContactService) computeGroupDetail(username string) {
 
 // GroupChatMessage 群聊单条消息（含发言者显示名）
 type GroupChatMessage struct {
-	Time    string `json:"time"`           // "HH:MM"
-	Speaker string `json:"speaker"`        // 发言者显示名
-	Content string `json:"content"`        // 消息内容
-	IsMine  bool   `json:"is_mine"`        // 是否是我发的
-	Type    int    `json:"type"`           // local_type
-	Date    string `json:"date,omitempty"` // "2024-03-15"，搜索结果中使用
+	Time      string `json:"time"`                  // "HH:MM"
+	Speaker   string `json:"speaker"`               // 发言者显示名
+	Content   string `json:"content"`               // 消息内容
+	IsMine    bool   `json:"is_mine"`               // 是否是我发的
+	Type      int    `json:"type"`                  // local_type
+	Date      string `json:"date,omitempty"`        // "2024-03-15"，搜索结果中使用
+	AvatarURL string `json:"avatar_url,omitempty"`  // 发言者头像 URL（有联系人记录时返回）
 }
 
 // GetGroupDayMessages 返回群聊某一天的聊天记录
@@ -2808,6 +3325,7 @@ func (s *ContactService) GetGroupDayMessages(username, date string) []GroupChatM
 	dayEnd := dayStart + 86400
 
 	nameMap := s.loadContactNameMap()
+	avatarMap := s.loadContactAvatarMap()
 
 	var msgs []GroupChatMessage
 	for _, mdb := range s.dbMgr.MessageDBs {
@@ -2906,11 +3424,12 @@ func (s *ContactService) GetGroupDayMessages(username, date string) []GroupChatM
 			}
 
 			msgs = append(msgs, GroupChatMessage{
-				Time:    time.Unix(ts, 0).In(s.tz).Format("15:04"),
-				Speaker: speaker,
-				Content: content,
-				IsMine:  false, // 群聊暂不区分"我"，仅展示发言者
-				Type:    lt,
+				Time:      time.Unix(ts, 0).In(s.tz).Format("15:04"),
+				Speaker:   speaker,
+				Content:   content,
+				IsMine:    false,
+				Type:      lt,
+				AvatarURL: avatarMap[speakerWxid],
 			})
 		}
 		rows.Close()
@@ -2939,6 +3458,7 @@ func (s *ContactService) SearchGroupMessages(username, query, speaker string) []
 	}
 
 	nameMap := s.loadContactNameMap()
+	avatarMap := s.loadContactAvatarMap()
 	lowerQuery := strings.ToLower(query)
 	var msgs []GroupChatMessage
 
@@ -3006,12 +3526,13 @@ func (s *ContactService) SearchGroupMessages(username, query, speaker string) []
 
 			t := time.Unix(ts, 0).In(s.tz)
 			msgs = append(msgs, GroupChatMessage{
-				Time:    t.Format("15:04"),
-				Date:    t.Format("2006-01-02"),
-				Speaker: speakerName,
-				Content: content,
-				IsMine:  false,
-				Type:    1,
+				Time:      t.Format("15:04"),
+				Date:      t.Format("2006-01-02"),
+				Speaker:   speakerName,
+				Content:   content,
+				IsMine:    false,
+				Type:      1,
+				AvatarURL: avatarMap[speakerWxid],
 			})
 		}
 		rows.Close()
@@ -4149,6 +4670,9 @@ type RelationshipGraph struct {
 	Nodes       []RelationshipNode `json:"nodes"`
 	Edges       []RelationshipEdge `json:"edges"`
 	Communities []CommunityInfo    `json:"communities,omitempty"` // 社区检测结果
+	// Modularity 是 Louvain 划分的模块度 Q；< 0.3 视为「没有明显的小圈子」
+	// 前端用它决定是否渲染社区列表 / 改用"群内互动较散"的提示
+	Modularity float64 `json:"modularity"`
 }
 
 // GetGroupRelationships 群聊人物关系（lazy load + 缓存，异步计算）
@@ -4178,18 +4702,49 @@ func (s *ContactService) GetGroupRelationships(username string) *RelationshipGra
 }
 
 func (s *ContactService) computeGroupRelationships(username string) {
+	started := time.Now()
+	// 兜底：任何 panic 或 early return 都要清掉 computing 标志，否则前端会永远
+	// 看到"正在分析"转圈。之前 40k 条消息的群查了半小时没出结果，就是因为
+	// 中间某步 panic 没被捕获，standing committing 永远为 true。
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[GROUPREL] %s panic: %v\n%s", username, r, debug.Stack())
+		}
+		s.groupDetailMu.Lock()
+		if _, ok := s.groupRelCache[username]; !ok {
+			// panic 或其他原因没写成功 → 放一个空图，让前端拿到"分析失败但已结束"
+			s.groupRelCache[username] = &RelationshipGraph{
+				Nodes: []RelationshipNode{}, Edges: []RelationshipEdge{},
+				Communities: []CommunityInfo{},
+			}
+		}
+		delete(s.groupRelComputing, username)
+		s.groupDetailMu.Unlock()
+		log.Printf("[GROUPREL] %s 耗时 %.1fs", username, time.Since(started).Seconds())
+	}()
+
 	tableName := db.GetTableName(username)
 	nameMap := s.loadContactNameMap()
 	tw := s.timeWhere()
+	log.Printf("[GROUPREL] %s 开始分析，扫描 %d 个 message DB", username, len(s.dbMgr.MessageDBs))
 
-	// 收集所有消息的 (timestamp, senderName, content) 按时间排序
+	// 收集所有消息的 (timestamp, senderName, content) 按时间排序。
+	// 同时解析 refermsg（局部类型 49 + XML 里 <refermsg>...<chatusr>WXID</chatusr>），
+	// 把被引用者的 display name 存进 referTarget —— 这是小圈子里唯一可靠的
+	// 「A 在回复 B」信号。老版本那个 120s 滑窗在活跃群里误判极多（午饭高峰
+	// 任意两人都会被判成互动），是之前"所有人挤在一个大圈"的主因。
 	type msgEntry struct {
-		ts     int64
-		sender string
-		content string
+		ts          int64
+		sender      string // display name
+		senderWxid  string // 原始 wxid，用于排除"引用了自己"之类
+		content     string
+		referTarget string // 被引用者的 display name；为空 = 非引用消息
 	}
 	var allMsgs []msgEntry
 	memberMsgs := make(map[string]int64)
+
+	// 匹配 <chatusr>WXID</chatusr>。WCDB 的 refermsg XML 就这一个字段可靠地标识被引用者。
+	referRe := regexp.MustCompile(`<chatusr>([^<]+)</chatusr>`)
 
 	for _, mdb := range s.dbMgr.MessageDBs {
 		idToWxid := make(map[int64]string)
@@ -4223,26 +4778,53 @@ func (s *ContactService) computeGroupRelationships(username string) {
 				continue
 			}
 			speaker := wxid
-			if name, ok2 := nameMap[wxid]; ok2 {
+			if name, ok2 := nameMap[wxid]; ok2 && name != "" {
 				speaker = name
 			}
 			memberMsgs[speaker]++
 
 			content := ""
-			if lt == 1 {
+			var referTarget string
+			// 只解文本和 refermsg 需要看的消息类型。大附件类的 lt==49（链接分享、
+			// 小程序卡片带大图 base64）动辄几 MB，对每条都跑 strings.Contains + regex
+			// 是爆炸性的（40k 条 × 几 MB 文本扫描 = 几十 GB 工作量，之前那个群卡
+			// 半小时大概率就是这个原因）。refermsg XML 实际就几百字节，卡到 128KB 原始
+			// 的消息肯定不是引用。
+			const maxRawBytes = 128 * 1024
+			if (lt == 1 || lt == 49) && len(rawContent) <= maxRawBytes {
 				content = decodeGroupContent(rawContent, ct)
-				// 去掉群聊消息的 "wxid:\n" 前缀
-				if idx := strings.Index(content, ":\n"); idx > 0 && idx < 80 {
-					content = content[idx+2:]
+				if len(content) > 256*1024 {
+					// 压缩后膨胀超大也放弃，避免后续扫描爆炸
+					content = ""
+				} else if lt == 1 {
+					// 群聊文本前缀 "wxid:\n"，剥掉后才是真内容
+					if idx := strings.Index(content, ":\n"); idx > 0 && idx < 80 {
+						content = content[idx+2:]
+					}
+				} else if lt == 49 && strings.Contains(content, "<refermsg>") {
+					if m := referRe.FindStringSubmatch(content); len(m) == 2 {
+						refWxid := strings.TrimSpace(m[1])
+						if refWxid != "" && refWxid != wxid {
+							if name, ok := nameMap[refWxid]; ok && name != "" {
+								referTarget = name
+							} else {
+								referTarget = refWxid
+							}
+						}
+					}
 				}
 			}
-			allMsgs = append(allMsgs, msgEntry{ts: ts, sender: speaker, content: content})
+			allMsgs = append(allMsgs, msgEntry{
+				ts: ts, sender: speaker, senderWxid: wxid,
+				content: content, referTarget: referTarget,
+			})
 		}
 		rows.Close()
 	}
 
 	// 按时间排序（跨 DB 合并后可能乱序）
 	sort.Slice(allMsgs, func(i, j int) bool { return allMsgs[i].ts < allMsgs[j].ts })
+	log.Printf("[GROUPREL] %s 扫描完成：%d 条消息，%d 个成员", username, len(allMsgs), len(memberMsgs))
 
 	// 建立所有已知成员名集合（用于 @mention 匹配）
 	memberNames := make(map[string]bool)
@@ -4271,12 +4853,12 @@ func (s *ContactService) computeGroupRelationships(username string) {
 		return edgeMap[k]
 	}
 
-	// 连续消息互动检测（2 分钟内的不同发言人视为互动）
-	for i := 1; i < len(allMsgs); i++ {
-		prev := allMsgs[i-1]
-		curr := allMsgs[i]
-		if curr.sender != prev.sender && curr.ts-prev.ts <= 120 {
-			getEdge(prev.sender, curr.sender).replies++
+	// 真实引用关系：消息类型 49 且 refermsg.chatusr 是群成员 → 计入 A→B 的回复。
+	// 这比原来的"2 分钟窗口"靠谱得多，但在不爱用引用的群里密度会低，正好让
+	// 后面的模块度兜底发挥作用（Q<0.3 时告诉用户"该群没有明显小圈子"）。
+	for _, m := range allMsgs {
+		if m.referTarget != "" && m.referTarget != m.sender && memberNames[m.referTarget] {
+			getEdge(m.sender, m.referTarget).replies++
 		}
 	}
 
@@ -4295,12 +4877,27 @@ func (s *ContactService) computeGroupRelationships(username string) {
 		}
 	}
 
+	// 自适应阈值：基准 3，并把中位数的 10% 作为下限。
+	// 对稀疏群不影响（阈值仍 3），对"人人都有一大堆弱连接"的稠密群能
+	// 把底噪刷掉，避免 Louvain 合并时把噪声当成真实聚类。
+	allWeights := make([]int, 0, len(edgeMap))
+	for _, e := range edgeMap {
+		allWeights = append(allWeights, e.replies+e.mentions*2)
+	}
+	sort.Ints(allWeights)
+	threshold := 3
+	if n := len(allWeights); n > 0 {
+		if adapt := allWeights[n/2] / 10; adapt > threshold {
+			threshold = adapt
+		}
+	}
+
 	// 构建结果（过滤弱关系）
 	var edges []RelationshipEdge
 	nodeInEdge := make(map[string]bool)
 	for k, e := range edgeMap {
 		weight := e.replies + e.mentions*2
-		if weight < 3 {
+		if weight < threshold {
 			continue
 		}
 		edges = append(edges, RelationshipEdge{
@@ -4331,8 +4928,14 @@ func (s *ContactService) computeGroupRelationships(username string) {
 		edges = []RelationshipEdge{}
 	}
 
-	// ── Label Propagation 社区检测 ──
-	detectCommunities(nodes, edges)
+	log.Printf("[GROUPREL] %s 边过滤完成：阈值 %d，保留 %d 条关系，%d 个节点", username, threshold, len(edges), len(nodes))
+
+	// ── 社区检测（Louvain 单层 + 模块度）──
+	// 换掉原来的 Label Propagation：LPA 在稠密图上会塌缩成一个大标签，
+	// 这是用户最常抱怨的"所有人都在一个圈里"的根源。Louvain 按模块度收益
+	// 决定合并，稀疏/无显著结构的群会直接停在 Q≈0，前端能据此提示"无明显小圈子"。
+	modularity := louvainCommunities(nodes, edges)
+	log.Printf("[GROUPREL] %s Louvain 完成：模块度 Q=%.3f", username, modularity)
 
 	// 汇总社区信息
 	communityMembers := make(map[int][]string)
@@ -4345,79 +4948,105 @@ func (s *ContactService) computeGroupRelationships(username string) {
 	}
 	sort.Slice(communities, func(i, j int) bool { return communities[i].Size > communities[j].Size })
 
-	graph := &RelationshipGraph{Nodes: nodes, Edges: edges, Communities: communities}
+	graph := &RelationshipGraph{Nodes: nodes, Edges: edges, Communities: communities, Modularity: modularity}
 	s.groupDetailMu.Lock()
 	s.groupRelCache[username] = graph
 	delete(s.groupRelComputing, username)
 	s.groupDetailMu.Unlock()
 }
 
-// detectCommunities 使用 Label Propagation 算法为节点分配社区标签。
-// 每个节点初始化为独立社区，然后迭代地将节点标签更新为其邻居中权重最大的标签。
-func detectCommunities(nodes []RelationshipNode, edges []RelationshipEdge) {
-	if len(nodes) == 0 {
-		return
+// louvainCommunities 对节点做单层 Louvain 社区检测，把结果写回 nodes[i].Community，
+// 并返回最终划分的模块度 Q。Q ∈ [-0.5, 1]，一般 Q<0.3 即视为"没有清晰的社区结构"。
+//
+// 实现说明：
+//   - 单层（不做图粗化）。规模 ≤200 边、~50 节点的群聊够用；多层版本对噪声图反而更容易
+//     合并出假社区，简单版配上模块度下限刚好。
+//   - ΔQ 移动准则采用 Blondel 等人的增量公式：先把 i 从当前社区移除，再对每个邻居社区
+//     算 ΔQ = k_{i,C}/m - k_i·Σ_C/(2m²)，取最大且 > 0 的那个。
+func louvainCommunities(nodes []RelationshipNode, edges []RelationshipEdge) float64 {
+	n := len(nodes)
+	if n == 0 {
+		return 0
 	}
 
-	// 节点 ID → index
-	idIdx := make(map[string]int, len(nodes))
-	for i, n := range nodes {
-		idIdx[n.ID] = i
-		nodes[i].Community = i // 初始：每人一个社区
+	idIdx := make(map[string]int, n)
+	for i, nd := range nodes {
+		idIdx[nd.ID] = i
+		nodes[i].Community = i
 	}
 
-	// 邻接表（带权重）
 	type neighbor struct {
-		idx    int
-		weight int
+		idx int
+		w   int
 	}
-	adj := make([][]neighbor, len(nodes))
+	adj := make([][]neighbor, n)
+	degree := make([]int, n) // 加权度
+	var m2 int               // 2m
 	for _, e := range edges {
 		si, ok1 := idIdx[e.Source]
 		ti, ok2 := idIdx[e.Target]
-		if !ok1 || !ok2 {
+		if !ok1 || !ok2 || si == ti {
 			continue
 		}
 		adj[si] = append(adj[si], neighbor{ti, e.Weight})
 		adj[ti] = append(adj[ti], neighbor{si, e.Weight})
+		degree[si] += e.Weight
+		degree[ti] += e.Weight
+		m2 += 2 * e.Weight
+	}
+	if m2 == 0 {
+		return 0
+	}
+	m := float64(m2) / 2.0
+
+	// commDeg[c] = Σ_{i ∈ c} degree[i]
+	commDeg := make(map[int]int, n)
+	for i := 0; i < n; i++ {
+		commDeg[i] = degree[i]
 	}
 
-	// 迭代 Label Propagation（最多 50 轮）
-	order := make([]int, len(nodes))
+	order := make([]int, n)
 	for i := range order {
 		order[i] = i
 	}
-	for iter := 0; iter < 50; iter++ {
-		// 随机化顺序（用简单 shuffle）
-		for i := len(order) - 1; i > 0; i-- {
-			j := int(time.Now().UnixNano()) % (i + 1)
-			if j < 0 {
-				j = -j
-			}
-			order[i], order[j] = order[j], order[i]
-		}
 
+	// 固定随机种子避免每次结果都跳；用户多次打开同一个群应该看到相同的划分
+	rng := rand.New(rand.NewSource(1))
+
+	for iter := 0; iter < 20; iter++ {
+		rng.Shuffle(len(order), func(i, j int) { order[i], order[j] = order[j], order[i] })
 		changed := false
-		for _, ni := range order {
-			if len(adj[ni]) == 0 {
+		for _, i := range order {
+			if len(adj[i]) == 0 {
 				continue
 			}
-			// 统计邻居标签的加权投票
-			votes := make(map[int]int)
-			for _, nb := range adj[ni] {
-				votes[nodes[nb.idx].Community] += nb.weight
+			curComm := nodes[i].Community
+			ki := degree[i]
+
+			// k_{i,C} : i 到每个邻居社区的边权总和（不含自环）
+			kiIn := make(map[int]int, len(adj[i]))
+			for _, e := range adj[i] {
+				kiIn[nodes[e.idx].Community] += e.w
 			}
-			// 选权重最大的标签
-			bestLabel := nodes[ni].Community
-			bestWeight := 0
-			for label, w := range votes {
-				if w > bestWeight || (w == bestWeight && label < bestLabel) {
-					bestWeight = w
-					bestLabel = label
+
+			// 先把 i 从当前社区拿出
+			commDeg[curComm] -= ki
+
+			bestComm := curComm
+			bestDelta := 0.0
+			for c, kin := range kiIn {
+				// ΔQ = k_{i,C}/m - k_i · Σ_C / (2m²)
+				delta := float64(kin)/m - float64(ki)*float64(commDeg[c])/(2.0*m*m)
+				// 打破并列时倾向编号小的社区，保证收敛稳定
+				if delta > bestDelta || (delta == bestDelta && c < bestComm && delta > 0) {
+					bestDelta = delta
+					bestComm = c
 				}
 			}
-			if bestLabel != nodes[ni].Community {
-				nodes[ni].Community = bestLabel
+
+			commDeg[bestComm] += ki
+			if bestComm != curComm {
+				nodes[i].Community = bestComm
 				changed = true
 			}
 		}
@@ -4436,4 +5065,25 @@ func detectCommunities(nodes []RelationshipNode, edges []RelationshipEdge) {
 		}
 		nodes[i].Community = labelMap[nodes[i].Community]
 	}
+
+	// 计算模块度 Q = Σ_c [ L_c/m - (D_c/2m)² ]
+	// L_c = 社区内部边权和；D_c = 社区内所有节点度之和。
+	// 由于 adj 是无向双向存，遍历 (i, 邻居) 时每条内部边会被计两次，所以最后除以 2。
+	commInEdge2 := make(map[int]int) // = 2 * L_c
+	commTotDeg := make(map[int]int)
+	for i := 0; i < n; i++ {
+		c := nodes[i].Community
+		commTotDeg[c] += degree[i]
+		for _, e := range adj[i] {
+			if nodes[e.idx].Community == c {
+				commInEdge2[c] += e.w
+			}
+		}
+	}
+	Q := 0.0
+	for c, dc := range commTotDeg {
+		ein2 := commInEdge2[c]
+		Q += float64(ein2)/(2.0*m) - float64(dc)*float64(dc)/(4.0*m*m)
+	}
+	return Q
 }

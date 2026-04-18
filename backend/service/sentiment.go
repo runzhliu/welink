@@ -31,7 +31,7 @@ var positiveWords = []string{
 	// 喜悦 / 开心
 	"开心", "高兴", "快乐", "幸福", "愉快", "欢喜", "喜悦", "欣慰", "心情好",
 	// 喜爱
-	"喜欢", "爱", "爱你", "宝贝", "亲爱", "心动", "暗恋",
+	"喜欢", "爱", "爱你", "宝贝", "亲爱", "心动", "暗恋", "好爱", "太爱了", "好喜欢",
 	// 赞扬 / 肯定
 	"棒", "厉害", "牛", "太棒了", "很棒", "好棒", "优秀", "出色", "聪明", "能干",
 	"完美", "漂亮", "好看", "帅", "美", "可爱", "赞", "666", "6666",
@@ -40,21 +40,29 @@ var positiveWords = []string{
 	// 成功 / 顺利
 	"成功", "顺利", "通过", "搞定", "完成", "达成", "实现", "进步", "提升",
 	// 期待 / 惊喜
-	"期待", "惊喜", "好期待", "太好了", "太棒了", "好激动", "激动", "兴奋",
+	"期待", "惊喜", "好期待", "太好了", "好激动", "激动", "兴奋",
 	// 满意 / 舒适
-	"满意", "舒服", "舒适", "享受", "放松", "轻松", "愉悦",
+	"满意", "舒服", "舒适", "享受", "放松", "轻松", "愉悦", "爽", "爽歪歪", "舒坦", "美滋滋", "美美哒",
 	// 加油 / 支持
 	"加油", "支持", "鼓励", "相信", "祝贺", "恭喜", "庆祝", "欢迎",
 	// 有趣
 	"有趣", "好玩", "好笑", "开怀", "哈哈哈哈哈",
 	// 甜蜜
 	"甜", "甜蜜", "幸运", "美好", "美妙", "好幸福",
+	// 网络用语（2020+）
+	"绝了", "绝绝子", "太绝了", "yyds", "YYDS",
+	"笑死", "笑不活", "乐坏", "笑岔气",
+	"好耶", "起飞", "awsl", "AWSL", "神仙", "爱了爱了",
+	"真香", "上头", "好香", "给力", "嘎嘎", "高能", "芜湖", "泪目",
+	"稳了", "值了", "赢麻了", "满血", "入股不亏",
+	"好磕", "磕到了", "嘻嘻嘻",
+	"happy", "nice", "good",
 }
 
 var negativeWords = []string{
 	// 悲伤
 	"难过", "伤心", "哭", "哭了", "哭泣", "流泪", "委屈", "心疼", "痛苦",
-	"心碎", "想哭", "好难受", "难受", "难受死了",
+	"心碎", "想哭", "好难受", "难受", "难受死了", "我哭了",
 	// 焦虑 / 担忧
 	"焦虑", "担心", "害怕", "恐惧", "紧张", "忐忑", "不安", "惶恐", "慌",
 	// 愤怒
@@ -63,17 +71,25 @@ var negativeWords = []string{
 	// 失望 / 沮丧
 	"失望", "沮丧", "遗憾", "后悔", "可惜", "无奈", "心灰意冷",
 	// 疲惫 / 痛苦
-	"累", "累死了", "好累", "疲惫", "疲倦", "精疲力竭",
-	"头疼", "头痛", "胃疼", "难受", "不舒服", "生病", "发烧",
+	"累", "累死了", "好累", "好累啊", "心累", "疲惫", "疲倦", "精疲力竭", "身心俱疲",
+	"头疼", "头痛", "胃疼", "不舒服", "生病", "发烧",
 	// 厌烦
-	"烦", "烦恼", "烦透了", "烦死了", "烦人", "无聊", "厌烦", "厌倦",
+	"烦", "烦恼", "烦透了", "烦死了", "烦人", "无聊", "厌烦", "厌倦", "烦躁", "焦躁",
 	// 孤独
-	"孤独", "寂寞", "孤单", "好孤独", "一个人",
+	"孤独", "寂寞", "孤单", "好孤独", "一个人", "冷漠", "空虚",
 	// 绝望 / 崩溃
 	"崩溃", "绝望", "心塞", "好绝望", "撑不住", "坚持不下去",
 	// 负面事件
 	"失败", "失去", "分手", "离开", "死", "完了", "糟糕", "糟透了",
 	"倒霉", "运气差", "坏运气",
+	// 网络用语（2020+）
+	"栓Q", "栓q", "裂开", "我裂开", "摆烂", "躺平",
+	"emo", "我emo", "emo了",
+	"血压高", "气抖冷", "社死", "人麻了", "心态崩", "心态炸",
+	"好丧", "丧了", "寄了", "完蛋", "完蛋了", "完犊子",
+	"想死", "不想动", "不想活", "不想说话",
+	"窒息", "难顶", "顶不住", "受不了", "我傻了",
+	"sad", "sigh",
 }
 
 // intensifiers 程度副词
@@ -86,6 +102,50 @@ var intensifiers = map[string]float64{
 
 // negations 否定词
 var negations = []string{"不", "没", "别", "莫", "勿", "未", "非", "无", "没有", "从未", "从来不"}
+
+// ---- 表情情感映射 ----
+
+// wechatEmojiSentiment 微信文字化表情 [xxx] 的极性
+// 值域 [-1, 1]；只收录极性明确的表情。
+var wechatEmojiSentiment = map[string]float64{
+	// 积极
+	"偷笑": 0.8, "呲牙": 0.8, "大笑": 1.0, "憨笑": 0.7, "悠闲": 0.5, "坏笑": 0.5,
+	"机智": 0.5, "色": 0.4, "流口水": 0.5, "喜极而泣": 0.9, "开心": 0.9, "嘿哈": 0.8,
+	"加油": 0.6, "666": 0.9, "OK": 0.5, "ok": 0.5, "赞": 0.8, "强": 0.7,
+	"好的": 0.5, "玫瑰": 0.9, "爱心": 1.0, "抱抱": 0.8, "亲亲": 0.9, "拥抱": 0.9,
+	"庆祝": 0.9, "鞭炮": 0.9, "礼物": 0.8, "福": 0.7, "红包": 0.7,
+	"得意": 0.6, "可爱": 0.9, "撒娇": 0.7, "害羞": 0.6, "玫瑰花": 0.9, "握手": 0.3,
+	"鼓掌": 0.8, "勾引": 0.4,
+	// 消极
+	"流泪": -0.9, "难过": -0.9, "大哭": -1.0, "委屈": -0.9, "抓狂": -0.8, "快哭了": -0.8,
+	"发怒": -1.0, "生病": -0.7, "骷髅": -0.8, "伤心": -0.9, "失望": -0.8, "皱眉": -0.6,
+	"打脸": -0.5, "无语": -0.5, "晕": -0.5, "衰": -0.7, "惊恐": -0.7, "尴尬": -0.5,
+	"白眼": -0.5, "吐": -0.7, "再见": -0.4,
+}
+
+// unicodeEmojiSentiment 常见 unicode emoji 的极性
+var unicodeEmojiSentiment = map[string]float64{
+	// 积极
+	"😀": 0.8, "😁": 0.8, "😂": 0.9, "🤣": 0.9, "😃": 0.8, "😄": 0.8, "😅": 0.5,
+	"😆": 0.9, "😊": 0.8, "😇": 0.7, "🙂": 0.4, "😉": 0.5, "😌": 0.5,
+	"😍": 1.0, "🥰": 1.0, "😘": 0.9, "😗": 0.7, "😙": 0.7, "😚": 0.8,
+	"😋": 0.7, "😛": 0.5, "😜": 0.6, "🤪": 0.6, "😝": 0.5, "🤗": 0.7,
+	"🤭": 0.5, "🥳": 1.0, "🤩": 1.0, "😎": 0.6,
+	"❤": 1.0, "❤️": 1.0, "♥": 1.0, "💕": 1.0, "💖": 1.0, "💗": 1.0, "💓": 1.0,
+	"💞": 0.9, "💝": 0.9, "💘": 0.9, "👍": 0.8, "👏": 0.8, "🎉": 0.9, "🎊": 0.9,
+	"🥂": 0.8, "🍻": 0.8, "💐": 0.8, "🌹": 0.8, "🌸": 0.6, "🌈": 0.8,
+	"⭐": 0.5, "✨": 0.5, "🎈": 0.7, "🙏": 0.5,
+	// 消极
+	"😢": -0.9, "😭": -1.0, "😔": -0.7, "😞": -0.7, "😟": -0.6, "😕": -0.5,
+	"🙁": -0.5, "☹": -0.6, "☹️": -0.6, "😣": -0.7, "😖": -0.8, "😩": -0.9,
+	"😫": -0.9, "😤": -0.6, "😠": -0.9, "😡": -1.0, "🤬": -1.0, "💢": -0.8,
+	"😨": -0.8, "😰": -0.8, "😥": -0.6, "😓": -0.6, "😪": -0.4, "😵": -0.6,
+	"🥺": -0.4, "💔": -1.0, "🤒": -0.6, "🤕": -0.6, "🤢": -0.8, "🤮": -0.9,
+	"🫠": -0.5, "🫣": -0.4, "🫢": -0.3,
+}
+
+// wechatBracketTag 只在本文件用，识别微信 [xxx] 文字表情
+// 注意：wechatEmojiRe 定义在 contact_service.go，作用是 strip；这里需要单独迭代匹配。
 
 // ---- 句子级评分 ----
 
@@ -140,21 +200,138 @@ func isKnownWord(w string) bool {
 	return false
 }
 
+// endsWithQuestion 判断文本是否是疑问句（末尾 ?/？/吗 等）
+// 疑问句里的情感词可能反相，不参与打分。
+func endsWithQuestion(text string) bool {
+	trimmed := strings.TrimRight(text, " \t\n\r.。…~～")
+	runes := []rune(trimmed)
+	if len(runes) == 0 {
+		return false
+	}
+	last := runes[len(runes)-1]
+	if last == '?' || last == '？' {
+		return true
+	}
+	// 末尾 "吗" 几乎总是疑问句粒子（"你好吗"），但太短的不算
+	if len(runes) >= 3 && last == '吗' {
+		return true
+	}
+	return false
+}
+
+// hasExclamation 感叹号 = 情绪强度加码
+func hasExclamation(text string) bool {
+	return strings.ContainsAny(text, "!！")
+}
+
+type scoredItem struct {
+	val    float64 // +1 positive, -1 negative
+	weight float64
+}
+
+// scoreEmojis 提取并评分文本中的微信 [xxx] 和 unicode emoji，
+// 返回 emoji 得分列表 + 去掉 emoji 后的纯文本。
+func scoreEmojis(text string) ([]scoredItem, string) {
+	var out []scoredItem
+
+	// 微信文字表情 [xxx]
+	for _, m := range wechatEmojiRe.FindAllString(text, -1) {
+		inner := strings.Trim(m, "[]")
+		if v, ok := wechatEmojiSentiment[inner]; ok {
+			out = append(out, scoredItem{val: v, weight: 1.0})
+		}
+	}
+	stripped := wechatEmojiRe.ReplaceAllString(text, "")
+
+	// Unicode emoji：先查 2-rune 组合（带 VS-16 选择符 ❤️ 等），再查单 rune
+	runes := []rune(stripped)
+	i := 0
+	var rebuilt strings.Builder
+	for i < len(runes) {
+		if i+1 < len(runes) {
+			two := string(runes[i : i+2])
+			if v, ok := unicodeEmojiSentiment[two]; ok {
+				out = append(out, scoredItem{val: v, weight: 1.0})
+				i += 2
+				continue
+			}
+		}
+		one := string(runes[i])
+		if v, ok := unicodeEmojiSentiment[one]; ok {
+			out = append(out, scoredItem{val: v, weight: 1.0})
+			i++
+			continue
+		}
+		rebuilt.WriteRune(runes[i])
+		i++
+	}
+
+	return out, rebuilt.String()
+}
+
 // scoreSentence 对单句打分，返回 0~1（0.5 为中性）
-// 使用滑动窗口：否定词影响后 4 个 token；程度副词影响紧接的情感词
+// 词典匹配 + 表情识别 + 否定词窗口（4 tokens）+ 程度副词紧邻修饰 + 疑问句剔除 + 感叹号加权
 func scoreSentence(text string) (float64, bool) {
 	text = strings.TrimSpace(text)
 	if len([]rune(text)) < 2 {
 		return 0.5, false
 	}
 
-	tokens := tokenize(text)
-
-	type scored struct {
-		val    float64 // +1 positive, -1 negative
-		weight float64
+	// 疑问句：情感词极性不可靠（"你开心吗？" 是在询问，不是陈述开心）
+	if endsWithQuestion(text) {
+		return 0.5, false
 	}
-	var scores []scored
+
+	// 先提取表情得分 + 去掉 emoji 留纯文本
+	emojiScores, plain := scoreEmojis(text)
+
+	// 纯文本太短时只靠 emoji 打分
+	plain = strings.TrimSpace(plain)
+	var wordScores []scoredItem
+	if len([]rune(plain)) >= 2 {
+		wordScores = scoreWords(plain)
+	}
+
+	allScores := append(emojiScores, wordScores...)
+	if len(allScores) == 0 {
+		return 0.5, false
+	}
+
+	// 加权平均
+	sumW := 0.0
+	sumV := 0.0
+	for _, s := range allScores {
+		sumW += s.weight
+		sumV += s.val * s.weight
+	}
+	ratio := sumV / sumW // [-1, 1]
+
+	// 感叹号增强情绪强度
+	if hasExclamation(text) {
+		ratio *= 1.3
+		if ratio > 1.0 {
+			ratio = 1.0
+		}
+		if ratio < -1.0 {
+			ratio = -1.0
+		}
+	}
+
+	// 映射到 [0.1, 0.9]
+	score := 0.5 + ratio*0.4
+	if score < 0.1 {
+		score = 0.1
+	}
+	if score > 0.9 {
+		score = 0.9
+	}
+
+	return math2dp(score), true
+}
+
+// scoreWords 对去掉 emoji 的纯文本做词典打分
+func scoreWords(text string) []scoredItem {
+	tokens := tokenize(text)
 
 	negMap := make(map[string]bool)
 	for _, n := range negations {
@@ -174,6 +351,7 @@ func scoreSentence(text string) (float64, bool) {
 	const negWindow = 4
 	negCountdown := 0
 
+	var scores []scoredItem
 	for i, tok := range tokens {
 		if negMap[tok] {
 			negCountdown = negWindow
@@ -211,32 +389,9 @@ func scoreSentence(text string) (float64, bool) {
 			polarity = -polarity
 		}
 
-		scores = append(scores, scored{val: polarity, weight: weight})
+		scores = append(scores, scoredItem{val: polarity, weight: weight})
 	}
-
-	if len(scores) == 0 {
-		return 0.5, false
-	}
-
-	// 加权平均
-	sumW := 0.0
-	sumV := 0.0
-	for _, s := range scores {
-		sumW += s.weight
-		sumV += s.val * s.weight
-	}
-	ratio := sumV / sumW // [-1, 1]
-
-	// 映射到 [0.1, 0.9]
-	score := 0.5 + ratio*0.4
-	if score < 0.1 {
-		score = 0.1
-	}
-	if score > 0.9 {
-		score = 0.9
-	}
-
-	return math2dp(score), true
+	return scores
 }
 
 func min(a, b int) int {
@@ -300,11 +455,7 @@ func (s *ContactService) GetSentimentAnalysis(username string, includeMine bool)
 			if len([]rune(text)) < 2 || s.isSys(text) {
 				continue
 			}
-			// 去掉微信表情符号
-			text = wechatEmojiRe.ReplaceAllString(text, "")
-			if len([]rune(text)) < 2 {
-				continue
-			}
+			// 注：这里不再预先 strip [捂脸] 类微信表情，scoreSentence 内部会提取评分后再 strip
 
 			month := time.Unix(ts, 0).In(s.tz).Format("2006-01")
 			if buckets[month] == nil {
