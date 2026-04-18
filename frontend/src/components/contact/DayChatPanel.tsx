@@ -7,20 +7,24 @@ import { X, Loader2 } from 'lucide-react';
 import type { ChatMessage } from '../../types';
 import { contactsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { useSelfInfo } from '../../contexts/SelfInfoContext';
 import { useEscape } from '../../hooks/useEscape';
+import { avatarSrc } from '../../utils/avatar';
 
 interface DayChatPanelProps {
   username: string;
   date: string;       // "2024-03-15"
   dayCount: number;   // 当天消息数
   contactName: string;
+  contactAvatarUrl?: string;
   onClose: () => void;
 }
 
 export const DayChatPanel: React.FC<DayChatPanelProps> = ({
-  username, date, dayCount, contactName, onClose,
+  username, date, dayCount, contactName, contactAvatarUrl, onClose,
 }) => {
   const { privacyMode } = usePrivacyMode();
+  const selfInfo = useSelfInfo();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const topRef = useRef<HTMLDivElement>(null);
@@ -45,6 +49,8 @@ export const DayChatPanel: React.FC<DayChatPanelProps> = ({
     const [y, m, day] = d.split('-');
     return `${y}年${parseInt(m)}月${parseInt(day)}日`;
   };
+
+  const contactAvatar = contactAvatarUrl ? avatarSrc(contactAvatarUrl) : '';
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-8 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
@@ -77,12 +83,20 @@ export const DayChatPanel: React.FC<DayChatPanelProps> = ({
             <>
             <div ref={topRef} />
             {messages.map((msg, i) => (
-              <div key={i} className={`flex items-end gap-2 ${msg.is_mine ? 'flex-row-reverse' : 'flex-row'}`}>
-                {/* Avatar dot */}
-                <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black
-                  ${msg.is_mine ? 'bg-[#07c160]' : 'bg-[#576b95]'}`}>
-                  {msg.is_mine ? '我' : <span className={privacyMode ? 'privacy-blur' : ''}>{contactName.charAt(0)}</span>}
-                </div>
+              <div key={i} className={`flex items-start gap-2 ${msg.is_mine ? 'flex-row-reverse' : 'flex-row'}`}>
+                {msg.is_mine ? (
+                  selfInfo?.avatar_url ? (
+                    <img src={avatarSrc(selfInfo.avatar_url)} alt="" className="w-6 h-6 rounded-full flex-shrink-0 object-cover mt-0.5" />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black bg-[#07c160] mt-0.5">我</div>
+                  )
+                ) : contactAvatar ? (
+                  <img src={contactAvatar} alt="" className="w-6 h-6 rounded-full flex-shrink-0 object-cover mt-0.5" />
+                ) : (
+                  <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black bg-[#576b95] mt-0.5">
+                    <span className={privacyMode ? 'privacy-blur' : ''}>{contactName.charAt(0)}</span>
+                  </div>
+                )}
                 <div className={`flex flex-col gap-0.5 max-w-[72%] ${msg.is_mine ? 'items-end' : 'items-start'}`}>
                   <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words whitespace-pre-wrap
                     ${msg.is_mine

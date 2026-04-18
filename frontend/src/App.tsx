@@ -5,6 +5,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { PrivacyModeContext } from './contexts/PrivacyModeContext';
+import { SelfInfoProvider } from './contexts/SelfInfoContext';
 
 // Layout Components
 import { Sidebar } from './components/layout/Sidebar';
@@ -13,8 +14,10 @@ import { Header } from './components/layout/Header';
 // Dashboard Components
 import { AIHomePage } from './components/dashboard/AIHomePage';
 import { StatsPage } from './components/dashboard/StatsPage';
+// FunStatsPage 已合并到 StatsPage 底部
 import { ContactsPage } from './components/dashboard/ContactsPage';
 import { URLCollectionPage } from './components/dashboard/URLCollectionPage';
+import { ExportCenterPage } from './components/dashboard/ExportCenterPage';
 import { DatabaseView } from './components/dashboard/DatabaseView';
 import { SearchView } from './components/search/SearchView';
 import { TimelineView } from './components/timeline/TimelineView';
@@ -65,7 +68,7 @@ function App() {
 
   // State — 从 URL hash 恢复当前 tab + 联系人/群聊弹窗
   // hash 格式：#/stats  #/stats/contact/wxid_abc  #/groups/group/xxx@chatroom
-  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'contacts', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'urls', 'skills', 'settings'];
+  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'contacts', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'urls', 'skills', 'export', 'settings'];
 
   const parseHash = (): { tab: TabType; contactId?: string; groupId?: string } => {
     const raw = window.location.hash.replace('#/', '').replace('#', '');
@@ -387,6 +390,7 @@ function App() {
   }
 
   return (
+    <SelfInfoProvider value={appInfo?.self_info ?? null}>
     <PrivacyModeContext.Provider value={{ privacyMode, setPrivacyMode }}>
     <div className="flex h-screen dk-page bg-[#f8f9fb] dk-text text-[#1d1d1f] font-sans overflow-hidden">
       {/* Sidebar */}
@@ -401,6 +405,7 @@ function App() {
             onReselect={handleReselect}
             onContactClick={handleContactClick}
             onGroupClick={(g) => setSelectedGroup(g)}
+            onNavigateToAnniversary={() => setActiveTab('anniversary')}
           />
         ) : activeTab === 'stats' ? (
           <StatsPage
@@ -442,6 +447,8 @@ function App() {
           />
         ) : activeTab === 'urls' ? (
           <URLCollectionPage blockedUsers={blockedUsers} blockedDisplayNames={blockedDisplayNames} />
+        ) : activeTab === 'export' ? (
+          <ExportCenterPage contacts={contacts} groups={allGroups} />
         ) : activeTab === 'settings' ? (
           <SettingsPage
             isAppMode={appInfo.app_mode}
@@ -516,6 +523,7 @@ function App() {
       )}
     </div>
     </PrivacyModeContext.Provider>
+    </SelfInfoProvider>
   );
 }
 

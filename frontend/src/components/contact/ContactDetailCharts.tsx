@@ -24,6 +24,7 @@ interface Props {
   totalMessages: number;
   username: string;
   contactName: string;
+  contactAvatarUrl?: string;
 }
 
 // 后端 weekly_dist[0]=周日, [1]=周一, ..., [6]=周六（Go time.Weekday）
@@ -46,7 +47,7 @@ const ModeBtn: React.FC<{ active: boolean; onClick: () => void; children: React.
   </button>
 );
 
-export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, username, contactName }) => {
+export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, username, contactName, contactAvatarUrl }) => {
   const { privacyMode } = usePrivacyMode();
   const [dayPanel, setDayPanel] = useState<{ date: string; count: number } | null>(null);
   const [trendMode, setTrendMode] = useState<TrendMode>('total');
@@ -477,6 +478,7 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
           date={dayPanel.date}
           dayCount={dayPanel.count}
           contactName={contactName}
+          contactAvatarUrl={contactAvatarUrl}
           onClose={() => setDayPanel(null)}
         />
       )}

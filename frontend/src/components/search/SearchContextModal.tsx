@@ -7,8 +7,10 @@ import { X, Loader2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import type { ChatMessage, GroupChatMessage } from '../../types';
 import { contactsApi, groupsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { useSelfInfo } from '../../contexts/SelfInfoContext';
 import { exportDayMessagesCsv, exportDayMessagesTxt, parseExportResult } from '../../utils/exportChat';
 import { useEscape } from '../../hooks/useEscape';
+import { avatarSrc } from '../../utils/avatar';
 
 export interface SearchContextTarget {
   username: string;
@@ -17,6 +19,7 @@ export interface SearchContextTarget {
   targetTime: string;    // "14:23"
   targetContent: string; // 用于定位并高亮目标消息
   isGroup: boolean;
+  avatarUrl?: string;    // 私聊：对方头像；群聊：不用（每条消息自带）
 }
 
 interface Props extends SearchContextTarget {
@@ -45,9 +48,10 @@ function formatDate(d: string): string {
 }
 
 export const SearchContextModal: React.FC<Props> = ({
-  username, displayName, date: initDate, targetTime, targetContent, isGroup, onClose,
+  username, displayName, date: initDate, targetTime, targetContent, isGroup, avatarUrl, onClose,
 }) => {
   const { privacyMode } = usePrivacyMode();
+  const selfInfo = useSelfInfo();
   const [date, setDate] = useState(initDate);
   const [messages, setMessages] = useState<(ChatMessage | GroupChatMessage)[]>([]);
   const [loading, setLoading] = useState(true);
@@ -195,12 +199,16 @@ export const SearchContextModal: React.FC<Props> = ({
                     className={`flex items-start gap-2 rounded-xl transition-all ${highlight ? 'ring-2 ring-yellow-300 ring-offset-2 bg-yellow-50/60 p-1' : ''}`}
                   >
                     {showHeader ? (
-                      <div
-                        className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-black mt-0.5"
-                        style={{ background: color }}
-                      >
-                        <span className={privacyMode ? 'privacy-blur' : ''}>{msg.speaker.charAt(0)}</span>
-                      </div>
+                      msg.avatar_url ? (
+                        <img src={avatarSrc(msg.avatar_url)} alt="" className="w-8 h-8 rounded-full flex-shrink-0 object-cover mt-0.5" />
+                      ) : (
+                        <div
+                          className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-black mt-0.5"
+                          style={{ background: color }}
+                        >
+                          <span className={privacyMode ? 'privacy-blur' : ''}>{msg.speaker.charAt(0)}</span>
+                        </div>
+                      )
                     ) : (
                       <div className="w-8 flex-shrink-0" />
                     )}
@@ -228,12 +236,21 @@ export const SearchContextModal: React.FC<Props> = ({
                   <div
                     key={i}
                     ref={highlight ? targetRef : undefined}
-                    className={`flex items-end gap-2 rounded-xl transition-all ${msg.is_mine ? 'flex-row-reverse' : 'flex-row'} ${highlight ? 'ring-2 ring-yellow-300 ring-offset-2 bg-yellow-50/60 p-1' : ''}`}
+                    className={`flex items-start gap-2 rounded-xl transition-all ${msg.is_mine ? 'flex-row-reverse' : 'flex-row'} ${highlight ? 'ring-2 ring-yellow-300 ring-offset-2 bg-yellow-50/60 p-1' : ''}`}
                   >
-                    <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black
-                      ${msg.is_mine ? 'bg-[#07c160]' : 'bg-[#576b95]'}`}>
-                      {msg.is_mine ? '我' : <span className={privacyMode ? 'privacy-blur' : ''}>{displayName.charAt(0)}</span>}
-                    </div>
+                    {msg.is_mine ? (
+                      selfInfo?.avatar_url ? (
+                        <img src={avatarSrc(selfInfo.avatar_url)} alt="" className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black bg-[#07c160]">我</div>
+                      )
+                    ) : avatarUrl ? (
+                      <img src={avatarSrc(avatarUrl)} alt="" className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black bg-[#576b95]">
+                        <span className={privacyMode ? 'privacy-blur' : ''}>{displayName.charAt(0)}</span>
+                      </div>
+                    )}
                     <div className={`flex flex-col gap-0.5 max-w-[72%] ${msg.is_mine ? 'items-end' : 'items-start'}`}>
                       <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words whitespace-pre-wrap
                         ${msg.is_mine ? 'bg-[#07c160] text-white rounded-br-sm' : 'bg-[#f0f0f0] text-[#1d1d1f] rounded-bl-sm'}

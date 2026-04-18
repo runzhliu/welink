@@ -105,14 +105,21 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
   const dragRef = useRef<{ node: SimNode; offsetX: number; offsetY: number } | null>(null);
   const [showRules, setShowRules] = useState(false);
 
-  // Poll until data is ready
+  // Poll until data is ready. 关键：后端返回 null = 仍在计算；返回对象（即便
+  // nodes 为空）= 分析已结束（可能因为 panic 被兜底成空图）。之前 `nodes.length > 0`
+  // 的判断会让空图也继续轮询，前端转 N 小时都不会停。
+  const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     let cancelled = false;
+    const startedAt = Date.now();
+    const tick = setInterval(() => {
+      if (!cancelled) setElapsed(Math.round((Date.now() - startedAt) / 1000));
+    }, 1000);
     const poll = async () => {
       while (!cancelled) {
         try {
           const resp = await groupsApi.getRelationships(username);
-          if (resp && resp.nodes && resp.nodes.length > 0) {
+          if (resp) {
             setGraph(resp);
             setLoading(false);
             return;
@@ -123,8 +130,9 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
     };
     setLoading(true);
     setGraph(null);
+    setElapsed(0);
     poll();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearInterval(tick); };
   }, [username]);
 
   const render = useCallback(() => {
@@ -313,12 +321,26 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
   }, []);
 
   if (loading) {
+    const stuck = elapsed > 180; // 超过 3 分钟就给出"可能卡住"的信号 + 重试入口
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <Loader2 size={32} className="text-[#07c160] animate-spin" />
         <div className="text-center">
           <span className="text-sm text-gray-400">正在分析群聊人物关系…</span>
-          <p className="text-[10px] text-gray-300 mt-1">需要遍历所有消息计算互动关系，大群请耐心等待</p>
+          <p className="text-[10px] text-gray-300 mt-1">
+            已等待 <b>{elapsed}s</b>
+            {stuck
+              ? '。大群通常 10 秒内出结果，这么久多半是后端卡住了，可以刷新或去终端看 welink.log 里的 [GROUPREL] 日志。'
+              : '。首次打开需遍历所有消息计算互动关系，大群请耐心等待。'}
+          </p>
+          {stuck && (
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-3 text-xs text-[#07c160] underline hover:no-underline"
+            >
+              刷新页面重试
+            </button>
+          )}
         </div>
       </div>
     );
@@ -333,7 +355,11 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
   const totalInteractions = graph.edges.reduce((s, e) => s + e.weight, 0);
   const topPair = graph.edges[0];
   const communities = graph.communities ?? [];
-  const multiMemberCommunities = communities.filter(c => c.size >= 2);
+  // 模块度 <0.3 视为没有明显小圈子（Louvain 划了也是噪声），直接藏起来。
+  // 另外最小圈子要 ≥3 人：二人组大多是偶发互动，展示出来只会让用户觉得凑数。
+  const modularity = graph.modularity ?? 0;
+  const clearStructure = modularity >= 0.3;
+  const multiMemberCommunities = clearStructure ? communities.filter(c => c.size >= 3) : [];
 
   return (
     <div className="space-y-4">
@@ -432,8 +458,8 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
           <div className="font-bold text-[#1d1d1f] dk-text text-sm mb-2">互动关系计算规则</div>
           <div className="space-y-1.5">
             <div className="flex gap-2">
-              <span className="text-[#07c160] font-bold flex-shrink-0">连续回复</span>
-              <span>两个不同成员在 <b>2 分钟内</b>先后发言，视为一次互动回复。这是最主要的互动信号。</span>
+              <span className="text-[#07c160] font-bold flex-shrink-0">引用回复</span>
+              <span>只有 <b>引用消息</b>（长按 → 引用）才算一次回复。早期按"2 分钟内先后发言"判定在活跃群里会把所有人误算到一起，已改掉。</span>
             </div>
             <div className="flex gap-2">
               <span className="text-[#10aeff] font-bold flex-shrink-0">@提及</span>
@@ -441,11 +467,11 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
             </div>
             <div className="flex gap-2">
               <span className="text-[#ff9500] font-bold flex-shrink-0">过滤阈值</span>
-              <span>互动总权重 &lt; 3 的弱关系会被过滤，避免噪声干扰。最多展示 200 条关系。</span>
+              <span>基准 3；稠密群里按所有关系权重的 <b>中位数的 10%</b> 自动上调，避免低信号把图塞满。最多保留 200 条边。</span>
             </div>
             <div className="flex gap-2">
-              <span className="text-[#576b95] font-bold flex-shrink-0">节点大小</span>
-              <span>与该成员在群内的 <b>总发言数</b> 成正比（开方缩放）。</span>
+              <span className="text-[#576b95] font-bold flex-shrink-0">小圈子</span>
+              <span>用 <b>Louvain</b> 做社区检测（比旧版 Label Propagation 更抗噪）。整体 <b>模块度 &lt; 0.3</b> 时判定"无明显小圈子"，不凑数。至少 3 人才算一个圈子。</span>
             </div>
             <div className="flex gap-2">
               <span className="text-[#fa5151] font-bold flex-shrink-0">连线粗细</span>
@@ -456,6 +482,18 @@ export const RelationshipGraphPanel: React.FC<Props> = ({ username }) => {
       )}
 
       {/* Community detection results */}
+      {graph.edges.length > 0 && !clearStructure && (
+        <div className="bg-[#f8f9fb] dark:bg-white/5 rounded-xl px-5 py-4 text-sm text-gray-500 dk-text flex items-start gap-2">
+          <Info size={14} className="text-gray-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <div className="font-bold text-[#1d1d1f] dk-text mb-1">群内互动较散，没有明显小圈子</div>
+            <p className="text-xs leading-relaxed">
+              Louvain 模块度 Q = <b className="font-mono">{modularity.toFixed(2)}</b>（&lt; 0.3），说明群成员的回复/@几乎均匀分布，不存在显著子群。
+              这在开放型大群（如兴趣群、工作群）里很常见，也正是旧算法误判成"一个大圈"的场景。
+            </p>
+          </div>
+        </div>
+      )}
       {multiMemberCommunities.length > 0 && (
         <div className="space-y-3">
           <div className="text-sm font-bold text-[#1d1d1f] dk-text">小团体检测</div>

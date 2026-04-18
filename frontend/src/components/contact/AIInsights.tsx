@@ -1,10 +1,10 @@
 /**
- * AI 洞察 — 关系报告 / 风格画像卡 / AI 日记
+ * AI 洞察 — 关系报告 / 风格画像卡 / AI 日记 / 关系剧本
  * 使用低 token 摘要数据（统计特征 + 采样消息）生成 AI 分析
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { FileText, User, BookOpen, Loader2, Share2, Check, Sparkles } from 'lucide-react';
+import { FileText, User, BookOpen, Loader2, Share2, Check, Sparkles, Film } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
@@ -19,11 +19,12 @@ interface Props {
   onOpenSettings?: () => void;
 }
 
-type InsightType = 'report' | 'profile' | 'diary';
+type InsightType = 'report' | 'profile' | 'diary' | 'story';
 
 const INSIGHT_TABS: { key: InsightType; label: string; icon: React.ReactNode; desc: string }[] = [
   { key: 'report', label: '关系报告', icon: <FileText size={14} />, desc: 'AI 分析你们关系的发展阶段、转折点和沟通特点' },
   { key: 'profile', label: '风格画像', icon: <User size={14} />, desc: 'AI 提炼 TA 的性格标签、口头禅和聊天习惯' },
+  { key: 'story', label: '关系剧本', icon: <Film size={14} />, desc: 'AI 把这段关系提炼成 3-5 个剧情节点的时间线' },
   { key: 'diary', label: 'AI 日记', icon: <BookOpen size={14} />, desc: '选择一天，AI 根据当天聊天记录生成日记' },
 ];
 
@@ -31,6 +32,7 @@ const INSIGHT_PROMPT_IDS: Record<InsightType, string> = {
   report: 'insight_report',
   profile: 'insight_profile',
   diary: 'insight_diary',
+  story: 'insight_story',
 };
 
 export const AIInsights: React.FC<Props> = ({ username, displayName, avatarUrl, onOpenSettings }) => {

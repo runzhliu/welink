@@ -72,6 +72,7 @@ const TAB_ITEMS: { tab: TabType; label: string; keywords: string[] }[] = [
   { tab: 'anniversary', label: '纪念日',       keywords: ['anniversary', '纪念日'] },
   { tab: 'urls',        label: '链接收藏',     keywords: ['urls', '链接'] },
   { tab: 'skills',      label: 'Skills',      keywords: ['skills'] },
+  { tab: 'stats',       label: '有趣发现',    keywords: ['fun', '有趣', '趣味', 'mbti', '话痨'] },
   { tab: 'db',          label: '数据库',       keywords: ['db', '数据库'] },
   { tab: 'settings',    label: '设置',         keywords: ['settings', '设置'] },
 ];

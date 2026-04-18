@@ -28,6 +28,14 @@ interface Props {
   totalMessages?: number;
 }
 
+// 188_895 → "188k"；4_532 → "4.5k"；< 1000 保留原值
+function formatCompact(n: number): string {
+  if (n < 1000) return n.toLocaleString();
+  if (n < 10_000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  if (n < 1_000_000) return Math.round(n / 1000) + 'k';
+  return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+}
+
 export const MessageTypePieChart: React.FC<Props> = ({ typeData, totalMessages }) => {
   const data = Object.entries(typeData)
     .map(([name, val]) => ({
@@ -75,19 +83,19 @@ export const MessageTypePieChart: React.FC<Props> = ({ typeData, totalMessages }
             </PieChart>
           </ResponsiveContainer>
         </div>
-        {/* 图例 */}
+        {/* 图例：name 占主位不截断，count + % 右侧紧凑显示 */}
         <div className="flex-1 min-w-0 space-y-1">
           {data.map((entry) => (
-            <div key={entry.name} className="flex items-center gap-1.5 text-[11px]">
+            <div key={entry.name} className="flex items-center gap-2 text-[11px]" title={entry.count > 0 ? `${entry.name} · ${entry.count.toLocaleString()} 条 · ${entry.pct}%` : `${entry.name} · ${entry.pct}%`}>
               <span
                 className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ background: TYPE_COLORS[entry.name] ?? '#d1d1d6' }}
               />
-              <span className="text-gray-600 dark:text-gray-300 font-semibold truncate">{entry.name}</span>
+              <span className="text-gray-600 dark:text-gray-300 font-semibold flex-1 min-w-0 truncate">{entry.name}</span>
               {entry.count > 0 && (
-                <span className="text-gray-400 flex-shrink-0 ml-auto tabular-nums">{entry.count.toLocaleString()}</span>
+                <span className="text-gray-400 flex-shrink-0 tabular-nums">{formatCompact(entry.count)}</span>
               )}
-              <span className="font-black text-gray-700 dark:text-gray-200 flex-shrink-0 w-7 text-right tabular-nums">{entry.pct}%</span>
+              <span className="font-black text-gray-700 dark:text-gray-200 flex-shrink-0 w-8 text-right tabular-nums">{entry.pct}%</span>
             </div>
           ))}
         </div>

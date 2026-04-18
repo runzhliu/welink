@@ -116,3 +116,15 @@ html.dark .prose blockquote,
 html.dark .prose code {
   color: #f0f0f0 !important;
 }
+
+/* AI 首页新用户引导条 pulse 动画 */
+@keyframes welink-onboard-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 149, 0, 0.35); }
+  50%      { box-shadow: 0 0 0 8px rgba(255, 149, 0, 0); }
+}
+.welink-onboard-pulse {
+  animation: welink-onboard-pulse 2s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .welink-onboard-pulse { animation: none; }
+}

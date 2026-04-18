@@ -311,4 +311,165 @@ export const anniversaryApi = {
     api.put<void, import('../types').CustomAnniversary[]>('/preferences/anniversaries', { custom_anniversaries: anniversaries }),
 };
 
+export const groupExtraApi = {
+  yearReview: (username: string, year: number, profileId?: string) =>
+    api.get<void, import('../types').GroupYearReview>(
+      `/groups/year-review?username=${encodeURIComponent(username)}&year=${year}${profileId ? `&profile_id=${profileId}` : ''}`,
+    ),
+};
+
+export const forecastApi = {
+  get: (top = 5) =>
+    api.get<void, import('../types').ForecastResponse>(`/contacts/relationship-forecast?top=${top}`),
+
+  getAll: () =>
+    api.get<void, import('../types').ForecastResponse>('/contacts/relationship-forecast?include_all=1'),
+
+  icebreaker: (username: string, profileId?: string) =>
+    api.post<void, import('../types').IcebreakerResponse>('/contacts/icebreaker', {
+      username,
+      profile_id: profileId || '',
+    }),
+
+  saveIgnored: (usernames: string[]) =>
+    api.put<void, { forecast_ignored: string[] }>('/preferences/forecast-ignored', {
+      forecast_ignored: usernames,
+    }),
+};
+
+// ─── 导出中心 ──────────────────────────────────────────────────────────────
+
+export type ExportContentType = 'year_review' | 'conversation' | 'ai_history' | 'memory_graph';
+export type ExportTarget = 'markdown' | 'notion' | 'feishu' | 'webdav' | 's3' | 'dropbox' | 'gdrive' | 'onedrive';
+
+export interface ExportItem {
+  type: ExportContentType;
+  username?: string;
+  is_group?: boolean;
+  year?: number;
+  from?: number;
+  to?: number;
+  ai_key?: string;
+  title?: string;
+}
+
+export interface ExportRequest {
+  items: ExportItem[];
+  target: ExportTarget;
+  notion_parent_page?: string;
+  feishu_folder_token?: string;
+}
+
+export interface ExportPreviewDoc {
+  title: string;
+  filename: string;
+  markdown: string;
+}
+
+export interface ExportResultItem {
+  title: string;
+  ok: boolean;
+  url?: string;
+  error?: string;
+  bytes?: number;
+}
+
+export interface ExportConfigDTO {
+  notion_token: string;
+  notion_parent_page: string;
+  feishu_app_id: string;
+  feishu_app_secret: string;
+  feishu_folder_token: string;
+
+  // WebDAV
+  webdav_url: string;
+  webdav_username: string;
+  webdav_password: string;
+  webdav_path: string;
+
+  // S3 兼容
+  s3_endpoint: string;
+  s3_region: string;
+  s3_bucket: string;
+  s3_access_key: string;
+  s3_secret_key: string;
+  s3_path_prefix: string;
+  s3_use_path_style: boolean;
+
+  // Dropbox
+  dropbox_token: string;
+  dropbox_path: string;
+
+  // Google Drive
+  gdrive_client_id: string;
+  gdrive_client_secret: string;
+  gdrive_folder_id: string;
+  gdrive_connected: boolean;
+
+  // OneDrive
+  onedrive_client_id: string;
+  onedrive_client_secret: string;
+  onedrive_tenant: string;
+  onedrive_folder_path: string;
+  onedrive_connected: boolean;
+}
+
+export const exportApi = {
+  preview: (req: ExportRequest) =>
+    api.post<void, { docs: ExportPreviewDoc[] }>('/export/preview', req),
+
+  /**
+   * Markdown 下载：单文件 → .md，多文件 → .zip。
+   * 用 fetch 而非 axios，便于直接拿到 Blob 触发浏览器下载。
+   */
+  downloadMarkdown: async (req: ExportRequest) => {
+    const resp = await fetch('/api/export/markdown', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || `下载失败 (${resp.status})`);
+    }
+    const blob = await resp.blob();
+    const cd = resp.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename="([^"]+)"/);
+    const filename = m ? decodeURIComponent(m[1]) : 'welink-export.md';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return filename;
+  },
+
+  pushNotion: (req: ExportRequest) =>
+    api.post<void, { results: ExportResultItem[] }>('/export/notion', req),
+
+  pushFeishu: (req: ExportRequest) =>
+    api.post<void, { results: ExportResultItem[] }>('/export/feishu', req),
+
+  pushWebDAV: (req: ExportRequest) =>
+    api.post<void, { results: ExportResultItem[] }>('/export/webdav', req),
+
+  pushS3: (req: ExportRequest) =>
+    api.post<void, { results: ExportResultItem[] }>('/export/s3', req),
+
+  pushDropbox: (req: ExportRequest) =>
+    api.post<void, { results: ExportResultItem[] }>('/export/dropbox', req),
+
+  pushGDrive: (req: ExportRequest) =>
+    api.post<void, { results: ExportResultItem[] }>('/export/gdrive', req),
+
+  pushOneDrive: (req: ExportRequest) =>
+    api.post<void, { results: ExportResultItem[] }>('/export/onedrive', req),
+
+  getConfig: () => api.get<void, ExportConfigDTO>('/export/config'),
+  saveConfig: (cfg: ExportConfigDTO) => api.put<void, { ok: boolean }>('/export/config', cfg),
+};
+
 export default api;

@@ -202,7 +202,7 @@ export interface BackendStatus {
   last_error?: string;
 }
 
-export type TabType = 'dashboard' | 'stats' | 'contacts' | 'db' | 'groups' | 'search' | 'timeline' | 'calendar' | 'anniversary' | 'urls' | 'skills' | 'settings';
+export type TabType = 'dashboard' | 'stats' | 'contacts' | 'db' | 'groups' | 'search' | 'timeline' | 'calendar' | 'anniversary' | 'urls' | 'skills' | 'export' | 'settings';
 
 export interface DetectedEvent {
   type: string;
@@ -239,6 +239,48 @@ export interface AnniversaryResponse {
   custom: CustomAnniversary[];
 }
 
+export type ForecastStatus = 'rising' | 'stable' | 'cooling' | 'endangered';
+
+export interface ForecastEntry {
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  status: ForecastStatus;
+  score: number;
+  trend_pct: number;
+  recent_3m: number;
+  prior_3m: number;
+  days_since_last: number;
+  reason: string;
+  suggestion: string;
+  monthly_12?: number[];  // 旧→新，仅 include_all=1 时返回
+  initiator_recent: number; // 最近 3 月我的主动占比 0-100，-1 = 样本不足
+  initiator_prior: number;  // 前 3 月我的主动占比
+  initiator_trend: number;  // 差值（百分点）
+  their_latency_recent_sec: number; // TA 回复我的中位时延（秒），-1 = 样本不足
+  their_latency_prior_sec: number;
+  mine_latency_recent_sec: number;  // 我回复 TA 的中位时延
+  mine_latency_prior_sec: number;
+}
+
+export interface ForecastResponse {
+  suggest_contact: ForecastEntry[];
+  all?: ForecastEntry[];  // 仅 include_all=1 时返回
+  generated_at: number;
+  total_scored: number;
+}
+
+export interface IcebreakerDraft {
+  tone: string;
+  text: string;
+}
+
+export interface IcebreakerResponse {
+  drafts: IcebreakerDraft[];
+  display_name: string;
+  days_since_last: number;
+}
+
 export interface RelationshipNode {
   id: string;
   name: string;
@@ -264,6 +306,8 @@ export interface RelationshipGraph {
   nodes: RelationshipNode[];
   edges: RelationshipEdge[];
   communities?: CommunityInfo[];
+  // Louvain 模块度。<0.3 表示无明显小圈子，前端据此改用"群内互动较散"的提示
+  modularity?: number;
 }
 
 export interface SimilarityPair {
@@ -325,12 +369,18 @@ export interface GroupInfo {
   last_message_time: string;
   first_message_ts?: number;
   last_message_ts?: number;
+  my_messages?: number;           // 我在此群的发言数
+  my_rank?: number;               // 我的排名（1-based，0=未发言）
+  my_last_message_ts?: number;    // 我上次发言 Unix 秒
+  recent_30d_messages?: number;   // 近 30 天消息数
+  recent_trend_pct?: number;      // 最近 3 月 vs 前 3 月 %
 }
 
 export interface MemberStat {
   speaker: string;
   username?: string;
-  count: number;
+  count: number;          // 全类型消息数（图片/红包/小程序/表情都算）
+  text_count?: number;    // 纯文本消息数（Skill 炼化实际能吃进去的量；后端 v2+ 才有）
   last_message_time?: string;
   first_message_time?: string;
   last_message_ts?: number;
@@ -344,6 +394,32 @@ export interface GroupDetail {
   member_rank: MemberStat[];
   top_words: { word: string; count: number }[];
   type_dist?: Record<string, number>;
+  my_cps?: MyCPEntry[]; // 群内跟我引用互动最多的成员 Top 3
+  weekly_hourly_dist?: number[][]; // 7×24 二维，weekday 0=周日
+  my_influence_score?: number;     // 0-100，-1=样本不足
+  my_reply_rate?: number;          // 0-1
+  group_base_reply_rate?: number;  // 0-1
+}
+
+export interface GroupYearReview {
+  group_name: string;
+  year: number;
+  total_messages: number;
+  total_members: number;
+  busiest_day: string;
+  busiest_day_count: number;
+  top_members: { username: string; display_name: string; avatar_url: string; messages: number }[];
+  top_topics: string[];
+  golden_quotes: string[];
+  monthly_trend: number[];
+  highlight?: string;
+}
+
+export interface MyCPEntry {
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  replies: number; // TA 引用回复我 + 我引用回复 TA 合计
 }
 
 export interface HealthStatus {
@@ -387,7 +463,8 @@ export interface GroupChatMessage {
   content: string;
   is_mine: boolean;
   type: number;
-  date?: string;    // "2024-03-15"，搜索结果中使用
+  date?: string;       // "2024-03-15"，搜索结果中使用
+  avatar_url?: string; // 发言者头像（有联系人记录时返回）
 }
 
 export interface QueryResult {
