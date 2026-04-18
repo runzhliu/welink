@@ -20,6 +20,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: 预检查 lockfile registry 白名单
+        run: node scripts/check-lockfile-registry.js frontend/package-lock.json
+
       - name: Determine version
         id: version
         run: |

@@ -20,7 +20,7 @@ cd mcp-server
 go build -o welink-mcp .
 ```
 
-> 仓库中已预置编译好的 `welink-mcp` 二进制（macOS arm64），可直接使用。如需重新编译请执行上方命令。
+编译产物 `welink-mcp` 已在 `.gitignore` 中，克隆仓库后需自行构建。无外部依赖，`go build` 一条命令即可。
 
 
 ## 配置 Claude Code
@@ -56,7 +56,7 @@ claude mcp add welink /你的路径/welink/mcp-server/welink-mcp -e WELINK_URL=h
 /mcp
 ```
 
-输出中应出现 `welink` 及其 9 个工具，状态为 connected。
+输出中应出现 `welink` 及其 19 个工具，状态为 connected。
 
 ### 第三步：配置 Skills（让 Claude 自动触发）
 
@@ -70,7 +70,10 @@ claude mcp add welink /你的路径/welink/mcp-server/welink-mcp -e WELINK_URL=h
 
 可用工具：get_contact_stats、get_contact_detail、get_contact_wordcloud、
 get_contact_sentiment、get_contact_messages、get_global_stats、
-get_groups、get_group_detail、get_stats_by_timerange
+get_groups、get_group_detail、get_stats_by_timerange、
+get_self_portrait、get_money_overview、get_urls、get_cooling_contacts、
+get_companion_time、get_common_circle、get_contact_similarity、
+search_messages、get_ai_usage_stats、get_relationship_forecast
 ```
 
 
@@ -118,6 +121,16 @@ get_groups、get_group_detail、get_stats_by_timerange
 | `get_groups` | 所有群聊列表及消息统计 | 无 |
 | `get_group_detail` | 某群聊深度分析（成员排行、词云等） | `username` |
 | `get_stats_by_timerange` | 按 Unix 时间戳范围过滤统计 | `from`, `to` |
+| `get_self_portrait` | 本人自画像：总发送量、平均长度、最活跃时段 | 无 |
+| `get_money_overview` | 红包 / 转账全局概览 | 无 |
+| `get_urls` | 聊天记录里分享过的所有 URL | 无 |
+| `get_cooling_contacts` | 关系降温榜：谁和我渐行渐远 | 无 |
+| `get_companion_time` | 每个联系人的累计聊天时长（基于 session） | 无 |
+| `get_common_circle` | 两个联系人的共同群 + 共同好友推测 | `user1`, `user2` |
+| `get_contact_similarity` | 哪些联系人"最像"（活跃时段等特征） | 无 |
+| `search_messages` | 跨联系人 / 群聊全局搜索消息 | `q` |
+| `get_ai_usage_stats` | 本地 AI 对话的字符数 / token 估算用量 | 无 |
+| `get_relationship_forecast` | 关系动态预测：4 档趋势 + 建议主动联系，可选 `include_all=1` 返回全列表 + 12 月折线 | 无 |
 
 
 ## 环境变量

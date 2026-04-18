@@ -2,6 +2,10 @@ FROM node:20-alpine AS builder
 
 ARG VERSION=dev
 
+# VitePress 的 lastUpdated 会 spawn git；即使 build context 不含 .git，
+# git 二进制不存在会直接抛 ENOENT 终止构建。装上即可让 VitePress 优雅降级。
+RUN apk add --no-cache git
+
 WORKDIR /app
 COPY package.json ./
 RUN npm install

@@ -77,3 +77,387 @@ a.btn-download:hover {
   background-color: var(--vp-c-brand-2);
   border-color: var(--vp-c-brand-2);
 }
+
+/* ========================================================================
+ * 动画：优先尊重 prefers-reduced-motion，全部动画在用户偏好下自动失效
+ * ======================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ── A. 滚动淡入 ───────────────────────────────────────────────────────── */
+
+.welink-fade-in {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.welink-fade-in.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 给子元素依次延迟出场，营造"瀑布"效果 */
+.welink-fade-in-stagger > * {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.welink-fade-in-stagger.is-visible > *:nth-child(1) { transition-delay: 0.02s; opacity: 1; transform: translateY(0); }
+.welink-fade-in-stagger.is-visible > *:nth-child(2) { transition-delay: 0.08s; opacity: 1; transform: translateY(0); }
+.welink-fade-in-stagger.is-visible > *:nth-child(3) { transition-delay: 0.14s; opacity: 1; transform: translateY(0); }
+.welink-fade-in-stagger.is-visible > *:nth-child(4) { transition-delay: 0.20s; opacity: 1; transform: translateY(0); }
+.welink-fade-in-stagger.is-visible > *:nth-child(5) { transition-delay: 0.26s; opacity: 1; transform: translateY(0); }
+.welink-fade-in-stagger.is-visible > *:nth-child(6) { transition-delay: 0.32s; opacity: 1; transform: translateY(0); }
+.welink-fade-in-stagger.is-visible > *:nth-child(n+7) { transition-delay: 0.36s; opacity: 1; transform: translateY(0); }
+
+/* ── B. Hero 区动画 ────────────────────────────────────────────────────── */
+
+/*
+ * 光晕背景：挂在整个 VPHome 上（不是仅 Hero），从顶部向下柔和淡出，
+ * Hero / Features / 自定义 .vp-doc 段落共用同一层底色，避免出现横向色带。
+ */
+.VPHome {
+  position: relative;
+  overflow-x: hidden;
+}
+
+.VPHome::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1100px;
+  background: radial-gradient(circle at 20% 15%, rgba(7, 193, 96, 0.14), transparent 42%),
+              radial-gradient(circle at 85% 35%, rgba(16, 174, 255, 0.12), transparent 42%),
+              radial-gradient(circle at 50% 55%, rgba(255, 149, 0, 0.06), transparent 50%);
+  animation: welinkHeroGlow 18s ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: 0;
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 0%, black 55%, transparent 100%);
+}
+
+.VPHome > * { position: relative; z-index: 1; }
+
+@keyframes welinkHeroGlow {
+  0%   { transform: translate(0, 0) scale(1); opacity: 0.9; }
+  50%  { transform: translate(3%, -2%) scale(1.05); opacity: 1; }
+  100% { transform: translate(-2%, 3%) scale(0.98); opacity: 0.85; }
+}
+
+.dark .VPHome::before {
+  background: radial-gradient(circle at 20% 15%, rgba(7, 193, 96, 0.18), transparent 42%),
+              radial-gradient(circle at 85% 35%, rgba(16, 174, 255, 0.14), transparent 42%),
+              radial-gradient(circle at 50% 55%, rgba(255, 149, 0, 0.08), transparent 50%);
+}
+
+/* Logo 发光 + 悬停旋转 */
+.VPHome .VPHero .image {
+  filter: drop-shadow(0 8px 24px rgba(7, 193, 96, 0.25));
+  animation: welinkLogoFloat 5s ease-in-out infinite;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), filter 0.4s;
+}
+
+.VPHome .VPHero .image:hover {
+  transform: scale(1.08) rotate(6deg);
+  filter: drop-shadow(0 12px 32px rgba(7, 193, 96, 0.45));
+}
+
+@keyframes welinkLogoFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+
+/* Hero 标题打字机光标 */
+.VPHome .VPHero .text {
+  position: relative;
+  background: linear-gradient(90deg, #07c160, #10aeff, #07c160);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: welinkGradientShift 6s linear infinite;
+}
+
+@keyframes welinkGradientShift {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+.VPHome .VPHero .tagline {
+  animation: welinkFadeSlideUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+}
+
+.VPHome .VPHero .actions {
+  animation: welinkFadeSlideUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
+}
+
+@keyframes welinkFadeSlideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── C. 卡片交互微动画 ─────────────────────────────────────────────────── */
+
+.feat-card {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s;
+}
+
+.feat-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 16px 40px -8px rgba(7, 193, 96, 0.25),
+              0 4px 12px -2px rgba(0, 0, 0, 0.06);
+  border-color: var(--vp-c-brand-1);
+}
+
+.feat-card .icon {
+  display: inline-block;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.feat-card:hover .icon {
+  transform: scale(1.2) rotate(-8deg);
+}
+
+/* VitePress 自带的 feature 卡也享受同款效果 */
+.VPFeature {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s !important;
+}
+
+.VPFeature:hover {
+  transform: translateY(-4px) scale(1.015);
+  box-shadow: 0 16px 40px -8px rgba(7, 193, 96, 0.2),
+              0 4px 12px -2px rgba(0, 0, 0, 0.06);
+  border-color: var(--vp-c-brand-1) !important;
+}
+
+.VPFeature .icon {
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.VPFeature:hover .icon {
+  transform: scale(1.2) rotate(-8deg);
+}
+
+/* 下载按钮涟漪 */
+a.btn-download {
+  position: relative;
+  overflow: hidden;
+}
+
+a.btn-download::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(255,255,255,0.5) 0%, transparent 60%);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.3s, transform 0.6s;
+  pointer-events: none;
+}
+
+a.btn-download:active::after {
+  opacity: 1;
+  transform: scale(1.2);
+  transition: 0s;
+}
+
+/* ── D. 数字 count-up（基础样式，实际计数靠 JS） ───────────────────────── */
+
+.welink-countup {
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+  min-width: 1ch;
+}
+
+/* ── E. 视频 / 图片过渡 ────────────────────────────────────────────────── */
+
+.vp-doc video {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.35s;
+}
+
+.vp-doc video:hover {
+  transform: scale(1.02);
+  box-shadow: 0 12px 36px -8px rgba(7, 193, 96, 0.3);
+}
+
+/* ── F. 装饰动画 ───────────────────────────────────────────────────────── */
+
+/* 底部跑马灯 */
+.welink-marquee {
+  overflow: hidden;
+  position: relative;
+  padding: 14px 0;
+  margin: 48px -24px 0;
+  background: linear-gradient(90deg, rgba(7, 193, 96, 0.06), rgba(16, 174, 255, 0.06), rgba(255, 149, 0, 0.06), rgba(7, 193, 96, 0.06));
+  border-top: 1px solid var(--vp-c-divider);
+  border-bottom: 1px solid var(--vp-c-divider);
+  user-select: none;
+}
+
+.welink-marquee-track {
+  display: inline-flex;
+  gap: 48px;
+  white-space: nowrap;
+  animation: welinkMarquee 32s linear infinite;
+  will-change: transform;
+}
+
+.welink-marquee-track:hover { animation-play-state: paused; }
+
+.welink-marquee-track > span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--vp-c-text-2);
+  letter-spacing: 0.05em;
+}
+
+.welink-marquee-track > span::before {
+  content: '●';
+  margin-right: 12px;
+  color: var(--vp-c-brand-1);
+}
+
+@keyframes welinkMarquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* 浮动吉祥物（右下角） */
+.welink-mascot {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 50;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #07c160, #10aeff);
+  box-shadow: 0 8px 24px rgba(7, 193, 96, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  cursor: pointer;
+  animation: welinkMascotBob 3s ease-in-out infinite;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s;
+  user-select: none;
+}
+
+.welink-mascot:hover {
+  transform: scale(1.15) rotate(-8deg);
+  box-shadow: 0 12px 32px rgba(7, 193, 96, 0.5);
+  animation-play-state: paused;
+}
+
+.welink-mascot:active { transform: scale(0.95); }
+
+@keyframes welinkMascotBob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+
+@media (max-width: 640px) {
+  .welink-mascot { right: 16px; bottom: 16px; width: 40px; height: 40px; font-size: 20px; }
+}
+
+/* 吉祥物气泡提示 */
+.welink-mascot::after {
+  content: attr(data-tip);
+  position: absolute;
+  right: 60px;
+  top: 50%;
+  transform: translateY(-50%) translateX(8px);
+  padding: 6px 12px;
+  background: #1d1d1f;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.welink-mascot:hover::after {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* ── 深色模式细调 ──────────────────────────────────────────────────────── */
+
+.dark .welink-marquee {
+  background: linear-gradient(90deg,
+    rgba(7, 193, 96, 0.12),
+    rgba(16, 174, 255, 0.12),
+    rgba(255, 149, 0, 0.10),
+    rgba(7, 193, 96, 0.12));
+}
+
+.dark .welink-marquee-track > span {
+  color: #c8c8cc;
+}
+
+.dark .welink-mascot {
+  box-shadow: 0 8px 24px rgba(7, 193, 96, 0.55),
+              0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.dark .welink-mascot::after {
+  background: #f5f5f7;
+  color: #1d1d1f;
+}
+
+.dark .feat-card:hover {
+  box-shadow: 0 16px 40px -8px rgba(7, 193, 96, 0.4),
+              0 4px 12px -2px rgba(0, 0, 0, 0.3);
+}
+
+.dark .VPFeature:hover {
+  box-shadow: 0 16px 40px -8px rgba(7, 193, 96, 0.4),
+              0 4px 12px -2px rgba(0, 0, 0, 0.3);
+}
+
+/* ── 响应式兜底 ────────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  /* 跑马灯在小屏上字号调整 */
+  .welink-marquee { padding: 10px 0; margin-top: 32px; }
+  .welink-marquee-track { gap: 32px; }
+  .welink-marquee-track > span { font-size: 11px; }
+
+  /* 视频 grid 在 640 以下的样式兜底 */
+  .vp-doc video { border-radius: 6px; }
+
+  /* Hero 发光背景在小屏不需要那么大 */
+  .VPHome .VPHero::before { inset: -10%; }
+}
+
+/* ── TOC 右侧目录美化 ──────────────────────────────────────────────────── */
+
+.VPDocAsideOutline .outline-marker {
+  background-color: var(--vp-c-brand-1) !important;
+}
+
+.VPDocAsideOutline .outline-link.active {
+  color: var(--vp-c-brand-1) !important;
+  font-weight: 700;
+}

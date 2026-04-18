@@ -15,6 +15,7 @@ backend/api/
 # MCP Server
 # ===========================
 mcp-server/welink-mcp
+mcp-server/mcp-server
 
 # ===========================
 # 前端
