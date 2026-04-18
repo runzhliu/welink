@@ -30,6 +30,7 @@ import (
 	"io/fs"
 	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -3766,18 +3767,69 @@ func serverMain() {
 
 	// 默认仅监听 127.0.0.1，避免新增的 /api/export/* 等端点暴露在 LAN 上
 	// 造成凭据/聊天数据泄漏。Docker/反代部署可显式打开 WELINK_LISTEN_LAN=1。
-	bindAddr := "127.0.0.1:" + prefs.Port
+	host := "127.0.0.1"
 	if os.Getenv("WELINK_LISTEN_LAN") == "1" {
-		bindAddr = ":" + prefs.Port
+		host = ""
 	}
-	log.Printf("WeLink Backend serving on %s", bindAddr)
+
+	// App 模式下，若首选 port 被占（例如 Docker 同名镜像在跑），自动递增找一个
+	// 空闲端口而不是静默失败后让 webview 连到别人的服务上看见 404。
+	listener, actualPort, err := listenWithFallback(host, prefs.Port, hasFrontend)
+	if err != nil {
+		log.Fatalf("WeLink 后端无法监听端口：%v", err)
+	}
+	log.Printf("WeLink Backend serving on %s:%s", host, actualPort)
 
 	if hasFrontend {
-		// App 模式：通知 webview 服务器已就绪，然后阻塞
-		go r.Run(bindAddr) //nolint:errcheck
-		signalServerReady(prefs.Port)
+		// App 模式：用已绑定的 listener 服务 webview，通知 ready 后阻塞
+		go func() {
+			if err := http.Serve(listener, r); err != nil {
+				log.Fatalf("WeLink HTTP server 崩溃：%v", err)
+			}
+		}()
+		signalServerReady(actualPort)
 		select {} // 等 webview 窗口关闭后 os.Exit
 	}
 
-	r.Run(bindAddr) //nolint:errcheck
+	if err := http.Serve(listener, r); err != nil {
+		log.Fatalf("WeLink HTTP server 崩溃：%v", err)
+	}
+}
+
+// listenWithFallback 绑定到 host:port。App 模式（fallback=true）下，如果首选
+// port 被占，会递增尝试最多 20 个端口，返回实际使用的 listener 和端口号。
+// Server 模式下只尝试一次以保留「端口由运维显式指定」的语义。
+func listenWithFallback(host, port string, fallback bool) (net.Listener, string, error) {
+	if host == "" {
+		// ":port" 语义：绑所有网卡
+		if l, err := net.Listen("tcp", ":"+port); err == nil {
+			return l, port, nil
+		} else if !fallback {
+			return nil, "", err
+		}
+	} else {
+		if l, err := net.Listen("tcp", host+":"+port); err == nil {
+			return l, port, nil
+		} else if !fallback {
+			return nil, "", err
+		}
+	}
+
+	// App 模式端口递增回退
+	basePort, err := strconv.Atoi(port)
+	if err != nil {
+		return nil, "", fmt.Errorf("端口号 %q 解析失败：%w", port, err)
+	}
+	for i := 1; i <= 20; i++ {
+		cand := strconv.Itoa(basePort + i)
+		addr := host + ":" + cand
+		if host == "" {
+			addr = ":" + cand
+		}
+		if l, err := net.Listen("tcp", addr); err == nil {
+			log.Printf("端口 %s 被占用，回退到 %s", port, cand)
+			return l, cand, nil
+		}
+	}
+	return nil, "", fmt.Errorf("端口 %s 以及后续 20 个备选端口全部被占用", port)
 }
