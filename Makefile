@@ -2,7 +2,8 @@
         dev-backend dev-frontend test test-short lint clean help \
         docs-build docs-build-push docs-up docs-down docs-logs \
         demo-up demo-up-build demo-down demo-logs \
-        server-up server-down server-logs server-pull
+        server-up server-down server-logs server-pull \
+        dev-deploy dev-down dev-logs
 
 ## ─── 主站 Docker（frontend + backend）────────────────────────────────────────
 ## 使用 docker-compose.yml，与 docs/ 完全隔离，互不影响。
@@ -107,6 +108,18 @@ server-pull: ## 【服务器执行】git pull + 拉取新镜像 + 重启（一�
 	git pull
 	docker compose -f server-compose.yml pull
 	docker compose -f server-compose.yml up -d
+
+## ─── 本地开发部署 ─────────────────────────────────────────────
+dev-deploy:  ## 本地 build 并部署（需设置 DEV_DOMAIN 环境变量）
+	docker compose -f docker-compose.dev.yml up --build -d
+	@echo ""
+	@echo "✅  部署完成：https://$(DEV_DOMAIN)"
+
+dev-down:    ## 停止本地开发部署
+	docker compose -f docker-compose.dev.yml down
+
+dev-logs:    ## 跟踪本地开发部署日志
+	docker compose -f docker-compose.dev.yml logs -f
 
 ## ─── 构建 ────────────────────────────────────────────────────────────────────
 
