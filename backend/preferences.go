@@ -125,6 +125,12 @@ type Preferences struct {
 	BlockedGroups []string `json:"blocked_groups"`
 	PrivacyMode   bool     `json:"privacy_mode,omitempty"`
 
+	// 屏幕锁定（纯前端覆盖层，微信 PC Cmd+L 同思路）
+	// PIN 用 bcrypt 哈希（salt 内嵌），由后端 /api/lock/* 负责验证
+	LockPinHash     string `json:"lock_pin_hash,omitempty"`
+	AutoLockMinutes int    `json:"auto_lock_minutes,omitempty"` // 0=关闭自动锁；30/60/120
+	LockOnStartup   bool   `json:"lock_on_startup,omitempty"`   // App 重开是否默认锁定
+
 	// 关系预测「不再推荐此人」名单（仍可在联系人/群聊中看到，只是首页 forecast 不再提醒）
 	ForecastIgnored []string `json:"forecast_ignored,omitempty"`
 
@@ -282,6 +288,9 @@ func sanitizeForExport(p Preferences, stripSecrets bool) Preferences {
 	if !stripSecrets {
 		return p
 	}
+
+	// 屏幕锁定 PIN（跟随 API Key 一起被视为敏感）
+	p.LockPinHash = ""
 
 	// LLM / Embedding
 	p.LLMAPIKey = ""
