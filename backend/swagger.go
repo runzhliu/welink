@@ -31,6 +31,7 @@ func swaggerSpec() []byte {
     { "name": "向量检索", "description": "语义向量嵌入与相似度搜索" },
     { "name": "记忆提炼", "description": "LLM 提炼关键事实并持久化" },
     { "name": "认证", "description": "Gemini OAuth 等第三方认证" },
+    { "name": "锁屏", "description": "界面 PIN 锁（bcrypt 哈希本地存储）" },
     { "name": "偏好设置", "description": "用户偏好（LLM 配置、屏蔽名单等）" },
     { "name": "应用管理", "description": "App 模式配置与日志（macOS/Windows 桌面端）" },
     { "name": "数据库", "description": "原始数据库管理与 SQL 查询" },
@@ -1262,6 +1263,44 @@ func swaggerSpec() []byte {
     },
     "/export/oauth/onedrive/callback": {
       "get": { "tags": ["导出中心"], "summary": "接收授权码换 token", "responses": { "200": { "description": "授权成功 HTML" } } }
+    },
+    "/lock/status": {
+      "get": { "tags": ["锁屏"], "summary": "锁屏配置与状态", "responses": { "200": { "description": "enabled / auto_lock_minutes / lock_on_startup" } } }
+    },
+    "/lock/setup": {
+      "post": {
+        "tags": ["锁屏"], "summary": "首次设 PIN 启用锁屏",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "pin": { "type": "string", "minLength": 4, "maxLength": 32 } }, "required": ["pin"] } } } },
+        "responses": { "200": { "description": "{ ok: true }" } }
+      }
+    },
+    "/lock/verify": {
+      "post": {
+        "tags": ["锁屏"], "summary": "解锁验证 PIN",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "pin": { "type": "string" } }, "required": ["pin"] } } } },
+        "responses": { "200": { "description": "{ ok: true }" }, "401": { "description": "PIN 错误" } }
+      }
+    },
+    "/lock/change": {
+      "post": {
+        "tags": ["锁屏"], "summary": "修改 PIN（需旧 PIN）",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "old_pin": { "type": "string" }, "new_pin": { "type": "string" } }, "required": ["old_pin", "new_pin"] } } } },
+        "responses": { "200": { "description": "{ ok: true }" } }
+      }
+    },
+    "/lock/disable": {
+      "post": {
+        "tags": ["锁屏"], "summary": "关闭锁屏（需当前 PIN）",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "pin": { "type": "string" } }, "required": ["pin"] } } } },
+        "responses": { "200": { "description": "{ ok: true }" } }
+      }
+    },
+    "/lock/settings": {
+      "put": {
+        "tags": ["锁屏"], "summary": "修改自动锁时长 / 启动锁定开关",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "auto_lock_minutes": { "type": "integer", "enum": [0, 30, 60, 120] }, "lock_on_startup": { "type": "boolean" } } } } } },
+        "responses": { "200": { "description": "{ ok: true }" } }
+      }
     }
   },
   "components": {
