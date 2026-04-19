@@ -6,6 +6,8 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { PrivacyModeContext } from './contexts/PrivacyModeContext';
 import { SelfInfoProvider } from './contexts/SelfInfoContext';
+import { LockProvider, useLock } from './contexts/LockContext';
+import { LockOverlay } from './components/common/LockOverlay';
 
 // Layout Components
 import { Sidebar } from './components/layout/Sidebar';
@@ -56,7 +58,8 @@ import { globalApi, groupsApi } from './services/api';
 
 const ALL_TIME: TimeRange = { from: null, to: null, label: '全部' };
 
-function App() {
+function AppInner() {
+  const { lock: lockScreen, enabled: lockEnabled } = useLock();
   const { dark, toggle: toggleDark } = useDarkMode();
 
   // 全局字号（rem 基准，默认 16px）
@@ -150,6 +153,11 @@ function App() {
         setPaletteOpen(p => !p);
         return;
       }
+      if (e.key.toLowerCase() === 'l' && lockEnabled) {
+        e.preventDefault();
+        lockScreen();
+        return;
+      }
       if (!isEditable && /^[1-9]$/.test(e.key)) {
         const idx = Number(e.key) - 1;
         const t = TAB_ORDER[idx];
@@ -161,7 +169,7 @@ function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [lockEnabled, lockScreen]);
 
 
   // App 模式检测
@@ -524,6 +532,15 @@ function App() {
     </div>
     </PrivacyModeContext.Provider>
     </SelfInfoProvider>
+  );
+}
+
+function App() {
+  return (
+    <LockProvider>
+      <AppInner />
+      <LockOverlay />
+    </LockProvider>
   );
 }
 

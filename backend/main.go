@@ -3753,6 +3753,9 @@ func serverMain() {
 		})
 	})
 
+	// 屏幕锁定相关端点（/api/lock/*）
+	registerLockRoutes(api)
+
 	// /api/status：未配置时也返回 200，前端 useBackendStatus 靠它判断后端是否可达
 	api.GET("/status", func(c *gin.Context) {
 		svcMu.RLock()

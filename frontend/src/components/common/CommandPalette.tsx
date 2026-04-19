@@ -11,10 +11,11 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Hash, User, Users, Bot, Settings, Sparkles, Database, Download, RefreshCw, Moon, Sun, X, Clock } from 'lucide-react';
+import { Search, Hash, User, Users, Bot, Settings, Sparkles, Database, Download, RefreshCw, Moon, Sun, X, Clock, Lock } from 'lucide-react';
 import axios from 'axios';
 import type { ContactStats, GroupInfo, TabType } from '../../types';
 import { appApi } from '../../services/appApi';
+import { useLock } from '../../contexts/LockContext';
 import { emitToast } from './Toast';
 import { canReveal } from '../../utils/reveal';
 import { buildPinyinIndex, matchPinyin } from '../../utils/pinyin';
@@ -80,6 +81,7 @@ const TAB_ITEMS: { tab: TabType; label: string; keywords: string[] }[] = [
 export const CommandPalette: React.FC<Props> = ({
   open, onClose, contacts, groups, onContactClick, onGroupClick, onTabChange, dark, onToggleDark,
 }) => {
+  const { enabled: lockEnabled, lock: lockScreen } = useLock();
   const [q, setQ] = useState('');
   const [aiHits, setAiHits] = useState<AIHit[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -291,6 +293,11 @@ export const CommandPalette: React.FC<Props> = ({
             document.querySelector<HTMLButtonElement>('[data-feedback-open]')?.click();
           }, 300);
         } },
+      ...(lockEnabled ? [{
+        label: '锁屏', keys: ['lock', '锁', 'lockscreen', '锁屏'],
+        icon: <Lock size={14} className="text-[#07c160]" />,
+        fn: () => lockScreen(),
+      }] : []),
     ];
     for (const a of actions) {
       if (lower && !a.keys.some(k => k.toLowerCase().includes(lower)) && !a.label.toLowerCase().includes(lower)) continue;
