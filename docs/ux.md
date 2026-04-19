@@ -155,7 +155,7 @@ WeLink 启动会自动探测几个候选数据目录（当前配置、`WELINK_DA
 
 | 按钮 | 适用场景 |
 |---|---|
-| **在 GitHub 创建 issue** | 有 GitHub 账号，推荐；URL 超长时自动把 body 复制到剪贴板让你粘贴 |
+| **在 GitHub 创建 issue** | 有 GitHub 账号，推荐；走专用 `diagnostic_report.md` 模板，title + body 会自动填入，带 `from-app` label 便于维护者筛选；URL 超长时自动把 body 复制到剪贴板让你粘贴 |
 | **复制为 Markdown** | 没 GitHub 账号，想贴到邮件、微信、钉钉、任何 IM |
 | **下载 .md 文件** | 当前设备不方便直接打开浏览器 / 需要作为附件发送 |
 

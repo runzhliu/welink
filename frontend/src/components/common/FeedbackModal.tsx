@@ -124,7 +124,9 @@ export const FeedbackModal: React.FC<Props> = ({ open, onClose, appVersion, init
     try {
       const md = assembleMarkdown();
       const urlBase = `https://github.com/${REPO}/issues/new`;
+      // 走纯 Markdown 模板（diagnostic_report.md），YAML 表单模板会忽略 body 参数
       const params = new URLSearchParams();
+      params.set('template', 'diagnostic_report.md');
       params.set('title', title.trim());
       params.set('body', md);
       const fullUrl = `${urlBase}?${params.toString()}`;
@@ -134,6 +136,7 @@ export const FeedbackModal: React.FC<Props> = ({ open, onClose, appVersion, init
         // 超长：先复制 body 到剪贴板，再打开空 body 的 issue 页让用户粘贴
         await navigator.clipboard.writeText(md);
         const fallbackParams = new URLSearchParams();
+        fallbackParams.set('template', 'diagnostic_report.md');
         fallbackParams.set('title', title.trim());
         fallbackParams.set('body', '> ⚠️ 详情内容过长，已自动复制到剪贴板，请在这里粘贴（Cmd/Ctrl + V）。');
         openUrl = `${urlBase}?${fallbackParams.toString()}`;
