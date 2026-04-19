@@ -41,6 +41,18 @@
 - **群聊列表**：加我的参与度 / 近期活跃 / 趋势四维
 - **官网**：全套微动画（滚动淡入 / Hero 光晕 / 卡片交互 / 跑马灯 / 吉祥物）
 
+### 🤝 社区治理
+
+- **Issue / PR 模板**：结构化 bug 报告 + feature 请求表单，PR checklist；引导新手提前看 FAQ / 走 Discussions
+- **CODEOWNERS**：自动按目录请 reviewer
+- **行为准则 + 安全策略**：`CODE_OF_CONDUCT.md`（Contributor Covenant 2.1）+ `SECURITY.md`（私密漏洞披露流程）
+- **FUNDING.yml**：仓库右侧 Sponsor 按钮
+- **DCO check**：PR 要求每个 commit `Signed-off-by`，避免未来许可证纠纷。`git commit -s` 即可
+- **Conventional Commits 校验**：PR 标题必须 `feat:` / `fix:` 等标准前缀
+- **自动 PR label**：按改动文件自动打 `area:backend` / `area:frontend` / `area:export` / `area:forecast` 等；附带 size 标签（xs/s/m/l/xl）
+- **First-interaction welcome bot**：第一次提 issue/PR 的贡献者自动收到欢迎 + 指引
+- **Stale bot**：45+14 天无响应 issue / 30+14 天无响应 PR 自动 close
+
 ### 🔧 基础设施
 
 - CI 防御：lockfile registry 白名单检查

@@ -1,0 +1,16 @@
+# CODEOWNERS
+# 改动特定路径时自动请对应 owner 审查。
+# 格式：<glob pattern> @user1 @user2
+#
+# 单人主导项目，所有改动默认都请 @runzhliu 审。未来多人协作时在这里按目录分配。
+
+*                   @runzhliu
+
+# 精细分配示例（启用时取消注释）：
+# /backend/          @runzhliu
+# /frontend/         @runzhliu
+# /mcp-server/       @runzhliu
+# /docs/             @runzhliu
+# /.github/          @runzhliu
+# /backend/service/  @runzhliu
+# /backend/export_*.go @runzhliu

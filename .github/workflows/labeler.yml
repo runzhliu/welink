@@ -1,0 +1,42 @@
+name: PR Labeler
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+          sync-labels: true
+
+  size:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: CodelyTV/pr-size-labeler@v1
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          xs_label: 'size/xs'
+          xs_max_size: '20'
+          s_label:  'size/s'
+          s_max_size:  '100'
+          m_label:  'size/m'
+          m_max_size:  '300'
+          l_label:  'size/l'
+          l_max_size:  '800'
+          xl_label: 'size/xl'
+          fail_if_xl: 'false'
+          message_if_xl: |
+            这个 PR 改动量很大（800+ 行）。review 起来困难，能不能拆成几个小 PR？
+          files_to_ignore: |
+            "frontend/package-lock.json"
+            "frontend/dist/**"
+            "backend/go.sum"

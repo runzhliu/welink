@@ -81,16 +81,51 @@ npm run docs:dev
 ## PR 流程
 
 1. Fork 仓库 → 创建 feature 分支（如 `feat/add-telegram-export`）
-2. 提交改动，commit message 用 [Conventional Commits](https://www.conventionalcommits.org/) 格式：
+2. 提交改动，**每个 commit 都用 `git commit -s`**（DCO 要求，见下方）
+3. commit message 用 [Conventional Commits](https://www.conventionalcommits.org/) 格式：
    - `feat: 新功能描述`
    - `fix: 修复描述`
    - `refactor: 重构描述`
    - `docs: 文档修改`
    - `chore: 杂项（依赖升级、配置等）`
-3. Push 到你的 fork
-4. 在 GitHub 上发起 PR 到 `dev` 分支（不是 `main`）
-5. CI 会跑 build / test / typecheck，都绿了进入 review
-6. 被 review 批准后合并
+4. Push 到你的 fork
+5. 在 GitHub 上发起 PR 到 `dev` 分支（不是 `main`）
+6. CI 会跑 build / test / typecheck / DCO check / PR 标题格式校验，都绿了进入 review
+7. 被 review 批准后合并
+
+### Signed-off-by (DCO)
+
+WeLink 用 **DCO**（Developer Certificate of Origin）而不是 CLA。**每个 commit 都要加 `Signed-off-by:` 行**，声明"我有权把这段代码以本项目的许可证发布"。
+
+规则很简单，git 有内置支持：
+
+```bash
+git commit -s -m "feat: 新功能"
+# 或修改现有 commit：
+git commit --amend --signoff
+# 或 rebase 整个分支：
+git rebase --signoff main
+```
+
+`-s` 会自动把下面这行附到 commit message 末尾：
+
+```
+Signed-off-by: Your Name <your.email@example.com>
+```
+
+这个名字 / 邮箱来自你本地 git 配置：
+
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+```
+
+::: tip DCO 全文
+DCO 原文 ~10 行，中文摘译：你声明这段贡献是你自己写的（或你有权贡献上游代码），并同意按本项目 AGPL-3.0 许可证发布。
+全文见 https://developercertificate.org/
+:::
+
+PR 提交后 CI 会自动检查每个 commit 的 `Signed-off-by`。漏了就按提示 `git rebase --signoff` 补签再 push。
 
 ### Commit Message 风格
 

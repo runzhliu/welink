@@ -1,0 +1,49 @@
+name: Commit Lint
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  lint-title:
+    runs-on: ubuntu-latest
+    steps:
+      # 校验 PR 标题符合 Conventional Commits，例如：feat: xxx / fix(api): xxx / docs: xxx
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          scopes: |
+            backend
+            frontend
+            mcp
+            docs
+            ci
+            export
+            forecast
+            group
+            api
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$  # 首字符不是大写英文
+          subjectPatternError: |
+            PR 标题的描述部分首字符不能是大写英文（中文 / 小写英文都可以）。
+            例如：
+              ✅ feat: 新增关系预测
+              ✅ fix(backend): correct timezone in exports
+              ❌ feat: Added new feature
