@@ -1,0 +1,36 @@
+# 本地开发部署：通过 DEV_DOMAIN 指定的域名访问
+# 用法：make dev-deploy / make dev-down
+
+services:
+  dev-nginx:
+    image: nginx:alpine
+    container_name: welink-dev-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./dev-nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - ${DEV_SSL_CERT:-./dev-certs/cert.pem}:/etc/certs/cert.pem:ro
+      - ${DEV_SSL_KEY:-./dev-certs/cert.key}:/etc/certs/cert.key:ro
+    environment:
+      - DEV_DOMAIN=${DEV_DOMAIN:?请设置 DEV_DOMAIN 环境变量}
+    depends_on:
+      - dev-frontend
+    restart: unless-stopped
+
+  dev-frontend:
+    build: ./frontend
+    container_name: welink-dev-frontend
+    depends_on:
+      - dev-backend
+    restart: unless-stopped
+
+  dev-backend:
+    build: ./backend
+    container_name: welink-dev-backend
+    hostname: backend
+    environment:
+      - GIN_MODE=release
+      - DEMO_MODE=true
+      - DATA_DIR=/app/demo-data
+    restart: unless-stopped
