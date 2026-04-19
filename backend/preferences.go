@@ -268,6 +268,68 @@ func defaultPreferences() Preferences {
 	}
 }
 
+// sanitizeForExport 返回用于导出的 Preferences 副本：
+//   - 机器特定字段（绝对路径、数据目录列表）始终清空，因为换机器没法用
+//   - stripSecrets=true 时，所有 API Key / OAuth token / 密码也清空
+func sanitizeForExport(p Preferences, stripSecrets bool) Preferences {
+	// 机器特定 —— 无论如何都清空
+	p.DataDir = ""
+	p.LogDir = ""
+	p.DownloadDir = ""
+	p.AIAnalysisDBPath = ""
+	p.DataDirProfiles = nil
+
+	if !stripSecrets {
+		return p
+	}
+
+	// LLM / Embedding
+	p.LLMAPIKey = ""
+	p.EmbeddingAPIKey = ""
+	for i := range p.LLMProfiles {
+		p.LLMProfiles[i].APIKey = ""
+	}
+
+	// 云笔记
+	p.NotionToken = ""
+	p.FeishuAppSecret = ""
+
+	// 对象存储
+	p.WebDAVPassword = ""
+	p.S3SecretKey = ""
+	p.DropboxToken = ""
+
+	// OAuth — client secret + 动态 token 一起清（token 单独留着没意义）
+	p.GDriveClientSecret = ""
+	p.GDriveAccessToken = ""
+	p.GDriveRefreshToken = ""
+	p.GDriveTokenExpiry = 0
+
+	p.OneDriveClientSecret = ""
+	p.OneDriveAccessToken = ""
+	p.OneDriveRefreshToken = ""
+	p.OneDriveTokenExpiry = 0
+
+	p.GeminiClientSecret = ""
+	p.GeminiAccessToken = ""
+	p.GeminiRefreshToken = ""
+	p.GeminiTokenExpiry = 0
+
+	return p
+}
+
+// mergeImported 导入新配置时的合并策略：
+//   - 非机器字段全部用 imported 覆盖（LLM / 偏好 / 凭证等）
+//   - 机器特定字段保留当前值（新机器上为空，用户会被引导重选；老机器上已配好不丢）
+func mergeImported(current, imported Preferences) Preferences {
+	imported.DataDir = current.DataDir
+	imported.LogDir = current.LogDir
+	imported.DownloadDir = current.DownloadDir
+	imported.AIAnalysisDBPath = current.AIAnalysisDBPath
+	imported.DataDirProfiles = current.DataDirProfiles
+	return imported
+}
+
 // migratePreferences 把老 schema 的 preferences 升到最新。每步 migration 只做
 // "本版本加进来的破坏性改动"，按版本号 case-by-case。新加字段但 zero-value 兼容
 // 的情况不需要在这里写东西；写在这里的都是语义翻转 / 字段合并 / 字段拆分之类。
