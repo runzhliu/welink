@@ -1,0 +1,90 @@
+name: 🐛 Bug 报告
+description: 发现了 WeLink 的问题？在这里描述
+title: "[Bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢报告 bug！请尽量提供能复现的信息。**敏感信息（聊天内容 / API Key / 头像 URL）请勿贴在这里。**
+
+        想带诊断报告一起？在 WeLink 里：设置 → 诊断 → 右上角「反馈问题 →」，Modal 里填完点「在 GitHub 创建 issue」，会自动附带结构化环境信息。
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题简述
+      description: 一句话说清楚遇到了什么
+      placeholder: 例如："点击某联系人 → 群聊画像闪退"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 一步步列出点什么、输入什么、看到什么
+      placeholder: |
+        1. 打开 XX 页
+        2. 点 XX 按钮
+        3. 观察到 XX
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+      description: 你觉得应该发生什么？
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 运行模式
+      options:
+        - macOS App（DMG）
+        - Windows App（EXE）
+        - Docker Compose
+        - 本地开发（go run / npm run dev）
+        - 在线 Demo（demo.welink.click）
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: WeLink 版本
+      description: 设置 → 关于 里能看到；或运行 `./welink-backend --version`
+      placeholder: v0.1.2 / dev-abc1234
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: macOS 14.5 / Windows 11 23H2 / Ubuntu 22.04
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 截图（可选）
+      description: |
+        - App 模式：设置 → 应用日志 → 一键打包日志（API Key 自动脱敏）
+        - Docker：`docker compose logs backend`
+        - 截图拖拽到这里即可
+      render: shell
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 我搜过了 Issues，没有重复的
+          required: true
+        - label: 我没有贴任何聊天内容 / API Key / 其他敏感信息
+          required: true

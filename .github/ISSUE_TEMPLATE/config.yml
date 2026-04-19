@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 使用讨论 / 提问
+    url: https://github.com/runzhliu/welink/discussions
+    about: 使用上的问题、想法、分享玩法 → 走 Discussions，比 Issue 更合适
+  - name: 📖 文档 / 常见问题
+    url: https://welink.click/faq
+    about: 先看 FAQ，大部分问题已经有答案了
+  - name: 🛟 加速反馈（带诊断信息）
+    url: https://welink.click/ux#一键反馈问题
+    about: 在 App 内：设置 → 诊断 → 反馈问题，会自动附带结构化环境信息
