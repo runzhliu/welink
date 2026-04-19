@@ -22,6 +22,13 @@ import { useToast } from './Toast';
 import { RelativeTime } from './RelativeTime';
 import { FeedbackModal } from './FeedbackModal';
 
+// Makefile 编译时会剥掉 tag 的 v 前缀（patsubst v%,%），展示时补回来
+function formatVersion(v?: string): string {
+  if (!v) return 'dev';
+  if (v === 'dev' || v.startsWith('dev-') || v.startsWith('v')) return v;
+  return 'v' + v;
+}
+
 // ─── 隐私屏蔽子组件 ───────────────────────────────────────────────────────────
 
 const TagList: React.FC<{
@@ -2859,7 +2866,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              当前版本：<span className="font-mono font-bold text-[#1d1d1f] dk-text">{appVersion ?? 'dev'}</span>
+              当前版本：<span className="font-mono font-bold text-[#1d1d1f] dk-text">{formatVersion(appVersion)}</span>
             </p>
             <p className="text-xs text-gray-400 mt-0.5">
               <a href="https://github.com/runzhliu/welink/releases" target="_blank" rel="noreferrer" className="hover:text-[#07c160] underline">更新日志</a>
@@ -2903,7 +2910,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               <div className="bg-[#e7f8f0] dark:bg-[#07c160]/10 border border-[#07c160]/20 rounded-xl p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-[#07c160]">发现新版本 {updateInfo.latest}</span>
-                  <span className="text-[10px] text-gray-400">当前 {appVersion}</span>
+                  <span className="text-[10px] text-gray-400">当前 {formatVersion(appVersion)}</span>
                 </div>
                 {updateInfo.changelog && (
                   <pre className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap max-h-32 overflow-y-auto bg-white/50 dark:bg-black/10 rounded-lg p-3">{updateInfo.changelog}</pre>
