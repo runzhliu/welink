@@ -1,0 +1,58 @@
+name: DCO check
+
+# 本仓库要求每个 commit 都带 Signed-off-by 行（DCO，Developer Certificate of Origin）。
+# 贡献者在本地用 `git commit -s` 即可自动追加。详见 https://welink.click/contribute
+#
+# 更推荐的做法是在 GitHub 仓库安装 https://github.com/apps/dco，
+# 它会作为 required check 在 PR 上打勾。本 workflow 是一个不依赖外部 app 的 fallback。
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dco:
+    name: DCO / Signed-off-by
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Verify every commit is signed off
+        run: |
+          set -e
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          echo "Checking commits $BASE_SHA..$HEAD_SHA"
+
+          MISSING=""
+          for sha in $(git rev-list "$BASE_SHA..$HEAD_SHA"); do
+            if ! git log -1 --format=%B "$sha" | grep -qE '^Signed-off-by: '; then
+              MISSING="$MISSING $sha"
+            fi
+          done
+
+          if [ -n "$MISSING" ]; then
+            echo "::error::以下 commit 没有 Signed-off-by 行（DCO 要求）："
+            for sha in $MISSING; do
+              echo "  - $sha  $(git log -1 --format=%s $sha)"
+            done
+            echo ""
+            echo "修复方式（本地）："
+            echo "  git rebase --signoff $BASE_SHA"
+            echo "  git push --force-with-lease"
+            echo ""
+            echo "或者单个 commit 用 \`git commit --amend --signoff\`。"
+            echo ""
+            echo "详见 https://welink.click/contribute"
+            exit 1
+          fi
+
+          echo "✅ 所有 commit 都有 Signed-off-by。"

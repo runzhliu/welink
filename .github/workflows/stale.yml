@@ -1,0 +1,34 @@
+name: Stale issues & PRs
+
+on:
+  schedule:
+    - cron: '30 1 * * *'  # 每天 01:30 UTC（北京 09:30）
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-issue-stale: 45
+          days-before-issue-close: 14
+          days-before-pr-stale: 30
+          days-before-pr-close: 14
+          stale-issue-label: 'stale'
+          stale-pr-label: 'stale'
+          exempt-issue-labels: 'pinned,security,roadmap,help-wanted,good-first-issue'
+          exempt-pr-labels: 'pinned,security,WIP,do-not-merge'
+          stale-issue-message: |
+            这个 issue 已经 **45 天没有动静**。如果问题仍然存在，请留个言更新状态，否则 14 天后会自动 close。
+          stale-pr-message: |
+            这个 PR 已经 **30 天没有动静**。需要人 review 吗？或者等 rebase？留个言继续推进，否则 14 天后会自动 close。
+          close-issue-message: |
+            因 45+14 天无人响应，自动关闭。若后续仍需跟进，可随时在此 issue 继续评论或开新 issue。
+          close-pr-message: |
+            因 30+14 天无人响应，自动关闭。重新 ready 时 reopen 即可。
+          operations-per-run: 80

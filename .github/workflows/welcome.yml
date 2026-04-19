@@ -1,0 +1,37 @@
+name: Welcome first-time contributors
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            👋 感谢第一次提 issue！
+
+            - 如果没看过 [FAQ](https://welink.click/faq)，可能答案已经在那里了
+            - 如果是使用上的问题 / 分享玩法，建议去 [Discussions](https://github.com/runzhliu/welink/discussions)
+            - 如果是 bug，记得附上**复现步骤**和**版本 / 系统信息**（设置 → 诊断 里可以一键复制）
+
+            我们会尽快看！有其他问题也可以在 issue 里继续补充。
+          pr-message: |
+            🎉 感谢第一次提 PR！
+
+            在 review 之前，请确认：
+
+            - [ ] 每个 commit 都 `git commit -s` 加了 `Signed-off-by` 行（DCO 要求 → [贡献指南](https://welink.click/contribute)）
+            - [ ] 改了代码的话跑了 `go build` + `npx tsc --noEmit`
+            - [ ] 改了 API 的话同步更新了 `docs/api.md` 和 `backend/swagger.go`
+
+            欢迎加入 WeLink！对改动有疑问可以直接 @runzhliu。

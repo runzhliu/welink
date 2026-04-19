@@ -1,0 +1,61 @@
+# actions/labeler v5 配置：根据 PR 改动的文件自动加 label
+# https://github.com/actions/labeler
+
+"area:backend":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "backend/**/*"
+
+"area:frontend":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "frontend/**/*"
+
+"area:mcp":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "mcp-server/**/*"
+
+"area:docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**/*"
+          - "*.md"
+
+"area:ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**/*"
+          - "docker-compose*.yml"
+          - "Dockerfile"
+          - "Makefile"
+
+"area:export":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "backend/export_*.go"
+          - "frontend/src/components/dashboard/ExportCenterPage.tsx"
+
+"area:forecast":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "backend/forecast.go"
+          - "backend/icebreaker.go"
+          - "backend/service/forecast.go"
+          - "frontend/src/components/dashboard/RelationshipForecast*.tsx"
+
+"area:group":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "frontend/src/components/groups/**"
+          - "backend/group_year_review.go"
+
+"dependencies":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "go.mod"
+          - "go.sum"
+          - "frontend/package.json"
+          - "frontend/package-lock.json"
+          - "backend/go.mod"
+          - "backend/go.sum"
