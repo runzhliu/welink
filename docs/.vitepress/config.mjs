@@ -75,7 +75,6 @@ export default defineConfig({
       { text: 'MCP Server', link: '/mcp-server' },
       { text: 'API 接口', link: '/api' },
       { text: 'FAQ', link: '/faq' },
-      { text: '更新日志', link: '/changelog' },
     ],
 
     outline: {
@@ -101,7 +100,6 @@ export default defineConfig({
         items: [
           { text: '常见问题 (FAQ)', link: '/faq' },
           { text: '贡献指南', link: '/contribute' },
-          { text: '更新日志', link: '/changelog' },
         ],
       },
       {
