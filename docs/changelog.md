@@ -51,6 +51,7 @@
 
 ### 🔒 安全加固
 
+- **界面 PIN 锁屏**：设置 → 锁屏 PIN 启 4-32 位 PIN（bcrypt 哈希存 preferences.json），支持 `⌘L` 快捷键 / 闲置 30min/1h/2h 自动锁 / App 启动即锁三种触发。全屏毛玻璃遮罩 + PIN 输入框。属"视觉锁"不是数据加密，防的是路过偷看
 - **默认仅监听 `127.0.0.1`**：后端端口不再默认暴露到局域网，避免同网络用户触达 `/api/export/*` 等敏感端点。开放到 LAN 需显式设 `WELINK_LISTEN_LAN=1`（Docker 镜像默认带，由 compose 端口映射限制宿主侧暴露）
 - **Google Drive / OneDrive OAuth 加 state 防 CSRF**：授权 URL 带 crypto/rand 32 字节 state（TTL 30 min，一次性消费），回调前先校验。修复了攻击者诱导受害者浏览器访问 `/api/export/oauth/*/callback?code=...` 即可把攻击者 refresh token 写入受害者 preferences 的漏洞
 - **OAuth 回调 base URL 不再信任 `X-Forwarded-*` 请求头**：改为从 `WELINK_PUBLIC_URL` 环境变量读取（否则回退到 `http://127.0.0.1:<PORT>`）。反代部署 OAuth 授权**需显式配置该变量**

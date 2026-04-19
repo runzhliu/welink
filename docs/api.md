@@ -22,6 +22,7 @@
 - [AI 对话历史](#ai-对话历史)
 - [用户偏好](#用户偏好)
 - [Gemini OAuth](#gemini-oauth)
+- [锁屏](#锁屏)
 - [数据库浏览器](#数据库浏览器)
 - [导出中心](#导出中心)
 - [App 管理（桌面版）](#app-管理桌面版)
@@ -593,6 +594,69 @@ OAuth 回调处理（交换 token）。
 ### `DELETE /api/auth/gemini`
 
 撤销 Gemini 授权。
+
+
+## 锁屏
+
+界面级 PIN 锁，防路过偷看。PIN 后端 bcrypt 哈希存 `preferences.json`，所有验证本地完成。
+
+### `GET /api/lock/status`
+
+查询锁屏配置与状态：是否启用、自动锁分钟数、启动锁定开关。
+
+### `POST /api/lock/setup`
+
+首次启用锁屏，设置 PIN。
+
+**请求体**
+
+```json
+{ "pin": "1234" }
+```
+
+PIN 长度 4-32，任意可见字符。
+
+### `POST /api/lock/verify`
+
+解锁时验证 PIN。
+
+**请求体**
+
+```json
+{ "pin": "1234" }
+```
+
+**响应**
+
+```json
+{ "ok": true }
+```
+
+### `POST /api/lock/change`
+
+已启用的情况下修改 PIN，需提供旧 PIN + 新 PIN。
+
+```json
+{ "old_pin": "1234", "new_pin": "567890" }
+```
+
+### `POST /api/lock/disable`
+
+关闭锁屏需要提供当前 PIN。
+
+```json
+{ "pin": "1234" }
+```
+
+### `PUT /api/lock/settings`
+
+修改自动锁屏时长（分钟）和启动锁定开关。
+
+```json
+{ "auto_lock_minutes": 30, "lock_on_startup": true }
+```
+
+`auto_lock_minutes`：`0` = 关闭，支持 `30` / `60` / `120`。
 
 
 ## 数据库浏览器
