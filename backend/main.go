@@ -3624,6 +3624,135 @@ func serverMain() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
+	// POST /api/preferences/reset — 重置用户配置
+	// body: {"hard": bool}
+	//   hard=false（默认 / 软重置）：仅清空 preferences.json（写回 defaultPreferences），保留 ai_analysis.db
+	//   hard=true（硬重置）：同时删除 ai_analysis.db（会先备份为 .bak）
+	// 旧 preferences.json 总会被 rename 为 preferences.json.<ts>.bak 保底。
+	api.POST("/preferences/reset", func(c *gin.Context) {
+		var body struct {
+			Hard bool `json:"hard"`
+		}
+		_ = c.ShouldBindJSON(&body)
+
+		backups := []string{}
+		// 备份并替换 preferences.json
+		prefPath := preferencesPath()
+		if _, err := os.Stat(prefPath); err == nil {
+			bak := prefPath + "." + time.Now().Format("20060102-150405") + ".bak"
+			if err := os.Rename(prefPath, bak); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "备份 preferences.json 失败：" + err.Error()})
+				return
+			}
+			backups = append(backups, bak)
+		}
+		if err := savePreferences(defaultPreferences()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "写入空配置失败：" + err.Error()})
+			return
+		}
+
+		if body.Hard {
+			// 硬重置：AI 库也干掉，先备份
+			dbPath := aiAnalysisDBPath()
+			if _, err := os.Stat(dbPath); err == nil {
+				if err := CloseAIDB(); err != nil {
+					log.Printf("[RESET] CloseAIDB warn: %v", err)
+				}
+				bak := dbPath + "." + time.Now().Format("20060102-150405") + ".bak"
+				if err := os.Rename(dbPath, bak); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "备份 ai_analysis.db 失败：" + err.Error()})
+					return
+				}
+				backups = append(backups, bak)
+				if err := InitAIDB(); err != nil {
+					log.Printf("[RESET] re-InitAIDB warn: %v", err)
+				}
+			}
+		}
+
+		log.Printf("[RESET] hard=%v backups=%v", body.Hard, backups)
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "hard": body.Hard, "backups": backups})
+	})
+
+	// GET /api/preferences/export — 导出当前配置为 JSON
+	// ?include_secrets=1 时把 API Key / OAuth token / 密码一起导出（默认 0，安全起见）。
+	// 机器特定字段（DataDir / LogDir / DownloadDir / AIAnalysisDBPath / DataDirProfiles）始终清空。
+	api.GET("/preferences/export", func(c *gin.Context) {
+		includeSecrets := c.Query("include_secrets") == "1"
+		p := loadPreferences()
+		exported := sanitizeForExport(p, !includeSecrets)
+		data, err := json.MarshalIndent(exported, "", "  ")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "序列化配置失败：" + err.Error()})
+			return
+		}
+		fname := fmt.Sprintf("welink-config-%s.json", time.Now().Format("20060102-150405"))
+		c.Header("Content-Disposition", "attachment; filename=\""+fname+"\"")
+		c.Header("Content-Type", "application/json; charset=utf-8")
+		c.Data(http.StatusOK, "application/json; charset=utf-8", data)
+	})
+
+	// POST /api/preferences/import — 上传 JSON 覆盖当前配置
+	// 合并策略：imported 覆盖非机器字段（LLM / 偏好 / 凭证等），当前机器特定字段（DataDir 等）保留。
+	// 原 preferences.json 会被 rename 为 .bak.<ts> 保底。
+	api.POST("/preferences/import", func(c *gin.Context) {
+		fileHeader, err := c.FormFile("file")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "未上传文件"})
+			return
+		}
+		if fileHeader.Size > 5*1024*1024 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "配置文件超过 5MB，已中止"})
+			return
+		}
+		f, err := fileHeader.Open()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "打开上传文件失败：" + err.Error()})
+			return
+		}
+		defer f.Close()
+		raw, err := io.ReadAll(f)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "读取上传文件失败：" + err.Error()})
+			return
+		}
+		var imported Preferences
+		if err := json.Unmarshal(raw, &imported); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "不是合法的 WeLink 配置 JSON：" + err.Error()})
+			return
+		}
+
+		current := loadPreferences()
+		merged := mergeImported(current, imported)
+		merged = migratePreferences(merged)
+
+		// 先 rename 原文件为 .bak 再写入（写入失败时能回滚）
+		prefPath := preferencesPath()
+		var bak string
+		if _, err := os.Stat(prefPath); err == nil {
+			bak = prefPath + "." + time.Now().Format("20060102-150405") + ".bak"
+			if err := os.Rename(prefPath, bak); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "备份原配置失败：" + err.Error()})
+				return
+			}
+		}
+		if err := savePreferences(merged); err != nil {
+			if bak != "" {
+				_ = os.Rename(bak, prefPath)
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "写入新配置失败：" + err.Error()})
+			return
+		}
+
+		needsDataDir := merged.DataDir == "" && len(merged.DataDirProfiles) == 0
+		log.Printf("[IMPORT] backup=%s needs_data_dir=%v", bak, needsDataDir)
+		c.JSON(http.StatusOK, gin.H{
+			"status":          "ok",
+			"backup":          bak,
+			"needs_data_dir":  needsDataDir, // 前端可据此提示用户重新选数据目录
+		})
+	})
+
 	// /api/status：未配置时也返回 200，前端 useBackendStatus 靠它判断后端是否可达
 	api.GET("/status", func(c *gin.Context) {
 		svcMu.RLock()

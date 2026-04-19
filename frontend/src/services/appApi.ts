@@ -72,4 +72,16 @@ export const appApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then((r) => r.data);
   },
+
+  resetPreferences: (hard: boolean) =>
+    api.post<{ status?: string; hard?: boolean; backups?: string[]; error?: string }>('/preferences/reset', { hard })
+      .then((r) => r.data),
+
+  importPreferences: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post<{ status?: string; backup?: string; needs_data_dir?: boolean; error?: string }>('/preferences/import', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data);
+  },
 };
