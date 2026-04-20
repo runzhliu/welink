@@ -58,6 +58,19 @@ func safePercent(part, total int) int {
 	return part * 100 / total
 }
 
+// sqlEscapeLikeArg 转义用于 LIKE '%...%' 的字面量子串。
+// 同时处理单引号（闭合字符串跳出）、LIKE 通配符 (% _) 和反斜杠（ESCAPE 字符）。
+// 配合 `LIKE '%X%' ESCAPE '\'` 使用。
+func sqlEscapeLikeArg(s string) string {
+	r := strings.NewReplacer(
+		`\`, `\\`,
+		`'`, `''`,
+		`%`, `\%`,
+		`_`, `\_`,
+	)
+	return r.Replace(s)
+}
+
 // sampleEvenly 从切片中均匀采样 n 个元素（保持原始顺序）
 func sampleEvenly(items []string, n int) []string {
 	if len(items) <= n {
@@ -1134,8 +1147,12 @@ func serverMain() {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请先填写并保存 Client ID"})
 			return
 		}
-		redirectURI := geminiRedirectURI(c.Request)
-		c.JSON(http.StatusOK, gin.H{"url": geminiAuthURL(prefs.GeminiClientID, redirectURI)})
+		state, err := newOAuthState()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "生成 state 失败：" + err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"url": geminiAuthURL(prefs.GeminiClientID, geminiRedirectURI()) + "&state=" + state})
 	})
 
 	// GET /api/auth/gemini/callback — Google 授权回调
@@ -1155,14 +1172,17 @@ func serverMain() {
 			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(failHTML(errParam)))
 			return
 		}
+		if !validateOAuthState(c.Query("state")) {
+			c.Data(http.StatusBadRequest, "text/html; charset=utf-8", []byte(failHTML("state 校验失败，可能是跨站请求伪造尝试")))
+			return
+		}
 		code := c.Query("code")
 		if code == "" {
 			c.Data(http.StatusBadRequest, "text/html; charset=utf-8", []byte(failHTML("无效回调，缺少 code 参数")))
 			return
 		}
 		prefs := loadPreferences()
-		redirectURI := geminiRedirectURI(c.Request)
-		access, refresh, expiry, err := geminiExchangeCode(prefs.GeminiClientID, prefs.GeminiClientSecret, code, redirectURI)
+		access, refresh, expiry, err := geminiExchangeCode(prefs.GeminiClientID, prefs.GeminiClientSecret, code, geminiRedirectURI())
 		if err != nil {
 			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(failHTML(err.Error())))
 			return
@@ -3257,9 +3277,13 @@ func serverMain() {
 					return
 				}
 				// Step 1: 查联系人
-				hint := parsed.ContactHint
+				// 这里的 hint 来自 LLM 的 JSON 输出，间接被用户可控（prompt injection）。
+				// ExecQuery 的白名单能阻断 DROP / ATTACH 之类多语句，但单 SELECT 里
+				// UNION 注入仍可泄露 contact.db 其他字段。先转义 LIKE 特殊字符 + 单引号，
+				// 让 hint 只能作为字面量子串匹配。
+				hint := sqlEscapeLikeArg(parsed.ContactHint)
 				contactResult := getMgr().ExecQuery("contact.db", fmt.Sprintf(
-					"SELECT username, COALESCE(remark,'') AS remark, nick_name FROM contact WHERE remark LIKE '%%%s%%' OR nick_name LIKE '%%%s%%' LIMIT 1",
+					"SELECT username, COALESCE(remark,'') AS remark, nick_name FROM contact WHERE remark LIKE '%%%s%%' ESCAPE '\\' OR nick_name LIKE '%%%s%%' ESCAPE '\\' LIMIT 1",
 					hint, hint))
 				if contactResult.Error != "" || len(contactResult.Rows) == 0 {
 					c.JSON(http.StatusOK, gin.H{

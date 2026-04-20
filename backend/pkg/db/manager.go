@@ -11,6 +11,71 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// pragmaReadOnlyAllow 是只读 PRAGMA 子命令的白名单。
+// 写入类的 PRAGMA（journal_mode / synchronous / writable_schema / foreign_keys 等）
+// 会改变连接的持久状态——连接来自 *sql.DB 连接池，会影响其他业务的写入与完整性，
+// 所以必须挡住，只放行查询 schema / 诊断信息这种纯读的。
+var pragmaReadOnlyAllow = map[string]bool{
+	"TABLE_INFO":        true,
+	"TABLE_XINFO":       true,
+	"INDEX_INFO":        true,
+	"INDEX_XINFO":       true,
+	"INDEX_LIST":        true,
+	"FOREIGN_KEY_LIST":  true,
+	"DATABASE_LIST":     true,
+	"COLLATION_LIST":    true,
+	"FUNCTION_LIST":     true,
+	"MODULE_LIST":       true,
+	"COMPILE_OPTIONS":   true,
+	"ENCODING":          true,
+	"PAGE_SIZE":         true,
+	"PAGE_COUNT":        true,
+	"FREELIST_COUNT":    true,
+	"USER_VERSION":      true,
+	"APPLICATION_ID":    true,
+	"SCHEMA_VERSION":    true,
+	"INTEGRITY_CHECK":   true,
+	"QUICK_CHECK":       true,
+	"CACHE_SIZE":        true, // 读取，不是写入
+}
+
+// validateReadOnlySQL 检查单条 SQL 语句是否只读。允许 SELECT / EXPLAIN，以及
+// 白名单内的只读 PRAGMA 查询。写入类 PRAGMA、ATTACH、DROP 等一律拒绝。
+func validateReadOnlySQL(trimmed string) error {
+	upper := strings.ToUpper(trimmed)
+	switch {
+	case strings.HasPrefix(upper, "SELECT"), strings.HasPrefix(upper, "EXPLAIN"), strings.HasPrefix(upper, "WITH"):
+		return nil
+	case strings.HasPrefix(upper, "PRAGMA"):
+		// 提取子命令名（去掉 "PRAGMA "，取第一个 word）
+		rest := strings.TrimSpace(upper[len("PRAGMA"):])
+		// 可能带 schema 前缀：PRAGMA main.table_info(...)
+		if dot := strings.Index(rest, "."); dot > 0 && dot < 30 && !strings.ContainsAny(rest[:dot], " (=") {
+			rest = rest[dot+1:]
+		}
+		// 子命令名 = 到第一个非字母数字下划线为止
+		end := len(rest)
+		for i, r := range rest {
+			if !(r == '_' || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
+				end = i
+				break
+			}
+		}
+		name := rest[:end]
+		// 禁止 "PRAGMA foo = value" 这种写入形式，哪怕 foo 本身在白名单里
+		tail := strings.TrimSpace(rest[end:])
+		if strings.HasPrefix(tail, "=") {
+			return fmt.Errorf("禁止写入类 PRAGMA：%s", name)
+		}
+		if pragmaReadOnlyAllow[name] {
+			return nil
+		}
+		return fmt.Errorf("PRAGMA %s 不在只读白名单内", name)
+	default:
+		return fmt.Errorf("只允许执行 SELECT / EXPLAIN / 白名单 PRAGMA 语句")
+	}
+}
+
 type DBManager struct {
 	ContactDB  *sql.DB
 	MessageDBs []*sql.DB
@@ -321,11 +386,9 @@ func (mgr *DBManager) ExecQuery(dbName, sql string) *QueryResult {
 		return &QueryResult{Error: "数据库不存在"}
 	}
 
-	// 只允许 SELECT 语句（简单前缀检查）
 	trimmed := strings.TrimSpace(sql)
-	upper := strings.ToUpper(trimmed)
-	if !strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "PRAGMA") && !strings.HasPrefix(upper, "EXPLAIN") {
-		return &QueryResult{Error: "只允许执行 SELECT / PRAGMA / EXPLAIN 语句"}
+	if err := validateReadOnlySQL(trimmed); err != nil {
+		return &QueryResult{Error: err.Error()}
 	}
 
 	rows, err := db.Query(trimmed)
@@ -383,9 +446,8 @@ func (mgr *DBManager) ExecQuery(dbName, sql string) *QueryResult {
 // 用于跨库联系人消息查询时直接操作已找到的 message DB 连接。
 func ExecQueryOnDB(conn *sql.DB, sqlStr string) *QueryResult {
 	trimmed := strings.TrimSpace(sqlStr)
-	upper := strings.ToUpper(trimmed)
-	if !strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "PRAGMA") && !strings.HasPrefix(upper, "EXPLAIN") {
-		return &QueryResult{Error: "只允许执行 SELECT / PRAGMA / EXPLAIN 语句"}
+	if err := validateReadOnlySQL(trimmed); err != nil {
+		return &QueryResult{Error: err.Error()}
 	}
 	rows, err := conn.Query(trimmed)
 	if err != nil {
