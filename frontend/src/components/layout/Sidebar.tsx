@@ -85,8 +85,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
           expanded ? 'w-44' : 'w-16'
         } overflow-hidden`}
       >
-        {/* Logo 区 */}
-        <div className={`flex items-center gap-3 px-3 mb-4 ${expanded ? 'justify-between' : 'justify-center flex-col gap-2'}`}>
+        {/* Logo 区（固定） */}
+        <div className={`shrink-0 flex items-center gap-3 px-3 mb-4 ${expanded ? 'justify-between' : 'justify-center flex-col gap-2'}`}>
           <div
             className="w-9 h-9 rounded-xl overflow-hidden shadow-md shadow-green-100/50 dark:shadow-none cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
             onClick={() => openExternal('https://welink.click')}
@@ -106,8 +106,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
           </button>
         </div>
 
-        {/* 主导航 */}
-        <nav className="flex flex-col gap-1 flex-1 px-2">
+        {/* 主导航（中间可滚动） */}
+        <nav className="flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto px-2">
           {navItems.map(({ tab, icon, label }) => (
             <button
               key={tab}
@@ -129,8 +129,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
           ))}
         </nav>
 
-        {/* 底部工具按钮 */}
-        <div className="flex flex-col gap-1 px-2 pt-2 border-t border-gray-100 mt-2">
+        {/* 底部工具按钮（固定） */}
+        <div className="shrink-0 flex flex-col gap-1 px-2 pt-2 border-t border-gray-100 dark:border-white/10 mt-2">
           {bottomItems.map(({ icon, label, onClick }) => (
             <button
               key={label}
