@@ -52,11 +52,26 @@ type CompleteResponse struct {
 // ─── Provider 配置 ─────────────────────────────────────────────────────────────
 
 type llmConfig struct {
-	provider string
-	apiKey   string
-	baseURL  string
-	model    string
-	noThink  bool // Ollama 思考型模型专用，开启后请求前加 /no_think 前缀
+	provider        string
+	apiKey          string
+	baseURL         string
+	model           string
+	noThink         bool   // Ollama 思考型模型专用，开启后请求前加 /no_think 前缀
+	reasoningEffort string // off / low / medium / high；空字符串 = off
+}
+
+// reasoningBudgetTokens 把档位映射到 Claude thinking.budget_tokens
+func reasoningBudgetTokens(effort string) int {
+	switch effort {
+	case "low":
+		return 2048
+	case "medium":
+		return 8192
+	case "high":
+		return 16384
+	default:
+		return 0
+	}
 }
 
 // defaultsFor 为已知 provider 填充默认 baseURL 和 model（若用户未配置）
@@ -154,7 +169,7 @@ func llmConfigForProfile(profileID string, prefs Preferences) llmConfig {
 	if profileID != "" {
 		for _, p := range prefs.LLMProfiles {
 			if p.ID == profileID {
-				cfg = llmConfig{provider: p.Provider, apiKey: p.APIKey, baseURL: p.BaseURL, model: p.Model, noThink: p.NoThink}
+				cfg = llmConfig{provider: p.Provider, apiKey: p.APIKey, baseURL: p.BaseURL, model: p.Model, noThink: p.NoThink, reasoningEffort: p.ReasoningEffort}
 				goto applyGemini
 			}
 		}
@@ -259,11 +274,12 @@ func dispatchLLMStream(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig)
 // ─── OpenAI 兼容流式实现 ───────────────────────────────────────────────────────
 
 type openAIRequest struct {
-	Model    string       `json:"model"`
-	Messages []LLMMessage `json:"messages"`
-	Stream   bool         `json:"stream"`
-	Think    *bool        `json:"think,omitempty"`    // Ollama 专用：false = 禁用思考模式
-	Stop     []string     `json:"stop,omitempty"`     // 停止词，防止模型输出特殊 token
+	Model           string       `json:"model"`
+	Messages        []LLMMessage `json:"messages"`
+	Stream          bool         `json:"stream"`
+	Think           *bool        `json:"think,omitempty"`            // Ollama 专用：false = 禁用思考模式
+	Stop            []string     `json:"stop,omitempty"`             // 停止词，防止模型输出特殊 token
+	ReasoningEffort string       `json:"reasoning_effort,omitempty"` // OpenAI o-series / gpt-5-reasoning：low / medium / high
 }
 
 func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) error {
@@ -284,6 +300,10 @@ func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig
 	}
 	if cfg.provider == "ollama" {
 		reqBody.Stop = []string{"<|endoftext|>", "<|im_end|>", "<|im_start|>"}
+	}
+	// OpenAI o-series / gpt-5-reasoning 等支持 reasoning_effort 的模型
+	if cfg.reasoningEffort != "" && cfg.reasoningEffort != "off" && cfg.provider == "openai" {
+		reqBody.ReasoningEffort = cfg.reasoningEffort
 	}
 	body, _ := json.Marshal(reqBody)
 
@@ -393,11 +413,17 @@ func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig
 // ─── Claude 原生 API 流式实现 ─────────────────────────────────────────────────
 
 type claudeRequest struct {
-	Model     string       `json:"model"`
-	MaxTokens int          `json:"max_tokens"`
-	System    string       `json:"system,omitempty"`
-	Messages  []LLMMessage `json:"messages"`
-	Stream    bool         `json:"stream"`
+	Model     string           `json:"model"`
+	MaxTokens int              `json:"max_tokens"`
+	System    string           `json:"system,omitempty"`
+	Messages  []LLMMessage     `json:"messages"`
+	Stream    bool             `json:"stream"`
+	Thinking  *claudeThinking  `json:"thinking,omitempty"` // Extended Thinking（Sonnet 4+ / Opus 4+）
+}
+
+type claudeThinking struct {
+	Type         string `json:"type"`           // "enabled"
+	BudgetTokens int    `json:"budget_tokens"`  // 1024-64000
 }
 
 func streamClaude(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) error {
@@ -419,13 +445,19 @@ func streamClaude(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) erro
 		}
 	}
 
-	body, _ := json.Marshal(claudeRequest{
+	reqObj := claudeRequest{
 		Model:     cfg.model,
 		MaxTokens: 8192,
 		System:    system,
 		Messages:  userMsgs,
 		Stream:    true,
-	})
+	}
+	if budget := reasoningBudgetTokens(cfg.reasoningEffort); budget > 0 {
+		reqObj.Thinking = &claudeThinking{Type: "enabled", BudgetTokens: budget}
+		// Extended Thinking 要求 max_tokens > budget_tokens
+		reqObj.MaxTokens = budget + 8192
+	}
+	body, _ := json.Marshal(reqObj)
 
 	baseURL := "https://api.anthropic.com"
 	if cfg.baseURL != "" {
@@ -460,15 +492,26 @@ func streamClaude(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) erro
 		var event struct {
 			Type  string `json:"type"`
 			Delta struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
+				Type     string `json:"type"`      // "text_delta" / "thinking_delta"
+				Text     string `json:"text"`      // text_delta
+				Thinking string `json:"thinking"`  // thinking_delta
 			} `json:"delta"`
 		}
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
 			continue
 		}
-		if event.Type == "content_block_delta" && event.Delta.Text != "" {
-			send(StreamChunk{Delta: event.Delta.Text})
+		if event.Type != "content_block_delta" {
+			continue
+		}
+		switch event.Delta.Type {
+		case "thinking_delta":
+			if event.Delta.Thinking != "" {
+				send(StreamChunk{Thinking: event.Delta.Thinking})
+			}
+		case "text_delta", "":
+			if event.Delta.Text != "" {
+				send(StreamChunk{Delta: event.Delta.Text})
+			}
 		}
 	}
 	return scanner.Err()
@@ -521,6 +564,9 @@ func completeOpenAICompatSync(msgs []LLMMessage, cfg llmConfig) (string, error) 
 	}
 	if cfg.provider == "ollama" {
 		reqBody.Stop = []string{"<|endoftext|>", "<|im_end|>", "<|im_start|>"}
+	}
+	if cfg.reasoningEffort != "" && cfg.reasoningEffort != "off" && cfg.provider == "openai" {
+		reqBody.ReasoningEffort = cfg.reasoningEffort
 	}
 	body, _ := json.Marshal(reqBody)
 	req, err := http.NewRequest("POST", cfg.baseURL+"/chat/completions", bytes.NewReader(body))
@@ -575,10 +621,15 @@ func completeClaudeSync(msgs []LLMMessage, cfg llmConfig) (string, error) {
 		}
 	}
 
-	body, _ := json.Marshal(claudeRequest{
+	reqObj := claudeRequest{
 		Model: cfg.model, MaxTokens: 2048,
 		System: system, Messages: userMsgs, Stream: false,
-	})
+	}
+	if budget := reasoningBudgetTokens(cfg.reasoningEffort); budget > 0 {
+		reqObj.Thinking = &claudeThinking{Type: "enabled", BudgetTokens: budget}
+		reqObj.MaxTokens = budget + 2048
+	}
+	body, _ := json.Marshal(reqObj)
 	baseURL := "https://api.anthropic.com"
 	if cfg.baseURL != "" {
 		baseURL = cfg.baseURL
