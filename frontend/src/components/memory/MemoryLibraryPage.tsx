@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Brain, Pin, PinOff, Pencil, Trash2, Search, Loader2, Check, X as XIcon } from 'lucide-react';
+import { Brain, Pin, PinOff, Pencil, Trash2, Search, Loader2, Check, X as XIcon, Plus } from 'lucide-react';
 import axios from 'axios';
 import type { ContactStats, GroupInfo } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
@@ -39,8 +39,18 @@ export const MemoryLibraryPage: React.FC<Props> = ({ contacts, groups }) => {
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState('');
+  // 手动添加
+  const [addOpen, setAddOpen] = useState(false);
+  const [addContact, setAddContact] = useState<string>('');
+  const [addContactQuery, setAddContactQuery] = useState('');
+  const [addFact, setAddFact] = useState('');
+  const [addPinned, setAddPinned] = useState(false);
+  const [addBusy, setAddBusy] = useState(false);
+  const [addErr, setAddErr] = useState<string | null>(null);
 
   // 用于把 contact_key 映射到头像 / 名称
+  // 注意：后端 contact_key 带 contact:/group: 前缀，lookup 时要脱
+  const stripKey = (k: string) => k.replace(/^(contact|group):/, '');
   const contactMap = useMemo(() => {
     const m = new Map<string, { name: string; avatar: string | undefined; isGroup: boolean }>();
     for (const c of contacts) {
@@ -59,6 +69,7 @@ export const MemoryLibraryPage: React.FC<Props> = ({ contacts, groups }) => {
     }
     return m;
   }, [contacts, groups]);
+  const lookup = (key: string) => contactMap.get(stripKey(key));
 
   const fetchFacts = useCallback(async () => {
     setLoading(true);
@@ -122,20 +133,76 @@ export const MemoryLibraryPage: React.FC<Props> = ({ contacts, groups }) => {
   const totalAll = contactStats.reduce((s, c) => s + c.count, 0);
   const pinnedAll = contactStats.reduce((s, c) => s + c.pinned_count, 0);
 
+  const openAdd = () => {
+    setAddContact(activeContact || '');
+    setAddContactQuery('');
+    setAddFact('');
+    setAddPinned(false);
+    setAddErr(null);
+    setAddOpen(true);
+  };
+  const handleAdd = async () => {
+    if (!addContact || !addFact.trim()) { setAddErr('请选择联系人并填写事实'); return; }
+    setAddBusy(true); setAddErr(null);
+    try {
+      await axios.post('/api/memory', {
+        contact_key: addContact,
+        fact: addFact.trim(),
+        pinned: addPinned,
+      });
+      setAddOpen(false);
+      await fetchContactStats();
+      await fetchFacts();
+    } catch (e: unknown) {
+      const anyE = e as { response?: { data?: { error?: string } }; message?: string };
+      setAddErr(anyE?.response?.data?.error || anyE?.message || '添加失败');
+    } finally {
+      setAddBusy(false);
+    }
+  };
+  // 添加 modal 的联系人候选：所有 contacts + groups，按查询过滤
+  const addCandidates = useMemo(() => {
+    const q = addContactQuery.trim().toLowerCase();
+    const all: { key: string; name: string; avatar?: string; isGroup: boolean }[] = [];
+    for (const c of contacts) {
+      all.push({
+        key: 'contact:' + c.username,
+        name: c.remark || c.nickname || c.username,
+        avatar: avatarSrc(c.small_head_url),
+        isGroup: false,
+      });
+    }
+    for (const g of groups) {
+      all.push({
+        key: 'group:' + g.username,
+        name: g.name || g.username,
+        avatar: avatarSrc(g.small_head_url),
+        isGroup: true,
+      });
+    }
+    if (!q) return all.slice(0, 50);
+    return all.filter(x => x.name.toLowerCase().includes(q) || x.key.toLowerCase().includes(q)).slice(0, 50);
+  }, [contacts, groups, addContactQuery]);
+
   return (
     <div className="p-4 sm:p-10 pb-20">
-      <header className="mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center shadow-md">
-            <Brain size={22} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black tracking-tight dk-text">记忆库</h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              共 {totalAll} 条 AI 提炼事实 · {pinnedAll} 条已置顶（AI 对话自动引用）
-            </p>
-          </div>
+      <header className="mb-6 flex items-center gap-3 flex-wrap">
+        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center shadow-md">
+          <Brain size={22} className="text-white" />
         </div>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-black tracking-tight dk-text">记忆库</h1>
+          <p className="text-sm text-gray-400 mt-0.5">
+            共 {totalAll} 条 AI 提炼事实 · {pinnedAll} 条已置顶（AI 对话自动引用）
+          </p>
+        </div>
+        <button
+          onClick={openAdd}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#07c160] text-white text-sm font-semibold hover:bg-[#06ad56] transition-colors"
+        >
+          <Plus size={14} />
+          手动添加
+        </button>
       </header>
 
       <div className="flex gap-4 flex-col lg:flex-row">
@@ -152,7 +219,7 @@ export const MemoryLibraryPage: React.FC<Props> = ({ contacts, groups }) => {
           </button>
           <div className="mt-2 max-h-[calc(100vh-320px)] overflow-y-auto space-y-0.5">
             {contactStats.map(s => {
-              const info = contactMap.get(s.contact_key);
+              const info = lookup(s.contact_key);
               const active = activeContact === s.contact_key;
               return (
                 <button
@@ -167,7 +234,7 @@ export const MemoryLibraryPage: React.FC<Props> = ({ contacts, groups }) => {
                   ) : (
                     <div className="w-6 h-6 rounded-lg bg-gray-200 dark:bg-white/10 shrink-0" />
                   )}
-                  <span className="truncate flex-1">{info?.name || s.contact_key}</span>
+                  <span className="truncate flex-1">{info?.name || stripKey(s.contact_key)}</span>
                   {s.pinned_count > 0 && (
                     <span className="text-[10px] text-amber-500">📌{s.pinned_count}</span>
                   )}
@@ -221,7 +288,7 @@ export const MemoryLibraryPage: React.FC<Props> = ({ contacts, groups }) => {
           ) : (
             <div className="space-y-2">
               {facts.map(f => {
-                const info = contactMap.get(f.contact_key);
+                const info = lookup(f.contact_key);
                 const isEditing = editingId === f.id;
                 return (
                   <div key={f.id} className={`bg-white dark:bg-[#1d1d1f] rounded-2xl border p-4 transition-colors ${
@@ -236,7 +303,7 @@ export const MemoryLibraryPage: React.FC<Props> = ({ contacts, groups }) => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
-                            {info?.name || f.contact_key}
+                            {info?.name || stripKey(f.contact_key)}
                           </span>
                           {f.pinned && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-semibold">
@@ -310,6 +377,86 @@ export const MemoryLibraryPage: React.FC<Props> = ({ contacts, groups }) => {
           )}
         </main>
       </div>
+
+      {/* 手动添加记忆 modal */}
+      {addOpen && (
+        <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-black/40 p-4" onClick={() => !addBusy && setAddOpen(false)}>
+          <div className="w-full max-w-lg rounded-3xl bg-white dark:bg-[#1d1d1f] shadow-2xl border border-gray-100 dark:border-white/10 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold dk-text mb-3">添加一条记忆</h3>
+            <p className="text-xs text-gray-400 mb-4">手动添加的事实会参与 AI 对话上下文检索；勾选置顶后无论相似度都会被引用。</p>
+
+            {/* 联系人 */}
+            <label className="text-xs text-gray-600 dark:text-gray-400 font-semibold">关联到</label>
+            {addContact ? (
+              <div className="mt-1 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10">
+                {(() => {
+                  const info = lookup(addContact);
+                  return (
+                    <div className="flex items-center gap-2 min-w-0">
+                      {info?.avatar
+                        ? <img src={info.avatar} alt="" className="w-6 h-6 rounded-lg object-cover" />
+                        : <div className="w-6 h-6 rounded-lg bg-gray-200 dark:bg-white/10" />}
+                      <span className="text-sm dk-text truncate">{info?.name || stripKey(addContact)}</span>
+                    </div>
+                  );
+                })()}
+                <button onClick={() => setAddContact('')} className="text-gray-400 hover:text-gray-600">
+                  <XIcon size={14} />
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  value={addContactQuery}
+                  onChange={(e) => setAddContactQuery(e.target.value)}
+                  placeholder="搜索联系人或群聊..."
+                  className="w-full mt-1 px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm dk-text outline-none focus:border-[#07c160]"
+                />
+                <div className="mt-2 max-h-48 overflow-y-auto space-y-0.5 border border-gray-100 dark:border-white/5 rounded-xl p-1">
+                  {addCandidates.length === 0 ? (
+                    <div className="text-xs text-gray-400 px-2 py-3 text-center">没有匹配的联系人</div>
+                  ) : addCandidates.map(x => (
+                    <button
+                      key={x.key}
+                      onClick={() => { setAddContact(x.key); setAddContactQuery(''); }}
+                      className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-2 text-sm"
+                    >
+                      {x.avatar ? <img src={x.avatar} alt="" className="w-6 h-6 rounded-lg object-cover" /> : <div className="w-6 h-6 rounded-lg bg-gray-200 dark:bg-white/10" />}
+                      <span className="dk-text truncate flex-1">{x.name}</span>
+                      {x.isGroup && <span className="text-[10px] text-gray-400">群</span>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* 事实内容 */}
+            <label className="text-xs text-gray-600 dark:text-gray-400 font-semibold block mt-4">事实内容</label>
+            <textarea
+              value={addFact}
+              onChange={(e) => setAddFact(e.target.value)}
+              rows={3}
+              placeholder="例如：对方的生日是 10 月 15 日；家住在北京朝阳区"
+              className="w-full mt-1 px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm dk-text outline-none focus:border-[#07c160]"
+            />
+
+            <label className="flex items-center gap-2 mt-3 text-xs text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+              <input type="checkbox" checked={addPinned} onChange={(e) => setAddPinned(e.target.checked)} className="accent-[#07c160]" />
+              置顶（AI 对话始终引用）
+            </label>
+
+            {addErr && <p className="mt-2 text-xs text-red-500">{addErr}</p>}
+
+            <div className="mt-5 flex gap-2 justify-end">
+              <button onClick={() => setAddOpen(false)} disabled={addBusy} className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 text-sm">取消</button>
+              <button onClick={handleAdd} disabled={addBusy} className="px-4 py-2 rounded-xl bg-[#07c160] text-white text-sm font-semibold disabled:opacity-50 flex items-center gap-1.5">
+                {addBusy && <Loader2 size={14} className="animate-spin" />}
+                添加
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
