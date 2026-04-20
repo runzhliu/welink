@@ -44,12 +44,68 @@ func collectAll(svc *service.ContactService, items []ExportItem) ([]ExportDoc, e
 		if it.Title != "" {
 			doc.Title = it.Title
 		}
+		doc.Markdown = welinkFrontmatter(it, doc.Title) + doc.Markdown
 		docs = append(docs, doc)
 	}
 	if len(docs) == 0 && firstErr != nil {
 		return nil, firstErr
 	}
 	return docs, nil
+}
+
+// welinkFrontmatter 生成 YAML frontmatter，方便 Obsidian / Logseq / 其他 MD 工具识别。
+// 普通 Markdown viewer（GitHub / VSCode 预览 / Notion）会把它当成文本块忽略不显示，
+// 不影响其他导出目标；Obsidian 则会识别 tags / aliases / source 等字段。
+func welinkFrontmatter(it ExportItem, title string) string {
+	var tags []string
+	switch it.Type {
+	case ExportYearReview:
+		tags = []string{"welink", "年度回顾"}
+	case ExportConversation:
+		tags = []string{"welink", "对话归档"}
+		if it.IsGroup {
+			tags = append(tags, "群聊")
+		} else {
+			tags = append(tags, "联系人")
+		}
+	case ExportAIHistory:
+		tags = []string{"welink", "AI对话"}
+	case ExportMemoryGraph:
+		tags = []string{"welink", "记忆图谱"}
+	default:
+		tags = []string{"welink"}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("---\n")
+	if title != "" {
+		sb.WriteString(fmt.Sprintf("title: %q\n", title))
+		// Obsidian 用 aliases 做反向链接的替代名
+		sb.WriteString(fmt.Sprintf("aliases: [%q]\n", title))
+	}
+	if len(tags) > 0 {
+		quoted := make([]string, len(tags))
+		for i, t := range tags {
+			quoted[i] = fmt.Sprintf("%q", t)
+		}
+		sb.WriteString(fmt.Sprintf("tags: [%s]\n", strings.Join(quoted, ", ")))
+	}
+	if it.Username != "" {
+		sb.WriteString(fmt.Sprintf("welink-username: %q\n", it.Username))
+	}
+	if it.Year > 0 {
+		sb.WriteString(fmt.Sprintf("welink-year: %d\n", it.Year))
+	}
+	if it.From > 0 {
+		sb.WriteString(fmt.Sprintf("welink-from: %s\n", time.Unix(it.From, 0).Format("2006-01-02")))
+	}
+	if it.To > 0 {
+		sb.WriteString(fmt.Sprintf("welink-to: %s\n", time.Unix(it.To, 0).Format("2006-01-02")))
+	}
+	sb.WriteString("source: WeLink\n")
+	sb.WriteString(fmt.Sprintf("exported-at: %s\n", time.Now().Format(time.RFC3339)))
+	sb.WriteString("---\n\n")
+	return sb.String()
 }
 
 // ─── 1. 年度回顾（全局） ─────────────────────────────────────────────────────
