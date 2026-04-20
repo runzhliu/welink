@@ -3774,6 +3774,9 @@ func serverMain() {
 	// 记忆库相关端点（/api/memory/*）
 	registerMemoryRoutes(api)
 
+	// 播客相关端点（/api/podcast/*）
+	registerPodcastRoutes(api, getSvc)
+
 	// /api/status：未配置时也返回 200，前端 useBackendStatus 靠它判断后端是否可达
 	api.GET("/status", func(c *gin.Context) {
 		svcMu.RLock()

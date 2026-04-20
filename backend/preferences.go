@@ -136,6 +136,14 @@ type Preferences struct {
 	AutoLockMinutes int    `json:"auto_lock_minutes,omitempty"` // 0=关闭自动锁；30/60/120
 	LockOnStartup   bool   `json:"lock_on_startup,omitempty"`   // App 重开是否默认锁定
 
+	// 播客功能 TTS 配置（NotebookLM 风格音频回顾）
+	// 默认走 OpenAI TTS；base URL 留空 = https://api.openai.com/v1
+	PodcastTTSBaseURL string `json:"podcast_tts_base_url,omitempty"`
+	PodcastTTSAPIKey  string `json:"podcast_tts_api_key,omitempty"`
+	PodcastTTSModel   string `json:"podcast_tts_model,omitempty"`   // 默认 tts-1
+	PodcastTTSVoiceA  string `json:"podcast_tts_voice_a,omitempty"` // 主持人 A，默认 alloy
+	PodcastTTSVoiceB  string `json:"podcast_tts_voice_b,omitempty"` // 主持人 B，默认 nova
+
 	// 关系预测「不再推荐此人」名单（仍可在联系人/群聊中看到，只是首页 forecast 不再提醒）
 	ForecastIgnored []string `json:"forecast_ignored,omitempty"`
 
@@ -297,6 +305,9 @@ func sanitizeForExport(p Preferences, stripSecrets bool) Preferences {
 	// 屏幕锁定 PIN（跟随 API Key 一起被视为敏感）
 	p.LockPinHash = ""
 
+	// 播客 TTS API Key
+	p.PodcastTTSAPIKey = ""
+
 	// LLM / Embedding
 	p.LLMAPIKey = ""
 	p.EmbeddingAPIKey = ""
@@ -426,6 +437,7 @@ func sanitizeForResponse(p Preferences) Preferences {
 	out.OneDriveClientSecret = redact(out.OneDriveClientSecret)
 	out.OneDriveAccessToken = ""
 	out.OneDriveRefreshToken = ""
+	out.PodcastTTSAPIKey = redact(out.PodcastTTSAPIKey)
 	if len(out.LLMProfiles) > 0 {
 		sanitized := make([]LLMProfile, len(out.LLMProfiles))
 		copy(sanitized, out.LLMProfiles)
