@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame, Sparkles, Maximize2, Minimize2 } from 'lucide-react';
+import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame, Sparkles, Maximize2, Minimize2, Mic } from 'lucide-react';
 import { ChatReplay } from './ChatReplay';
 import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
@@ -13,6 +13,7 @@ import { WordCloudCanvas } from './WordCloudCanvas';
 import { LLMAnalysisTab } from './LLMAnalysisTab';
 import { AICloneTab } from './AICloneTab';
 import { ForgeSkillModal } from './ForgeSkillModal';
+import { PodcastModal } from './PodcastModal';
 import { RelationshipThermometer } from './RelationshipThermometer';
 import { SecretWordsCard } from './SecretWordsCard';
 import { ConfirmDialog } from '../common/ConfirmDialog';
@@ -59,6 +60,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   // showReplay removed — now a tab
   const [forgeOpen, setForgeOpen] = useState(false);
+  const [podcastOpen, setPodcastOpen] = useState(false);
 
   // 联系人切换时重置到指定 tab（支持从首页跳转到 AI 分析）
   useEffect(() => {
@@ -267,6 +269,13 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
               </div>
             )}
           </div>
+          <button
+            onClick={() => setPodcastOpen(true)}
+            className="p-2 rounded-xl text-gray-300 hover:text-pink-500 hover:bg-pink-500/10 transition-colors duration-200"
+            title="生成播客 — 双主持人对话 + TTS 播报"
+          >
+            <Mic size={20} strokeWidth={2} />
+          </button>
           <button
             onClick={() => setForgeOpen(true)}
             className="p-2 rounded-xl text-gray-300 hover:text-[#8b5cf6] hover:bg-[#8b5cf6]/10 transition-colors duration-200"
@@ -802,6 +811,12 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         displayName={displayName}
       />
     )}
+
+    <PodcastModal
+      open={podcastOpen}
+      onClose={() => setPodcastOpen(false)}
+      contact={contact}
+    />
 
     <ConfirmDialog
       open={blockConfirmOpen}

@@ -30,6 +30,49 @@ type PodcastScript struct {
 // registerPodcastRoutes 挂载播客相关端点。
 // NotebookLM 风格：把联系人数据 → 双主持人对话 → TTS 播报。
 func registerPodcastRoutes(api *gin.RouterGroup, getSvc func() *service.ContactService) {
+	// 读取 TTS 配置
+	api.GET("/podcast/config", func(c *gin.Context) {
+		p := loadPreferences()
+		hasKey := strings.TrimSpace(p.PodcastTTSAPIKey) != ""
+		c.JSON(http.StatusOK, gin.H{
+			"base_url": p.PodcastTTSBaseURL,
+			"has_key":  hasKey,
+			"model":    p.PodcastTTSModel,
+			"voice_a":  p.PodcastTTSVoiceA,
+			"voice_b":  p.PodcastTTSVoiceB,
+		})
+	})
+
+	// 更新 TTS 配置
+	api.PUT("/podcast/config", func(c *gin.Context) {
+		var body struct {
+			BaseURL string `json:"base_url"`
+			APIKey  string `json:"api_key"` // 空串 / "__HAS_KEY__" / "****" 都视为"保持原值"
+			Model   string `json:"model"`
+			VoiceA  string `json:"voice_a"`
+			VoiceB  string `json:"voice_b"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		p := loadPreferences()
+		p.PodcastTTSBaseURL = strings.TrimSpace(body.BaseURL)
+		p.PodcastTTSModel = strings.TrimSpace(body.Model)
+		p.PodcastTTSVoiceA = strings.TrimSpace(body.VoiceA)
+		p.PodcastTTSVoiceB = strings.TrimSpace(body.VoiceB)
+		// API Key 保护逻辑同 LLM
+		incoming := strings.TrimSpace(body.APIKey)
+		if incoming != "" && incoming != hasKeyPlaceholder && !strings.Contains(incoming, "****") {
+			p.PodcastTTSAPIKey = incoming
+		}
+		if err := savePreferences(p); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败：" + err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
 	// 生成脚本：聚合数据 + LLM 写双人对话 JSON
 	api.POST("/podcast/generate-script", func(c *gin.Context) {
 		var body struct {
