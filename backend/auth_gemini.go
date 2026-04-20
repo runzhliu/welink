@@ -106,7 +106,9 @@ func geminiValidToken(prefs *Preferences) (string, error) {
 	return newToken, nil
 }
 
-// geminiRedirectURI 从请求的 Host 构造回调地址
-func geminiRedirectURI(r *http.Request) string {
-	return "http://" + r.Host + "/api/auth/gemini/callback"
+// geminiRedirectURI 返回 Gemini OAuth 回调地址。
+// 使用服务端 oauthPublicURL()（WELINK_PUBLIC_URL 或 127.0.0.1:<port>），
+// 不读任何请求头——否则 Host / X-Forwarded-Host 可被伪造，授权 code 被回传到攻击者域。
+func geminiRedirectURI() string {
+	return oauthPublicURL() + "/api/auth/gemini/callback"
 }
