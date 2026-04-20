@@ -127,6 +127,7 @@ interface LLMProfile {
   base_url?: string;
   model?: string;
   no_think?: boolean; // Ollama 思考型模型（Qwen3+）专用
+  reasoning_effort?: '' | 'low' | 'medium' | 'high'; // 深度思考档位：Claude thinking + OpenAI o-series
 }
 
 function genId(): string {
@@ -344,6 +345,30 @@ const ProfileCard: React.FC<{
           >
             <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${profile.no_think ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
           </button>
+        </div>
+      )}
+
+      {/* 深度思考档位（Claude Sonnet 4+ / Opus 4+ 以及 OpenAI o-series 有效） */}
+      {(profile.provider === 'claude' || profile.provider === 'openai') && (
+        <div className="flex items-center justify-between py-1 gap-3">
+          <div className="flex-1 min-w-0">
+            <span className="text-sm text-[#1d1d1f] dark:text-gray-200">深度思考</span>
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              {profile.provider === 'claude'
+                ? 'Claude Extended Thinking（Sonnet 4+ / Opus 4+）— 档位对应 2K / 8K / 16K budget_tokens'
+                : 'OpenAI reasoning_effort — 适用 o1 / o3 / gpt-5-reasoning 等模型'}
+            </p>
+          </div>
+          <select
+            value={profile.reasoning_effort || ''}
+            onChange={(e) => onChange({ ...profile, reasoning_effort: e.target.value as LLMProfile['reasoning_effort'] })}
+            className="px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-[#1d1d1f] dark:text-white outline-none focus:border-[#07c160]"
+          >
+            <option value="">关闭</option>
+            <option value="low">低</option>
+            <option value="medium">中</option>
+            <option value="high">高</option>
+          </select>
         </div>
       )}
 

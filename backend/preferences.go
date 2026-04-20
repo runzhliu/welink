@@ -80,6 +80,11 @@ type LLMProfile struct {
 	BaseURL  string `json:"base_url,omitempty"`
 	Model    string `json:"model,omitempty"`
 	NoThink  bool   `json:"no_think,omitempty"` // Ollama 思考型模型（Qwen3+）专用：开启后在消息前加 /no_think 跳过推理
+	// 深度思考档位：off（默认）/ low / medium / high。
+	//   - Claude (Sonnet 4+ / Opus 4+)  → 映射为 thinking.budget_tokens（2K/8K/16K）
+	//   - OpenAI o-series / gpt-5-reasoning → reasoning_effort 字段
+	//   - DeepSeek R1 / Ollama qwen3 等     → 模型自带 <think>，本字段不影响
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 }
 
 // Preferences 是唯一的持久化结构体，合并了用户偏好和 App 配置。
