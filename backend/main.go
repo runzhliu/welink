@@ -2483,6 +2483,21 @@ func serverMain() {
 
 		// 从记忆事实库检索相关事实（有则补充，无则跳过）
 		memFacts, _ := SearchMemFacts(body.Key, searchQ, 10, prefs)
+		// 置顶事实：无论相似度如何都塞进 context（用户主动标记的始终重要）
+		if pinned, _ := GetPinnedMemFacts(body.Key); len(pinned) > 0 {
+			seen := make(map[string]bool, len(memFacts))
+			for _, f := range memFacts {
+				seen[f] = true
+			}
+			var merged []string
+			for _, p := range pinned {
+				if !seen[p.Fact] {
+					merged = append(merged, "[📌 置顶] "+p.Fact)
+					seen[p.Fact] = true
+				}
+			}
+			memFacts = append(merged, memFacts...)
+		}
 
 		flusher, ok := c.Writer.(http.Flusher)
 		if !ok {
@@ -3755,6 +3770,9 @@ func serverMain() {
 
 	// 屏幕锁定相关端点（/api/lock/*）
 	registerLockRoutes(api)
+
+	// 记忆库相关端点（/api/memory/*）
+	registerMemoryRoutes(api)
 
 	// /api/status：未配置时也返回 200，前端 useBackendStatus 靠它判断后端是否可达
 	api.GET("/status", func(c *gin.Context) {
