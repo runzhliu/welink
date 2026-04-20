@@ -1420,6 +1420,43 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
+  // 播客 TTS 配置
+  const [ttsConfig, setTtsConfig] = useState({
+    base_url: '',
+    model: '',
+    voice_a: '',
+    voice_b: '',
+    api_key: '',
+    has_key: false,
+  });
+  const [ttsSaving, setTtsSaving] = useState(false);
+  const [ttsSaveMsg, setTtsSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => {
+    axios.get<{ base_url: string; has_key: boolean; model: string; voice_a: string; voice_b: string }>('/api/podcast/config')
+      .then(r => setTtsConfig(c => ({ ...c, ...r.data, api_key: r.data.has_key ? '__HAS_KEY__' : '' })))
+      .catch(() => { /* 忽略 */ });
+  }, []);
+  const saveTtsConfig = async () => {
+    setTtsSaving(true);
+    setTtsSaveMsg(null);
+    try {
+      await axios.put('/api/podcast/config', {
+        base_url: ttsConfig.base_url,
+        api_key: ttsConfig.api_key,
+        model: ttsConfig.model,
+        voice_a: ttsConfig.voice_a,
+        voice_b: ttsConfig.voice_b,
+      });
+      setTtsSaveMsg({ ok: true, text: '已保存' });
+      setTtsConfig(c => ({ ...c, api_key: '__HAS_KEY__', has_key: c.api_key ? true : c.has_key }));
+    } catch (e: unknown) {
+      const anyE = e as { response?: { data?: { error?: string } }; message?: string };
+      setTtsSaveMsg({ ok: false, text: anyE?.response?.data?.error || anyE?.message || '保存失败' });
+    } finally {
+      setTtsSaving(false);
+    }
+  };
+
   // 屏幕锁定
   const lockCtx = useLock();
   const [lockSetupOpen, setLockSetupOpen] = useState(false);
@@ -2107,6 +2144,96 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </button>
           </>
         )}
+      </section>
+
+      {/* ── 播客 TTS 配置 ── */}
+      <section className="mb-8" data-settings-tags="播客 podcast tts 语音 朗读 openai voice 主持人">
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles size={18} className="text-pink-500" />
+          <h3 className="text-base font-bold text-[#1d1d1f] dk-text">播客 TTS 配置</h3>
+        </div>
+        <p className="text-sm text-gray-400 mb-4">联系人详情页「🎙 播客」会按这里的配置调用 TTS 合成双主持人对话音频</p>
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 dk-card dk-border space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 font-semibold block mb-1">Base URL</label>
+              <input
+                type="text"
+                value={ttsConfig.base_url}
+                onChange={(e) => setTtsConfig(c => ({ ...c, base_url: e.target.value }))}
+                placeholder="https://api.openai.com/v1"
+                className="w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm dk-text outline-none focus:border-[#07c160]"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 font-semibold block mb-1">API Key</label>
+              <input
+                type="password"
+                value={ttsConfig.api_key === '__HAS_KEY__' ? '' : ttsConfig.api_key}
+                placeholder={ttsConfig.has_key ? '已配置（输入新值覆盖）' : 'sk-...'}
+                onChange={(e) => setTtsConfig(c => ({ ...c, api_key: e.target.value }))}
+                className="w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm dk-text outline-none focus:border-[#07c160]"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 font-semibold block mb-1">模型</label>
+              <input
+                type="text"
+                value={ttsConfig.model}
+                onChange={(e) => setTtsConfig(c => ({ ...c, model: e.target.value }))}
+                placeholder="tts-1（默认）或 tts-1-hd"
+                className="w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm dk-text outline-none focus:border-[#07c160]"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-gray-500 font-semibold block mb-1">主持人 A 声音</label>
+                <select
+                  value={ttsConfig.voice_a}
+                  onChange={(e) => setTtsConfig(c => ({ ...c, voice_a: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm dk-text outline-none focus:border-[#07c160]"
+                >
+                  <option value="">alloy（默认）</option>
+                  <option value="alloy">alloy · 中性</option>
+                  <option value="echo">echo · 男性</option>
+                  <option value="onyx">onyx · 低沉男性</option>
+                  <option value="fable">fable · 英式口音</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-semibold block mb-1">主持人 B 声音</label>
+                <select
+                  value={ttsConfig.voice_b}
+                  onChange={(e) => setTtsConfig(c => ({ ...c, voice_b: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm dk-text outline-none focus:border-[#07c160]"
+                >
+                  <option value="">nova（默认）</option>
+                  <option value="nova">nova · 女性</option>
+                  <option value="shimmer">shimmer · 温柔女性</option>
+                  <option value="alloy">alloy · 中性</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              onClick={saveTtsConfig}
+              disabled={ttsSaving}
+              className="px-4 py-2 rounded-xl bg-[#07c160] text-white text-sm font-semibold hover:bg-[#06ad56] disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {ttsSaving && <Loader2 size={14} className="animate-spin" />}
+              保存
+            </button>
+            {ttsSaveMsg && (
+              <span className={`text-xs ${ttsSaveMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
+                {ttsSaveMsg.text}
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-gray-400">
+            兼容 OpenAI `/audio/speech` 协议的任何服务（官方 / 自部署转发 / 本地 tts 网关都行）。语音默认 alloy（男）+ nova（女）。
+          </p>
+        </div>
       </section>
 
       {/* ── AI 配置（分析模型 / Embedding / 记忆提炼） ── */}
