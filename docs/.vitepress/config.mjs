@@ -112,6 +112,8 @@ export default defineConfig({
           { text: 'Skill 炼化', link: '/skill-forge' },
           { text: 'Ollama 本地 AI 配置', link: '/ollama-setup' },
           { text: 'MCP Server', link: '/mcp-server' },
+          { text: 'MCP 客户端接入', link: '/mcp-clients' },
+          { text: 'ChatGPT Custom GPT', link: '/chatgpt-gpt' },
         ],
       },
       {
