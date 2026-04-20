@@ -105,6 +105,68 @@ func registerMemoryRoutes(api *gin.RouterGroup) {
 		c.JSON(http.StatusOK, gin.H{"contacts": items})
 	})
 
+	// 手动添加记忆
+	api.POST("/memory", func(c *gin.Context) {
+		var body struct {
+			ContactKey string `json:"contact_key"`
+			Fact       string `json:"fact"`
+			Pinned     bool   `json:"pinned"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		body.ContactKey = strings.TrimSpace(body.ContactKey)
+		body.Fact = strings.TrimSpace(body.Fact)
+		if body.ContactKey == "" || body.Fact == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "contact_key / fact 不能为空"})
+			return
+		}
+		// 保证前缀存在：没带就当成 contact 联系人
+		if !strings.Contains(body.ContactKey, ":") {
+			body.ContactKey = "contact:" + body.ContactKey
+		}
+
+		db := getAIDB()
+		if db == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI DB 未就绪"})
+			return
+		}
+
+		// 尝试计算 embedding（配好了 embedding 才会有值）；拿不到就零向量
+		var emb []byte
+		prefs := loadPreferences()
+		embCfg := defaultEmbeddingConfig(prefs)
+		if vecs, err := GetEmbeddingsBatch([]string{body.Fact}, embCfg); err == nil && len(vecs) == 1 && vecs[0] != nil {
+			emb = encodeVec(vecs[0])
+		} else {
+			// 零向量占位（schema 要求 NOT NULL）；之后如果用户跑一次「重提炼」可以补
+			emb = encodeVec(make([]float32, 1))
+		}
+		pinned := 0
+		if body.Pinned {
+			pinned = 1
+		}
+		now := time.Now().Unix()
+		res, err := db.Exec(
+			"INSERT INTO mem_facts(contact_key, fact, source_from, source_to, embedding, pinned, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?)",
+			body.ContactKey, body.Fact, 0, 0, emb, pinned, now, now,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		id, _ := res.LastInsertId()
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+			"id":     id,
+			"fact": MemFact{
+				ID: int(id), ContactKey: body.ContactKey, Fact: body.Fact,
+				Pinned: body.Pinned, CreatedAt: now, UpdatedAt: now,
+			},
+		})
+	})
+
 	// 编辑 fact 内容
 	api.PUT("/memory/:id", func(c *gin.Context) {
 		id, err := strconv.Atoi(c.Param("id"))

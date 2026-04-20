@@ -1364,8 +1364,14 @@ ${effectiveCtx}
             ) : memFactsCount == null ? (
               <span className="text-xs text-gray-400">加载中…</span>
             ) : memFactsCount > 0 ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-[#576b95]">✓ 已提炼，对话时自动补充背景知识</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-[#576b95]">✓ 已提炼 {memFactsCount} 条，对话时自动补充</span>
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('welink:navigate', { detail: { tab: 'memory' } }))}
+                  className="text-[10px] font-semibold text-[#07c160] hover:underline"
+                >
+                  查看 / 管理 →
+                </button>
                 {vecIndexStatus?.built && (
                   <button onClick={buildMemFacts} className="ml-auto text-[10px] font-semibold text-gray-400 hover:text-[#576b95] underline">重新提炼</button>
                 )}

@@ -172,6 +172,23 @@ function AppInner() {
     return () => window.removeEventListener('keydown', onKey);
   }, [lockEnabled, lockScreen]);
 
+  // 全局跳转事件：子组件（如 ContactModal 里的记忆提炼卡）可以 dispatch
+  //   window.dispatchEvent(new CustomEvent('welink:navigate', { detail: { tab: 'memory' } }))
+  // 跳转时会顺带关闭 Contact / Group modal。
+  useEffect(() => {
+    const onNav = (e: Event) => {
+      const ev = e as CustomEvent<{ tab: TabType }>;
+      if (!ev.detail?.tab) return;
+      if (VALID_TABS.includes(ev.detail.tab)) {
+        setActiveTab(ev.detail.tab);
+        setSelectedContactRaw(null);
+        setSelectedGroupRaw(null);
+      }
+    };
+    window.addEventListener('welink:navigate', onNav);
+    return () => window.removeEventListener('welink:navigate', onNav);
+  }, []);
+
 
   // App 模式检测
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
