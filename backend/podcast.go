@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -14,6 +16,41 @@ import (
 
 	"welink/backend/service"
 )
+
+// validateTTSBaseURL 校验用户设置的 TTS base URL 安全可用。
+// 要求：https://、带 host、host 不是 loopback / RFC1918 / link-local —— 否则后端
+// 代理请求可被用来打内网或元数据服务（SSRF）。空串代表"使用默认 OpenAI"，放行。
+func validateTTSBaseURL(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("URL 解析失败：%v", err)
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("只接受 https:// 开头的地址")
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("URL 缺少 host")
+	}
+	// 如果是 IP 字面量直接拒私网
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return fmt.Errorf("拒绝内网 / 回环 / 链路本地 IP")
+		}
+		return nil
+	}
+	// 域名字面量：拒绝 localhost 前缀（dns 解析到的 A 记录无法在写入时校验，
+	// TOCTOU 层面有残余风险，但要兜到 http.Transport 的 DialContext 才能彻底防）
+	lower := strings.ToLower(host)
+	if lower == "localhost" || strings.HasSuffix(lower, ".localhost") || strings.HasSuffix(lower, ".internal") {
+		return fmt.Errorf("拒绝 localhost / .internal 域名")
+	}
+	return nil
+}
 
 // PodcastLine 是脚本里的一句对白
 type PodcastLine struct {
@@ -54,6 +91,10 @@ func registerPodcastRoutes(api *gin.RouterGroup, getSvc func() *service.ContactS
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		if err := validateTTSBaseURL(body.BaseURL); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "base_url 不合法：" + err.Error()})
 			return
 		}
 		p := loadPreferences()
@@ -205,6 +246,11 @@ func registerPodcastRoutes(api *gin.RouterGroup, getSvc func() *service.ContactS
 		base := strings.TrimSpace(prefs.PodcastTTSBaseURL)
 		if base == "" {
 			base = "https://api.openai.com/v1"
+		}
+		// 调用点再校一次——直接改 preferences.json 能绕过 PUT config 的校验
+		if err := validateTTSBaseURL(base); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "TTS base_url 不安全：" + err.Error() + "（去设置页重新填写）"})
+			return
 		}
 		model := strings.TrimSpace(prefs.PodcastTTSModel)
 		if model == "" {
