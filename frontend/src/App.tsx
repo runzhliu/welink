@@ -8,6 +8,7 @@ import { PrivacyModeContext } from './contexts/PrivacyModeContext';
 import { SelfInfoProvider } from './contexts/SelfInfoContext';
 import { LockProvider, useLock } from './contexts/LockContext';
 import { LockOverlay } from './components/common/LockOverlay';
+import { MemoryLibraryPage } from './components/memory/MemoryLibraryPage';
 
 // Layout Components
 import { Sidebar } from './components/layout/Sidebar';
@@ -71,7 +72,7 @@ function AppInner() {
 
   // State — 从 URL hash 恢复当前 tab + 联系人/群聊弹窗
   // hash 格式：#/stats  #/stats/contact/wxid_abc  #/groups/group/xxx@chatroom
-  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'contacts', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'urls', 'skills', 'export', 'settings'];
+  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'contacts', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'urls', 'skills', 'export', 'memory', 'settings'];
 
   const parseHash = (): { tab: TabType; contactId?: string; groupId?: string } => {
     const raw = window.location.hash.replace('#/', '').replace('#', '');
@@ -457,6 +458,8 @@ function AppInner() {
           <URLCollectionPage blockedUsers={blockedUsers} blockedDisplayNames={blockedDisplayNames} />
         ) : activeTab === 'export' ? (
           <ExportCenterPage contacts={contacts} groups={allGroups} />
+        ) : activeTab === 'memory' ? (
+          <MemoryLibraryPage contacts={contacts} groups={allGroups} />
         ) : activeTab === 'settings' ? (
           <SettingsPage
             isAppMode={appInfo.app_mode}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 // ─── 表初始化 ─────────────────────────────────────────────────────────────────
@@ -28,7 +29,40 @@ func initMemTables() error {
 	if err != nil {
 		return fmt.Errorf("mem: idx_mem_contact: %w", err)
 	}
+	// 迁移：给老库补 pinned / created_at / updated_at 列
+	if err := addColumnIfMissing("mem_facts", "pinned", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return fmt.Errorf("mem: pinned col: %w", err)
+	}
+	if err := addColumnIfMissing("mem_facts", "created_at", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return fmt.Errorf("mem: created_at col: %w", err)
+	}
+	if err := addColumnIfMissing("mem_facts", "updated_at", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return fmt.Errorf("mem: updated_at col: %w", err)
+	}
 	return nil
+}
+
+// addColumnIfMissing 给已有表加列（SQLite 不支持 ADD COLUMN IF NOT EXISTS）。
+func addColumnIfMissing(table, column, decl string) error {
+	rows, err := aiDB.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return err
+		}
+		if name == column {
+			return nil
+		}
+	}
+	_, err = aiDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, decl))
+	return err
 }
 
 // ─── 状态查询 ─────────────────────────────────────────────────────────────────
@@ -49,9 +83,13 @@ func GetMemFactsCount(key string) (int, error) {
 // MemFact 是单条记忆事实的展示结构。
 type MemFact struct {
 	ID         int    `json:"id"`
+	ContactKey string `json:"contact_key,omitempty"`
 	Fact       string `json:"fact"`
 	SourceFrom int    `json:"source_from"`
 	SourceTo   int    `json:"source_to"`
+	Pinned     bool   `json:"pinned"`
+	CreatedAt  int64  `json:"created_at,omitempty"`
+	UpdatedAt  int64  `json:"updated_at,omitempty"`
 }
 
 // GetMemFacts 返回指定 key 的所有事实（按 id 升序）。
@@ -63,7 +101,7 @@ func GetMemFacts(key string) ([]MemFact, error) {
 		return nil, nil
 	}
 	rows, err := db.Query(
-		"SELECT id, fact, source_from, source_to FROM mem_facts WHERE contact_key = ? ORDER BY id",
+		"SELECT id, fact, source_from, source_to, pinned, created_at, updated_at FROM mem_facts WHERE contact_key = ? ORDER BY pinned DESC, id",
 		key,
 	)
 	if err != nil {
@@ -73,7 +111,9 @@ func GetMemFacts(key string) ([]MemFact, error) {
 	var facts []MemFact
 	for rows.Next() {
 		var f MemFact
-		rows.Scan(&f.ID, &f.Fact, &f.SourceFrom, &f.SourceTo)
+		var pinned int
+		rows.Scan(&f.ID, &f.Fact, &f.SourceFrom, &f.SourceTo, &pinned, &f.CreatedAt, &f.UpdatedAt)
+		f.Pinned = pinned != 0
 		facts = append(facts, f)
 	}
 	if facts == nil {
@@ -134,15 +174,16 @@ func extractAndStoreFacts(
 				tx, err := db.Begin()
 				if err == nil {
 					stmt, err := tx.Prepare(
-						"INSERT INTO mem_facts(contact_key, fact, source_from, source_to, embedding) VALUES(?,?,?,?,?)")
+						"INSERT INTO mem_facts(contact_key, fact, source_from, source_to, embedding, created_at, updated_at) VALUES(?,?,?,?,?,?,?)")
 					if err != nil {
 						tx.Rollback()
 					} else {
+						now := time.Now().Unix()
 						for j, emb := range embeddings {
 							if emb == nil || j >= len(facts) {
 								continue
 							}
-							if _, err := stmt.Exec(key, facts[j], i, end-1, encodeVec(emb)); err == nil {
+							if _, err := stmt.Exec(key, facts[j], i, end-1, encodeVec(emb), now, now); err == nil {
 								total++
 							}
 						}
