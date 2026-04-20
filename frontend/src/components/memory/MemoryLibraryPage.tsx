@@ -133,6 +133,18 @@ export const MemoryLibraryPage: React.FC<Props> = ({ contacts, groups }) => {
   const totalAll = contactStats.reduce((s, c) => s + c.count, 0);
   const pinnedAll = contactStats.reduce((s, c) => s + c.pinned_count, 0);
 
+  // 搜索框同时按"人名"过滤左栏：输入命中联系人名字/备注时，左栏只剩匹配项
+  // （fact 内容过滤依然走后端 ?q=；两者并存，搜 "生日 alice" 这种也能工作）
+  const qLower = q.trim().toLowerCase();
+  const filteredContactStats = useMemo(() => {
+    if (!qLower) return contactStats;
+    return contactStats.filter(s => {
+      const info = lookup(s.contact_key);
+      const name = (info?.name || stripKey(s.contact_key)).toLowerCase();
+      return name.includes(qLower) || s.contact_key.toLowerCase().includes(qLower);
+    });
+  }, [contactStats, qLower, contactMap]);
+
   const openAdd = () => {
     setAddContact(activeContact || '');
     setAddContactQuery('');
@@ -218,7 +230,10 @@ export const MemoryLibraryPage: React.FC<Props> = ({ contacts, groups }) => {
             <span className="text-xs text-gray-400">{totalAll}</span>
           </button>
           <div className="mt-2 max-h-[calc(100vh-320px)] overflow-y-auto space-y-0.5">
-            {contactStats.map(s => {
+            {qLower && filteredContactStats.length === 0 && (
+              <div className="text-xs text-gray-400 px-2 py-2">没有联系人名字匹配「{q}」</div>
+            )}
+            {filteredContactStats.map(s => {
               const info = lookup(s.contact_key);
               const active = activeContact === s.contact_key;
               return (
@@ -253,7 +268,7 @@ export const MemoryLibraryPage: React.FC<Props> = ({ contacts, groups }) => {
               <input
                 value={q}
                 onChange={e => setQ(e.target.value)}
-                placeholder="搜索记忆内容..."
+                placeholder="搜索记忆内容或联系人..."
                 className="flex-1 bg-transparent outline-none text-sm dk-text placeholder-gray-400"
               />
               {q && (
