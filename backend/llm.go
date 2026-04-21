@@ -210,6 +210,10 @@ func StreamLLM(w http.ResponseWriter, msgs []LLMMessage, prefs Preferences) {
 // streamLLMCore 是流式调用的核心逻辑，接受一个已配置好的 sendChunk 函数。
 // 适用于需要在 LLM 响应前先发送元数据事件的场景（如 RAG）。
 func streamLLMCore(sendChunk func(StreamChunk), msgs []LLMMessage, prefs Preferences) {
+	if DemoMockActive() {
+		demoLLMStream(sendChunk, msgs)
+		return
+	}
 	// Gemini OAuth：若已授权则用 OAuth token 替代 API Key
 	if prefs.LLMProvider == "gemini" && prefs.GeminiAccessToken != "" {
 		if token, err := geminiValidToken(&prefs); err == nil {
@@ -233,6 +237,10 @@ func streamLLMCore(sendChunk func(StreamChunk), msgs []LLMMessage, prefs Prefere
 
 // streamLLMCoreWithProfile 与 streamLLMCore 相同，但通过 profileID 解析配置。
 func streamLLMCoreWithProfile(sendChunk func(StreamChunk), msgs []LLMMessage, prefs Preferences, profileID string) {
+	if DemoMockActive() {
+		demoLLMStream(sendChunk, msgs)
+		return
+	}
 	cfg := llmConfigForProfile(profileID, prefs)
 	err := dispatchLLMStream(sendChunk, msgs, cfg)
 	if err != nil {
@@ -521,6 +529,10 @@ func streamClaude(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) erro
 
 // CompleteLLM 发起非流式请求，返回完整响应文本（用于分段摘要）
 func CompleteLLM(msgs []LLMMessage, prefs Preferences) (string, error) {
+	// Demo 模式：AI 被锁死时直接返回 canned 响应，不走真实 provider
+	if DemoMockActive() {
+		return demoLLMComplete(msgs), nil
+	}
 	// Gemini OAuth：若已授权则用 OAuth token 替代 API Key
 	if prefs.LLMProvider == "gemini" && prefs.GeminiAccessToken != "" {
 		if token, err := geminiValidToken(&prefs); err == nil {

@@ -160,6 +160,21 @@ var demoContacts = []Contact{
 // demoSelfWxid is the fake "me" wxid used in demo messages.
 const demoSelfWxid = "demo_self_wxid"
 
+// DemoSelfWxid 暴露给主包：seed 出来的"我"用的是这个 wxid。
+const DemoSelfWxid = demoSelfWxid
+
+// DemoContacts 返回 seed 出来的联系人列表（只读快照）。主包 demo AI seed 使用。
+func DemoContacts() []Contact {
+	out := make([]Contact, len(demoContacts))
+	copy(out, demoContacts)
+	return out
+}
+
+// TableNameForUser 暴露给主包：给定 username 返回消息表名。
+func TableNameForUser(username string) string {
+	return tableNameForUser(username)
+}
+
 var textMessages = []string{
 	// 日常
 	"在吗？",
@@ -206,6 +221,89 @@ var textMessages = []string{
 	"新赛季目标：三冠王",
 	"不败赛季我们可以的",
 	"Invincibles 2.0 加油",
+	// URL 消息（给"URL 收藏"功能用）
+	"看这个进球回放 https://www.arsenal.com/news/match-report",
+	"训练计划我贴在这了 https://www.arsenal.com/training",
+	"战术分析视频 https://youtu.be/arsenal-tactics-breakdown",
+	"欧冠对阵表出来了 https://www.uefa.com/uefachampionsleague/",
+	"更衣室新款球衣 https://shop.arsenal.com/new-kit",
+	"队内投票链接 https://forms.gle/arsenal-team-vote",
+	"赛程表 https://www.premierleague.com/fixtures",
+	"这篇采访值得一看 https://theathletic.com/arsenal-feature",
+}
+
+// signaturePhrases 给每个联系人分配专属高频口头禅，让"秘密暗语"（TF-IDF）跑得出结果。
+// 每个 key 的短语会被高频使用（~25% 消息从这里抽），形成高 TF + 低 DF。
+var signaturePhrases = map[string][]string{
+	"arteta_mikel": {
+		"战术板", "压迫要到位", "我要的是强度", "Process 第一", "Play with courage",
+	},
+	"odegaard_martin": {
+		"队长负责", "稳住节奏", "Pasa y muevete", "掌控中场", "这球我负责",
+	},
+	"saka_bukayo": {
+		"Starboy mode", "内切射门", "来打你们怕的位置", "7号到位", "Starboy 就是我",
+	},
+	"rice_declan": {
+		"中场扫荡", "拦截预判", "我来兜底", "Hammers 教会我的", "拼到最后一秒",
+	},
+	"havertz_kai": {
+		"9号位思考", "Kaichemy", "顶住第一点", "要更冷静", "德味传中",
+	},
+	"gabriel_magalhaes": {
+		"Aidar 兄弟", "后防不慌", "头球是我的菜", "桑巴防线", "阿迪永远在",
+	},
+	"martinelli_gabriel": {
+		"巴西边路", "一脚油门", "Zoom zoom", "左路爆破", "给我球",
+	},
+	"jesus_gabriel": {
+		"Jesus walks", "前场逼抢", "恩典时刻", "神圣进球", "See you in Emirates",
+	},
+	"raya_david": {
+		"门线指挥", "Commander mode", "后场出球交给我", "稳如磐石", "Clean sheet",
+	},
+	"trossard_leandro": {
+		"小比利时", "替补奇兵", "关键时刻在", "Pony ready", "补丁侠",
+	},
+	"nwaneri_ethan": {
+		"小天才报到", "学长们带我", "Nwaneri time", "第一次首发", "英超初体验",
+	},
+	"arsenal_dressing_room@chatroom": {
+		"更衣室合影", "三点半大巴出发", "赛前 playlist 有人点歌吗",
+	},
+	"emirates_north_bank@chatroom": {
+		"North Bank 唱起来", "今晚酋长满员", "Arsenal till I die",
+	},
+	"tactics_board@chatroom": {
+		"4-3-3 默认阵型", "高位逼抢 trigger", "后场出球三角站位",
+	},
+}
+
+// pickText 给指定联系人挑一条文本消息：25% 概率来自签名短语池（若有），否则来自通用池。
+func pickText(username string, rng *rand.Rand) string {
+	if sigs, ok := signaturePhrases[username]; ok && len(sigs) > 0 && rng.Intn(4) == 0 {
+		return sigs[rng.Intn(len(sigs))]
+	}
+	return textMessages[rng.Intn(len(textMessages))]
+}
+
+// moneyMessageContent 为 local_type=49 的消息生成红包 / 转账 / 其他 app 消息的 XML。
+// classifier 识别逻辑在 service.classifyMsgType：
+//   - 含 "wcpay" + "redenvelope" → 红包
+//   - 含 "wcpay"（不含 redenvelope） → 转账
+//   - 其他 → "其他"
+func moneyMessageContent(rng *rand.Rand) string {
+	r := rng.Intn(100)
+	switch {
+	case r < 20: // 20% 红包
+		amt := 5 + rng.Intn(95)
+		return fmt.Sprintf(`<msg><appmsg><type>2001</type><wcpayinfo><paysubtype>redenvelope</paysubtype><feedsprice>%d.00</feedsprice><sendertitle>恭喜发财 COYG！</sendertitle></wcpayinfo></appmsg></msg>`, amt)
+	case r < 35: // 15% 转账
+		amt := 20 + rng.Intn(480)
+		return fmt.Sprintf(`<msg><appmsg><type>2000</type><wcpayinfo><paysubtype>transfer</paysubtype><feedsprice>%d.00</feedsprice><pay_memo>球衣分摊</pay_memo></wcpayinfo></appmsg></msg>`, amt)
+	default: // 其他 app 消息占位
+		return `<msg><appmsg><type>5</type><title>链接/文件</title></appmsg></msg>`
+	}
 }
 
 // tableNameForUser returns the Msg_<md5> table name for a given username.
@@ -444,8 +542,11 @@ func insertMessages(db *sql.DB, tableName string, contact Contact, count int, no
 
 		msgType := pickMsgType(rng)
 		var content string
-		if msgType == 1 {
-			content = textMessages[rng.Intn(len(textMessages))]
+		switch msgType {
+		case 1:
+			content = pickText(contact.Username, rng)
+		case 49:
+			content = moneyMessageContent(rng)
 		}
 
 		// 50/50 split between self and the contact.

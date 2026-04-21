@@ -23,10 +23,14 @@ import (
 // ── 1. 禁止写入 LLM 配置 ────────────────────────────────────────────────────
 
 // DemoAIDisabled 返回 Demo 模式下是否禁用 AI 配置。
-// 通过环境变量 DEMO_DISABLE_AI=true 禁用（默认不禁用，即 AI 可用）。
-// 用于公有云部署时防止用户误配置 API Key。
+// Demo 默认不允许改 AI 配置（所有功能走预置的 mock 数据），
+// 需显式设置 DEMO_DISABLE_AI=false 才打开配置入口。
 func DemoAIDisabled() bool {
-	return strings.EqualFold(os.Getenv("DEMO_DISABLE_AI"), "true")
+	v := strings.TrimSpace(os.Getenv("DEMO_DISABLE_AI"))
+	if v == "" {
+		return true
+	}
+	return !strings.EqualFold(v, "false")
 }
 
 // demoBlockLLMWrite 在 DEMO_MODE + DEMO_DISABLE_AI 下拒绝 AI 配置写入。

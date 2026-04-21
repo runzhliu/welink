@@ -149,7 +149,7 @@ const NLQueryPanel: React.FC = () => {
   };
 
   const renderCellValue = (val: any) => {
-    if (val === null || val === undefined) return <span className="text-gray-300 italic">NULL</span>;
+    if (val === null || val === undefined) return <span className="text-gray-300 dark:text-gray-500 italic">NULL</span>;
     const str = String(val);
     if (str.length > 100) return <span title={str}>{str.slice(0, 100)}…</span>;
     return str;
@@ -392,7 +392,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ dbName, tableName, onClose }) =
   const currentPage = Math.floor(offset / limit) + 1;
 
   const renderCellValue = (val: any) => {
-    if (val === null || val === undefined) return <span className="text-gray-300 italic">NULL</span>;
+    if (val === null || val === undefined) return <span className="text-gray-300 dark:text-gray-500 italic">NULL</span>;
     const str = String(val);
     if (str.startsWith('<binary')) return <span className="text-orange-400 italic text-xs">{str}</span>;
     if (str.length > 100) return <span title={str}>{str.slice(0, 100)}…</span>;
@@ -467,7 +467,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ dbName, tableName, onClose }) =
                 <tbody>
                   {schema.map((col) => (
                     <tr key={col.cid} className="border-b border-gray-50 dark:border-white/5 hover:bg-[#f8f9fb] dark:hover:bg-white/5">
-                      <td className="px-5 py-3 text-gray-400 font-mono text-xs">{col.cid}</td>
+                      <td className="px-5 py-3 text-gray-400 dark:text-gray-500 font-mono text-xs">{col.cid}</td>
                       <td className="px-5 py-3 font-semibold text-[#1d1d1f] dk-text">
                         {col.primary_key && (
                           <Hash size={12} className="inline mr-1 text-[#07c160]" />
@@ -481,18 +481,18 @@ const TablePanel: React.FC<TablePanelProps> = ({ dbName, tableName, onClose }) =
                         {col.not_null ? (
                           <span className="text-xs text-red-500 font-bold">YES</span>
                         ) : (
-                          <span className="text-xs text-gray-300">—</span>
+                          <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
                         )}
                       </td>
                       <td className="px-5 py-3">
                         {col.primary_key ? (
                           <span className="text-xs text-[#07c160] font-bold">PK</span>
                         ) : (
-                          <span className="text-xs text-gray-300">—</span>
+                          <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-xs text-gray-400 font-mono">
-                        {col.default_value || <span className="text-gray-200">NULL</span>}
+                      <td className="px-5 py-3 text-xs text-gray-400 dark:text-gray-400 font-mono">
+                        {col.default_value || <span className="text-gray-200 dark:text-gray-600">NULL</span>}
                       </td>
                     </tr>
                   ))}
@@ -524,11 +524,11 @@ const TablePanel: React.FC<TablePanelProps> = ({ dbName, tableName, onClose }) =
                       <tbody>
                         {(tableData.rows ?? []).map((row, ri) => (
                           <tr key={ri} className="border-b border-gray-50 dark:border-white/5 hover:bg-[#f8faf8] dark:hover:bg-white/5 transition-colors">
-                            <td className="px-4 py-2 text-gray-300 text-xs font-mono">
+                            <td className="px-4 py-2 text-gray-300 dark:text-gray-500 text-xs font-mono">
                               {offset + ri + 1}
                             </td>
                             {row.map((cell, ci) => (
-                              <td key={ci} className="px-4 py-2 text-gray-700 text-xs max-w-[200px] truncate font-mono">
+                              <td key={ci} className="px-4 py-2 text-gray-700 dark:text-gray-200 text-xs max-w-[200px] truncate font-mono">
                                 {renderCellValue(cell)}
                               </td>
                             ))}
@@ -655,7 +655,7 @@ const SQLEditor: React.FC<SQLEditorProps> = ({ databases }) => {
   };
 
   const renderCellValue = (val: any) => {
-    if (val === null || val === undefined) return <span className="text-gray-300 italic">NULL</span>;
+    if (val === null || val === undefined) return <span className="text-gray-300 dark:text-gray-500 italic">NULL</span>;
     const str = String(val);
     if (str.startsWith('<binary')) return <span className="text-orange-400 italic text-xs">{str}</span>;
     if (str.length > 120) return <span title={str}>{str.slice(0, 120)}…</span>;
@@ -843,9 +843,9 @@ const SQLEditor: React.FC<SQLEditorProps> = ({ databases }) => {
                       <tbody>
                         {(result.rows ?? []).map((row, ri) => (
                           <tr key={ri} className="border-t border-gray-100 dark:border-white/5 hover:bg-white dark:hover:bg-white/5 transition-colors">
-                            <td className="px-3 py-1.5 text-gray-300">{ri + 1}</td>
+                            <td className="px-3 py-1.5 text-gray-300 dark:text-gray-500">{ri + 1}</td>
                             {row.map((cell, ci) => (
-                              <td key={ci} className="px-3 py-1.5 text-gray-700 max-w-[240px] truncate">
+                              <td key={ci} className="px-3 py-1.5 text-gray-700 dark:text-gray-200 max-w-[240px] truncate">
                                 {renderCellValue(cell)}
                               </td>
                             ))}

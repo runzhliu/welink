@@ -74,6 +74,14 @@ func defaultEmbeddingConfig(prefs Preferences) EmbeddingConfig {
 // GetEmbeddingsBatch 批量获取 texts 的向量。
 // Ollama 使用 /api/embed（支持批量），其他 provider 使用 OpenAI 兼容的 /embeddings。
 func GetEmbeddingsBatch(texts []string, cfg EmbeddingConfig) ([][]float32, error) {
+	// Demo 模式：用确定性 mock 向量（和 demo_seed 存的一致，保证相似度能算）
+	if DemoMockActive() {
+		out := make([][]float32, len(texts))
+		for i, t := range texts {
+			out[i] = hashedMockEmbedding(t, 8)
+		}
+		return out, nil
+	}
 	if cfg.Provider == "ollama" {
 		return ollamaEmbeddingsBatch(texts, cfg)
 	}

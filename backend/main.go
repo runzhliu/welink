@@ -221,7 +221,7 @@ func serverMain() {
 		prefs.DefaultInitTo = time.Now().Unix() + 365*24*3600*10 // 10年后
 
 		if DemoAIDisabled() {
-			log.Printf("[DEMO] AI configuration disabled via DEMO_DISABLE_AI=true")
+			log.Printf("[DEMO] AI configuration locked (mock data only). Override: DEMO_DISABLE_AI=false")
 		}
 	}
 
@@ -260,6 +260,14 @@ func serverMain() {
 	// 将 AI 分析库注册到 DBManager，使数据库页面可查看和查询
 	if dbMgr != nil {
 		dbMgr.RegisterExtraDB("ai_analysis.db", aiAnalysisDBPath())
+	}
+
+	// Demo 模式：把预置的 AI 数据（记忆/索引/分身/技能）灌进 ai_analysis.db，
+	// 让所有 AI 功能一开就是"有内容可看"的状态。
+	if isDemoMode {
+		if err := SeedDemoAIData(prefs.DataDir); err != nil {
+			log.Printf("[DEMO] AI 预置数据灌库失败: %v", err)
+		}
 	}
 
 	// 服务层访问助手（线程安全）

@@ -7,9 +7,10 @@ services:
       - GIN_MODE=release
       - DEMO_MODE=true
       - DATA_DIR=/app/demo-data
-      # 公有云部署时禁用 AI 配置（防止用户误填 API Key）
-      # 本地 demo 默认不设置此项，AI 功能正常可用
-      # - DEMO_DISABLE_AI=true
+      # Demo 默认锁定 AI 配置：AI 能力走预置 mock 数据（无需外部 API Key），
+      # 也防止公有云部署被滥用填入 API Key。
+      # 如需在 demo 里真实调 LLM，显式设置 DEMO_DISABLE_AI=false。
+      # - DEMO_DISABLE_AI=false
 
   frontend:
     image: ghcr.io/runzhliu/welink/frontend:main
