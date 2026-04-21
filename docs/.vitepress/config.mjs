@@ -71,6 +71,7 @@ export default defineConfig({
 
     nav: [
       { text: '首页', link: '/' },
+      { text: '全部功能', link: '/features' },
       { text: '下载安装', link: '/install' },
       { text: 'MCP Server', link: '/mcp-server' },
       { text: 'API 接口', link: '/api' },
@@ -87,6 +88,7 @@ export default defineConfig({
         text: '开始使用',
         items: [
           { text: '产品概览', link: '/' },
+          { text: '全部功能', link: '/features' },
           { text: '下载与安装', link: '/install' },
           { text: 'macOS App 安装', link: '/install-macos' },
           { text: 'Windows App 安装', link: '/install-windows' },

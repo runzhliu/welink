@@ -461,3 +461,597 @@ a.btn-download:active::after {
   color: var(--vp-c-brand-1) !important;
   font-weight: 700;
 }
+
+/* ========================================================================
+ * Hero CTA 三级分层：brand 主 / alt 次 / sponsor 降级为链接
+ * ======================================================================== */
+
+/* 主按钮：放大 + 脉冲呼吸光，把视觉权重吸过来 */
+.VPHero .VPButton.brand {
+  padding: 0 28px !important;
+  height: 46px !important;
+  line-height: 46px !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  box-shadow:
+    0 8px 24px -6px rgba(7, 193, 96, 0.55),
+    0 0 0 0 rgba(7, 193, 96, 0.4);
+  animation: welinkBrandPulse 2.4s ease-in-out infinite;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s,
+              background-color 0.2s,
+              border-color 0.2s;
+}
+
+.VPHero .VPButton.brand:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow:
+    0 14px 32px -6px rgba(7, 193, 96, 0.7),
+    0 0 0 6px rgba(7, 193, 96, 0);
+}
+
+@keyframes welinkBrandPulse {
+  0%, 100% {
+    box-shadow:
+      0 8px 24px -6px rgba(7, 193, 96, 0.55),
+      0 0 0 0 rgba(7, 193, 96, 0.35);
+  }
+  50% {
+    box-shadow:
+      0 10px 28px -6px rgba(7, 193, 96, 0.6),
+      0 0 0 8px rgba(7, 193, 96, 0);
+  }
+}
+
+/* 次按钮：描边低调 */
+.VPHero .VPButton.alt {
+  font-weight: 700 !important;
+}
+
+/* sponsor 第三级：隐藏边框变文字链 */
+.VPHero .VPButton.sponsor {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--vp-c-text-2) !important;
+  padding: 0 10px !important;
+  font-weight: 600 !important;
+}
+.VPHero .VPButton.sponsor:hover {
+  color: var(--vp-c-brand-1) !important;
+  background: transparent !important;
+  text-decoration: underline;
+}
+
+/* ========================================================================
+ * 首页自定义段落：badges / stats / pillars
+ * ======================================================================== */
+
+.welink-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.welink-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+  margin: 8px 0 32px;
+  text-align: center;
+}
+
+.welink-stats .num {
+  font-size: 36px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.welink-stats .lbl {
+  font-size: 12px;
+  color: var(--vp-c-text-3);
+  margin-top: 4px;
+}
+
+/* 价值主张 3 柱 */
+.welink-pillars {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 16px 0 32px;
+}
+
+@media (max-width: 768px) {
+  .welink-pillars { grid-template-columns: 1fr; }
+}
+
+.welink-pillars .pillar {
+  padding: 20px 22px;
+  border-radius: 14px;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s,
+              box-shadow 0.25s;
+  position: relative;
+  overflow: hidden;
+}
+
+.welink-pillars .pillar::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--vp-c-brand-1), #10aeff);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.welink-pillars .pillar:hover {
+  transform: translateY(-3px);
+  border-color: var(--vp-c-brand-1);
+  box-shadow: 0 12px 32px -8px rgba(7, 193, 96, 0.22);
+}
+
+.welink-pillars .pillar:hover::before { opacity: 1; }
+
+.welink-pillars .pillar-icon {
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.welink-pillars .pillar-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--vp-c-text-1);
+  margin-bottom: 6px;
+}
+
+.welink-pillars .pillar-body {
+  font-size: 13px;
+  color: var(--vp-c-text-2);
+  line-height: 1.6;
+}
+
+/* ========================================================================
+ * 视频：首屏 2 主 autoplay 卡 + 折叠内懒加载网格
+ * ======================================================================== */
+
+/* 首屏 2 列主视觉卡 */
+.welink-video-hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0 8px;
+}
+
+@media (max-width: 640px) {
+  .welink-video-hero { grid-template-columns: 1fr; }
+}
+
+.welink-video-card {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg-soft);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s;
+}
+
+.welink-video-card:hover {
+  transform: translateY(-3px) scale(1.01);
+  box-shadow: 0 16px 40px -10px rgba(7, 193, 96, 0.35);
+  border-color: var(--vp-c-brand-1);
+}
+
+.welink-video-card video {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: zoom-in;
+}
+
+.welink-video-card-label {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  background: rgba(29, 29, 31, 0.72);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 8px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* 折叠内视频网格：click-to-play */
+.welink-more-videos details {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  padding: 8px 16px;
+  margin: 16px 0 8px;
+  background: var(--vp-c-bg-soft);
+}
+
+.welink-more-videos summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--vp-c-text-1);
+  padding: 8px 0;
+  list-style: none;
+}
+
+.welink-more-videos summary::-webkit-details-marker { display: none; }
+
+.welink-more-videos summary::before {
+  content: '▸';
+  color: var(--vp-c-brand-1);
+  margin-right: 8px;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.welink-more-videos details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.welink-video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin: 12px 0 8px;
+}
+
+.welink-lazy-video {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg-alt);
+  cursor: pointer;
+  transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+}
+
+.welink-lazy-video:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -8px rgba(7, 193, 96, 0.3);
+  border-color: var(--vp-c-brand-1);
+}
+
+.welink-lazy-video video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.welink-lazy-video .lbl {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  background: rgba(29, 29, 31, 0.72);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* 播放按钮蒙层：CSS 画一个三角形，点击后移除 */
+.welink-lazy-video::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(7, 193, 96, 0.92);
+  box-shadow: 0 8px 24px rgba(7, 193, 96, 0.5);
+  z-index: 1;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s;
+  pointer-events: none;
+}
+
+.welink-lazy-video::before {
+  content: '';
+  position: absolute;
+  left: calc(50% + 3px);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 0;
+  height: 0;
+  border-left: 14px solid #fff;
+  border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent;
+  z-index: 2;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.welink-lazy-video:hover::after {
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.welink-lazy-video.is-playing::after,
+.welink-lazy-video.is-playing::before {
+  opacity: 0;
+}
+
+/* 全部功能 CTA */
+.welink-all-features-cta {
+  text-align: center;
+  margin: 24px 0 8px;
+}
+
+.welink-all-features-cta a {
+  display: inline-block;
+  padding: 10px 24px;
+  border-radius: 999px;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--vp-c-text-1) !important;
+  text-decoration: none !important;
+  transition: transform 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
+}
+
+.welink-all-features-cta a:hover {
+  transform: translateY(-2px);
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1) !important;
+  box-shadow: 0 10px 24px -8px rgba(7, 193, 96, 0.3);
+}
+
+/* ========================================================================
+ * Demo iframe 嵌入
+ * ======================================================================== */
+
+.welink-demo-embed {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 24px 0;
+  background: var(--vp-c-bg-soft);
+  transition: box-shadow 0.3s, border-color 0.3s;
+}
+
+.welink-demo-embed:hover {
+  border-color: var(--vp-c-brand-1);
+  box-shadow: 0 16px 40px -10px rgba(7, 193, 96, 0.25);
+}
+
+.welink-demo-embed .iframe-wrap {
+  position: relative;
+  padding-top: 56.25%;
+}
+
+.welink-demo-embed iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.welink-demo-embed .footer {
+  padding: 10px 14px;
+  background: var(--vp-c-bg);
+  border-top: 1px solid var(--vp-c-divider);
+  font-size: 12px;
+  color: var(--vp-c-text-2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.welink-demo-embed .footer a {
+  color: var(--vp-c-brand-1);
+  font-weight: 700;
+  text-decoration: none;
+}
+.welink-demo-embed .footer a:hover { text-decoration: underline; }
+
+/* ========================================================================
+ * Fancy 升级：粒子网格底层 / 滚动进度条 / KPI glass-card / 视频 3D tilt
+ * ======================================================================== */
+
+/* ── Hero 底层点阵网格（纯 CSS，流光扫过）───────────────────────────────── */
+.VPHome::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 900px;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(circle, rgba(7, 193, 96, 0.18) 1px, transparent 1.5px);
+  background-size: 22px 22px;
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 70%);
+  mask-image: linear-gradient(to bottom, black 0%, transparent 70%);
+  opacity: 0.5;
+}
+
+.dark .VPHome::after {
+  background-image:
+    radial-gradient(circle, rgba(9, 217, 107, 0.22) 1px, transparent 1.5px);
+  opacity: 0.55;
+}
+
+/* 流光：覆盖在网格之上的一条渐变斜向光束，缓慢走一圈 */
+.VPHome .VPHero {
+  position: relative;
+  overflow: hidden;
+}
+
+.VPHome .VPHero::after {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(115deg,
+    transparent 40%,
+    rgba(7, 193, 96, 0.10) 48%,
+    rgba(16, 174, 255, 0.08) 52%,
+    transparent 62%);
+  animation: welinkHeroSweep 14s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.VPHome .VPHero > * { position: relative; z-index: 1; }
+
+@keyframes welinkHeroSweep {
+  0%   { transform: translate(-30%, -10%) rotate(0deg); }
+  100% { transform: translate(-30%, -10%) rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .VPHome .VPHero::after { animation: none; display: none; }
+}
+
+/* ── 顶部滚动进度条（CSS scroll-driven animation） ───────────────────────── */
+.welink-scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 1000;
+  pointer-events: none;
+  background: linear-gradient(90deg, #07c160, #10aeff, #ff9500);
+  transform-origin: 0 0;
+  transform: scaleX(0);
+  transition: transform 0.05s linear;
+}
+
+/* ── KPI Stats Cards 玻璃卡 ─────────────────────────────────────────────── */
+.welink-stats {
+  /* 覆盖上方 grid 规则，加 perspective 让每张 card 有轻微 3D 感 */
+  perspective: 600px;
+}
+
+.welink-stat-card {
+  padding: 18px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--vp-c-bg-soft) 72%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--vp-c-divider);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s,
+              box-shadow 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.welink-stat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg,
+    rgba(255,255,255,0.08) 0%,
+    transparent 40%);
+  pointer-events: none;
+  opacity: 0.6;
+  transition: opacity 0.3s;
+}
+
+.welink-stat-card:hover {
+  transform: translateY(-4px) rotateX(4deg);
+  border-color: var(--vp-c-brand-1);
+  box-shadow: 0 14px 32px -10px rgba(7, 193, 96, 0.3);
+}
+
+.welink-stat-card:hover::before { opacity: 1; }
+
+.welink-stat-card .stat-icon {
+  font-size: 20px;
+  line-height: 1;
+  margin-bottom: 6px;
+  opacity: 0.85;
+}
+
+.dark .welink-stat-card {
+  background: color-mix(in srgb, var(--vp-c-bg-soft) 65%, transparent);
+}
+
+/* ── Pillar SVG icon 容器 ───────────────────────────────────────────────── */
+.welink-pillars .pillar-icon svg {
+  stroke: var(--vp-c-brand-1);
+  transition: stroke 0.25s, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.welink-pillars .pillar:hover .pillar-icon svg {
+  stroke: #10aeff;
+  transform: scale(1.15) rotate(-6deg);
+}
+
+/* ── 视频 3D tilt ──────────────────────────────────────────────────────── */
+.welink-video-hero {
+  perspective: 1000px;
+}
+
+.welink-video-card {
+  transform-style: preserve-3d;
+}
+
+.welink-video-card:hover {
+  /* 覆盖上方简单的 translate/scale：加一点 rotateX */
+  transform: translateY(-4px) scale(1.02) rotateX(3deg) rotateY(-3deg);
+}
+
+/* 懒加载视频卡：鼠标悬停时用渐变发光边框代替实线 */
+.welink-lazy-video {
+  position: relative;
+}
+
+.welink-lazy-video::after {
+  /* 注意：上面已有 play-button ::after，这里不改 ::after，改用 box-shadow 实现流光边 */
+  box-shadow:
+    0 8px 24px rgba(7, 193, 96, 0.5),
+    0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+.welink-lazy-video:hover {
+  transform: translateY(-3px) scale(1.01);
+}
+
+/* ── Pillar 柱卡片加渐变描边 + 大号内边距 ────────────────────────────────── */
+.welink-pillars .pillar {
+  padding: 24px 22px;
+}
+
+.welink-pillars .pillar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  padding: 1px;
+  background: linear-gradient(135deg,
+    rgba(7, 193, 96, 0.35),
+    rgba(16, 174, 255, 0.25),
+    transparent 60%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.35s;
+  pointer-events: none;
+}
+
+.welink-pillars .pillar:hover::after { opacity: 1; }

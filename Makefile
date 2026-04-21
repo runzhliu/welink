@@ -57,6 +57,7 @@ docs-build-push: ## 跨平台构建官网镜像并推送（linux/amd64 + linux/a
 	  --push docs/
 
 docs-up:     ## 启动官网容器
+	@docker network inspect welink-net >/dev/null 2>&1 || docker network create welink-net
 	docker compose -f docs/docker-compose.yml up -d
 
 docs-down:   ## 停止官网容器
