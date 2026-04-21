@@ -1,104 +1,50 @@
 /**
- * 时光机 — 3 个月分页聊天日历
+ * 时光机 — 聊天日历
  *
- * 布局：
- *   上：← [年月范围] → + 3 个月日历网格并排 + 对应时段折线图
- *   右侧面板：点击日期后显示当天活跃联系人/群聊，再点进去看消息
+ * 三种视图由用户切换：
+ *   - QuarterlyView（季度，3 月滚动）默认
+ *   - MonthView（单月大图）
+ *   - YearView（年贡献图）
+ * 视图偏好写 localStorage（welink_calendar_view）。
+ *
+ * 主文件只负责：拉 heatmap / 管 selectedDate / 去年今天回忆 / 右侧面板 / 折线图。
+ * 日历展示逻辑拆到 QuarterlyView / MonthView / YearView 三个文件。
  */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { Hourglass, MessageSquare, ChevronLeft, ChevronRight, X, Users, MessagesSquare, Bot, Send, Loader2, Square, Copy, Check, Share2, Sparkles } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { generateShareImage } from '../../utils/shareImage';
-import { RevealLink } from '../common/RevealLink';
+import {
+  Hourglass, MessageSquare, ChevronLeft, ChevronRight, X, Users, MessagesSquare,
+  Bot, Sparkles, CalendarDays, CalendarRange, LayoutGrid, GitCommitHorizontal,
+  type LucideIcon,
+} from 'lucide-react';
 import { calendarApi } from '../../services/api';
 import type { CalendarDayEntry, ContactStats, ChatMessage, GroupChatMessage } from '../../types';
 import { Section } from '../common/Section';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { avatarSrc } from '../../utils/avatar';
+import { DayAIPanel } from './DayAIPanel';
+import { QuarterlyView } from './QuarterlyView';
+import { MonthView } from './MonthView';
+import { YearView } from './YearView';
+import { TimelineViewMode } from './TimelineViewMode';
+import {
+  HEAT_COLORS_DISPLAY, EMPTY_CELL_CLASS,
+  isoDate,
+  PANEL_MIN_WIDTH, PANEL_MAX_WIDTH, PANEL_DEFAULT_WIDTH, isNarrowViewport,
+  loadCalendarView, saveCalendarView,
+  type CalendarViewType, type CalendarViewRange,
+} from './calendarUtils';
 
 interface Props {
   contacts: ContactStats[];
   onContactClick?: (contact: ContactStats) => void;
 }
 
-// ─── 颜色 ──────────────────────────────────────────────────────────────────────
-const HEAT_COLORS = ['#ebedf0', '#c6e9d0', '#87d4a8', '#40c463', '#216e39'];
-function heatColor(val: number, max: number): string {
-  if (val === 0 || max === 0) return HEAT_COLORS[0];
-  const r = val / max;
-  if (r <= 0.1) return HEAT_COLORS[1];
-  if (r <= 0.3) return HEAT_COLORS[2];
-  if (r <= 0.6) return HEAT_COLORS[3];
-  return HEAT_COLORS[4];
-}
-
-// ─── 工具函数 ──────────────────────────────────────────────────────────────────
-const isoDate = (d: Date) => d.toISOString().slice(0, 10);
-const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
-const firstWeekday = (y: number, m: number) => { const d = new Date(y, m, 1).getDay(); return d === 0 ? 6 : d - 1; };
-const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
-const MONTH_NAMES = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-
-// ─── 单月日历格 ────────────────────────────────────────────────────────────────
-interface MonthGridProps {
-  year: number;
-  month: number;
-  heatmap: Record<string, number>;
-  maxVal: number;
-  selectedDate: string | null;
-  onDayClick: (date: string) => void;
-}
-
-const MonthGrid: React.FC<MonthGridProps> = ({ year, month, heatmap, maxVal, selectedDate, onDayClick }) => {
-  const total = daysInMonth(year, month);
-  const offset = firstWeekday(year, month);
-  const cells: (number | null)[] = [...Array(offset).fill(null), ...Array.from({ length: total }, (_, i) => i + 1)];
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  return (
-    <div className="flex-1 min-w-0">
-      {/* 月份标题 */}
-      <div className="text-sm font-black text-[#1d1d1f] dark:text-white mb-2 text-center">
-        {MONTH_NAMES[month]}
-      </div>
-      <div className="grid grid-cols-7 gap-px">
-        {WEEKDAYS.map(d => (
-          <div key={d} className="text-center text-[10px] font-bold text-gray-400 py-1">{d}</div>
-        ))}
-        {cells.map((day, i) => {
-          if (day === null) return <div key={`e-${i}`} className="h-7" />;
-          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const count = heatmap[dateStr] || 0;
-          const isSelected = dateStr === selectedDate;
-          const isToday = dateStr === isoDate(new Date());
-          return (
-            <button
-              key={dateStr}
-              onClick={() => onDayClick(dateStr)}
-              title={`${dateStr}  ${count} 条`}
-              className={`
-                h-7 rounded text-[11px] font-semibold transition-all duration-100
-                flex items-center justify-center
-                ${isSelected ? 'ring-2 ring-[#07c160] ring-offset-1 z-10' : 'hover:opacity-75'}
-                ${isToday && !isSelected ? 'ring-1 ring-gray-400' : ''}
-              `}
-              style={{ backgroundColor: heatColor(count, maxVal) }}
-            >
-              <span className={count > 0 ? 'text-gray-800 dark:text-gray-100' : 'text-gray-400'}>{day}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
 // ─── 折线图 Tooltip ────────────────────────────────────────────────────────────
+
 const TrendTooltip: React.FC<{ active?: boolean; payload?: { value: number }[]; label?: string }> = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -110,6 +56,7 @@ const TrendTooltip: React.FC<{ active?: boolean; payload?: { value: number }[]; 
 };
 
 // ─── 消息视图 ──────────────────────────────────────────────────────────────────
+
 interface MessagesViewProps {
   date: string;
   entry: CalendarDayEntry;
@@ -121,17 +68,27 @@ const MessagesView: React.FC<MessagesViewProps> = ({ date, entry, onBack }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let alive = true;
     setLoading(true);
+    setMsgs([]);
     const fn = entry.is_group
       ? calendarApi.getGroupMessages(date, entry.username)
       : calendarApi.getContactMessages(date, entry.username);
-    fn.then(d => setMsgs(d || [])).finally(() => setLoading(false));
+    fn.then(d => { if (alive) setMsgs(d || []); })
+      .catch(() => { if (alive) setMsgs([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, [date, entry.username, entry.is_group]);
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 px-4 py-3 border-b dark:border-white/10 flex-shrink-0">
-        <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="返回"
+          className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+        >
           <ChevronLeft size={16} className="text-gray-500" />
         </button>
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -147,14 +104,15 @@ const MessagesView: React.FC<MessagesViewProps> = ({ date, entry, onBack }) => {
         </div>
         <span className="text-xs text-gray-400 flex-shrink-0">{date}</span>
       </div>
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2" aria-busy={loading}>
         {loading && <div className="text-center text-gray-300 py-8 animate-pulse text-sm">加载中...</div>}
         {!loading && msgs.length === 0 && <div className="text-center text-gray-300 py-8 text-sm">暂无消息</div>}
         {msgs.map((m, i) => {
           const isMine = 'is_mine' in m ? m.is_mine : false;
           const speaker = 'speaker' in m ? (m as GroupChatMessage).speaker : (isMine ? '我' : entry.display_name);
+          const key = `${m.time || ''}-${i}`;
           return (
-            <div key={i} className={`flex gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
+            <div key={key} className={`flex gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
               <div className={`text-[10px] font-bold flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-white mt-0.5 ${isMine ? 'bg-[#07c160]' : 'bg-gray-300'}`}>
                 {speaker.charAt(0)}
               </div>
@@ -173,426 +131,8 @@ const MessagesView: React.FC<MessagesViewProps> = ({ date, entry, onBack }) => {
   );
 };
 
-// ─── 当天 AI 分析面板 ──────────────────────────────────────────────────────────
-
-interface DayAIMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  streaming?: boolean;
-  stats?: { elapsed: number; tokensPerSec: number; chars: number; provider?: string; model?: string };
-}
-
-const PROVIDER_LABELS: Record<string, string> = {
-  deepseek: 'DeepSeek', kimi: 'Kimi', gemini: 'Gemini', glm: 'GLM',
-  grok: 'Grok', openai: 'OpenAI', claude: 'Claude', ollama: 'Ollama', custom: '自定义',
-};
-
-const DAY_PRESETS = [
-  { label: '今日概览', prompt: '请总结今天所有聊天的主要内容、话题和情绪基调。' },
-  { label: '重要事项', prompt: '今天的聊天中提到了哪些重要事项、约定或待办事项？' },
-  { label: '情绪状态', prompt: '从今天的聊天记录来看，整体情绪状态怎么样？' },
-  { label: '趣味总结', prompt: '用轻松有趣的方式总结今天的聊天，找出最有意思的片段。' },
-];
-
-interface DayAIPanelProps {
-  date: string;
-  contacts: CalendarDayEntry[];
-  groups: CalendarDayEntry[];
-  onBack: () => void;
-}
-
-// ─── 时光机 AI 气泡（含复制/分享）──────────────────────────────────────────────
-
-const DayAssistantBubble: React.FC<{
-  msg: DayAIMessage;
-  date: string;
-  prevQuestion?: string;
-}> = ({ msg, date, prevQuestion }) => {
-  const [copied, setCopied] = useState(false);
-  const [sharing, setSharing] = useState(false);
-  const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string; path?: string } | null>(null);
-
-  const handleCopy = () => {
-    if (!msg.content) return;
-    navigator.clipboard.writeText(msg.content).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }).catch(() => {});
-  };
-
-  const handleShare = async () => {
-    if (!msg.content || sharing) return;
-    setSharing(true);
-    setShareMsg(null);
-    try {
-      const savedPath = await generateShareImage({
-        question: prevQuestion,
-        answer: msg.content,
-        contactName: `${date} 时光机`,
-        stats: msg.stats ? {
-          provider: msg.stats.provider,
-          model: msg.stats.model,
-          elapsedSecs: msg.stats.elapsed,
-          tokensPerSec: msg.stats.tokensPerSec,
-          charCount: msg.stats.chars,
-        } : undefined,
-      });
-      const isAppMode = savedPath.startsWith('/') || /^[A-Z]:\\/i.test(savedPath);
-      setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载', path: isAppMode ? savedPath : undefined });
-    } catch (err) {
-      setShareMsg({ ok: false, text: `生成失败：${(err as Error).message}` });
-    } finally {
-      setSharing(false);
-      setTimeout(() => setShareMsg(null), 4000);
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-0.5">
-      <div className="flex gap-2 group">
-        <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white mt-0.5 bg-[#576b95]">
-          <Bot size={12} />
-        </div>
-        <div className="max-w-[85%] flex flex-col gap-0.5">
-          <div className="px-3 py-2 rounded-2xl rounded-bl-sm text-sm leading-relaxed break-words bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-gray-200 prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 dark:prose-invert">
-            {msg.content
-              ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-              : msg.streaming
-                ? null
-                : ''}
-            {msg.stats && !msg.streaming && (
-              <div className="flex items-center justify-end gap-1.5 mt-1.5 text-[10px] text-gray-400 not-prose">
-                {msg.stats.provider && <span className="font-medium">{PROVIDER_LABELS[msg.stats.provider] ?? msg.stats.provider}{msg.stats.model ? ` · ${msg.stats.model}` : ''}</span>}
-                {msg.stats.provider && <span className="text-gray-300">·</span>}
-                <span>{msg.stats.elapsed.toFixed(1)}s</span>
-                <span className="text-gray-300">·</span>
-                <span>~{msg.stats.tokensPerSec} tok/s</span>
-                <span className="text-gray-300">·</span>
-                <span>{msg.stats.chars} 字符</span>
-              </div>
-            )}
-          </div>
-          {msg.content && !msg.streaming && (
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={handleCopy}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#07c160] hover:bg-[#f0faf4] transition-colors"
-              >
-                {copied ? <Check size={10} className="text-[#07c160]" /> : <Copy size={10} />}
-                {copied ? '已复制' : '复制'}
-              </button>
-              <button
-                onClick={handleShare}
-                disabled={sharing}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#576b95] hover:bg-[#f0f4ff] transition-colors disabled:opacity-50"
-              >
-                {sharing ? <Loader2 size={10} className="animate-spin" /> : <Share2 size={10} />}
-                {sharing ? '生成中…' : '分享'}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-      {shareMsg && (
-        <p className={`text-[10px] font-medium ml-8 break-all leading-relaxed ${shareMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
-          {shareMsg.text}
-          {shareMsg.path && <RevealLink path={shareMsg.path} className="ml-2" />}
-        </p>
-      )}
-    </div>
-  );
-};
-
-const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, onBack }) => {
-  const [messages, setMessages] = useState<DayAIMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [ragMode, setRagMode] = useState<'full' | 'hybrid'>('full');
-  const [ragInfo, setRagInfo] = useState<{ hits: number; retrieved: number } | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  // 加载 LLM profiles
-  interface ProfileItem { id: string; provider: string; model?: string; }
-  const [profiles, setProfiles] = useState<ProfileItem[]>([]);
-  const [selectedProfileId, setSelectedProfileId] = useState('');
-  useEffect(() => {
-    fetch('/api/preferences')
-      .then(r => r.json())
-      .then((d: { llm_profiles?: ProfileItem[]; llm_provider?: string; llm_model?: string }) => {
-        if (d.llm_profiles && d.llm_profiles.length > 0) {
-          setProfiles(d.llm_profiles);
-          setSelectedProfileId(d.llm_profiles[0].id);
-        } else if (d.llm_provider) {
-          setProfiles([{ id: '__default__', provider: d.llm_provider, model: d.llm_model }]);
-          setSelectedProfileId('__default__');
-        }
-      }).catch(() => {});
-  }, []);
-  const selectedProfile = profiles.find(p => p.id === selectedProfileId) ?? profiles[0];
-
-  const scrollToBottom = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
-
-  const loadDayContext = async (): Promise<{ text: string; count: number }> => {
-    const allLines: string[] = [];
-    for (const entry of contacts) {
-      const msgs = await calendarApi.getContactMessages(date, entry.username).catch(() => []);
-      if (msgs && msgs.length > 0) {
-        allLines.push(`\n=== 与 ${entry.display_name} 的私聊 ===`);
-        for (const m of msgs) {
-          if (!m.content.startsWith('[')) {
-            allLines.push(`[${date} ${m.time}] ${m.is_mine ? '我' : entry.display_name}：${m.content}`);
-          }
-        }
-      }
-    }
-    for (const entry of groups) {
-      const msgs = await calendarApi.getGroupMessages(date, entry.username).catch(() => []);
-      if (msgs && msgs.length > 0) {
-        allLines.push(`\n=== 群聊「${entry.display_name}」===`);
-        for (const m of msgs) {
-          if (!m.content.startsWith('[')) {
-            allLines.push(`[${date} ${m.time}] ${m.speaker}：${m.content}`);
-          }
-        }
-      }
-    }
-    return { text: allLines.join('\n'), count: allLines.filter(l => !l.startsWith('\n===')).length };
-  };
-
-  const sendMessage = async (text: string) => {
-    if (!text.trim() || loading) return;
-    const userMsg: DayAIMessage = { role: 'user', content: text.trim() };
-    const newMessages = [...messages, userMsg];
-    const assistantIdx = newMessages.length;
-    setMessages([...newMessages, { role: 'assistant', content: '', streaming: true }]);
-    setInput('');
-    setLoading(true);
-    scrollToBottom();
-
-    const abort = new AbortController();
-    abortRef.current = abort;
-    const streamStart = Date.now();
-
-    const updateAssistant = (patch: Partial<DayAIMessage>) =>
-      setMessages(prev => {
-        const next = [...prev];
-        if (next[assistantIdx]) next[assistantIdx] = { ...next[assistantIdx], ...patch };
-        return next;
-      });
-
-    const profileId = selectedProfileId !== '__default__' ? selectedProfileId : '';
-
-    try {
-      if (ragMode === 'hybrid') {
-        const resp = await fetch('/api/ai/day-rag', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ date, profile_id: profileId, messages: newMessages.map(m => ({ role: m.role, content: m.content })) }),
-          signal: abort.signal,
-        });
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({})) as { error?: string };
-          throw new Error(err.error ?? resp.statusText);
-        }
-        const reader = resp.body!.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let accContent = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() ?? '';
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            try {
-              const chunk = JSON.parse(line.slice(6)) as { delta?: string; done?: boolean; error?: string; rag_meta?: { hits: number; retrieved: number } };
-              if (chunk.error) throw new Error(chunk.error);
-              if (chunk.rag_meta) setRagInfo(chunk.rag_meta);
-              if (chunk.done) break;
-              if (chunk.delta) { accContent += chunk.delta; updateAssistant({ content: accContent }); scrollToBottom(); }
-            } catch (e) { if (!(e instanceof SyntaxError)) throw e; }
-          }
-        }
-      } else {
-        updateAssistant({ content: '📅 正在加载当天聊天记录…' });
-        const { text: ctxText, count } = await loadDayContext();
-        if (count === 0) { updateAssistant({ content: '当天暂无文本聊天记录可分析。', streaming: false }); return; }
-        updateAssistant({ content: '' });
-        const systemPrompt = `你是微信聊天数据分析助手。以下是 ${date} 这一天所有的聊天记录（包含私聊和群聊）：\n\n${ctxText}\n\n请基于以上聊天记录回答用户的问题。`;
-        const resp = await fetch('/api/ai/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: '', is_group: false, from: 0, to: 0,
-            profile_id: profileId,
-            messages: [{ role: 'system', content: systemPrompt }, ...newMessages.map(m => ({ role: m.role, content: m.content }))],
-          }),
-          signal: abort.signal,
-        });
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({})) as { error?: string };
-          throw new Error(err.error ?? resp.statusText);
-        }
-        const reader = resp.body!.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let accContent = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() ?? '';
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            try {
-              const chunk = JSON.parse(line.slice(6)) as { delta?: string; done?: boolean; error?: string };
-              if (chunk.error) throw new Error(chunk.error);
-              if (chunk.done) break;
-              if (chunk.delta) { accContent += chunk.delta; updateAssistant({ content: accContent }); scrollToBottom(); }
-            } catch (e) { if (!(e instanceof SyntaxError)) throw e; }
-          }
-        }
-      }
-    } catch (e: unknown) {
-      if ((e as { name?: string }).name === 'AbortError') return;
-      updateAssistant({ content: `❌ ${e instanceof Error ? e.message : '请求失败'}`, streaming: false });
-    } finally {
-      const elapsed = (Date.now() - streamStart) / 1000;
-      setMessages(prev => {
-        const next = [...prev];
-        const msg = next[assistantIdx];
-        if (msg?.streaming) {
-          const chars = msg.content.length;
-          const tokensPerSec = elapsed > 0.1 ? Math.round(chars / elapsed / 1.5) : 0;
-          next[assistantIdx] = { ...msg, streaming: false, stats: {
-            elapsed, tokensPerSec, chars,
-            provider: selectedProfile?.provider,
-            model: selectedProfile?.model,
-          }};
-        }
-        return next;
-      });
-      setLoading(false);
-      scrollToBottom();
-    }
-  };
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-4 py-3 border-b dark:border-white/10 flex-shrink-0">
-        <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
-          <ChevronLeft size={16} className="text-gray-500" />
-        </button>
-        <div className="flex-1 min-w-0">
-          <div className="font-black text-sm text-[#1d1d1f] dark:text-white truncate">{date} · AI 分析</div>
-          <div className="text-[10px] text-gray-400">{contacts.length} 私聊 · {groups.length} 群聊</div>
-        </div>
-        {/* 模型切换 */}
-        {profiles.length > 1 && (
-          <div className="flex items-center gap-1 flex-wrap">
-            {profiles.map(p => (
-              <button
-                key={p.id}
-                onClick={() => setSelectedProfileId(p.id)}
-                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
-                  selectedProfileId === p.id
-                    ? 'bg-[#576b95] text-white border-[#576b95]'
-                    : 'bg-white dark:bg-white/5 text-gray-400 border-gray-200 dark:border-white/10 hover:border-[#576b95] hover:text-[#576b95]'
-                }`}
-              >
-                {`${PROVIDER_LABELS[p.provider] ?? p.provider}${p.model ? ` · ${p.model}` : ''}`}
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="flex rounded-lg border border-gray-200 dark:border-white/10 overflow-hidden flex-shrink-0">
-          <button onClick={() => setRagMode('full')}
-            className={`px-2 py-1 text-[10px] font-bold transition-colors ${ragMode === 'full' ? 'bg-[#07c160] text-white' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}>
-            全量
-          </button>
-          <button onClick={() => setRagMode('hybrid')}
-            className={`px-2 py-1 text-[10px] font-bold transition-colors ${ragMode === 'hybrid' ? 'bg-[#576b95] text-white' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}>
-            检索
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        {messages.length === 0 && (
-          <div className="space-y-3">
-            <div className="text-[11px] text-gray-400 text-center pt-2">
-              {ragMode === 'full' ? '全量分析：加载当天所有聊天记录' : '混合检索：从已建索引的对话中检索'}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {DAY_PRESETS.map(p => (
-                <button key={p.label} onClick={() => sendMessage(p.prompt)}
-                  className="px-2.5 py-1 rounded-full border border-[#07c160] text-[#07c160] text-[11px] font-semibold hover:bg-[#07c160] hover:text-white transition-colors">
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {ragInfo && ragMode === 'hybrid' && (
-          <div className="text-[10px] text-[#576b95] bg-[#576b95]/5 rounded-lg px-3 py-1.5">
-            检索到 {ragInfo.hits} 条相关消息（含上下文共 {ragInfo.retrieved} 条）
-          </div>
-        )}
-        {messages.map((msg, i) => (
-          msg.role === 'user' ? (
-            <div key={i} className="flex gap-2 flex-row-reverse">
-              <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center bg-[#07c160] text-white text-[10px] font-black mt-0.5">我</div>
-              <div className="max-w-[85%] px-3 py-2 rounded-2xl rounded-br-sm text-sm leading-relaxed whitespace-pre-wrap break-words bg-[#07c160] text-white">
-                {msg.content}
-              </div>
-            </div>
-          ) : msg.streaming ? (
-            <div key={i} className="flex gap-2">
-              <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center bg-[#576b95] text-white mt-0.5"><Bot size={12} /></div>
-              <div className="px-3 py-2 rounded-2xl rounded-bl-sm text-sm bg-gray-100 dark:bg-white/10 text-gray-400">
-                <span className="flex items-center gap-1.5 text-xs">
-                  <Loader2 size={12} className="animate-spin text-[#576b95]" />
-                  分析中…{selectedProfile && <span className="ml-1 text-[#576b95]/70">{PROVIDER_LABELS[selectedProfile.provider] ?? selectedProfile.provider}{selectedProfile.model ? ` · ${selectedProfile.model}` : ''}</span>}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <DayAssistantBubble
-              key={i}
-              msg={msg}
-              date={date}
-              prevQuestion={[...messages].slice(0, i).reverse().find(m => m.role === 'user')?.content}
-            />
-          )
-        ))}
-        <div ref={bottomRef} />
-      </div>
-
-      <div className="px-3 pb-3 flex-shrink-0">
-        <div className="flex items-end gap-2 bg-gray-50 dark:bg-white/5 rounded-2xl px-3 py-2 border border-gray-100 dark:border-white/10">
-          <textarea
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
-            placeholder="提问关于这一天的聊天…"
-            rows={1}
-            className="flex-1 bg-transparent text-sm resize-none outline-none placeholder:text-gray-400 max-h-20 min-h-[1.25rem]"
-          />
-          {loading
-            ? <button onClick={() => { abortRef.current?.abort(); }} className="p-1.5 rounded-lg bg-red-100 text-red-500 hover:bg-red-200 flex-shrink-0 transition-colors"><Square size={14} /></button>
-            : <button onClick={() => sendMessage(input)} disabled={!input.trim()} className="p-1.5 rounded-lg bg-[#07c160] text-white hover:bg-[#06ad56] disabled:opacity-30 flex-shrink-0 transition-colors"><Send size={14} /></button>
-          }
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // ─── 当天详情面板 ──────────────────────────────────────────────────────────────
+
 interface DayPanelProps {
   date: string;
   contacts: CalendarDayEntry[];
@@ -613,9 +153,12 @@ const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, on
   if (aiMode) return <DayAIPanel date={date} contacts={contacts} groups={groups} onBack={() => setAiMode(false)} />;
 
   const renderEntry = (entry: CalendarDayEntry) => (
-    <div key={entry.username}
-      className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors group"
+    <button
+      key={`${entry.is_group ? 'g' : 'c'}-${entry.username}`}
+      type="button"
       onClick={() => setViewEntry(entry)}
+      aria-label={`${entry.display_name}，${entry.is_group ? '群聊' : '私聊'}，${entry.count} 条`}
+      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group focus:outline-none focus-visible:bg-gray-50 dark:focus-visible:bg-white/5"
     >
       {entry.small_head_url ? (
         <img loading="lazy" src={avatarSrc(entry.small_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0"
@@ -637,7 +180,7 @@ const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, on
         <span className="text-xs text-gray-400">条</span>
         <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-400" />
       </div>
-    </div>
+    </button>
   );
 
   return (
@@ -649,18 +192,27 @@ const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, on
         </div>
         <div className="flex items-center gap-1">
           {!loading && total > 0 && (
-            <button onClick={() => setAiMode(true)}
+            <button
+              type="button"
+              onClick={() => setAiMode(true)}
+              aria-label="AI 分析"
               className="p-2 rounded-xl text-gray-400 hover:text-[#07c160] hover:bg-[#e7f8f0] dark:hover:bg-[#07c160]/10 transition-colors"
-              title="AI 分析">
+              title="AI 分析"
+            >
               <Bot size={16} />
             </button>
           )}
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="关闭"
+            className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+          >
             <X size={16} className="text-gray-400" />
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" aria-busy={loading}>
         {loading && <div className="text-center text-gray-300 py-12 animate-pulse text-sm">加载中...</div>}
         {!loading && contacts.length === 0 && groups.length === 0 && (
           <div className="text-center text-gray-300 py-12 text-sm">当天无消息记录</div>
@@ -686,15 +238,56 @@ const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, on
   );
 };
 
+// ─── 视图切换器 ───────────────────────────────────────────────────────────────
+
+const VIEW_OPTIONS: { value: CalendarViewType; label: string; Icon: LucideIcon }[] = [
+  { value: 'quarter', label: '季度', Icon: CalendarRange },
+  { value: 'month', label: '单月', Icon: CalendarDays },
+  { value: 'year', label: '年度', Icon: LayoutGrid },
+  { value: 'timeline', label: '时间线', Icon: GitCommitHorizontal },
+];
+
+const ViewSwitcher: React.FC<{ value: CalendarViewType; onChange: (v: CalendarViewType) => void }> = ({ value, onChange }) => (
+  <div
+    className="inline-flex rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-[#1c1c1e] shadow-sm"
+    role="radiogroup"
+    aria-label="日历视图切换"
+  >
+    {VIEW_OPTIONS.map(({ value: v, label, Icon }) => (
+      <button
+        key={v}
+        type="button"
+        role="radio"
+        aria-checked={value === v}
+        onClick={() => onChange(v)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#07c160] focus-visible:ring-inset ${
+          value === v
+            ? 'bg-[#07c160] text-white'
+            : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'
+        }`}
+      >
+        <Icon size={12} />
+        {label}
+      </button>
+    ))}
+  </div>
+);
+
 // ─── 主页面 ────────────────────────────────────────────────────────────────────
-export const ChatCalendarPage: React.FC<Props> = () => {
+
+export const ChatCalendarPage: React.FC<Props> = ({ contacts, onContactClick }) => {
   const [heatmap, setHeatmap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
-  // 滚动容器 ref
-  const scrollRef = useRef<HTMLDivElement>(null);
-  // 当前可见的组索引（每组 3 个月）
-  const [currentGroupIdx, setCurrentGroupIdx] = useState(0);
+  const [view, setView] = useState<CalendarViewType>(loadCalendarView);
+  const handleViewChange = useCallback((v: CalendarViewType) => {
+    setView(v);
+    saveCalendarView(v);
+  }, []);
+
+  // 当前视图对应的范围（由子视图 onRangeChange 上报）
+  const [range, setRange] = useState<CalendarViewRange>({ label: '', from: '', to: '' });
+  const handleRangeChange = useCallback((r: CalendarViewRange) => setRange(r), []);
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [dayContacts, setDayContacts] = useState<CalendarDayEntry[]>([]);
@@ -702,17 +295,29 @@ export const ChatCalendarPage: React.FC<Props> = () => {
   const [dayLoading, setDayLoading] = useState(false);
   const dayFetchRef = useRef(0);
 
-  // 右侧面板宽度（可拖动）
-  const [panelWidth, setPanelWidth] = useState(320);
+  // 右侧面板宽度
+  const [panelWidth, setPanelWidth] = useState(() =>
+    isNarrowViewport() ? Math.round(window.innerWidth * 0.9) : PANEL_DEFAULT_WIDTH,
+  );
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    const onResize = () => {
+      const maxForViewport = Math.min(PANEL_MAX_WIDTH, Math.max(PANEL_MIN_WIDTH, window.innerWidth - 120));
+      setPanelWidth(prev => Math.min(prev, maxForViewport));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const handleDragStart = (e: React.MouseEvent) => {
     e.preventDefault();
     dragRef.current = { startX: e.clientX, startWidth: panelWidth };
+    const maxForViewport = Math.min(PANEL_MAX_WIDTH, Math.max(PANEL_MIN_WIDTH, window.innerWidth - 120));
     const onMove = (ev: MouseEvent) => {
       if (!dragRef.current) return;
       const delta = dragRef.current.startX - ev.clientX;
-      const next = Math.min(600, Math.max(240, dragRef.current.startWidth + delta));
+      const next = Math.min(maxForViewport, Math.max(PANEL_MIN_WIDTH, dragRef.current.startWidth + delta));
       setPanelWidth(next);
     };
     const onUp = () => {
@@ -725,108 +330,33 @@ export const ChatCalendarPage: React.FC<Props> = () => {
   };
 
   useEffect(() => {
+    let alive = true;
     setLoading(true);
     calendarApi.getHeatmap()
-      .then(h => setHeatmap(h.heatmap || {}))
+      .then(h => { if (alive) setHeatmap(h.heatmap || {}); })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, []);
 
-  // 从 heatmap 数据推导所有月份列表（最早月 → 当月）
-  const allMonths = useMemo(() => {
-    const dates = Object.keys(heatmap).sort();
-    if (!dates.length) return [];
-    const start = new Date(dates[0].slice(0, 7) + '-01');
-    const now = new Date();
-    const end = new Date(now.getFullYear(), now.getMonth(), 1);
-    const months: { year: number; month: number }[] = [];
-    const cur = new Date(start);
-    while (cur <= end) {
-      months.push({ year: cur.getFullYear(), month: cur.getMonth() });
-      cur.setMonth(cur.getMonth() + 1);
-    }
-    return months;
-  }, [heatmap]);
-
-  // 每 3 个月一组
-  const monthGroups = useMemo(() => {
-    const groups: { year: number; month: number }[][] = [];
-    for (let i = 0; i < allMonths.length; i += 3) {
-      groups.push(allMonths.slice(i, i + 3));
-    }
-    return groups;
-  }, [allMonths]);
-
-  // 加载完成后滚到最后一组（最新）
-  useEffect(() => {
-    if (!monthGroups.length) return;
-    const lastIdx = monthGroups.length - 1;
-    setCurrentGroupIdx(lastIdx);
-    requestAnimationFrame(() => {
-      const el = scrollRef.current;
-      if (el) el.scrollLeft = el.scrollWidth;
-    });
-  }, [monthGroups.length]);
-
-  // 滚动时更新 currentGroupIdx
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || !monthGroups.length) return;
-    const idx = Math.round(el.scrollLeft / el.clientWidth);
-    setCurrentGroupIdx(Math.max(0, Math.min(idx, monthGroups.length - 1)));
-  }, [monthGroups.length]);
-
-  const goPrev = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({ left: el.scrollLeft - el.clientWidth, behavior: 'smooth' });
-  };
-  const goNext = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({ left: el.scrollLeft + el.clientWidth, behavior: 'smooth' });
-  };
-
-  // 当前可见组的月份
-  const currentGroup = monthGroups[currentGroupIdx] || [];
-
-  // 当前组日期范围
-  const [rangeStart, rangeEnd] = useMemo(() => {
-    if (!currentGroup.length) return ['', ''];
-    const first = currentGroup[0];
-    const last = currentGroup[currentGroup.length - 1];
-    const start = `${first.year}-${String(first.month + 1).padStart(2, '0')}-01`;
-    const lastDay = daysInMonth(last.year, last.month);
-    const end = `${last.year}-${String(last.month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-    return [start, end];
-  }, [currentGroup]);
-
-  // 当前组最大值（颜色归一化用）
-  const maxVal = useMemo(() => {
-    let max = 1;
-    for (const [d, c] of Object.entries(heatmap)) {
-      if (d >= rangeStart && d <= rangeEnd && c > max) max = c;
-    }
-    return max;
-  }, [heatmap, rangeStart, rangeEnd]);
-
-  // 折线图数据（当前组所有天）
+  // 折线图数据：根据当前视图的范围切片
   const visibleTrend = useMemo(() => {
-    if (!rangeStart || !rangeEnd) return [];
+    if (!range.from || !range.to) return [];
     const result: { date: string; count: number }[] = [];
-    const cur = new Date(rangeStart);
-    const end = new Date(rangeEnd);
+    const cur = new Date(range.from);
+    const end = new Date(range.to);
     while (cur <= end) {
       const d = isoDate(cur);
       result.push({ date: d, count: heatmap[d] || 0 });
       cur.setDate(cur.getDate() + 1);
     }
     return result;
-  }, [heatmap, rangeStart, rangeEnd]);
+  }, [heatmap, range]);
 
-  const trendLabels = useMemo(() =>
-    visibleTrend.filter(p => p.date.endsWith('-01') || p.date.endsWith('-15')).map(p => p.date.slice(5)),
-    [visibleTrend]
+  // X 轴 tick：每月 1 号和 15 号（密度足够又不重叠）
+  const trendLabels = useMemo(
+    () => visibleTrend.filter(p => p.date.endsWith('-01') || p.date.endsWith('-15')).map(p => p.date.slice(5)),
+    [visibleTrend],
   );
 
   const handleDayClick = useCallback((date: string) => {
@@ -850,207 +380,147 @@ export const ChatCalendarPage: React.FC<Props> = () => {
       });
   }, []);
 
-  // 标题标签
-  const navLabel = useMemo(() => {
-    if (!currentGroup.length) return '';
-    const first = currentGroup[0];
-    const last = currentGroup[currentGroup.length - 1];
-    if (first.year === last.year) {
-      return `${first.year}年 ${MONTH_NAMES[first.month]} — ${MONTH_NAMES[last.month]}`;
+  // 去年今天 / N 年前
+  const memories = useMemo(() => {
+    const today = new Date();
+    const result: { year: number; date: string; count: number }[] = [];
+    for (let y = 1; y <= 5; y++) {
+      const d = new Date(today.getFullYear() - y, today.getMonth(), today.getDate());
+      const ds = isoDate(d);
+      const c = heatmap[ds] ?? 0;
+      if (c > 0) result.push({ year: y, date: ds, count: c });
     }
-    return `${first.year}年${MONTH_NAMES[first.month]} — ${last.year}年${MONTH_NAMES[last.month]}`;
-  }, [currentGroup]);
+    return result;
+  }, [heatmap]);
+
+  // 当前视图组件（时间线模式单独处理，因为它吃 contacts 而不是 heatmap）
+  const HeatmapView = useMemo(() => {
+    switch (view) {
+      case 'month': return MonthView;
+      case 'year': return YearView;
+      default: return QuarterlyView;
+    }
+  }, [view]);
+
+  const isTimeline = view === 'timeline';
+  const subtitle = isTimeline
+    ? '你是什么时候认识每个人的'
+    : '聊天足迹，点击日期查看当天记录';
 
   return (
     <div className="flex gap-0 h-[calc(100vh-6rem)] -mx-4 sm:-mx-10">
       {/* ── 左栏 ─────────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-5 overflow-y-auto px-4 sm:px-10 py-6 flex-1">
-        <div>
-          <h1 className="dk-text text-3xl sm:text-5xl font-black tracking-tight text-[#1d1d1f] mb-1">时光机</h1>
-          <p className="text-gray-400 text-sm">聊天足迹，点击日期查看当天记录</p>
+      <div className="flex flex-col gap-5 overflow-y-auto px-4 sm:px-10 py-6 flex-1 min-w-0">
+        <div className="flex items-end justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="dk-text text-3xl sm:text-5xl font-black tracking-tight text-[#1d1d1f] mb-1">时光机</h1>
+            <p className="text-gray-400 text-sm">{subtitle}</p>
+          </div>
+          <ViewSwitcher value={view} onChange={handleViewChange} />
         </div>
 
-        {/* 去年今天 */}
-        {(() => {
-          const today = new Date();
-          const lastYear = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
-          const lastYearStr = isoDate(lastYear);
-          const lastYearCount = heatmap[lastYearStr] ?? 0;
-
-          // also check 2 years ago, 3 years ago
-          const memories: { year: number; date: string; count: number }[] = [];
-          for (let y = 1; y <= 5; y++) {
-            const d = new Date(today.getFullYear() - y, today.getMonth(), today.getDate());
-            const ds = isoDate(d);
-            const c = heatmap[ds] ?? 0;
-            if (c > 0) memories.push({ year: y, date: ds, count: c });
-          }
-
-          if (memories.length === 0) return null;
-
-          // 跳转日历到指定日期所在的月份组
-          const jumpToDate = (dateStr: string) => {
-            handleDayClick(dateStr);
-            // 找到该日期所在月份在 monthGroups 中的组索引
-            const [y, m] = dateStr.split('-').map(Number);
-            const targetIdx = monthGroups.findIndex(group =>
-              group.some(g => g.year === y && g.month === m - 1)
-            );
-            if (targetIdx >= 0 && targetIdx !== currentGroupIdx) {
-              setCurrentGroupIdx(targetIdx);
-              requestAnimationFrame(() => {
-                const el = scrollRef.current;
-                if (el) el.scrollTo({ left: targetIdx * el.clientWidth, behavior: 'smooth' });
-              });
-            }
-          };
-
-          return (
-            <div className="w-full dk-card bg-gradient-to-r from-[#f0faf4] to-[#e7f8f0] dark:from-[#07c160]/10 dark:to-[#07c160]/5
-              border border-[#07c160]/20 rounded-2xl px-5 py-3">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-9 h-9 rounded-xl bg-[#07c160] flex items-center justify-center flex-shrink-0">
-                  <Sparkles size={16} className="text-white" />
-                </div>
-                <div className="text-sm font-bold text-[#1d1d1f] dk-text">
-                  {memories.length === 1
-                    ? `${memories[0].year} 年前的今天`
-                    : `回忆：${memories.map(m => `${m.year}年前`).join('、')}的今天`
-                  }
-                </div>
+        {memories.length > 0 && !isTimeline && (
+          <div className="w-full dk-card bg-gradient-to-r from-[#f0faf4] to-[#e7f8f0] dark:from-[#07c160]/10 dark:to-[#07c160]/5
+            border border-[#07c160]/20 rounded-2xl px-5 py-3">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-9 h-9 rounded-xl bg-[#07c160] flex items-center justify-center flex-shrink-0">
+                <Sparkles size={16} className="text-white" />
               </div>
-              <div className="flex flex-wrap gap-2 ml-12">
-                {memories.map(m => (
-                  <button
-                    key={m.date}
-                    onClick={() => jumpToDate(m.date)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold
-                      bg-white/70 dark:bg-white/10 text-[#07c160] hover:bg-white hover:shadow-sm transition-all"
-                  >
-                    <span>{m.date}</span>
-                    <span className="text-gray-400 font-normal">{m.count} 条</span>
-                    <ChevronRight size={12} />
-                  </button>
-                ))}
+              <div className="text-sm font-bold text-[#1d1d1f] dk-text">
+                {memories.length === 1
+                  ? `${memories[0].year} 年前的今天`
+                  : `回忆：${memories.map(m => `${m.year}年前`).join('、')}的今天`}
               </div>
             </div>
-          );
-        })()}
-
-        {/* 日历卡片 */}
-        <div className="dk-card bg-white dark:bg-[#1c1c1e] border border-gray-100 dark:border-white/10 rounded-3xl p-5 shadow-sm">
-          {/* 导航栏 */}
-          <div className="flex items-center justify-between mb-4">
-            <button onClick={goPrev} disabled={currentGroupIdx === 0}
-              className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 transition-colors disabled:opacity-20">
-              <ChevronLeft size={18} className="text-gray-500" />
-            </button>
-            <div className="flex items-center gap-2">
-              <Hourglass size={15} className="text-[#07c160]" strokeWidth={2.5} />
-              <span className="font-black text-base text-[#1d1d1f] dark:text-white">{navLabel}</span>
-            </div>
-            <button onClick={goNext} disabled={currentGroupIdx >= monthGroups.length - 1}
-              className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 transition-colors disabled:opacity-20">
-              <ChevronRight size={18} className="text-gray-500" />
-            </button>
-          </div>
-
-          {loading ? (
-            <div className="h-40 flex items-center justify-center text-gray-300 animate-pulse text-sm">加载中...</div>
-          ) : (
-            /* 横向滚动容器：每组占满宽度，scroll-snap 每组对齐 */
-            <div
-              ref={scrollRef}
-              className="overflow-x-auto"
-              style={{ scrollSnapType: 'x mandatory', scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}
-              onScroll={handleScroll}
-            >
-              <div className="flex" style={{ width: `${monthGroups.length * 100}%` }}>
-                {monthGroups.map((group, gi) => (
-                  <div
-                    key={gi}
-                    className="flex gap-4 px-1"
-                    style={{ width: `${100 / monthGroups.length}%`, scrollSnapAlign: 'start', flexShrink: 0 }}
-                  >
-                    {group.map(({ year, month }) => (
-                      <MonthGrid
-                        key={`${year}-${month}`}
-                        year={year} month={month}
-                        heatmap={heatmap} maxVal={maxVal}
-                        selectedDate={selectedDate}
-                        onDayClick={handleDayClick}
-                      />
-                    ))}
-                    {/* 补齐不足 3 个月的空位 */}
-                    {group.length < 3 && Array.from({ length: 3 - group.length }).map((_, k) => (
-                      <div key={`empty-${k}`} className="flex-1" />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 图例 + 页码点 */}
-          <div className="flex items-center justify-between mt-4">
-            <div className="flex gap-1">
-              {monthGroups.map((_, i) => (
+            <div className="flex flex-wrap gap-2 ml-12">
+              {memories.map(m => (
                 <button
-                  key={i}
-                  onClick={() => scrollRef.current?.scrollTo({ left: i * (scrollRef.current.clientWidth), behavior: 'smooth' })}
-                  className={`rounded-full transition-all duration-200 ${i === currentGroupIdx ? 'w-4 h-1.5 bg-[#07c160]' : 'w-1.5 h-1.5 bg-gray-200 dark:bg-white/20'}`}
-                />
+                  key={m.date}
+                  type="button"
+                  onClick={() => handleDayClick(m.date)}
+                  aria-label={`跳到 ${m.date}，${m.count} 条`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold
+                    bg-white/70 dark:bg-white/10 text-[#07c160] hover:bg-white hover:shadow-sm transition-all"
+                >
+                  <span>{m.date}</span>
+                  <span className="text-gray-400 font-normal">{m.count} 条</span>
+                  <ChevronRight size={12} />
+                </button>
               ))}
             </div>
-            <div className="flex items-center gap-1.5">
+          </div>
+        )}
+
+        {loading ? (
+          <div className="dk-card bg-white dark:bg-[#1c1c1e] border border-gray-100 dark:border-white/10 rounded-3xl p-5 shadow-sm h-40 flex items-center justify-center text-gray-300 animate-pulse text-sm">
+            加载中...
+          </div>
+        ) : isTimeline ? (
+          <TimelineViewMode contacts={contacts} onContactClick={onContactClick} />
+        ) : (
+          <HeatmapView
+            heatmap={heatmap}
+            selectedDate={selectedDate}
+            onDayClick={handleDayClick}
+            onRangeChange={handleRangeChange}
+          />
+        )}
+
+        {/* 色阶图例 + 折线图：只在热图视图下有意义，时间线模式隐藏 */}
+        {!loading && !isTimeline && (
+          <>
+            <div className="flex items-center justify-end gap-1.5" aria-label="颜色图例">
               <span className="text-[10px] text-gray-400">少</span>
-              {HEAT_COLORS.map(c => <div key={c} className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: c }} />)}
+              {HEAT_COLORS_DISPLAY.map((c, idx) => (
+                idx === 0
+                  ? <div key="empty-chip" className={`w-2.5 h-2.5 rounded-sm ${EMPTY_CELL_CLASS}`} />
+                  : <div key={c} className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: c }} />
+              ))}
               <span className="text-[10px] text-gray-400">多</span>
             </div>
-          </div>
-        </div>
 
-        {/* 折线图（可折叠） */}
-        <Section
-          title="消息趋势"
-          subtitle={navLabel}
-          icon={<Hourglass size={14} strokeWidth={2.5} />}
-          defaultOpen={false}
-          className="bg-white dark:bg-[#1c1c1e] border border-gray-100 dark:border-white/10 !rounded-3xl"
-        >
-          {loading ? (
-            <div className="h-28 flex items-center justify-center text-gray-300 animate-pulse text-sm">加载中...</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={120}>
-              <AreaChart data={visibleTrend} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
-                onClick={e => { if (e?.activePayload?.[0]) handleDayClick((e.activePayload[0].payload as { date: string }).date); }}>
-                <defs>
-                  <linearGradient id="calGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#07c160" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#07c160" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                <XAxis dataKey="date" tickFormatter={v => v.slice(5)} ticks={trendLabels}
-                  tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip content={<TrendTooltip />} />
-                <Area type="monotone" dataKey="count" stroke="#07c160" strokeWidth={2}
-                  fill="url(#calGrad)" dot={false} activeDot={{ r: 4, fill: '#07c160', cursor: 'pointer' }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </Section>
+            <Section
+              title="消息趋势"
+              subtitle={range.label}
+              icon={<Hourglass size={14} strokeWidth={2.5} />}
+              defaultOpen={false}
+              className="bg-white dark:bg-[#1c1c1e] border border-gray-100 dark:border-white/10 !rounded-3xl"
+            >
+              <ResponsiveContainer width="100%" height={120}>
+                <AreaChart data={visibleTrend} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+                  onClick={e => { if (e?.activePayload?.[0]) handleDayClick((e.activePayload[0].payload as { date: string }).date); }}>
+                  <defs>
+                    <linearGradient id="calGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#07c160" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#07c160" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                  <XAxis dataKey="date" tickFormatter={v => v.slice(5)} ticks={trendLabels}
+                    tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip content={<TrendTooltip />} />
+                  <Area type="monotone" dataKey="count" stroke="#07c160" strokeWidth={2}
+                    fill="url(#calGrad)" dot={false} activeDot={{ r: 4, fill: '#07c160', cursor: 'pointer' }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </Section>
+          </>
+        )}
       </div>
 
       {/* ── 右侧面板 ─────────────────────────────────────────────────────────── */}
       {selectedDate && (
-        <div className="border-l dark:border-white/10 bg-white dark:bg-[#1c1c1e] overflow-hidden flex flex-col flex-shrink-0 relative"
-          style={{ width: panelWidth }}>
-          {/* 拖动把手 */}
+        <div
+          className="border-l dark:border-white/10 bg-white dark:bg-[#1c1c1e] overflow-hidden flex flex-col flex-shrink-0 relative"
+          style={{ width: panelWidth, maxWidth: '100vw' }}
+        >
           <div
-            className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#07c160]/40 active:bg-[#07c160]/60 z-10"
+            className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#07c160]/40 active:bg-[#07c160]/60 z-10 hidden sm:block"
             onMouseDown={handleDragStart}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="拖动调整面板宽度"
           />
           <DayPanel
             date={selectedDate}

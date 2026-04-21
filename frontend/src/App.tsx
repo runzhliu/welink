@@ -23,7 +23,6 @@ import { URLCollectionPage } from './components/dashboard/URLCollectionPage';
 import { ExportCenterPage } from './components/dashboard/ExportCenterPage';
 import { DatabaseView } from './components/dashboard/DatabaseView';
 import { SearchView } from './components/search/SearchView';
-import { TimelineView } from './components/timeline/TimelineView';
 import { ChatCalendarPage } from './components/calendar/ChatCalendarPage';
 import { AnniversaryPage } from './components/anniversary/AnniversaryPage';
 import { SkillsView } from './components/skills/SkillsView';
@@ -73,12 +72,19 @@ function AppInner() {
 
   // State — 从 URL hash 恢复当前 tab + 联系人/群聊弹窗
   // hash 格式：#/stats  #/stats/contact/wxid_abc  #/groups/group/xxx@chatroom
-  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'contacts', 'db', 'groups', 'search', 'timeline', 'calendar', 'anniversary', 'urls', 'skills', 'export', 'memory', 'settings'];
+  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'contacts', 'db', 'groups', 'search', 'calendar', 'anniversary', 'urls', 'skills', 'export', 'memory', 'settings'];
 
   const parseHash = (): { tab: TabType; contactId?: string; groupId?: string } => {
     const raw = window.location.hash.replace('#/', '').replace('#', '');
     const parts = raw.split('/');
-    const tab = VALID_TABS.includes(parts[0] as TabType) ? parts[0] as TabType : 'dashboard';
+    let tabStr = parts[0];
+    // 时间线已合并到时光机 — 老书签 #/timeline 重定向到 #/calendar，并把视图偏好写为 timeline
+    if (tabStr === 'timeline') {
+      try { localStorage.setItem('welink_calendar_view', 'timeline'); } catch { /* ignore */ }
+      tabStr = 'calendar';
+      window.history.replaceState(null, '', '#/calendar');
+    }
+    const tab = VALID_TABS.includes(tabStr as TabType) ? tabStr as TabType : 'dashboard';
     let contactId: string | undefined;
     let groupId: string | undefined;
     if (parts[1] === 'contact' && parts[2]) contactId = decodeURIComponent(parts[2]);
@@ -149,7 +155,7 @@ function AppInner() {
   const [releaseChecked, setReleaseChecked] = useState(false);
   useEffect(() => {
     // ⌘1..⌘9 映射到 VALID_TABS 的前 9 项；顺序对应 Sidebar 上的常用 tab
-    const TAB_ORDER: TabType[] = ['dashboard', 'stats', 'contacts', 'groups', 'search', 'timeline', 'calendar', 'skills', 'settings'];
+    const TAB_ORDER: TabType[] = ['dashboard', 'stats', 'contacts', 'groups', 'search', 'calendar', 'anniversary', 'skills', 'settings'];
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
       // 在输入框里按 ⌘1 之类不拦截（浏览器默认也会被某些组件拦截）
@@ -518,8 +524,6 @@ function AppInner() {
           />
         ) : activeTab === 'groups' ? (
           <GroupsView allContacts={allContacts} onContactClick={handleContactClick} onGroupClick={(g) => setSelectedGroup(g)} blockedGroups={blockedGroups} onBlockGroup={addBlockedGroup} onOpenSettings={() => setActiveTab('settings')} />
-        ) : activeTab === 'timeline' ? (
-          <TimelineView contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'calendar' ? (
           <ChatCalendarPage contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'anniversary' ? (

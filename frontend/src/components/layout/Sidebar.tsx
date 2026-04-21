@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { Bot, BarChart2, Database, Sun, Moon, MessagesSquare, MessageCircle, BookOpen, Github, Search, GitCommitHorizontal, Hourglass, Heart, Link2, X, Settings, ChevronLeft, ChevronRight, Sparkles, Download, Brain } from 'lucide-react';
+import { Bot, BarChart2, Database, Sun, Moon, MessagesSquare, MessageCircle, BookOpen, Github, Search, Hourglass, Heart, Link2, X, Settings, ChevronLeft, ChevronRight, Sparkles, Download, Brain } from 'lucide-react';
 import type { TabType } from '../../types';
 
 interface SidebarProps {
@@ -44,7 +44,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
     { tab: 'stats',     icon: <BarChart2 size={20} strokeWidth={2} />,        label: '洞察' },
     { tab: 'contacts',  icon: <MessageCircle size={20} strokeWidth={2} />,    label: '私聊' },
     { tab: 'groups',    icon: <MessagesSquare size={20} strokeWidth={2} />,   label: '群聊' },
-    { tab: 'timeline',  icon: <GitCommitHorizontal size={20} strokeWidth={2} />, label: '时间线' },
     { tab: 'calendar',    icon: <Hourglass size={20} strokeWidth={2} />,        label: '时光机' },
     { tab: 'anniversary', icon: <Heart size={20} strokeWidth={2} />,          label: '纪念日' },
     { tab: 'search',      icon: <Search size={20} strokeWidth={2} />,         label: '搜索' },
