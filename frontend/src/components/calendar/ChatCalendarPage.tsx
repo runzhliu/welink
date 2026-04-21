@@ -41,6 +41,7 @@ import {
 interface Props {
   contacts: ContactStats[];
   onContactClick?: (contact: ContactStats) => void;
+  onOpenSettings?: () => void;
 }
 
 // ─── 折线图 Tooltip ────────────────────────────────────────────────────────────
@@ -139,9 +140,10 @@ interface DayPanelProps {
   groups: CalendarDayEntry[];
   loading: boolean;
   onClose: () => void;
+  onOpenSettings?: () => void;
 }
 
-const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, onClose }) => {
+const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, onClose, onOpenSettings }) => {
   const { privacyMode } = usePrivacyMode();
   const [viewEntry, setViewEntry] = useState<CalendarDayEntry | null>(null);
   const [aiMode, setAiMode] = useState(false);
@@ -150,7 +152,7 @@ const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, on
   const total = contacts.reduce((s, c) => s + c.count, 0) + groups.reduce((s, g) => s + g.count, 0);
 
   if (viewEntry) return <MessagesView date={date} entry={viewEntry} onBack={() => setViewEntry(null)} />;
-  if (aiMode) return <DayAIPanel date={date} contacts={contacts} groups={groups} onBack={() => setAiMode(false)} />;
+  if (aiMode) return <DayAIPanel date={date} contacts={contacts} groups={groups} onBack={() => setAiMode(false)} onOpenSettings={onOpenSettings} />;
 
   const renderEntry = (entry: CalendarDayEntry) => (
     <button
@@ -275,7 +277,7 @@ const ViewSwitcher: React.FC<{ value: CalendarViewType; onChange: (v: CalendarVi
 
 // ─── 主页面 ────────────────────────────────────────────────────────────────────
 
-export const ChatCalendarPage: React.FC<Props> = ({ contacts, onContactClick }) => {
+export const ChatCalendarPage: React.FC<Props> = ({ contacts, onContactClick, onOpenSettings }) => {
   const [heatmap, setHeatmap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
@@ -528,6 +530,7 @@ export const ChatCalendarPage: React.FC<Props> = ({ contacts, onContactClick }) 
             groups={dayGroups}
             loading={dayLoading}
             onClose={() => setSelectedDate(null)}
+            onOpenSettings={onOpenSettings}
           />
         </div>
       )}

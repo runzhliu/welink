@@ -15,6 +15,7 @@ import { avatarSrc } from '../../utils/avatar';
 import type { ContactStats, TimeRange, ChatMessage, GroupInfo, GroupChatMessage } from '../../types';
 import { contactsApi, groupsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { isAIConfigError } from '../../utils/aiError';
 
 const PROVIDER_LABELS: Record<string, string> = {
   deepseek: 'DeepSeek', kimi: 'Kimi', gemini: 'Gemini', glm: 'GLM',
@@ -253,7 +254,8 @@ const MessageBubble: React.FC<{
   prevQuestion?: string;
   llmProvider?: string;
   llmModel?: string;
-}> = ({ msg, contactName, avatarUrl, prevQuestion, llmProvider, llmModel }) => {
+  onOpenSettings?: () => void;
+}> = ({ msg, contactName, avatarUrl, prevQuestion, llmProvider, llmModel, onOpenSettings }) => {
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [thinkingOpen, setThinkingOpen] = useState(false);
@@ -355,6 +357,15 @@ const MessageBubble: React.FC<{
                     <span>{msg.thinking ? '正在生成回答…' : '正在分析，请稍候…'}{llmProvider && <span className="ml-1.5 text-[#576b95]/70">{llmProvider}{llmModel ? ` · ${llmModel}` : ''}</span>}</span>
                   </span>
                 : ''}
+            {!msg.streaming && msg.content && isAIConfigError(msg.content) && onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="not-prose mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#07c160] text-white text-xs font-bold hover:bg-[#06ad56] transition-colors shadow-sm"
+              >
+                <Sparkles size={12} /> 去设置
+              </button>
+            )}
             {msg.stats && !msg.streaming && (
               <div className="flex flex-col items-end gap-0.5 mt-2 text-[10px] text-gray-400 not-prose">
                 {showPerfMetrics && msg.stats.provider && (
@@ -430,6 +441,7 @@ export interface AIHomePageProps {
   onContactClick?: (contact: ContactStats) => void;
   onGroupClick?: (group: GroupInfo) => void;
   onNavigateToAnniversary?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const AIHomePage: React.FC<AIHomePageProps> = ({
@@ -439,6 +451,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   onContactClick,
   onGroupClick,
   onNavigateToAnniversary,
+  onOpenSettings,
 }) => {
   const { privacyMode } = usePrivacyMode();
   const [mode, setMode] = useState<'contact' | 'cross'>('contact');
@@ -1051,6 +1064,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
               avatarUrl={shareAvatarUrl}
               llmProvider={llmProvider}
               llmModel={llmModel}
+              onOpenSettings={onOpenSettings}
               prevQuestion={
                 msg.role === 'assistant'
                   ? [...messages].slice(0, i).reverse().find(m => m.role === 'user')?.content
@@ -1124,7 +1138,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
       {mode === 'cross' ? (
         <div className="w-full max-w-xl mx-auto" style={{ minHeight: 400 }}>
           <CrossContactQA
-            onOpenSettings={onReselect}
+            onOpenSettings={onOpenSettings}
             onContactClick={uname => {
               const c = contacts.find(cc => cc.username === uname);
               if (c) onContactClick?.(c);

@@ -13,7 +13,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ChevronLeft, Bot, Send, Loader2, Square, Copy, Check, Share2,
+  ChevronLeft, Bot, Send, Loader2, Square, Copy, Check, Share2, Sparkles,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -21,6 +21,7 @@ import { calendarApi } from '../../services/api';
 import type { CalendarDayEntry, ChatMessage, GroupChatMessage } from '../../types';
 import { generateShareImage } from '../../utils/shareImage';
 import { RevealLink } from '../common/RevealLink';
+import { isAIConfigError } from '../../utils/aiError';
 import { PROVIDER_LABELS, consumeSSEStream } from './calendarUtils';
 
 // ─── 类型 ─────────────────────────────────────────────────────────────────────
@@ -37,6 +38,7 @@ interface DayAIPanelProps {
   contacts: CalendarDayEntry[];
   groups: CalendarDayEntry[];
   onBack: () => void;
+  onOpenSettings?: () => void;
 }
 
 interface ProfileItem { id: string; provider: string; model?: string; }
@@ -55,7 +57,8 @@ const DayAssistantBubble: React.FC<{
   msg: DayAIMessage;
   date: string;
   prevQuestion?: string;
-}> = ({ msg, date, prevQuestion }) => {
+  onOpenSettings?: () => void;
+}> = ({ msg, date, prevQuestion, onOpenSettings }) => {
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string; path?: string } | null>(null);
@@ -106,6 +109,15 @@ const DayAssistantBubble: React.FC<{
             {msg.content
               ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
               : ''}
+            {!msg.streaming && msg.content && isAIConfigError(msg.content) && onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="not-prose mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#07c160] text-white text-xs font-bold hover:bg-[#06ad56] transition-colors shadow-sm"
+              >
+                <Sparkles size={12} /> 去设置
+              </button>
+            )}
             {msg.stats && !msg.streaming && (
               <div className="flex items-center justify-end gap-1.5 mt-1.5 text-[10px] text-gray-400 not-prose flex-wrap">
                 {msg.stats.provider && <span className="font-medium">{PROVIDER_LABELS[msg.stats.provider] ?? msg.stats.provider}{msg.stats.model ? ` · ${msg.stats.model}` : ''}</span>}
@@ -155,7 +167,7 @@ const DayAssistantBubble: React.FC<{
 
 // ─── 主面板 ──────────────────────────────────────────────────────────────────
 
-export const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, onBack }) => {
+export const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, onBack, onOpenSettings }) => {
   const [messages, setMessages] = useState<DayAIMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -424,6 +436,7 @@ export const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, 
               msg={msg}
               date={date}
               prevQuestion={messages.slice(0, i).reverse().find(m => m.role === 'user')?.content}
+              onOpenSettings={onOpenSettings}
             />
           )
         ))}
