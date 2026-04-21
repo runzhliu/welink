@@ -81,6 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
 
       {/* 桌面侧边栏 */}
       <aside
+        data-tour="sidebar"
         className={`hidden sm:flex dk-card bg-white dk-border border-r flex-col py-4 shadow-sm z-10 transition-all duration-200 ${
           expanded ? 'w-44' : 'w-16'
         } overflow-hidden`}
@@ -111,6 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
           {navItems.map(({ tab, icon, label }) => (
             <button
               key={tab}
+              data-tour={`nav-${tab}`}
               onClick={() => onTabChange(tab)}
               title={expanded ? undefined : label}
               className={`flex items-center gap-3 rounded-xl transition-all duration-150 ${
@@ -150,10 +152,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, dark, 
       </aside>
 
       {/* 手机底部导航栏（不受折叠影响） */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 dk-card bg-white dk-border border-t flex safe-area-inset-bottom">
+      <nav data-tour="sidebar" className="sm:hidden fixed bottom-0 left-0 right-0 z-50 dk-card bg-white dk-border border-t flex safe-area-inset-bottom">
         {navItems.map(({ tab, icon, label }) => (
           <button
             key={tab}
+            data-tour={`nav-${tab}`}
             onClick={() => onTabChange(tab)}
             className={`flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors min-w-0 ${
               activeTab === tab ? 'text-[#07c160]' : 'text-gray-400'

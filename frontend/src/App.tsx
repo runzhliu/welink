@@ -41,6 +41,7 @@ import { SetupRequiredPage } from './components/common/SetupRequiredPage';
 import { CommandPalette } from './components/common/CommandPalette';
 import { ReleaseNotesModal } from './components/common/ReleaseNotesModal';
 import { SettingsPage } from './components/common/SettingsPage';
+import { SpotlightTour, type TourStep } from './components/common/SpotlightTour';
 
 // App API
 import { appApi } from './services/appApi';
@@ -139,8 +140,13 @@ function AppInner() {
   // Cmd+K 命令面板 + Cmd/Ctrl+1..9 tab 切换
   const [paletteOpen, setPaletteOpen] = useState(false);
 
+  // 首次启动多步引导
+  const [tourOpen, setTourOpen] = useState(false);
+
   // Release notes：启动时后台检查，有新版本且用户没 dismiss 过就弹 Modal
   const [releaseInfo, setReleaseInfo] = useState<{ current: string; latest: string; changelog: string; url: string } | null>(null);
+  // release 检查是否已跑完（无论有没有更新）—— 用来和 SpotlightTour 串行：先弹更新、再弹引导
+  const [releaseChecked, setReleaseChecked] = useState(false);
   useEffect(() => {
     // ⌘1..⌘9 映射到 VALID_TABS 的前 9 项；顺序对应 Sidebar 上的常用 tab
     const TAB_ORDER: TabType[] = ['dashboard', 'stats', 'contacts', 'groups', 'search', 'timeline', 'calendar', 'skills', 'settings'];
@@ -337,23 +343,82 @@ function AppInner() {
     localStorage.removeItem('welink_timeRange');
   };
 
+  // 主面板首次可见时触发多步引导（只在没标记过 welink_onboarding_tour_v1 时展示）
+  // 串行策略：必须等 release 检查跑完、且当前没有 release Modal 在显示
+  //   → 没更新：releaseChecked=true, releaseInfo=null，延迟 600ms 弹 tour
+  //   → 有更新：等用户关掉 Modal（releaseInfo 变 null）才弹 tour
+  useEffect(() => {
+    const dashboardReady = hasStarted && isInitialized && !isIndexing && appInfo?.ready;
+    if (!dashboardReady || !releaseChecked || releaseInfo) return;
+    try {
+      if (localStorage.getItem('welink_onboarding_tour_v1') === '1') return;
+    } catch { return; }
+    const t = setTimeout(() => setTourOpen(true), 600);
+    return () => clearTimeout(t);
+  }, [hasStarted, isInitialized, isIndexing, appInfo?.ready, releaseChecked, releaseInfo]);
+
+  const finishTour = useCallback(() => {
+    setTourOpen(false);
+    try { localStorage.setItem('welink_onboarding_tour_v1', '1'); } catch { /* ignore */ }
+  }, []);
+
+  const tourSteps: TourStep[] = useMemo(() => [
+    {
+      title: '欢迎使用 WeLink 👋',
+      body: '这是一个本地跑的微信聊天数据分析平台。\n花 30 秒熟悉下主要入口，之后就可以自由探索啦。',
+      placement: 'center',
+    },
+    {
+      selector: 'sidebar',
+      title: '左侧是主导航',
+      body: '所有功能都在这里：AI 首页、洞察、私聊、群聊、时间线、记忆库等 14 个模块。\n桌面端点击 logo 旁的箭头可以折叠。',
+      placement: 'right',
+      mobilePlacement: 'top',
+    },
+    {
+      selector: 'nav-dashboard',
+      title: 'AI 首页 —— 默认入口',
+      body: '像 ChatGPT 一样，输入问题让 AI 分析你的聊天记录。\n可以问"我和谁聊得最多"、"总结最近一周"等。',
+      placement: 'right',
+      mobilePlacement: 'top',
+    },
+    {
+      selector: 'nav-contacts',
+      title: '私聊 —— 单人深度分析',
+      body: '点进任意联系人可查看词云、画像、情感分析、AI 克隆对话，甚至生成播客。',
+      placement: 'right',
+      mobilePlacement: 'top',
+    },
+    {
+      selector: 'nav-settings',
+      title: '设置 & 快捷键',
+      body: '屏蔽特定联系人 / 群聊、切换暗色模式、调整字号都在这里。\n随时按 ⌘K（Win：Ctrl+K）打开命令面板快速跳转。',
+      placement: 'right',
+      mobilePlacement: 'top',
+    },
+  ], []);
+
   // 启动后 5s 检查一次新版本（避免与首次索引抢带宽）
+  // 结束时（有更新 / 没更新 / 请求失败）都要翻 releaseChecked=true，SpotlightTour 才会开始轮它的条件
   useEffect(() => {
     if (!backendReady || !appInfo?.ready) return;
     const timer = setTimeout(async () => {
       try {
         const r = await fetch('/api/app/check-update');
         const d = await r.json() as { has_update?: boolean; current?: string; latest?: string; changelog?: string; url?: string };
-        if (!d.has_update || !d.latest) return;
-        const dismissed = localStorage.getItem('welink_dismissed_version');
-        if (dismissed === d.latest) return;
-        setReleaseInfo({
-          current: d.current || appInfo.version || '',
-          latest: d.latest,
-          changelog: d.changelog || '',
-          url: d.url || `https://github.com/runzhliu/welink/releases/tag/${d.latest}`,
-        });
+        if (d.has_update && d.latest) {
+          const dismissed = localStorage.getItem('welink_dismissed_version');
+          if (dismissed !== d.latest) {
+            setReleaseInfo({
+              current: d.current || appInfo.version || '',
+              latest: d.latest,
+              changelog: d.changelog || '',
+              url: d.url || `https://github.com/runzhliu/welink/releases/tag/${d.latest}`,
+            });
+          }
+        }
       } catch { /* 网络挂了静默 */ }
+      finally { setReleaseChecked(true); }
     }, 5000);
     return () => clearTimeout(timer);
   }, [backendReady, appInfo?.ready, appInfo?.version]);
@@ -503,6 +568,9 @@ function AppInner() {
           </div>
         )}
       </main>
+
+      {/* 首次启动多步引导 */}
+      {tourOpen && <SpotlightTour steps={tourSteps} onFinish={finishTour} />}
 
       {/* Release notes */}
       {releaseInfo && (
