@@ -503,6 +503,7 @@ function AppInner() {
             onContactClick={handleContactClick}
             onGroupClick={(g) => setSelectedGroup(g)}
             onNavigateToAnniversary={() => setActiveTab('anniversary')}
+            onOpenSettings={() => setActiveTab('settings')}
           />
         ) : activeTab === 'stats' ? (
           <StatsPage
@@ -525,7 +526,7 @@ function AppInner() {
         ) : activeTab === 'groups' ? (
           <GroupsView allContacts={allContacts} onContactClick={handleContactClick} onGroupClick={(g) => setSelectedGroup(g)} blockedGroups={blockedGroups} onBlockGroup={addBlockedGroup} onOpenSettings={() => setActiveTab('settings')} />
         ) : activeTab === 'calendar' ? (
-          <ChatCalendarPage contacts={contacts} onContactClick={handleContactClick} />
+          <ChatCalendarPage contacts={contacts} onContactClick={handleContactClick} onOpenSettings={() => setActiveTab('settings')} />
         ) : activeTab === 'anniversary' ? (
           <AnniversaryPage contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'skills' ? (
