@@ -10,6 +10,7 @@ import remarkGfm from 'remark-gfm';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { generateShareImage } from '../../utils/shareImage';
 import { RevealLink } from '../common/RevealLink';
+import { TTSButton } from '../common/TTSButton';
 import { getPrompt, loadCustomPrompts } from '../../utils/promptTemplates';
 
 interface Props {
@@ -340,6 +341,9 @@ export const AIInsights: React.FC<Props> = ({ username, displayName, avatarUrl, 
           {result && !loading && (
             <div className="absolute top-2 right-2 flex gap-1 items-center">
               {shared && savedPath && <RevealLink path={savedPath} className="text-[10px] text-[#07c160]" />}
+              <div className="p-1.5 rounded-lg bg-white/80 dark:bg-black/30">
+                <TTSButton text={result} title="朗读整段" />
+              </div>
               <button
                 onClick={handleShare}
                 disabled={sharing}

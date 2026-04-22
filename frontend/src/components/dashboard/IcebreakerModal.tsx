@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { X, Loader2, Copy, Check, Sparkles, RotateCw, AlertCircle } from 'lucide-react';
 import type { IcebreakerResponse } from '../../types';
 import { forecastApi } from '../../services/api';
+import { TTSButton } from '../common/TTSButton';
 
 interface Props {
   username: string;
@@ -139,7 +140,8 @@ export const IcebreakerModal: React.FC<Props> = ({ username, fallbackDisplayName
                     <div className="text-sm text-[#1d1d1f] dk-text leading-relaxed whitespace-pre-wrap break-words">
                       {draft.text}
                     </div>
-                    <div className="mt-2 flex justify-end">
+                    <div className="mt-2 flex justify-end items-center gap-1">
+                      <TTSButton text={draft.text} size={13} showLabel title="朗读这段" />
                       <button
                         onClick={() => handleCopy(i, draft.text)}
                         className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${

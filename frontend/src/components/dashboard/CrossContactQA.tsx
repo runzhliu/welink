@@ -10,6 +10,7 @@ import remarkGfm from 'remark-gfm';
 import { searchApi, calendarApi } from '../../services/api';
 import { generateShareImage } from '../../utils/shareImage';
 import { RevealLink } from '../common/RevealLink';
+import { TTSButton } from '../common/TTSButton';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { ConversationHistory } from './ConversationHistory';
 
@@ -430,6 +431,7 @@ export const CrossContactQA: React.FC<Props> = ({ onOpenSettings, onContactClick
               {/* 复制 + 分享 */}
               {msg.role === 'assistant' && !msg.searching && msg.content && (
                 <div className="flex items-center gap-3 mt-1.5 self-start">
+                  <TTSButton text={msg.content} size={13} showLabel title="朗读回答" />
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(msg.content).then(() => {

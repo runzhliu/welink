@@ -10,6 +10,7 @@ import { avatarSrc } from '../../utils/avatar';
 import { contactsApi } from '../../services/api';
 import { generateCloneChatImage } from '../../utils/shareImage';
 import { RevealLink } from '../common/RevealLink';
+import { TTSButton } from '../common/TTSButton';
 import type { GroupInfo } from '../../types';
 
 interface Props {
@@ -721,6 +722,9 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
                 </span>
               ) : null)}
             </div>
+            {msg.role === 'assistant' && msg.content && !(loading && i === messages.length - 1) && (
+              <TTSButton text={msg.content} speaker="B" size={12} title="朗读 TA 的回复" className="self-end mb-1" />
+            )}
             {msg.role === 'user' && (
               <div className="w-7 h-7 rounded-full bg-[#07c160] flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-1">
                 我
