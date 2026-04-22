@@ -1,7 +1,13 @@
 # Build stage
-FROM golang:1.25-alpine AS builder
+#
+# 多架构构建时 builder 固定在 runner 原生平台（$BUILDPLATFORM），
+# 用 Go 原生交叉编译到目标平台（$TARGETOS / $TARGETARCH），
+# 比走 QEMU 模拟跑整个 Go toolchain 快 3-5 倍。
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
 ARG APP_VERSION=dev
 ARG GIT_COMMIT=unknown
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -10,7 +16,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.appVersion=${APP_VERSION} -X main.gitCommit=${GIT_COMMIT}" -o welink-backend .
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+    go build -ldflags="-s -w -X main.appVersion=${APP_VERSION} -X main.gitCommit=${GIT_COMMIT}" -o welink-backend .
 
 # Final stage
 FROM alpine:3.21
