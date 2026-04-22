@@ -8,6 +8,7 @@ import { X, Loader2, Calendar, MessageSquare, Users, Crown, Sparkles, Quote, Tre
 import type { GroupYearReview } from '../../types';
 import { groupExtraApi } from '../../services/api';
 import { avatarSrc } from '../../utils/avatar';
+import { TTSButton } from '../common/TTSButton';
 
 interface Props {
   username: string;
@@ -178,14 +179,18 @@ export const GroupYearReviewModal: React.FC<Props> = ({ username, fallbackName, 
     }
 
     if (data.highlight) {
+      const highlight = data.highlight; // 在闭包里固化，TS narrowing 跨 render 箭头函数会丢
       pages.push({
         title: 'AI 年度叙事',
         icon: <Sparkles size={18} />,
         render: () => (
-          <div className="bg-gradient-to-br from-[#f5f7fb] to-[#fff7e6] dark:from-[#576b95]/10 dark:to-[#ff9500]/10 rounded-2xl p-6 border border-[#576b95]/20">
+          <div className="relative bg-gradient-to-br from-[#f5f7fb] to-[#fff7e6] dark:from-[#576b95]/10 dark:to-[#ff9500]/10 rounded-2xl p-6 border border-[#576b95]/20">
+            <div className="absolute top-3 right-3">
+              <TTSButton text={highlight} size={16} title="朗读年度叙事" />
+            </div>
             <Sparkles className="text-[#576b95] mb-3" size={24} />
             <div className="text-base text-[#1d1d1f] dk-text leading-[1.9] whitespace-pre-wrap">
-              {data.highlight}
+              {highlight}
             </div>
           </div>
         ),

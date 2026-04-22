@@ -8,6 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateShareImage } from '../../utils/shareImage';
 import { RevealLink } from '../common/RevealLink';
+import { TTSButton } from '../common/TTSButton';
 import { contactsApi, groupsApi } from '../../services/api';
 import { CalendarRangePicker } from './CalendarRangePicker';
 import {
@@ -334,6 +335,7 @@ const AssistantMessage: React.FC<{
           </div>
           {msg.content && !msg.streaming && (
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <TTSButton text={msg.content} size={13} showLabel title="朗读回答" />
               <button
                 onClick={handleCopy}
                 className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#07c160] hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 transition-colors"
