@@ -15,6 +15,12 @@ services:
     environment:
       - GIN_MODE=release
       - PREFERENCES_PATH=/app/prefs/preferences.json
+    # 让容器内能通过 host.docker.internal 访问宿主机上的服务
+    # （例如本机 docker run 的 openai-edge-tts:5050，或 Ollama:11434）。
+    # macOS / Windows Docker Desktop / OrbStack 默认就支持；这里加 extra_hosts
+    # 让 Linux Docker Engine 也能用，不需要用户改 network_mode。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   frontend:
     image: ghcr.io/runzhliu/welink/frontend:main
