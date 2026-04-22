@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -18,8 +19,15 @@ import (
 )
 
 // validateTTSBaseURL 校验用户设置的 TTS base URL 安全可用。
-// 要求：https://、带 host、host 不是 loopback / RFC1918 / link-local —— 否则后端
-// 代理请求可被用来打内网或元数据服务（SSRF）。空串代表"使用默认 OpenAI"，放行。
+//
+// Demo 公网（DEMO_MODE=true）：严格 —— 只放 https 且 host 必须是公网域名/IP，
+// 防止 SSRF 拿后端去打内网/元数据服务。
+//
+// 本地 / App 模式：宽松 —— 放行 http 和 loopback / RFC1918，
+// 因为 UI 会引导用户自建 openai-edge-tts（docker run -p 5050:5050），
+// 填的就是 http://localhost:5050/v1。本地用户本来就控制后端，不存在 SSRF 威胁。
+//
+// 空串代表"使用默认 OpenAI"，始终放行。
 func validateTTSBaseURL(raw string) error {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -29,25 +37,32 @@ func validateTTSBaseURL(raw string) error {
 	if err != nil {
 		return fmt.Errorf("URL 解析失败：%v", err)
 	}
-	if u.Scheme != "https" {
-		return fmt.Errorf("只接受 https:// 开头的地址")
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("scheme 只接受 http:// 或 https://")
 	}
 	host := u.Hostname()
 	if host == "" {
 		return fmt.Errorf("URL 缺少 host")
 	}
-	// 如果是 IP 字面量直接拒私网
+
+	// 本地 / App 模式：只要格式合法就放行
+	if os.Getenv("DEMO_MODE") != "true" {
+		return nil
+	}
+
+	// ── 以下仅 Demo 公网部署生效：严格 SSRF 防护 ──────────────────────────
+	if u.Scheme != "https" {
+		return fmt.Errorf("Demo 模式只接受 https:// 开头的地址")
+	}
 	if ip := net.ParseIP(host); ip != nil {
 		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
-			return fmt.Errorf("拒绝内网 / 回环 / 链路本地 IP")
+			return fmt.Errorf("Demo 模式拒绝内网 / 回环 / 链路本地 IP")
 		}
 		return nil
 	}
-	// 域名字面量：拒绝 localhost 前缀（dns 解析到的 A 记录无法在写入时校验，
-	// TOCTOU 层面有残余风险，但要兜到 http.Transport 的 DialContext 才能彻底防）
 	lower := strings.ToLower(host)
 	if lower == "localhost" || strings.HasSuffix(lower, ".localhost") || strings.HasSuffix(lower, ".internal") {
-		return fmt.Errorf("拒绝 localhost / .internal 域名")
+		return fmt.Errorf("Demo 模式拒绝 localhost / .internal 域名")
 	}
 	return nil
 }
@@ -82,6 +97,11 @@ func registerPodcastRoutes(api *gin.RouterGroup, getSvc func() *service.ContactS
 
 	// 更新 TTS 配置
 	api.PUT("/podcast/config", func(c *gin.Context) {
+		// Demo 公网部署：AI 配置（含 TTS）默认锁死，防止用户填入 API Key
+		if os.Getenv("DEMO_MODE") == "true" && DemoAIDisabled() {
+			demoBlockLLMWrite(c)
+			return
+		}
 		var body struct {
 			BaseURL string `json:"base_url"`
 			APIKey  string `json:"api_key"` // 空串 / "__HAS_KEY__" / "****" 都视为"保持原值"
@@ -115,6 +135,47 @@ func registerPodcastRoutes(api *gin.RouterGroup, getSvc func() *service.ContactS
 	})
 
 	// 生成脚本：聚合数据 + LLM 写双人对话 JSON
+	// 预览喂给 LLM 的事实清单（透明化：让用户在点「生成脚本」前看到输入）
+	api.GET("/podcast/summary-preview", func(c *gin.Context) {
+		contactKey := c.Query("contact_key")
+		if contactKey == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "contact_key 必传"})
+			return
+		}
+		dur := 5
+		switch c.Query("duration_minutes") {
+		case "3":
+			dur = 3
+		case "10":
+			dur = 10
+		}
+		svc := getSvc()
+		if svc == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "数据索引未就绪"})
+			return
+		}
+		username := strings.TrimPrefix(contactKey, "contact:")
+		username = strings.TrimPrefix(username, "group:")
+		detail := svc.GetContactDetail(username)
+		if detail == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "找不到联系人或无数据"})
+			return
+		}
+		var basics *service.ContactStatsExtended
+		for _, s := range svc.GetCachedStats() {
+			if s.Username == username {
+				cp := s
+				basics = &cp
+				break
+			}
+		}
+		if basics == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "找不到联系人"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"summary": buildPodcastSummary(basics, detail, dur)})
+	})
+
 	api.POST("/podcast/generate-script", func(c *gin.Context) {
 		var body struct {
 			ContactKey      string `json:"contact_key"`
@@ -133,7 +194,11 @@ func registerPodcastRoutes(api *gin.RouterGroup, getSvc func() *service.ContactS
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "数据索引未就绪"})
 			return
 		}
-		detail := svc.GetContactDetail(body.ContactKey)
+		// 前端传的 contact_key 带 "contact:" / "group:" 前缀（与 mem_facts 等对齐），
+		// 但 GetContactDetail / ContactStatsExtended.Username 都是裸 username，这里去前缀。
+		username := strings.TrimPrefix(body.ContactKey, "contact:")
+		username = strings.TrimPrefix(username, "group:")
+		detail := svc.GetContactDetail(username)
 		if detail == nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "找不到联系人或无数据"})
 			return
@@ -141,7 +206,7 @@ func registerPodcastRoutes(api *gin.RouterGroup, getSvc func() *service.ContactS
 		// 拿到基础 stats（从缓存里捞）
 		var basics *service.ContactStatsExtended
 		for _, s := range svc.GetCachedStats() {
-			if s.Username == body.ContactKey {
+			if s.Username == username {
 				cp := s
 				basics = &cp
 				break
@@ -221,14 +286,87 @@ func registerPodcastRoutes(api *gin.RouterGroup, getSvc func() *service.ContactS
 			}
 			script.Lines[i].Speaker = s
 		}
+
+		// 持久化到 ai_analysis.db，用户可在历史列表里回放（免 LLM 重跑）
+		contactName := basics.Remark
+		if contactName == "" {
+			contactName = basics.Nickname
+		}
+		if contactName == "" {
+			contactName = username
+		}
+		rec := &PodcastScriptRecord{
+			ContactUsername: username,
+			ContactName:     contactName,
+			DurationMin:     body.DurationMinutes,
+			Title:           script.Title,
+			Lines:           script.Lines,
+			Summary:         summary,
+		}
+		if id, err := SavePodcastScript(rec); err == nil {
+			c.Header("X-Podcast-Script-Id", fmt.Sprintf("%d", id))
+		}
+
 		c.JSON(http.StatusOK, script)
+	})
+
+	// 播客历史列表
+	api.GET("/podcast/scripts", func(c *gin.Context) {
+		contactKey := c.Query("contact_key")
+		username := ""
+		if contactKey != "" {
+			username = strings.TrimPrefix(contactKey, "contact:")
+			username = strings.TrimPrefix(username, "group:")
+		}
+		list, err := ListPodcastScripts(username, 100)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"scripts": list})
+	})
+
+	// 单条详情（包含 lines，可直接回放）
+	api.GET("/podcast/scripts/:id", func(c *gin.Context) {
+		var id int64
+		fmt.Sscanf(c.Param("id"), "%d", &id)
+		if id <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "id 不合法"})
+			return
+		}
+		rec, err := GetPodcastScript(id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if rec == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "未找到该播客"})
+			return
+		}
+		c.JSON(http.StatusOK, rec)
+	})
+
+	// 删除一条历史
+	api.DELETE("/podcast/scripts/:id", func(c *gin.Context) {
+		var id int64
+		fmt.Sscanf(c.Param("id"), "%d", &id)
+		if id <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "id 不合法"})
+			return
+		}
+		if err := DeletePodcastScript(id); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 
 	// TTS 代理：前端按句调用，后端用户自己的 key 合成 MP3 返回
 	api.POST("/podcast/tts", func(c *gin.Context) {
 		var body struct {
-			Text    string `json:"text"`
-			Speaker string `json:"speaker"` // A / B
+			Text    string  `json:"text"`
+			Speaker string  `json:"speaker"` // A / B
+			Speed   float64 `json:"speed"`   // 0.25 - 4.0，OpenAI TTS 标准范围；0 或非法值视为 1.0
 		}
 		if err := c.ShouldBindJSON(&body); err != nil || strings.TrimSpace(body.Text) == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "text 必传"})
@@ -267,12 +405,16 @@ func registerPodcastRoutes(api *gin.RouterGroup, getSvc func() *service.ContactS
 			}
 		}
 
-		reqBody, _ := json.Marshal(map[string]interface{}{
+		payload := map[string]interface{}{
 			"model":  model,
 			"input":  body.Text,
 			"voice":  voice,
 			"format": "mp3",
-		})
+		}
+		if body.Speed >= 0.25 && body.Speed <= 4.0 && body.Speed != 1.0 {
+			payload["speed"] = body.Speed
+		}
+		reqBody, _ := json.Marshal(payload)
 		req, err := http.NewRequest("POST", base+"/audio/speech", bytes.NewReader(reqBody))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
