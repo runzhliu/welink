@@ -16,6 +16,7 @@ import type { ContactStats, TimeRange, ChatMessage, GroupInfo, GroupChatMessage 
 import { contactsApi, groupsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { isAIConfigError } from '../../utils/aiError';
+import { AIConfigNotice } from '../common/AIConfigNotice';
 
 const PROVIDER_LABELS: Record<string, string> = {
   deepseek: 'DeepSeek', kimi: 'Kimi', gemini: 'Gemini', glm: 'GLM',
@@ -1077,6 +1078,11 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
 
         {/* 输入区 */}
         <div className="sticky bottom-0 bg-white/90 dark:bg-[#1c1c1e]/90 backdrop-blur border-t border-gray-100 dark:border-white/10 px-4 sm:px-6 py-4">
+          <AIConfigNotice
+            visible={profiles.length === 0}
+            onOpenSettings={onOpenSettings}
+            className="max-w-3xl mx-auto mb-3"
+          />
           {inputCard}
         </div>
       </div>
@@ -1174,6 +1180,13 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
           </button>
         </div>
       )}
+
+      {/* AI 未配置提示（优先级最高，覆盖在输入卡片之前） */}
+      <AIConfigNotice
+        visible={profiles.length === 0}
+        onOpenSettings={onOpenSettings}
+        className="w-full max-w-xl mb-4"
+      />
 
       {/* 输入卡片 */}
       {inputCard}

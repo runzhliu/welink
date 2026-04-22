@@ -513,6 +513,7 @@ function AppInner() {
             onContactClick={handleContactClick}
             blockedUsers={blockedUsers}
             blockedDisplayNames={blockedDisplayNames}
+            onOpenSettings={() => setActiveTab('settings')}
           />
         ) : activeTab === 'contacts' ? (
           <ContactsPage

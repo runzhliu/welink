@@ -21,6 +21,7 @@ interface Props {
   blockedDisplayNames?: Set<string>;
   contacts?: ContactStats[];
   globalStats?: GlobalStats | null;
+  onOpenSettings?: () => void;
 }
 
 // ─── MBTI 计算（从原 MBTICard 搬来） ─────────────────────────────────────
@@ -118,7 +119,7 @@ function computePersonaTags(contacts: ContactStats[], globalStats: GlobalStats |
   return picked;
 }
 
-export const SelfPortraitCard: React.FC<Props> = ({ blockedDisplayNames, contacts = [], globalStats = null }) => {
+export const SelfPortraitCard: React.FC<Props> = ({ blockedDisplayNames, contacts = [], globalStats = null, onOpenSettings }) => {
   const { privacyMode } = usePrivacyMode();
   const [data, setData] = useState<SelfPortrait | null>(null);
   const [loading, setLoading] = useState(true);
@@ -309,6 +310,7 @@ export const SelfPortraitCard: React.FC<Props> = ({ blockedDisplayNames, contact
           onClose={() => setForgeOpen(false)}
           skillType="self"
           displayName="我的写作风格"
+          onOpenSettings={onOpenSettings}
         />
       )}
     </div>

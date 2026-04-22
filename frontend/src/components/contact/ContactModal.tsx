@@ -809,6 +809,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         skillType="contact"
         username={contact.username}
         displayName={displayName}
+        onOpenSettings={onOpenSettings}
       />
     )}
 

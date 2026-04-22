@@ -39,6 +39,7 @@ interface StatsPageProps {
   onContactClick: (c: ContactStats) => void;
   blockedUsers: string[];
   blockedDisplayNames: Set<string>;
+  onOpenSettings?: () => void;
 }
 
 const LAYOUT_KEY = 'welink_stats_layout_v3';
@@ -122,6 +123,7 @@ export const StatsPage: React.FC<StatsPageProps> = ({
   onContactClick,
   blockedUsers,
   blockedDisplayNames,
+  onOpenSettings,
 }) => {
   const [editMode, setEditMode] = useState(false);
   const [showYearReview, setShowYearReview] = useState(false);
@@ -271,7 +273,7 @@ export const StatsPage: React.FC<StatsPageProps> = ({
       case 'hourly':
         return <HourlyHeatmap data={globalStats} />;
       case 'self':
-        return <SelfPortraitCard blockedDisplayNames={blockedDisplayNames} contacts={contacts} globalStats={globalStats} />;
+        return <SelfPortraitCard blockedDisplayNames={blockedDisplayNames} contacts={contacts} globalStats={globalStats} onOpenSettings={onOpenSettings} />;
       case 'breadth':
         return <SocialBreadthCard />;
       case 'social-report':
