@@ -22,6 +22,7 @@ import type { CalendarDayEntry, ChatMessage, GroupChatMessage } from '../../type
 import { generateShareImage } from '../../utils/shareImage';
 import { RevealLink } from '../common/RevealLink';
 import { isAIConfigError } from '../../utils/aiError';
+import { AIConfigNotice } from '../common/AIConfigNotice';
 import { PROVIDER_LABELS, consumeSSEStream } from './calendarUtils';
 
 // ─── 类型 ─────────────────────────────────────────────────────────────────────
@@ -388,6 +389,10 @@ export const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, 
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" aria-live="polite">
+        <AIConfigNotice
+          visible={profiles.length === 0}
+          onOpenSettings={onOpenSettings}
+        />
         {messages.length === 0 && (
           <div className="space-y-3">
             <div className="text-[11px] text-gray-400 text-center pt-2">

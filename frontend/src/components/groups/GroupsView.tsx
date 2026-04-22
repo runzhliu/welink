@@ -1010,6 +1010,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
           skillType="group"
           username={group.username}
           displayName={group.name}
+          onOpenSettings={onOpenSettings}
         />
       )}
 

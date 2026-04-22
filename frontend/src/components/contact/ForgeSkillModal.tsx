@@ -7,6 +7,7 @@ import { X, Loader2, Download, Sparkles, Info } from 'lucide-react';
 import { forgeSkill, skillsApi, groupsApi } from '../../services/api';
 import type { MemberStat } from '../../types';
 import { RevealLink } from '../common/RevealLink';
+import { AIConfigNotice } from '../common/AIConfigNotice';
 
 interface Props {
   open: boolean;
@@ -14,6 +15,7 @@ interface Props {
   skillType: 'contact' | 'self' | 'group';
   username?: string;
   displayName: string;
+  onOpenSettings?: () => void;
 }
 
 interface LLMProfileItem {
@@ -39,7 +41,7 @@ const FORMATS: Array<{ key: FormatKey; name: string; description: string; icon: 
 // 上限字符预算是 50000（约 30-50k token），对应约 5000-10000 条平均长度的消息
 const MSG_LIMIT_OPTIONS = [300, 500, 1000, 2000, 5000, 10000];
 
-export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, username, displayName }) => {
+export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, username, displayName, onOpenSettings }) => {
   const [format, setFormat] = useState<FormatKey>('claude-skill');
   const [profileId, setProfileId] = useState('');
   const [profiles, setProfiles] = useState<LLMProfileItem[]>([]);
@@ -265,6 +267,12 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
             </div>
           </div>
         </div>
+
+        <AIConfigNotice
+          visible={profiles.length === 0}
+          onOpenSettings={onOpenSettings}
+          className="mb-5"
+        />
 
         {/* 群聊：选整个群 or 某个成员 */}
         {skillType === 'group' && (
