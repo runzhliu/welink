@@ -5,7 +5,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   X, Plus, ShieldOff, User, Users,
-  FolderOpen, Loader2, Database, FileText, AlertCircle, RotateCcw, CheckCircle2, EyeOff, BarChart2, Bot, Check, LogIn, LogOut, Stethoscope, AlertTriangle, XCircle, Copy,
+  FolderOpen, Loader2, Database, FileText, AlertCircle, RotateCcw, CheckCircle2, EyeOff, BarChart2, Bot, Check, LogIn, LogOut, Stethoscope, AlertTriangle, XCircle, Copy, ExternalLink,
   Settings, Clock, Cpu, Save, RefreshCw, Sparkles, Download, Upload, Trash2, Lock, Unlock,
 } from 'lucide-react';
 import axios from 'axios';
@@ -102,20 +102,32 @@ const AddInput: React.FC<{
 // ─── AI 配置区块 ───────────────────────────────────────────────────────────────
 
 const PROVIDERS = [
-  { value: 'deepseek', label: 'DeepSeek', defaultURL: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat' },
-  { value: 'kimi',     label: 'Kimi (Moonshot)', defaultURL: 'https://api.moonshot.cn/v1', defaultModel: 'kimi-k2.5' },
-  { value: 'gemini',   label: 'Gemini', defaultURL: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-2.0-flash' },
-  { value: 'glm',      label: 'GLM（智谱 AI）', defaultURL: 'https://open.bigmodel.cn/api/paas/v4', defaultModel: 'glm-4-flash' },
-  { value: 'grok',     label: 'Grok (xAI)', defaultURL: 'https://api.x.ai/v1', defaultModel: 'grok-3-mini' },
-  { value: 'minimax',     label: 'MiniMax（国际版）', defaultURL: 'https://api.minimax.io/v1', defaultModel: 'MiniMax-Text-01' },
-  { value: 'minimax-cn', label: 'MiniMax（国内版）', defaultURL: 'https://api.minimaxi.com/v1', defaultModel: 'MiniMax-Text-01' },
-  { value: 'openai',   label: 'OpenAI', defaultURL: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini' },
-  { value: 'claude',   label: 'Claude (Anthropic)', defaultURL: 'https://api.anthropic.com', defaultModel: 'claude-haiku-4-5-20251001' },
-  { value: 'vertex',   label: 'Google Vertex AI', defaultURL: '', defaultModel: 'google/gemini-2.0-flash-001' },
-  { value: 'bedrock',  label: 'AWS Bedrock', defaultURL: 'https://bedrock-runtime.us-east-1.amazonaws.com', defaultModel: 'us.anthropic.claude-sonnet-4-6' },
-  { value: 'ollama',   label: 'Ollama（本地）', defaultURL: 'http://localhost:11434/v1', defaultModel: 'llama3' },
-  { value: 'custom',   label: '自定义 OpenAI 兼容接口', defaultURL: '', defaultModel: '' },
+  { value: 'deepseek', label: 'DeepSeek', defaultURL: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat', keyUrl: 'https://platform.deepseek.com/api_keys' },
+  { value: 'kimi',     label: 'Kimi (Moonshot)', defaultURL: 'https://api.moonshot.cn/v1', defaultModel: 'kimi-k2.5', keyUrl: 'https://platform.moonshot.cn/console/api-keys' },
+  { value: 'gemini',   label: 'Gemini', defaultURL: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-2.0-flash', keyUrl: 'https://aistudio.google.com/apikey' },
+  { value: 'glm',      label: 'GLM（智谱 AI）', defaultURL: 'https://open.bigmodel.cn/api/paas/v4', defaultModel: 'glm-4-flash', keyUrl: 'https://open.bigmodel.cn/usercenter/apikeys' },
+  { value: 'grok',     label: 'Grok (xAI)', defaultURL: 'https://api.x.ai/v1', defaultModel: 'grok-3-mini', keyUrl: 'https://console.x.ai/' },
+  { value: 'minimax',     label: 'MiniMax（国际版）', defaultURL: 'https://api.minimax.io/v1', defaultModel: 'MiniMax-Text-01', keyUrl: 'https://www.minimax.io/user-center/basic-information/interface-key' },
+  { value: 'minimax-cn', label: 'MiniMax（国内版）', defaultURL: 'https://api.minimaxi.com/v1', defaultModel: 'MiniMax-Text-01', keyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key' },
+  { value: 'openai',   label: 'OpenAI', defaultURL: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', keyUrl: 'https://platform.openai.com/api-keys' },
+  { value: 'claude',   label: 'Claude (Anthropic)', defaultURL: 'https://api.anthropic.com', defaultModel: 'claude-haiku-4-5-20251001', keyUrl: 'https://console.anthropic.com/settings/keys' },
+  { value: 'vertex',   label: 'Google Vertex AI', defaultURL: '', defaultModel: 'google/gemini-2.0-flash-001', keyUrl: 'https://console.cloud.google.com/iam-admin/serviceaccounts' },
+  { value: 'bedrock',  label: 'AWS Bedrock', defaultURL: 'https://bedrock-runtime.us-east-1.amazonaws.com', defaultModel: 'us.anthropic.claude-sonnet-4-6', keyUrl: 'https://console.aws.amazon.com/bedrock/home' },
+  { value: 'ollama',   label: 'Ollama（本地）', defaultURL: 'http://localhost:11434/v1', defaultModel: 'llama3', keyUrl: '' },
+  { value: 'custom',   label: '自定义 OpenAI 兼容接口', defaultURL: '', defaultModel: '', keyUrl: '' },
 ] as const;
+
+// 打开外链：App 模式走后端 open-url，浏览器模式直接 window.open
+const openProviderUrl = (url: string) => {
+  if (!url) return;
+  const ua = navigator.userAgent;
+  const isWebView = ua.includes('AppleWebKit') && !ua.includes('Safari') && !ua.includes('Chrome') && !ua.includes('Firefox');
+  if (isWebView) {
+    fetch(`/api/open-url?url=${encodeURIComponent(url)}`).catch(() => {});
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+};
 
 type ProviderValue = typeof PROVIDERS[number]['value'];
 
@@ -215,12 +227,25 @@ const ProfileCard: React.FC<{
 
       {/* API Key */}
       <div>
-        <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wide">
-          {profile.provider === 'vertex' ? 'Service Account JSON' : 'API Key'}
-          {profile.provider === 'ollama' && <span className="ml-1 font-normal normal-case text-gray-400">（本地无需填写）</span>}
-          {profile.provider === 'gemini' && geminiAuthorized && <span className="ml-1 font-normal normal-case text-gray-400">（OAuth 已授权，可留空）</span>}
-          {profile.provider === 'bedrock' && <span className="ml-1 font-normal normal-case text-gray-400">（格式：AccessKeyId:SecretAccessKey）</span>}
-          {profile.provider === 'vertex' && <span className="ml-1 font-normal normal-case text-gray-400">（完整 JSON）</span>}
+        <label className="flex items-center gap-2 text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wide">
+          <span>
+            {profile.provider === 'vertex' ? 'Service Account JSON' : 'API Key'}
+            {profile.provider === 'ollama' && <span className="ml-1 font-normal normal-case text-gray-400">（本地无需填写）</span>}
+            {profile.provider === 'gemini' && geminiAuthorized && <span className="ml-1 font-normal normal-case text-gray-400">（OAuth 已授权，可留空）</span>}
+            {profile.provider === 'bedrock' && <span className="ml-1 font-normal normal-case text-gray-400">（格式：AccessKeyId:SecretAccessKey）</span>}
+            {profile.provider === 'vertex' && <span className="ml-1 font-normal normal-case text-gray-400">（完整 JSON）</span>}
+          </span>
+          {provInfo.keyUrl && (
+            <button
+              type="button"
+              onClick={() => openProviderUrl(provInfo.keyUrl)}
+              className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold normal-case tracking-normal bg-[#07c160]/10 dark:bg-[#07c160]/20 text-[#07c160] hover:bg-[#07c160]/20 dark:hover:bg-[#07c160]/30 transition-colors"
+              title={provInfo.keyUrl}
+            >
+              {profile.provider === 'vertex' ? '去 GCP Console' : profile.provider === 'bedrock' ? '去 AWS Console' : '获取 Key'}
+              <ExternalLink size={10} />
+            </button>
+          )}
         </label>
         {profile.provider === 'vertex' ? (
           <textarea
