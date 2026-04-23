@@ -27,6 +27,33 @@ let current: RuntimeConfig = {
   token: localStorage.getItem(LS_TOKEN) || '',
 };
 
+// 判断 server URL 是否指向私网 / 回环 / mDNS —— 对抗 QR phishing：
+// 只接受 RFC1918 + loopback + *.local，避免扫到恶意二维码把所有聊天数据
+// 发给攻击者的公网 host。
+function isPrivateServerURL(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    if (host === 'localhost' || host.endsWith('.local')) return true;
+    // IPv4 字面量
+    const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4) {
+      const [, a, b] = ipv4.map(Number);
+      if (a === 127) return true;                            // loopback
+      if (a === 10) return true;                              // 10/8
+      if (a === 192 && b === 168) return true;                // 192.168/16
+      if (a === 172 && b >= 16 && b <= 31) return true;       // 172.16/12
+      return false;
+    }
+    // IPv6 回环
+    if (host === '::1' || host === '[::1]') return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 // 页面首开时：若 URL 带 ?server=&token=，吸收到 localStorage 并剥掉 query
 // 以免 token 长期留在浏览器地址栏 / 历史里。
 (function absorbQueryParams() {
@@ -36,8 +63,13 @@ let current: RuntimeConfig = {
     const token = url.searchParams.get('token');
     let changed = false;
     if (server !== null) {
-      current.serverURL = server;
-      localStorage.setItem(LS_SERVER, server);
+      // 防 QR phishing：只接受私网 / 回环 / mDNS 地址
+      if (isPrivateServerURL(server)) {
+        current.serverURL = server;
+        localStorage.setItem(LS_SERVER, server);
+      } else {
+        console.warn('[welink] 拒绝非私网的 ?server= 参数，防止 QR phishing：', server);
+      }
       url.searchParams.delete('server');
       changed = true;
     }
