@@ -17,6 +17,7 @@ import { Header } from './components/layout/Header';
 // Dashboard Components
 import { AIHomePage } from './components/dashboard/AIHomePage';
 import { DailyDigestPage } from './components/dashboard/DailyDigestPage';
+import { LabsPage } from './components/labs/LabsPage';
 import { StatsPage } from './components/dashboard/StatsPage';
 // FunStatsPage 已合并到 StatsPage 底部
 import { ContactsPage } from './components/dashboard/ContactsPage';
@@ -73,7 +74,7 @@ function AppInner() {
 
   // State — 从 URL hash 恢复当前 tab + 联系人/群聊弹窗
   // hash 格式：#/stats  #/stats/contact/wxid_abc  #/groups/group/xxx@chatroom
-  const VALID_TABS: TabType[] = ['dashboard', 'digest', 'stats', 'contacts', 'db', 'groups', 'search', 'calendar', 'anniversary', 'urls', 'skills', 'export', 'memory', 'settings'];
+  const VALID_TABS: TabType[] = ['dashboard', 'digest', 'stats', 'contacts', 'db', 'groups', 'search', 'calendar', 'anniversary', 'urls', 'skills', 'labs', 'export', 'memory', 'settings'];
 
   const parseHash = (): { tab: TabType; contactId?: string; groupId?: string } => {
     const raw = window.location.hash.replace('#/', '').replace('#', '');
@@ -535,6 +536,8 @@ function AppInner() {
           <AnniversaryPage contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'skills' ? (
           <SkillsView />
+        ) : activeTab === 'labs' ? (
+          <LabsPage contacts={contacts} />
         ) : activeTab === 'search' ? (
           <SearchView
             contacts={contacts}

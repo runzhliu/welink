@@ -3880,6 +3880,9 @@ func serverMain() {
 	// 播客相关端点（/api/podcast/*）
 	registerPodcastRoutes(api, getSvc)
 
+	// 虚拟群聊（任意联系人拉进一个虚拟群，AI 扮演每个人）
+	registerVirtualGroupRoutes(api, getSvc)
+
 	// /api/status：未配置时也返回 200，前端 useBackendStatus 靠它判断后端是否可达
 	api.GET("/status", func(c *gin.Context) {
 		svcMu.RLock()
