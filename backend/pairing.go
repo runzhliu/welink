@@ -45,36 +45,31 @@ func currentPairingToken() string {
 // ── 鉴权中间件 ────────────────────────────────────────────────────────────────
 
 // requirePairingTokenIfEnabled 是 Gin 中间件：
-//   - 配对未启用（token 为空）→ 放行
-//   - 启用后 → 校验请求 header
-//   - 同源请求（无 Origin / Origin 是 localhost）→ 放行，保持 PC 本机体验
+//   - 配对未启用（token 为空）→ 放行（向后兼容）
+//   - 启用后 → 严格鉴权：loopback 连接 或 带正确 token 才放行
 //
-// 必须在所有 API 路由注册前挂。
+// 不用 Origin/Referer 做"同源"判断 —— 这俩 header 对 curl / 跨域 GET /
+// fetch(no-cors) 经常缺失，而且 HasPrefix 匹配能被 "http://localhost.attacker.com"
+// 绕过。只认 TCP 连接的远端 IP 是 loopback 才算本机。
 func requirePairingTokenIfEnabled(c *gin.Context) {
 	tok := currentPairingToken()
 	if tok == "" {
-		// 未启用配对，老行为
 		c.Next()
 		return
 	}
 
-	// 白名单：这些端点总是放行，否则手机 App 无从判断是不是 WeLink、
-	// 也无法触发配对确认动作
-	p := c.Request.URL.Path
-	if p == "/api/app/info" || p == "/api/app/pairing/verify" {
+	// 仅 pairing verify 握手端点允许未鉴权 —— 手机扫码后第一步要用它校验 token。
+	// /app/info 原来也在白名单里，现在移除：启用配对后必须鉴权才能看到任何敏感字段。
+	if c.Request.URL.Path == "/api/app/pairing/verify" {
 		c.Next()
 		return
 	}
 
-	// 同源（PC 本机）请求：Origin / Referer 是 localhost 时默认信任。
-	// 注意这不能防"同机器上另一个恶意进程"，但 WeLink 场景下本机就是
-	// 用户自己，够用。
-	if isSameOriginRequest(c.Request) {
+	if isLoopbackRequest(c.Request) {
 		c.Next()
 		return
 	}
 
-	// 外部请求：要么 Authorization: Bearer <token>，要么 ?token=xxx
 	got := extractToken(c.Request)
 	if got == "" {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "移动端配对已启用，需要 token"})
@@ -87,25 +82,29 @@ func requirePairingTokenIfEnabled(c *gin.Context) {
 	c.Next()
 }
 
-func isSameOriginRequest(r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	ref := r.Header.Get("Referer")
-	// 无 Origin / Referer：curl / 内部同进程调用 → 当作信任
-	if origin == "" && ref == "" {
-		return true
+// isLoopbackRequest 判断请求来自本机 loopback 连接。只信 TCP RemoteAddr
+// —— Go net/http 填入，调用方伪造不了。
+func isLoopbackRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
 	}
-	for _, candidate := range []string{origin, ref} {
-		if candidate == "" {
-			continue
-		}
-		if strings.HasPrefix(candidate, "http://localhost") ||
-			strings.HasPrefix(candidate, "http://127.0.0.1") ||
-			strings.HasPrefix(candidate, "https://localhost") ||
-			strings.HasPrefix(candidate, "https://127.0.0.1") {
-			return true
-		}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// hasValidPairingToken 判断请求是否带了正确的 pairing token（未启用时始终返回 false）。
+// 用于 /api/app/info 这种默认放行、但想对"已鉴权用户"额外返回敏感字段的端点。
+func hasValidPairingToken(r *http.Request) bool {
+	tok := currentPairingToken()
+	if tok == "" {
+		return false
 	}
-	return false
+	got := extractToken(r)
+	if got == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(tok)) == 1
 }
 
 func extractToken(r *http.Request) string {
@@ -119,10 +118,12 @@ func extractToken(r *http.Request) string {
 	if h := r.Header.Get("X-WeLink-Token"); h != "" {
 		return strings.TrimSpace(h)
 	}
-	// URL query ?token=xxx（主要给扫码链接首次传递用，不推荐长期用）
-	if v := r.URL.Query().Get("token"); v != "" {
-		return strings.TrimSpace(v)
-	}
+	// 注意：曾经接受 ?token=xxx 做首次扫码，但 query 会落到：
+	//   - 访问日志（Docker stdout / nginx log）
+	//   - 浏览器历史
+	//   - Referer 头泄露给外部资源
+	// 所以现在**不再**从 URL 读 token。前端扫码后只把 query 里的 token 读到
+	// localStorage 并立即 history.replaceState 抹掉，之后用 header 发送。
 	return ""
 }
 
@@ -159,7 +160,7 @@ func registerPairingRoutes(api *gin.RouterGroup) {
 		tok := currentPairingToken()
 		enabled := tok != ""
 		resp := gin.H{"enabled": enabled}
-		if enabled && isSameOriginRequest(c.Request) {
+		if enabled && isLoopbackRequest(c.Request) {
 			resp["token"] = tok
 			resp["lan_ips"] = detectLANIPs()
 		}
@@ -168,7 +169,7 @@ func registerPairingRoutes(api *gin.RouterGroup) {
 
 	// POST /api/app/pairing/enable — 开启配对，生成新 token
 	api.POST("/app/pairing/enable", func(c *gin.Context) {
-		if !isSameOriginRequest(c.Request) {
+		if !isLoopbackRequest(c.Request) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "只能在 PC 本机开启"})
 			return
 		}
@@ -187,7 +188,7 @@ func registerPairingRoutes(api *gin.RouterGroup) {
 
 	// POST /api/app/pairing/disable — 关闭并清空 token（之前配过的手机全失效）
 	api.POST("/app/pairing/disable", func(c *gin.Context) {
-		if !isSameOriginRequest(c.Request) {
+		if !isLoopbackRequest(c.Request) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "只能在 PC 本机关闭"})
 			return
 		}
@@ -202,7 +203,7 @@ func registerPairingRoutes(api *gin.RouterGroup) {
 
 	// POST /api/app/pairing/regen — 换新 token（老手机会失效，需要重新扫码）
 	api.POST("/app/pairing/regen", func(c *gin.Context) {
-		if !isSameOriginRequest(c.Request) {
+		if !isLoopbackRequest(c.Request) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "只能在 PC 本机重新生成"})
 			return
 		}

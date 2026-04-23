@@ -345,6 +345,9 @@ func sanitizeForExport(p Preferences, stripSecrets bool) Preferences {
 	p.GeminiRefreshToken = ""
 	p.GeminiTokenExpiry = 0
 
+	// 移动端配对 token —— 拥有即全权访问，不能随导出泄露
+	p.MobilePairingToken = ""
+
 	return p
 }
 
@@ -443,6 +446,7 @@ func sanitizeForResponse(p Preferences) Preferences {
 	out.OneDriveAccessToken = ""
 	out.OneDriveRefreshToken = ""
 	out.PodcastTTSAPIKey = redact(out.PodcastTTSAPIKey)
+	out.MobilePairingToken = redact(out.MobilePairingToken)
 	if len(out.LLMProfiles) > 0 {
 		sanitized := make([]LLMProfile, len(out.LLMProfiles))
 		copy(sanitized, out.LLMProfiles)

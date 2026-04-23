@@ -330,7 +330,23 @@ func serverMain() {
 		if hasFrontend {
 			needsSetup = !configured || !ready
 		}
-		// "我"的信息（wxid + 头像 + 昵称）：服务就绪时从私聊消息 sender 反推
+
+		// 同一端点两套响应：
+		//   - loopback / 已鉴权 —— 完整信息（self_info / data_dir / reason 等）
+		//   - 外部未鉴权 —— 只给前端判断"是否为 WeLink + 版本 + 是否需配对"的最小字段
+		// 避免启用配对前，同局域网任意人一个 GET 拿到 wxid / 头像 / 磁盘路径 / 错误栈。
+		trusted := isLoopbackRequest(c.Request) || hasValidPairingToken(c.Request)
+
+		if !trusted {
+			c.JSON(http.StatusOK, gin.H{
+				"app_mode":      hasFrontend,
+				"version":       appVersion,
+				"platform":      runtime.GOOS,
+				"needs_pairing": currentPairingToken() != "",
+			})
+			return
+		}
+
 		var selfInfo interface{}
 		if ready {
 			svcMu.RLock()
