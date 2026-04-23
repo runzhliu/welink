@@ -113,6 +113,11 @@ func InitAIDB() error {
 		aiDB = nil
 		return fmt.Errorf("ai_store: %w", err)
 	}
+	if err := initVirtualGroupTables(); err != nil {
+		db.Close()
+		aiDB = nil
+		return fmt.Errorf("ai_store: %w", err)
+	}
 	return nil
 }
 
