@@ -202,7 +202,7 @@ export interface BackendStatus {
   last_error?: string;
 }
 
-export type TabType = 'dashboard' | 'stats' | 'contacts' | 'db' | 'groups' | 'search' | 'calendar' | 'anniversary' | 'urls' | 'skills' | 'export' | 'memory' | 'settings';
+export type TabType = 'dashboard' | 'digest' | 'stats' | 'contacts' | 'db' | 'groups' | 'search' | 'calendar' | 'anniversary' | 'urls' | 'skills' | 'export' | 'memory' | 'settings';
 
 export interface DetectedEvent {
   type: string;

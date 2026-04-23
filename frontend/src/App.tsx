@@ -16,6 +16,7 @@ import { Header } from './components/layout/Header';
 
 // Dashboard Components
 import { AIHomePage } from './components/dashboard/AIHomePage';
+import { DailyDigestPage } from './components/dashboard/DailyDigestPage';
 import { StatsPage } from './components/dashboard/StatsPage';
 // FunStatsPage 已合并到 StatsPage 底部
 import { ContactsPage } from './components/dashboard/ContactsPage';
@@ -72,7 +73,7 @@ function AppInner() {
 
   // State — 从 URL hash 恢复当前 tab + 联系人/群聊弹窗
   // hash 格式：#/stats  #/stats/contact/wxid_abc  #/groups/group/xxx@chatroom
-  const VALID_TABS: TabType[] = ['dashboard', 'stats', 'contacts', 'db', 'groups', 'search', 'calendar', 'anniversary', 'urls', 'skills', 'export', 'memory', 'settings'];
+  const VALID_TABS: TabType[] = ['dashboard', 'digest', 'stats', 'contacts', 'db', 'groups', 'search', 'calendar', 'anniversary', 'urls', 'skills', 'export', 'memory', 'settings'];
 
   const parseHash = (): { tab: TabType; contactId?: string; groupId?: string } => {
     const raw = window.location.hash.replace('#/', '').replace('#', '');
@@ -155,7 +156,7 @@ function AppInner() {
   const [releaseChecked, setReleaseChecked] = useState(false);
   useEffect(() => {
     // ⌘1..⌘9 映射到 VALID_TABS 的前 9 项；顺序对应 Sidebar 上的常用 tab
-    const TAB_ORDER: TabType[] = ['dashboard', 'stats', 'contacts', 'groups', 'search', 'calendar', 'anniversary', 'skills', 'settings'];
+    const TAB_ORDER: TabType[] = ['dashboard', 'digest', 'stats', 'contacts', 'groups', 'search', 'calendar', 'anniversary', 'skills', 'settings'];
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
       // 在输入框里按 ⌘1 之类不拦截（浏览器默认也会被某些组件拦截）
@@ -505,6 +506,8 @@ function AppInner() {
             onNavigateToAnniversary={() => setActiveTab('anniversary')}
             onOpenSettings={() => setActiveTab('settings')}
           />
+        ) : activeTab === 'digest' ? (
+          <DailyDigestPage contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'stats' ? (
           <StatsPage
             contacts={contacts}
