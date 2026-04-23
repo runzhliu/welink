@@ -35,6 +35,7 @@ func registerVirtualGroupRoutes(api *gin.RouterGroup, getSvc func() *service.Con
 			NextSpeaker string `json:"next_speaker"` // 空 = 自动轮转 / "random" = 随机挑
 			Topic       string `json:"topic"`
 			ProfileID   string `json:"profile_id"`
+			Turns       int    `json:"turns"` // 一次性生成几句；<=1 = 单句（老行为）
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
@@ -62,33 +63,43 @@ func registerVirtualGroupRoutes(api *gin.RouterGroup, getSvc func() *service.Con
 			return
 		}
 
-		// 1. 决定这一轮谁说话
-		speaker := strings.TrimSpace(body.NextSpeaker)
-		if speaker == "" || speaker == "auto" {
-			speaker = pickNextSpeaker(body.Members, body.History)
-		} else if speaker == "random" {
-			speaker = body.Members[rand.Intn(len(body.Members))]
-		}
-		// 校验 speaker 是成员之一
-		valid := false
-		for _, m := range body.Members {
-			if m == speaker {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "next_speaker 不在成员列表"})
-			return
-		}
-
 		// 2. 为每个成员构造画像（clone_profiles 优先，私聊样例兜底）
-		personas := make(map[string]string) // username → 风格描述段落
+		personas := make(map[string]string)
 		displayNames := make(map[string]string)
 		for _, uname := range body.Members {
 			name, persona := buildMemberPersona(svc, uname)
 			displayNames[uname] = name
 			personas[uname] = persona
+		}
+
+		// 规范化 turns：单句走老逻辑；多句 2-15
+		turns := body.Turns
+		if turns <= 1 {
+			turns = 1
+		}
+		if turns > 15 {
+			turns = 15
+		}
+
+		// 1. 决定 speaker（仅 turns=1 需要；turns>1 时 LLM 自己选顺序）
+		speaker := strings.TrimSpace(body.NextSpeaker)
+		if turns == 1 {
+			if speaker == "" || speaker == "auto" {
+				speaker = pickNextSpeaker(body.Members, body.History)
+			} else if speaker == "random" {
+				speaker = body.Members[rand.Intn(len(body.Members))]
+			}
+			valid := false
+			for _, m := range body.Members {
+				if m == speaker {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "next_speaker 不在成员列表"})
+				return
+			}
 		}
 
 		// 3. 构造 system prompt
@@ -100,12 +111,27 @@ func registerVirtualGroupRoutes(api *gin.RouterGroup, getSvc func() *service.Con
 		if body.Topic != "" {
 			fmt.Fprintf(&sb, "本次聊天话题或场景：%s\n\n", body.Topic)
 		}
-		sb.WriteString("规则：\n")
-		sb.WriteString("1. 你要**严格以【" + displayNames[speaker] + "】的身份和风格**发一句话\n")
-		sb.WriteString("2. 只输出这一句消息内容本身，不要带 \"" + displayNames[speaker] + "：\" 这样的前缀，也不要旁白或解释\n")
-		sb.WriteString("3. 回复风格要贴合此人平时说话习惯（用词、长度、语气、表情使用）\n")
-		sb.WriteString("4. 内容要自然承接上下文，像真实微信群聊一样，而不是辩论或演讲\n")
-		sb.WriteString("5. 长度 1-3 句，总字数 ≤ 60（除非此人平时就话多）\n")
+
+		if turns == 1 {
+			sb.WriteString("规则：\n")
+			sb.WriteString("1. 你要**严格以【" + displayNames[speaker] + "】的身份和风格**发一句话\n")
+			sb.WriteString("2. 只输出这一句消息内容本身，不要带 \"" + displayNames[speaker] + "：\" 这样的前缀，也不要旁白或解释\n")
+			sb.WriteString("3. 回复风格要贴合此人平时说话习惯（用词、长度、语气、表情使用）\n")
+			sb.WriteString("4. 内容要自然承接上下文，像真实微信群聊一样，而不是辩论或演讲\n")
+			sb.WriteString("5. 长度 1-3 句，总字数 ≤ 60（除非此人平时就话多）\n")
+		} else {
+			fmt.Fprintf(&sb, "规则（一次性输出 %d 条群聊对话）：\n", turns)
+			sb.WriteString("1. 连续生成，一条一行，不要空行\n")
+			sb.WriteString("2. 每一条**严格**用格式：`名字：消息内容`（名字后是中文全角冒号）\n")
+			sb.WriteString("3. 名字必须从下面名单中挑（不要造新名字，不要写「我」）：\n")
+			for _, uname := range body.Members {
+				fmt.Fprintf(&sb, "   - %s\n", displayNames[uname])
+			}
+			sb.WriteString("4. 发言人要合理轮换，避免同一人连续；让对话像真实群聊（相互回应、偶尔插科打诨）\n")
+			sb.WriteString("5. 每条控制在 1-3 句、总字数 ≤ 60，贴合各自说话习惯\n")
+			sb.WriteString("6. 不要编号、不要旁白、不要解释、不要代码块围栏\n")
+			sb.WriteString("7. 不要输出超过 " + fmt.Sprintf("%d", turns) + " 条\n")
+		}
 
 		// 4. 把历史拼成"XXX: 内容"行
 		var userPart strings.Builder
@@ -116,14 +142,18 @@ func registerVirtualGroupRoutes(api *gin.RouterGroup, getSvc func() *service.Con
 			for _, h := range body.History {
 				n := displayNames[h.Speaker]
 				if n == "" {
-					n = h.Speaker // "我" 或未映射的
+					n = h.Speaker
 				}
 				fmt.Fprintf(&userPart, "%s：%s\n", n, h.Content)
 			}
 		}
-		fmt.Fprintf(&userPart, "\n现在轮到【%s】发言：", displayNames[speaker])
+		if turns == 1 {
+			fmt.Fprintf(&userPart, "\n现在轮到【%s】发言：", displayNames[speaker])
+		} else {
+			fmt.Fprintf(&userPart, "\n现在续写接下来 %d 条群聊：\n", turns)
+		}
 
-		// 5. 流式返回；同时把 speaker 信息通过首 chunk 带出去（前端用于定位气泡）
+		// 5. 流式返回
 		flusher, ok := c.Writer.(http.Flusher)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "不支持流式响应"})
@@ -137,21 +167,109 @@ func registerVirtualGroupRoutes(api *gin.RouterGroup, getSvc func() *service.Con
 			fmt.Fprintf(c.Writer, "data: %s\n\n", b)
 			flusher.Flush()
 		}
-		// 先发 meta，让前端提前创建对应 speaker 的气泡壳
-		send(map[string]interface{}{
-			"speaker":      speaker,
-			"display_name": displayNames[speaker],
-			"meta":         true,
-		})
 
-		sendChunk := func(chunk StreamChunk) {
+		if turns == 1 {
+			// ── 单句：保持老行为 ──
 			send(map[string]interface{}{
-				"delta": chunk.Delta,
-				"done":  chunk.Done,
-				"error": chunk.Error,
+				"speaker":      speaker,
+				"display_name": displayNames[speaker],
+				"meta":         true,
 			})
+			sendChunk := func(chunk StreamChunk) {
+				send(map[string]interface{}{
+					"delta": chunk.Delta,
+					"done":  chunk.Done,
+					"error": chunk.Error,
+				})
+			}
+			streamLLMCoreWithProfile(sendChunk, []LLMMessage{
+				{Role: "system", Content: sb.String()},
+				{Role: "user", Content: userPart.String()},
+			}, prefs, body.ProfileID)
+			return
 		}
-		streamLLMCoreWithProfile(sendChunk, []LLMMessage{
+
+		// ── 多句：buffer delta 按行 parse，逐条 emit ──
+		// name → username 反向映射（兼容 display_name 里有空格、特殊字符）
+		nameToUser := make(map[string]string, len(displayNames))
+		for u, n := range displayNames {
+			nameToUser[n] = u
+		}
+
+		var buf strings.Builder
+		emittedCount := 0
+
+		emitLine := func(raw string) {
+			raw = strings.TrimSpace(raw)
+			if raw == "" || emittedCount >= turns {
+				return
+			}
+			// 容忍常见格式：`名字：内容` / `[名字] 内容` / `名字: 内容`
+			sep := -1
+			for _, sepCh := range []string{"：", ": "} {
+				if idx := strings.Index(raw, sepCh); idx != -1 {
+					sep = idx
+					raw = strings.Replace(raw, sepCh, "：", 1)
+					break
+				}
+			}
+			if sep == -1 {
+				if idx := strings.Index(raw, ":"); idx != -1 {
+					sep = idx
+					raw = strings.Replace(raw, ":", "：", 1)
+				}
+			}
+			idx := strings.Index(raw, "：")
+			if idx == -1 {
+				return // 无法解析，跳过
+			}
+			name := strings.TrimSpace(raw[:idx])
+			name = strings.Trim(name, "[]【】")
+			content := strings.TrimSpace(raw[idx+len("："):])
+			if content == "" {
+				return
+			}
+			uname, ok := nameToUser[name]
+			if !ok {
+				return // 名字不在名单里，跳过
+			}
+			send(map[string]interface{}{
+				"speaker":      uname,
+				"display_name": name,
+				"meta":         true,
+			})
+			send(map[string]interface{}{"delta": content})
+			send(map[string]interface{}{"turn_end": true})
+			emittedCount++
+		}
+
+		bulkChunk := func(chunk StreamChunk) {
+			if chunk.Error != "" {
+				send(map[string]interface{}{"error": chunk.Error})
+				return
+			}
+			if chunk.Delta != "" {
+				buf.WriteString(chunk.Delta)
+				for {
+					s := buf.String()
+					nl := strings.Index(s, "\n")
+					if nl == -1 {
+						break
+					}
+					emitLine(s[:nl])
+					buf.Reset()
+					buf.WriteString(s[nl+1:])
+				}
+			}
+			if chunk.Done {
+				if buf.Len() > 0 {
+					emitLine(buf.String())
+					buf.Reset()
+				}
+				send(map[string]interface{}{"done": true})
+			}
+		}
+		streamLLMCoreWithProfile(bulkChunk, []LLMMessage{
 			{Role: "system", Content: sb.String()},
 			{Role: "user", Content: userPart.String()},
 		}, prefs, body.ProfileID)

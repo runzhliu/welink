@@ -94,7 +94,7 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
 
   const canStart = members.length >= 2 && !loading;
 
-  const requestTurn = async (nextSpeaker = 'auto') => {
+  const requestTurn = async (nextSpeaker = 'auto', turns = 1) => {
     if (loading) return;
     setLoading(true);
     const abort = new AbortController();
@@ -113,6 +113,7 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
           history: history.map(h => ({ speaker: h.speaker, content: h.content })),
           topic,
           next_speaker: nextSpeaker,
+          turns,
         }),
         signal: abort.signal,
       });
@@ -124,6 +125,12 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
       const decoder = new TextDecoder();
       let buffer = '';
       let cur: TurnMsg | null = null;
+      const finalizeCur = () => {
+        if (!cur) return;
+        const done = cur;
+        setHistory(h => h.map(x => (x === done ? { ...x, streaming: false } : x)));
+        cur = null;
+      };
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -135,10 +142,12 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
           try {
             const chunk = JSON.parse(line.slice(6)) as {
               meta?: boolean; speaker?: string; display_name?: string;
-              delta?: string; done?: boolean; error?: string;
+              delta?: string; done?: boolean; turn_end?: boolean; error?: string;
             };
             if (chunk.error) throw new Error(chunk.error);
             if (chunk.meta && chunk.speaker) {
+              // bulk 模式里会多次触发 meta，每个 meta 前先把上一条收尾
+              finalizeCur();
               const m = members.find(x => x.username === chunk.speaker);
               cur = {
                 speaker: chunk.speaker,
@@ -154,9 +163,12 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
               cur.content += chunk.delta;
               setHistory(h => h.map(x => (x === cur ? { ...x, content: cur!.content } : x)));
             }
-            if (chunk.done && cur) {
-              cur.streaming = false;
-              setHistory(h => h.map(x => (x === cur ? { ...x, streaming: false } : x)));
+            if (chunk.turn_end) {
+              finalizeCur();
+            }
+            if (chunk.done) {
+              // bulk 模式 done 表示整个流结束；单句模式 done 也兼做收尾
+              finalizeCur();
             }
           } catch (e) {
             if (!(e instanceof SyntaxError)) throw e;
@@ -189,18 +201,13 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
     setHistory([]);
   };
 
-  // 批量连跑 N 轮：每轮等流式完成再下一轮；按下"停止"立即中止
+  // 批量连跑 N 条：一次 LLM 调用生成 N 条（不再循环 N 次）。
+  // 速度比旧版快几倍：省掉 N-1 次 LLM 握手，且同一 prompt 上下文只传一次。
   const runBatch = async (n: number) => {
     if (loading || !canStart) return;
     batchCancelRef.current = false;
     setBatchLeft(n);
-    for (let i = 0; i < n; i++) {
-      if (batchCancelRef.current) break;
-      setBatchLeft(n - i);
-      await requestTurn('auto');
-      // 两轮间小停顿，让 UI 滚动生效，也避免 LLM 限流
-      await new Promise(r => setTimeout(r, 200));
-    }
+    await requestTurn('auto', n);
     setBatchLeft(0);
   };
 
@@ -661,9 +668,9 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
             <button
               onClick={stopBatch}
               className="flex items-center gap-1 px-3 py-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/15 text-xs font-bold"
-              title="中止批量"
+              title="中止"
             >
-              <Square size={12} /> 停止（剩 {batchLeft}）
+              <Square size={12} /> 停止（目标 {batchLeft} 条）
             </button>
           ) : (
             <>
@@ -671,17 +678,17 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
                 onClick={() => runBatch(5)}
                 disabled={!canStart}
                 className="flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-xs text-gray-500 hover:text-[#07c160] disabled:opacity-40"
-                title="连续生成 5 轮"
+                title="一次生成 5 条"
               >
-                <Zap size={12} /> 跑 5 轮
+                <Zap size={12} /> 来 5 条
               </button>
               <button
                 onClick={() => runBatch(10)}
                 disabled={!canStart}
                 className="flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-xs text-gray-500 hover:text-[#07c160] disabled:opacity-40"
-                title="连续生成 10 轮"
+                title="一次生成 10 条"
               >
-                <Zap size={12} /> 跑 10 轮
+                <Zap size={12} /> 来 10 条
               </button>
             </>
           )}
