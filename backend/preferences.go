@@ -221,6 +221,11 @@ type Preferences struct {
 	OneDriveTokenExpiry  int64  `json:"onedrive_token_expiry,omitempty"`
 	OneDriveFolderPath   string `json:"onedrive_folder_path,omitempty"` // 例 /WeLink-Export
 
+	// 移动端配对：启用后，外部（非同源）请求必须带 Bearer token 才能访问 API。
+	// 目的是让手机 App 安全地远程连上 PC 上的 WeLink 后端。
+	// 空字符串 = 未启用（向后兼容：所有请求像以前一样放行）。
+	MobilePairingToken string `json:"mobile_pairing_token,omitempty"`
+
 	// Gemini OAuth（可选，与 API Key 二选一）
 	GeminiClientID     string `json:"gemini_client_id,omitempty"`
 	GeminiClientSecret string `json:"gemini_client_secret,omitempty"`

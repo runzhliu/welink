@@ -5,20 +5,26 @@
 
 import axios from 'axios';
 import type { ContactStats, GlobalStats, WordCount, DBInfo, BackendStatus, TableInfo, ColumnInfo, TableData, ContactDetail, GroupInfo, GroupDetail, FilteredStats, SentimentResult, GroupChatMessage, CoolingEntry, GlobalSearchGroup, QueryResult } from '../types';
+import { getServerURL, getToken } from '../runtimeConfig';
 
 // 配置 axios 实例
 const api = axios.create({
-  baseURL: '/api',
   timeout: 120000, // 2 分钟（大群聊分析需要较长时间）
   headers: {
     'Content-Type': 'application/json',
   }
 });
 
-// 请求拦截器
+// 请求拦截器：动态决定 baseURL 和 Authorization（远程客户端场景）
 api.interceptors.request.use(
   (config) => {
-    // 可以在这里添加 token 等
+    const server = getServerURL();
+    config.baseURL = (server ? server.replace(/\/+$/, '') : '') + '/api';
+    const tok = getToken();
+    if (tok) {
+      config.headers = config.headers ?? {};
+      (config.headers as Record<string, string>).Authorization = `Bearer ${tok}`;
+    }
     return config;
   },
   (error) => {

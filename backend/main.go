@@ -307,6 +307,14 @@ func serverMain() {
 
 	api := r.Group("/api")
 
+	// 移动端配对鉴权：若 MobilePairingToken 不为空，所有外部 /api/* 请求
+	// 必须带对应 Bearer token；同源请求（PC 本机）和 /app/info 等白名单
+	// 端点始终放行。未启用时完全是 no-op。
+	api.Use(requirePairingTokenIfEnabled)
+
+	// 配对相关端点
+	registerPairingRoutes(api)
+
 	// ── App 配置相关（无需服务层） ──────────────────────────────────────────
 
 	// App 状态：前端用于判断是否需要显示 Setup 页面 / 未配置横幅。

@@ -1,6 +1,17 @@
 import axios from 'axios';
+import { getServerURL, getToken } from '../runtimeConfig';
 
-const api = axios.create({ baseURL: '/api', timeout: 120000 });
+const api = axios.create({ timeout: 120000 });
+api.interceptors.request.use(cfg => {
+  const server = getServerURL();
+  cfg.baseURL = (server ? server.replace(/\/+$/, '') : '') + '/api';
+  const tok = getToken();
+  if (tok) {
+    cfg.headers = cfg.headers ?? {};
+    (cfg.headers as Record<string, string>).Authorization = `Bearer ${tok}`;
+  }
+  return cfg;
+});
 
 export interface SelfInfo {
   wxid: string;

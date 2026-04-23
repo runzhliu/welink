@@ -8,6 +8,7 @@ import {
   FolderOpen, Loader2, Database, FileText, AlertCircle, RotateCcw, CheckCircle2, EyeOff, BarChart2, Bot, Check, LogIn, LogOut, Stethoscope, AlertTriangle, XCircle, Copy, ExternalLink,
   Settings, Clock, Cpu, Save, RefreshCw, Sparkles, Download, Upload, Trash2, Lock, Unlock,
 } from 'lucide-react';
+import { MobilePairingSection } from './MobilePairingSection';
 import axios from 'axios';
 import { PROMPT_TEMPLATES } from '../../utils/promptTemplates';
 import { useLock, type AutoLockMinutes } from '../../contexts/LockContext';
@@ -2263,6 +2264,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           </>
         )}
       </section>
+
+      {/* ── 移动端配对 ── */}
+      <MobilePairingSection />
 
       {/* ── 播客 TTS 配置 ── */}
       <section className="mb-8" data-settings-tags="播客 podcast tts 语音 朗读 openai voice 主持人 硅基流动 siliconflow edge-tts">

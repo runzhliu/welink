@@ -20,6 +20,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
+import './runtimeConfig' // side-effect: 吸收 URL ?server=&token= + 挂全局 axios 拦截器
 import { initFrontendLogger } from './utils/frontendLogger'
 import { ToastProvider, ToastBridge } from './components/common/Toast'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
