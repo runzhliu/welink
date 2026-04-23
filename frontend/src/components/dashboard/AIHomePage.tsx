@@ -6,7 +6,6 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { Bot, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, Share2, Users, Plus, ChevronDown, ChevronRight, BrainCircuit, Globe, Sparkles } from 'lucide-react';
 import { CrossContactQA } from './CrossContactQA';
 import { ConversationHistory } from './ConversationHistory';
-import { TodayPanel } from './TodayPanel';
 import { DailyDigestBanner } from './DailyDigestBanner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -452,7 +451,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   onReselect,
   onContactClick,
   onGroupClick,
-  onNavigateToAnniversary,
+  onNavigateToAnniversary: _onNavigateToAnniversary, // 老调用方仍在传；目前简报 banner 里不用
   onOpenSettings,
 }) => {
   const { privacyMode } = usePrivacyMode();
@@ -1095,15 +1094,8 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   return (
     <div className="min-h-full flex flex-col items-center px-4 py-8">
 
-      {/* 每日社交简报 banner（懒加载 + 按日期关闭） */}
+      {/* 今日社交简报：建议主动联系 / 3 天纪念日 / 沉睡老朋友 三大段 */}
       <DailyDigestBanner contacts={contacts} onContactClick={onContactClick} />
-
-      {/* 右侧聚合面板：建议主动联系 / 纪念日 / 每周摘要（带 tab、可收起） */}
-      <TodayPanel
-        contacts={contacts}
-        onContactClick={onContactClick}
-        onNavigateToAnniversary={onNavigateToAnniversary}
-      />
 
       {/* Hero */}
       <div className="text-center mb-8">

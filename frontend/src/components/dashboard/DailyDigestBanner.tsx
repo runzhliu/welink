@@ -7,11 +7,12 @@
 
 import React, { useEffect, useState } from 'react';
 import {
-  Sunrise, Users, MoonStar, Cake, X, ChevronDown, ChevronUp,
+  Sunrise, MoonStar, Cake, X, ChevronDown, ChevronUp, Snowflake, AlertCircle,
 } from 'lucide-react';
 import axios from 'axios';
 import { avatarSrc } from '../../utils/avatar';
-import type { ContactStats } from '../../types';
+import { forecastApi } from '../../services/api';
+import type { ContactStats, ForecastEntry } from '../../types';
 
 interface DigestActiveContact {
   username: string;
@@ -54,6 +55,7 @@ const COLLAPSED_KEY = 'welink:daily-digest-collapsed';
 
 export const DailyDigestBanner: React.FC<Props> = ({ contacts, onContactClick }) => {
   const [digest, setDigest] = useState<DailyDigest | null>(null);
+  const [forecasts, setForecasts] = useState<ForecastEntry[]>([]);
   const [dismissed, setDismissed] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSED_KEY) === '1');
 
@@ -61,11 +63,13 @@ export const DailyDigestBanner: React.FC<Props> = ({ contacts, onContactClick })
     axios.get<DailyDigest>('/api/daily-digest/today')
       .then(r => {
         setDigest(r.data);
-        // 检查今天是否已关闭
         const key = DISMISS_KEY_PREFIX + r.data.date;
         if (localStorage.getItem(key) === '1') setDismissed(true);
       })
-      .catch(() => { /* 静默失败，不显示 banner */ });
+      .catch(() => { /* 静默 */ });
+    forecastApi.get(5)
+      .then(r => setForecasts((r.suggest_contact || []).slice(0, 5)))
+      .catch(() => setForecasts([]));
   }, []);
 
   const dismiss = () => {
@@ -88,8 +92,8 @@ export const DailyDigestBanner: React.FC<Props> = ({ contacts, onContactClick })
 
   if (dismissed || !digest) return null;
 
-  // 没有任何可展示内容时不渲染
-  const hasContent = digest.active_contact_count > 0 ||
+  const forecastCount = forecasts.length;
+  const hasContent = forecastCount > 0 ||
     digest.sleeping_friends.length > 0 ||
     digest.upcoming_anniversaries.length > 0;
   if (!hasContent) return null;
@@ -102,7 +106,7 @@ export const DailyDigestBanner: React.FC<Props> = ({ contacts, onContactClick })
   })();
 
   return (
-    <div className="relative mx-auto mt-4 mb-3 w-full max-w-3xl rounded-3xl border border-amber-100 dark:border-amber-400/20 bg-gradient-to-br from-amber-50/60 via-rose-50/40 to-purple-50/40 dark:from-amber-500/5 dark:via-rose-500/5 dark:to-purple-500/5 shadow-sm overflow-hidden">
+    <div className="relative mx-auto mt-4 mb-3 w-full max-w-4xl rounded-3xl border border-amber-100 dark:border-amber-400/20 bg-gradient-to-br from-amber-50/60 via-rose-50/40 to-purple-50/40 dark:from-amber-500/5 dark:via-rose-500/5 dark:to-purple-500/5 shadow-sm overflow-hidden">
       <div className="flex items-center gap-2.5 px-5 py-3 border-b border-amber-100/60 dark:border-amber-400/10">
         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-sm shrink-0">
           <Sunrise size={16} className="text-white" />
@@ -110,7 +114,8 @@ export const DailyDigestBanner: React.FC<Props> = ({ contacts, onContactClick })
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-black text-[#1d1d1f] dark:text-gray-100">今日社交简报</h3>
           <p className="text-[11px] text-gray-500 dark:text-gray-400">
-            {dateLabel} · {digest.active_contact_count} 位联系人互动
+            {dateLabel}
+            {forecastCount > 0 && ` · ${forecastCount} 位建议主动联系`}
             {digest.sleeping_count > 0 && ` · ${digest.sleeping_count} 位久未联系`}
             {digest.upcoming_anniversaries.length > 0 && ` · ${digest.upcoming_anniversaries.length} 个即将纪念日`}
           </p>
@@ -133,23 +138,31 @@ export const DailyDigestBanner: React.FC<Props> = ({ contacts, onContactClick })
 
       {!collapsed && (
         <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* 昨日活跃 */}
-          {digest.active_contacts.length > 0 && (
+          {/* 建议主动联系（降温 / 濒危） */}
+          {forecastCount > 0 && (
             <section className="rounded-2xl bg-white/70 dark:bg-black/20 border border-amber-100/40 dark:border-white/5 p-3">
               <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold text-[#1d1d1f] dark:text-gray-200">
-                <Users size={12} className="text-[#07c160]" />
-                昨日有互动
-                <span className="text-gray-400 font-normal">· Top {digest.active_contacts.length}</span>
+                <AlertCircle size={12} className="text-[#fa5151]" />
+                建议主动联系
+                <span className="text-gray-400 font-normal">· {forecastCount}</span>
               </div>
               <ul className="space-y-1.5">
-                {digest.active_contacts.map(c => (
+                {forecasts.map(f => (
                   <li
-                    key={c.username}
-                    onClick={() => clickContact(c.username)}
+                    key={f.username}
+                    onClick={() => clickContact(f.username)}
                     className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-amber-50 dark:hover:bg-white/5 cursor-pointer"
                   >
-                    <img loading="lazy" src={avatarSrc(c.avatar || '')} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-100" />
-                    <span className="flex-1 text-xs dk-text truncate">{c.name}</span>
+                    <img loading="lazy" src={avatarSrc(f.avatar_url || '')} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-100" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs dk-text truncate">{f.display_name}</span>
+                        {f.status === 'endangered'
+                          ? <span className="text-[9px] font-bold px-1 rounded bg-[#fa5151]/10 text-[#fa5151] shrink-0">濒危</span>
+                          : <span className="text-[9px] font-bold px-1 rounded bg-[#10aeff]/10 text-[#10aeff] shrink-0 inline-flex items-center gap-0.5"><Snowflake size={8} />降温</span>}
+                      </div>
+                      <div className="text-[10px] text-gray-400 truncate">{f.days_since_last} 天未联系</div>
+                    </div>
                   </li>
                 ))}
               </ul>
