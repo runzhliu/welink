@@ -2841,6 +2841,9 @@ func serverMain() {
 		// 纪念日 & 提醒
 		registerAnniversaryRoutes(prot, getSvc)
 
+		// 每日社交简报（晨报）
+		registerDailyDigestRoutes(prot, getSvc)
+
 		// 关系动态预测
 		registerForecastRoutes(prot, getSvc)
 

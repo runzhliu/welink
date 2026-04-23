@@ -7,6 +7,7 @@ import { Bot, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLef
 import { CrossContactQA } from './CrossContactQA';
 import { ConversationHistory } from './ConversationHistory';
 import { TodayPanel } from './TodayPanel';
+import { DailyDigestBanner } from './DailyDigestBanner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateShareImage } from '../../utils/shareImage';
@@ -1092,7 +1093,10 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   // ── 空白（首次）模式 ────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-full flex flex-col items-center justify-center px-4 py-16">
+    <div className="min-h-full flex flex-col items-center px-4 py-8">
+
+      {/* 每日社交简报 banner（懒加载 + 按日期关闭） */}
+      <DailyDigestBanner contacts={contacts} onContactClick={onContactClick} />
 
       {/* 右侧聚合面板：建议主动联系 / 纪念日 / 每周摘要（带 tab、可收起） */}
       <TodayPanel
