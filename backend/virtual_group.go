@@ -35,7 +35,8 @@ func registerVirtualGroupRoutes(api *gin.RouterGroup, getSvc func() *service.Con
 			NextSpeaker string `json:"next_speaker"` // 空 = 自动轮转 / "random" = 随机挑
 			Topic       string `json:"topic"`
 			ProfileID   string `json:"profile_id"`
-			Turns       int    `json:"turns"` // 一次性生成几句；<=1 = 单句（老行为）
+			Turns       int    `json:"turns"`        // 一次性生成几句；<=1 = 单句（老行为）
+			SampleCount int    `json:"sample_count"` // 未训练分身时每人用多少条历史样例；<=0 默认 30；上限 200
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
@@ -64,10 +65,17 @@ func registerVirtualGroupRoutes(api *gin.RouterGroup, getSvc func() *service.Con
 		}
 
 		// 2. 为每个成员构造画像（clone_profiles 优先，私聊样例兜底）
+		sampleCount := body.SampleCount
+		if sampleCount <= 0 {
+			sampleCount = 30
+		}
+		if sampleCount > 200 {
+			sampleCount = 200
+		}
 		personas := make(map[string]string)
 		displayNames := make(map[string]string)
 		for _, uname := range body.Members {
-			name, persona := buildMemberPersona(svc, uname)
+			name, persona := buildMemberPersona(svc, uname, sampleCount)
 			displayNames[uname] = name
 			personas[uname] = persona
 		}
@@ -299,9 +307,12 @@ func pickNextSpeaker(members []string, history []struct {
 }
 
 // buildMemberPersona 返回 (display_name, persona_text)
-//   - 优先 clone_profiles.prompt（用户 explicitly trained 过）
-//   - fallback：从私聊最近 30 条文本样例拼成一段
-func buildMemberPersona(svc *service.ContactService, username string) (string, string) {
+//   - 优先 clone_profiles.prompt（用户 explicitly trained 过）— sampleCount 无效，用完整训练产出
+//   - fallback：从私聊最近 sampleCount 条文本样例拼成一段
+func buildMemberPersona(svc *service.ContactService, username string, sampleCount int) (string, string) {
+	if sampleCount <= 0 {
+		sampleCount = 30
+	}
 	// display name
 	name := username
 	for _, s := range svc.GetCachedStats() {
@@ -322,8 +333,8 @@ func buildMemberPersona(svc *service.ContactService, username string) (string, s
 
 	// fallback：样例对话
 	msgs := svc.ExportContactMessagesAll(username)
-	samples := make([]string, 0, 30)
-	for i := len(msgs) - 1; i >= 0 && len(samples) < 30; i-- {
+	samples := make([]string, 0, sampleCount)
+	for i := len(msgs) - 1; i >= 0 && len(samples) < sampleCount; i-- {
 		m := msgs[i]
 		if m.Type != 1 || m.IsMine { // 只要对方的文本
 			continue
