@@ -39,6 +39,7 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
   const [search, setSearch] = useState('');
   const [userInput, setUserInput] = useState('');
   const [batchLeft, setBatchLeft] = useState(0); // >0 表示正在批量模式
+  const [sampleCount, setSampleCount] = useState<30 | 60 | 120>(30); // 仅对未训练分身的成员生效
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
   // 会话持久化
@@ -114,6 +115,7 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
           topic,
           next_speaker: nextSpeaker,
           turns,
+          sample_count: sampleCount,
         }),
         signal: abort.signal,
       });
@@ -586,6 +588,33 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
             placeholder="可选：给他们一个场景或话题（例如：周末一起吃饭时聊什么）"
             className="w-full px-3 py-1.5 text-sm rounded-xl border border-gray-200 dark:border-white/10 dk-input"
           />
+        </div>
+
+        {/* 样例深度：仅对未训练分身的成员生效 */}
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] text-gray-500 dark:text-gray-400">样例深度</span>
+          <div className="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-white/5 p-0.5">
+            {[
+              { v: 30 as const,  label: '轻' },
+              { v: 60 as const,  label: '中' },
+              { v: 120 as const, label: '深' },
+            ].map(opt => (
+              <button
+                key={opt.v}
+                onClick={() => setSampleCount(opt.v)}
+                className={`px-2.5 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${
+                  sampleCount === opt.v
+                    ? 'bg-white dark:bg-[#1c1c1e] text-[#07c160] shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-[#07c160]'
+                }`}
+              >
+                {opt.label} {opt.v}
+              </button>
+            ))}
+          </div>
+          <span className="text-[11px] text-gray-400">
+            条 · 只对未训练分身的成员生效；训练过的用完整人设
+          </span>
         </div>
       </div>
 
