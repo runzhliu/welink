@@ -604,6 +604,64 @@ ports:
 
 ---
 
+## 整体架构
+
+```
+                       ┌──────────────────────────────────────────┐
+                       │             终端用户 (浏览器 / App)        │
+                       └────────────────┬─────────────────────────┘
+                                        │ HTTP / SSE
+                                        ▼
+          ┌───────────────────────────────────────────────────────┐
+          │                      前端 (React)                     │
+          │   Dashboard · AI 对话 · 设置 · 数据库 · 记忆库 · 播客   │
+          └────────────────┬──────────────────────────────────────┘
+                           │ REST + SSE
+                           ▼
+          ┌───────────────────────────────────────────────────────┐
+          │              后端 (Go + Gin, 单 binary)               │
+          │                                                       │
+          │  ┌─────────┐  ┌────────┐  ┌──────┐  ┌──────┐  ┌────┐ │
+          │  │ 统计分析 │  │ AI/LLM │  │ RAG  │  │ 记忆 │  │ TTS│ │
+          │  │  服务   │  │ 多 provider│ FTS+向量│  提炼 │  代理│ │
+          │  └─────────┘  └────┬───┘  └──┬───┘  └──────┘  └────┘ │
+          │                    │         │                        │
+          │              ┌─────▼─────────▼────┐                   │
+          │              │   DB 管理器 (纯 Go) │                   │
+          │              └─────┬─────────┬────┘                   │
+          └────────────────────┼─────────┼────────────────────────┘
+                               │         │
+                      ┌────────▼───┐   ┌─▼──────────────┐
+                      │ 解密后的    │   │ ai_analysis.db │
+                      │ 微信 DB     │   │ AI 对话/记忆/  │
+                      │ (contact/   │   │ 向量索引/播客   │
+                      │  message)   │   │ 历史           │
+                      └─────────────┘   └────────────────┘
+                               ▲
+                               │ 本地解密（不出机器）
+                               │
+                      ┌────────┴─────────────┐
+                      │ wechat-decrypt       │
+                      │ (从微信进程内存取 key) │
+                      └──────────────────────┘
+
+  外部可选集成（全部用户自备凭证）
+  ─────────────────────────────────────────────────────────────────
+  LLM:   OpenAI / Anthropic / Gemini / DeepSeek / Kimi / Ollama / Vertex / Bedrock
+  导出:  Markdown / Notion / 飞书 / WebDAV / S3 / Dropbox / Google Drive / OneDrive
+  MCP:   Claude Code / Claude Desktop / Cline / Continue / Windsurf / Zed / ... (独立 Go binary)
+  TTS:   OpenAI / Azure / Edge-TTS (播客功能)
+```
+
+**关键设计**
+
+- **本地优先**：微信数据库全程在本地机器解密、索引、检索；只有你明确触发 AI 对话时才会把相关片段发到你配置的 LLM 提供商
+- **单 binary 部署**：后端 Go 源码编译成一个可执行文件，内嵌前端静态资源，Docker 镜像 < 50MB，也可打包成 macOS / Windows 桌面 App
+- **零 CGO**：SQLite 用 modernc 纯 Go 实现，向量检索/FTS 全部走 Go，跨平台编译不依赖 C 工具链
+- **MCP 集成**：独立的 `mcp-server` binary 通过本地 HTTP 反向代理后端 API，让 Claude Code 等 MCP 客户端能直接用自然语言查询你的聊天数据
+
+---
+
 ## 技术栈
 
 | 层次 | 技术 |
@@ -617,7 +675,7 @@ ports:
 | 中文分词 | go-ego/gse |
 | 部署 | Docker Compose |
 
-API 文档：启动后访问 [localhost:3418/swagger/](http://localhost:3418/swagger/)。更多技术细节见 [docs/](docs/README.md)。
+API 文档：启动后访问 [localhost:3418/swagger/](http://localhost:3418/swagger/)。架构细节与分层职责见 [docs/architecture.md](docs/architecture.md)，更多技术文档见 [docs/](docs/README.md)。
 
 ---
 

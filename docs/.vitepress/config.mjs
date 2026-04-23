@@ -123,6 +123,7 @@ export default defineConfig({
         text: '技术参考',
         items: [
           { text: '文档总览', link: '/README' },
+          { text: '整体架构', link: '/architecture' },
           { text: 'API 接口文档', link: '/api' },
           { text: '数据库结构', link: '/database' },
           { text: '消息类型说明', link: '/message-types' },
