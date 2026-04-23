@@ -135,10 +135,22 @@ func registerVirtualGroupRoutes(api *gin.RouterGroup, getSvc func() *service.Con
 			for _, uname := range body.Members {
 				fmt.Fprintf(&sb, "   - %s\n", displayNames[uname])
 			}
-			sb.WriteString("4. 发言人要合理轮换，避免同一人连续；让对话像真实群聊（相互回应、偶尔插科打诨）\n")
-			sb.WriteString("5. 每条控制在 1-3 句、总字数 ≤ 60，贴合各自说话习惯\n")
-			sb.WriteString("6. 不要编号、不要旁白、不要解释、不要代码块围栏\n")
-			sb.WriteString("7. 不要输出超过 " + fmt.Sprintf("%d", turns) + " 条\n")
+			sb.WriteString("4. 关键：这是**群聊**，不是轮流自我介绍！每条必须至少满足以下之一：\n")
+			sb.WriteString("   - 直接回应上一条或最近几条发言（附和、反驳、调侃、共鸣）\n")
+			sb.WriteString("   - 点名问/回复某个成员（用 @名字 或直呼其名），延续他/她刚才的话题\n")
+			sb.WriteString("   - 围绕同一件事继续追问或展开（不要每条都换一个无关话题）\n")
+			sb.WriteString("5. 只有第 1 条可以是开场发言；从第 2 条起就要在群聊语境里接话\n")
+			sb.WriteString("6. 发言人合理轮换，避免同一人连续发两条；偶尔一个人可以连发两条作为补充\n")
+			sb.WriteString("7. 每条 1-2 句、总字数 ≤ 40，贴合各自说话习惯（表情包、口头禅要用上）\n")
+			sb.WriteString("8. 语气要像真实微信群里的熟人：打趣、吐槽、随口附和，不要写成辩论或演讲\n")
+			sb.WriteString("9. 不要编号、不要旁白、不要解释、不要代码块围栏\n")
+			sb.WriteString("10. 不要输出超过 " + fmt.Sprintf("%d", turns) + " 条\n\n")
+			sb.WriteString("小范例（示范「相互回应」的感觉，不是要你照抄）：\n")
+			sb.WriteString("张三：最近忙炸了 项目改了七八版\n")
+			sb.WriteString("李四：哎哟 你们又改需求？\n")
+			sb.WriteString("张三：可不是 产品是真的反复\n")
+			sb.WriteString("王五：@张三 那月底还能喝酒不\n")
+			sb.WriteString("李四：必须的 不能让张三一个人加班\n")
 		}
 
 		// 4. 把历史拼成"XXX: 内容"行
