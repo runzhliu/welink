@@ -746,10 +746,22 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                       })}
                       title="点击查看当天完整对话"
                     >
-                      <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black
-                        ${msg.is_mine ? 'bg-[#07c160]' : 'bg-[#576b95]'}`}>
-                        {msg.is_mine ? '我' : displayName.charAt(0)}
-                      </div>
+                      {msg.is_mine ? (
+                        <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black bg-[#07c160]">
+                          我
+                        </div>
+                      ) : avatarUrl ? (
+                        <img
+                          loading="lazy"
+                          src={avatarSrc(avatarUrl)}
+                          alt={displayName}
+                          className="w-6 h-6 rounded-full flex-shrink-0 object-cover bg-gray-100"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black bg-[#576b95]">
+                          {displayName.charAt(0)}
+                        </div>
+                      )}
                       <div className={`flex flex-col gap-0.5 max-w-[72%] ${msg.is_mine ? 'items-end' : 'items-start'}`}>
                         <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words whitespace-pre-wrap
                           ${msg.is_mine ? 'bg-[#07c160] text-white rounded-br-sm' : 'bg-[#f0f0f0] dark:bg-white/10 text-[#1d1d1f] dark:text-gray-100 rounded-bl-sm'}`}>
