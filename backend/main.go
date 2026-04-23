@@ -1553,6 +1553,66 @@ func serverMain() {
 		streamLLMCoreWithProfile(sendChunk, llmMessages, prefs, body.ProfileID)
 	})
 
+	// ── 分身长期记忆：clone_chat_history 持久化 ──
+	// GET /api/ai/clone/history/:username — 拉回该联系人的分身对话历史（旧→新）
+	api.GET("/ai/clone/history/:username", func(c *gin.Context) {
+		uname := c.Param("username")
+		limit := 200
+		if v := c.Query("limit"); v != "" {
+			fmt.Sscanf(v, "%d", &limit)
+		}
+		list, err := ListCloneChatHistory(uname, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"messages": list})
+	})
+
+	// POST /api/ai/clone/history/:username — 追加一条
+	api.POST("/ai/clone/history/:username", func(c *gin.Context) {
+		uname := c.Param("username")
+		var body struct {
+			Role    string `json:"role"`    // user / assistant
+			Content string `json:"content"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || strings.TrimSpace(body.Content) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "role 和 content 必传"})
+			return
+		}
+		id, err := AppendCloneChatMsg(uname, body.Role, body.Content)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"id": id})
+	})
+
+	// DELETE /api/ai/clone/history/:username — 清空该联系人全部分身对话
+	api.DELETE("/ai/clone/history/:username", func(c *gin.Context) {
+		uname := c.Param("username")
+		if err := DeleteCloneChatHistory(uname); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	// DELETE /api/ai/clone/history/msg/:id — 撤回单条
+	api.DELETE("/ai/clone/history/msg/:id", func(c *gin.Context) {
+		var id int64
+		fmt.Sscanf(c.Param("id"), "%d", &id)
+		if id <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "id 不合法"})
+			return
+		}
+		if err := DeleteCloneChatMsg(id); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
 	// POST /api/ai/clone/continue — 对话续写：AI 模拟双方继续聊天
 	api.POST("/ai/clone/continue", func(c *gin.Context) {
 		var body struct {

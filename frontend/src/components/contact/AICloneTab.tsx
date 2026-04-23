@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, Sparkles, RotateCcw, Users, Brain, BarChart3, MessageSquare, CheckCircle2, Share2, Check, Play, Square } from 'lucide-react';
+import { Send, Loader2, Sparkles, RotateCcw, Users, Brain, BarChart3, MessageSquare, CheckCircle2, Share2, Check, Play, Square, Eraser } from 'lucide-react';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { avatarSrc } from '../../utils/avatar';
 import { contactsApi } from '../../services/api';
@@ -87,12 +87,12 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [restoring, setRestoring] = useState(true);
 
-  // 检查是否有缓存的分身档案
+  // 检查是否有缓存的分身档案 + 载入长期记忆
   useEffect(() => {
     setRestoring(true);
     fetch(`/api/ai/clone/session/${encodeURIComponent(username)}`)
       .then(r => r.json())
-      .then((data: { exists: boolean; session_id?: string; private_count?: number; group_count?: number; has_profile?: boolean; has_recent?: boolean; avg_msg_len?: number; emoji_pct?: number; updated_at?: number }) => {
+      .then(async (data: { exists: boolean; session_id?: string; private_count?: number; group_count?: number; has_profile?: boolean; has_recent?: boolean; avg_msg_len?: number; emoji_pct?: number; updated_at?: number }) => {
         if (data.exists && data.session_id) {
           setSessionId(data.session_id);
           setLearnResult({
@@ -106,6 +106,16 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
             emoji_pct: data.emoji_pct ?? 0,
           });
           setLearned(true);
+          // 载入过去跟这个分身的对话历史（持久化的长期记忆）
+          try {
+            const h = await fetch(`/api/ai/clone/history/${encodeURIComponent(username)}`);
+            if (h.ok) {
+              const j = await h.json() as { messages?: { role: string; content: string }[] };
+              if (j.messages && j.messages.length > 0) {
+                setMessages(j.messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })));
+              }
+            }
+          } catch { /* 历史拉失败不阻断分身进入 */ }
         }
       })
       .catch(() => {})
@@ -382,6 +392,19 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
             if (!(e instanceof SyntaxError)) throw e;
           }
         }
+      }
+
+      // 流式结束、回复完整：持久化用户提问 + 分身回复到长期记忆
+      // （只在这里存，避免中途 abort/err 时写半条脏数据）
+      if (accumulated.trim()) {
+        const persist = (role: 'user' | 'assistant', content: string) =>
+          fetch(`/api/ai/clone/history/${encodeURIComponent(username)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role, content }),
+          }).catch(() => {});
+        void persist('user', text);
+        void persist('assistant', accumulated);
       }
     } catch (e: unknown) {
       if ((e as Error).name === 'AbortError') return;
@@ -666,10 +689,25 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
               {sharing ? <Loader2 size={16} className="animate-spin" /> : shareMsg?.ok ? <Check size={16} className="text-[#07c160]" /> : <Share2 size={16} />}
             </button>
           )}
+          {messages.length > 0 && (
+            <button
+              onClick={async () => {
+                if (!confirm('清空跟 TA 的全部分身对话记忆？此操作不可撤销（不影响已学到的人设）。')) return;
+                try {
+                  await fetch(`/api/ai/clone/history/${encodeURIComponent(username)}`, { method: 'DELETE' });
+                } catch { /* ignore */ }
+                setMessages([]);
+              }}
+              className="text-gray-400 hover:text-red-500 transition-colors p-1"
+              title="清空对话记忆（保留分身人设）"
+            >
+              <Eraser size={16} />
+            </button>
+          )}
           <button
             onClick={handleReset}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1"
-            title="重新学习"
+            title="重新学习分身"
           >
             <RotateCcw size={16} />
           </button>
