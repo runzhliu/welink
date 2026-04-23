@@ -106,6 +106,13 @@ export const MobilePairingSection: React.FC = () => {
         未启用时 API 完全放行（向后兼容老部署）。
       </p>
 
+      <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700/50 p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
+        <div className="font-semibold mb-1">⚠️ 仅在信任的网络中使用</div>
+        局域网通信是 <b>HTTP 明文</b>，同网段设备可被嗅探——咖啡馆、机场、公司访客 Wi-Fi 等不可信网络下请勿启用。
+        推荐场景：家里 / 个人热点。<br/>
+        二维码里含 token，不要截图分享。若二维码曾被他人看到，请点「重新生成 token」。
+      </div>
+
       {!status ? (
         <div className="text-xs text-gray-400 flex items-center gap-1">
           <Loader2 size={12} className="animate-spin" /> 读取状态中…
