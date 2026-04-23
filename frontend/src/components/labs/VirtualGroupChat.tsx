@@ -126,11 +126,15 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
       const reader = resp.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      // 注意：cur 是外层闭包变量，setHistory 回调延迟执行时 cur 可能已被
+      // finalizeCur 置 null —— 所以每次 setHistory 前必须把 cur 快照到
+      // 局部 const，闭包里引用 snapshot 而不是 cur，否则 React 18 batch
+      // 下会把 null 推进 history 数组，触发下游 .content on null 崩溃。
       let cur: TurnMsg | null = null;
       const finalizeCur = () => {
         if (!cur) return;
-        const done = cur;
-        setHistory(h => h.map(x => (x === done ? { ...x, streaming: false } : x)));
+        const target = cur;
+        setHistory(h => h.map(x => (x === target ? { ...x, streaming: false } : x)));
         cur = null;
       };
       while (true) {
@@ -148,28 +152,29 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
             };
             if (chunk.error) throw new Error(chunk.error);
             if (chunk.meta && chunk.speaker) {
-              // bulk 模式里会多次触发 meta，每个 meta 前先把上一条收尾
-              finalizeCur();
+              finalizeCur(); // 上一条收尾
               const m = members.find(x => x.username === chunk.speaker);
-              cur = {
+              const fresh: TurnMsg = {
                 speaker: chunk.speaker,
                 displayName: chunk.display_name || (m ? displayOf(m) : chunk.speaker),
                 content: '',
                 avatar: m?.big_head_url || m?.small_head_url,
                 streaming: true,
               };
-              setHistory(h => [...h, cur!]);
+              cur = fresh;
+              setHistory(h => [...h, fresh]); // 用快照 fresh，不用 cur
               continue;
             }
             if (chunk.delta && cur) {
-              cur.content += chunk.delta;
-              setHistory(h => h.map(x => (x === cur ? { ...x, content: cur!.content } : x)));
+              const target = cur;
+              target.content += chunk.delta;
+              const snapshot = target.content;
+              setHistory(h => h.map(x => (x === target ? { ...x, content: snapshot } : x)));
             }
             if (chunk.turn_end) {
               finalizeCur();
             }
             if (chunk.done) {
-              // bulk 模式 done 表示整个流结束；单句模式 done 也兼做收尾
               finalizeCur();
             }
           } catch (e) {
@@ -239,7 +244,9 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
         name,
         topic,
         members: members.map(m => ({ username: m.username, name: displayOf(m), avatar: m.big_head_url || m.small_head_url })),
-        history: history.map(h => ({ speaker: h.speaker, display_name: h.displayName, content: h.content, avatar: h.avatar })),
+        history: history
+          .filter(h => h && typeof h.content === 'string')
+          .map(h => ({ speaker: h.speaker, display_name: h.displayName, content: h.content, avatar: h.avatar })),
       };
       const r = await axios.post<{ id: number }>('/api/ai/virtual-group/sessions', body);
       setSessionId(r.data.id);
@@ -275,9 +282,12 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
       });
       setMembers(rebuilt);
       setTopic(s.topic || '');
-      setHistory(s.history.map(h => ({
-        speaker: h.speaker, displayName: h.display_name, content: h.content, avatar: h.avatar,
-      })));
+      // 过滤 null / 缺字段的坏数据（老版本 bug 可能留下的脏记录）
+      setHistory((s.history || [])
+        .filter(h => h && typeof h.content === 'string' && typeof h.speaker === 'string')
+        .map(h => ({
+          speaker: h.speaker, displayName: h.display_name, content: h.content, avatar: h.avatar,
+        })));
       setSessionId(s.id);
       setSessionName(s.name);
       setHistoryOpen(false);
@@ -630,7 +640,7 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
             <p className="text-[11px]">训练过分身的人风格最像；没训练的会从私聊最近 30 条里临时学</p>
           </div>
         )}
-        {history.map((m, i) => {
+        {history.filter(m => m && typeof m.content === 'string').map((m, i) => {
           const isMe = m.speaker === '我';
           return (
             <div key={i} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
