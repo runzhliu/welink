@@ -419,11 +419,14 @@ export async function generateShareImage(options: ShareImageOptions): Promise<st
   const wrap = document.createElement('div');
   wrap.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
 
+  // 640px 原来对中文 AI 回答太窄（每行 ~30 字切），放宽到 720，
+  // 对应 body 内容区 720-72=648px，约能放 40+ 中文字符。
+  // S=2 @2x 输出仍然高清（最终 1440 px 宽，微信朋友圈等直接显示无压力）。
   const card = document.createElement('div');
-  card.style.cssText = `width:640px;background:#fff;font-family:${FONT};`;
+  card.style.cssText = `width:720px;background:#fff;font-family:${FONT};`;
 
   const S = 2;   // @2x
-  const W = 640;
+  const W = 720;
   const FF = FONT; // font-family 字符串
 
   // ── Header（Canvas 2D 直接绘制，彻底绕开 html2canvas CSS 对齐问题）──
