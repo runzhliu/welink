@@ -89,9 +89,15 @@ const MARKDOWN_CSS = `
 .sa strong { font-weight:700; }
 .sa em { font-style:italic; }
 .sa hr { border:none; border-top:1px solid #e5e7eb; margin:10px 0; }
-.sa code { background:#f3f4f6; padding:1px 5px; border-radius:4px; font-size:12px; font-family:monospace; }
+/* inline code：
+ * - display:inline-block + white-space:nowrap 保证跨行时不把背景 rect 拆成
+ *   html2canvas 无法正确拼接的两段（老 bug：盒子会飘出、遮挡后续几行）
+ * - vertical-align:baseline 让它对齐正文基线，不把行高抬起来
+ * - word-break:keep-all 再保险一层，长 id 溢出就换行而非切字 */
+.sa code { background:#f3f4f6; padding:1px 5px; border-radius:4px; font-size:12px; font-family:monospace;
+           display:inline-block; white-space:nowrap; vertical-align:baseline; word-break:keep-all; margin:0 2px; }
 .sa pre  { background:#f3f4f6; padding:10px 12px; border-radius:8px; margin:8px 0; overflow-x:auto; }
-.sa pre code { background:none; padding:0; font-size:12px; }
+.sa pre code { background:none; padding:0; font-size:12px; display:inline; white-space:pre; word-break:normal; margin:0; }
 .sa blockquote { border-left:3px solid #07c160; padding-left:12px; color:#666; margin:8px 0; }
 .sa table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13px; }
 .sa th { background:#f3f4f6; font-weight:600; padding:8px 10px; border:1px solid #e5e7eb; text-align:left; }
