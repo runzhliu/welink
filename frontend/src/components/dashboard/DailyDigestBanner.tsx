@@ -62,8 +62,14 @@ export const DailyDigestBanner: React.FC<Props> = ({ contacts, onContactClick })
   useEffect(() => {
     axios.get<DailyDigest>('/api/daily-digest/today')
       .then(r => {
-        setDigest(r.data);
-        const key = DISMISS_KEY_PREFIX + r.data.date;
+        // 防御：后端早期版本 Go 侧列表字段可能序列化成 null
+        const d: DailyDigest = {
+          ...r.data,
+          sleeping_friends: r.data.sleeping_friends ?? [],
+          upcoming_anniversaries: r.data.upcoming_anniversaries ?? [],
+        };
+        setDigest(d);
+        const key = DISMISS_KEY_PREFIX + d.date;
         if (localStorage.getItem(key) === '1') setDismissed(true);
       })
       .catch(() => { /* 静默 */ });

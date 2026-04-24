@@ -226,7 +226,10 @@ func buildDailyDigest(svc *service.ContactService, date string) *DailyDigest {
 	d.SleepingCount = len(sleeping)
 	if len(sleeping) > 5 {
 		d.SleepingFriends = sleeping[:5]
-	} else {
+	} else if len(sleeping) > 0 {
+		// 注意：不能直接 d.SleepingFriends = sleeping —— 当 sleeping 为 nil
+		// （没人满足条件，Demo 模式常见）时会把前面初始化的空 slice 覆盖成 nil，
+		// JSON 序列化出 "null" 让前端 .length 炸
 		d.SleepingFriends = sleeping
 	}
 

@@ -54,8 +54,8 @@ export const DailyDigestPage: React.FC<Props> = ({ contacts, onContactClick }) =
         axios.get<DailyDigest>('/api/daily-digest/today').then(r => r.data).catch(() => null),
         forecastApi.get(10).then(r => r.suggest_contact || []).catch(() => []),
       ]);
-      if (d) setDigest(d);
-      setForecasts(f);
+      if (d) setDigest(normalizeDigest(d));
+      setForecasts(f || []);
     } finally {
       setLoading(false);
     }
@@ -66,12 +66,21 @@ export const DailyDigestPage: React.FC<Props> = ({ contacts, onContactClick }) =
     setRegenBusy(true);
     try {
       const r = await axios.post<DailyDigest>('/api/daily-digest/regen');
-      setDigest(r.data);
+      setDigest(normalizeDigest(r.data));
       const f = await forecastApi.get(10);
       setForecasts(f.suggest_contact || []);
     } catch { /* ignore */ }
     finally { setRegenBusy(false); }
   };
+
+  // 防御后端返回 null 列表字段（早期版本 Go 侧会把空结果序列化成 null）
+  function normalizeDigest(d: DailyDigest): DailyDigest {
+    return {
+      ...d,
+      sleeping_friends: d.sleeping_friends ?? [],
+      upcoming_anniversaries: d.upcoming_anniversaries ?? [],
+    };
+  }
 
   const clickContact = (username: string) => {
     if (!onContactClick) return;
