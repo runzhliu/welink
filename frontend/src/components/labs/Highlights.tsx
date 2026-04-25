@@ -40,13 +40,6 @@ interface HighlightsResp {
 
 const displayOf = (c: ContactStats) => c.remark || c.nickname || c.username;
 
-const CATEGORY_COLORS: Record<string, string> = {
-  '认识当天': 'from-pink-400 to-rose-500',
-  '最长聊天日': 'from-amber-400 to-orange-500',
-  '深夜长谈': 'from-indigo-400 to-purple-600',
-  '最近时光': 'from-emerald-400 to-teal-500',
-  '随机翻到': 'from-sky-400 to-blue-500',
-};
 
 export const Highlights: React.FC<Props> = ({ contacts }) => {
   const [picked, setPicked] = useState<ContactStats | null>(null);
@@ -102,19 +95,18 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
       const node = cardRef.current.cloneNode(true) as HTMLElement;
       const wrapper = document.createElement('div');
       wrapper.style.cssText = `
-        width: 720px; background: #fdfcf9; padding: 0;
+        width: 720px; background: #ffffff; padding: 0;
         font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
         position: fixed; left: -10000px; top: 0; z-index: -1;
       `;
       // 强制白底，避免 dark 模式被截图
-      node.style.background = '#fdfcf9';
+      node.style.background = '#ffffff';
       node.style.color = '#1d1d1f';
-      // 把所有 dark: 类的孩子的颜色清掉（最简单办法是给 wrapper 一个 light scope）
       wrapper.appendChild(node);
 
       const footer = document.createElement('div');
       footer.style.cssText =
-        'padding:16px 28px; background:#f5f3ee; border-top: 1px solid #e8e4dc; display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#888;';
+        'padding:16px 28px; background:#f8f9fb; border-top: 1px solid #eee; display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#888;';
       footer.innerHTML = `
         <div>
           <div><strong style="color:#555">github.com/runzhliu/welink</strong></div>
@@ -146,7 +138,7 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
       {/* 选联系人区 */}
       <div className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-4 mb-4">
         <div className="flex items-center gap-2 mb-3">
-          <Sparkles size={16} className="text-amber-500" />
+          <Sparkles size={16} className="text-[#07c160]" />
           <div className="text-sm font-bold text-[#1d1d1f] dark:text-gray-100">
             选一位联系人，看看你们的故事
           </div>
@@ -173,7 +165,7 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
                 onClick={() => setPicked(c)}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs transition-colors ${
                   sel
-                    ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-white font-bold'
+                    ? 'bg-[#07c160] text-white font-bold'
                     : 'bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'
                 }`}
               >
@@ -203,7 +195,7 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
           <button
             onClick={generate}
             disabled={!picked || loading}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-400 to-orange-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#07c160] hover:bg-[#06a850] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : data ? <RefreshCw size={14} /> : <Wand2 size={14} />}
             {loading ? '生成中…' : data ? '重新生成' : '生成高光'}
@@ -230,10 +222,10 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
             </button>
           </div>
 
-          <div ref={cardRef} className="rounded-2xl bg-[#fdfcf9] dark:bg-[#1c1c1e] overflow-hidden border border-gray-100 dark:border-white/10">
+          <div ref={cardRef} className="rounded-2xl bg-white dark:bg-[#1c1c1e] overflow-hidden border border-gray-100 dark:border-white/10">
             {/* Hero */}
-            <div className="px-7 py-6 bg-gradient-to-br from-amber-50 to-rose-50 dark:from-amber-500/10 dark:to-rose-500/10">
-              <div className="text-xs uppercase tracking-widest text-amber-600 dark:text-amber-400 font-bold mb-1">
+            <div className="px-7 py-6 bg-[#07c160]/8 dark:bg-[#07c160]/10 border-b border-[#07c160]/15">
+              <div className="text-xs uppercase tracking-widest text-[#07c160] font-bold mb-1">
                 Highlights · 高光瞬间
               </div>
               <div className="text-3xl font-black text-[#1d1d1f] dark:text-gray-100 mb-1">
@@ -247,12 +239,11 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
             {/* Highlights list */}
             <div className="px-7 py-5 space-y-5">
               {data.highlights.map((h, idx) => {
-                const grad = CATEGORY_COLORS[h.category] || 'from-gray-400 to-gray-600';
                 return (
                   <div key={idx} className="relative pl-5">
-                    <div className={`absolute left-0 top-1.5 w-1 bottom-1.5 rounded-full bg-gradient-to-b ${grad}`} />
+                    <div className="absolute left-0 top-1.5 w-1 bottom-1.5 rounded-full bg-[#07c160]" />
                     <div className="flex items-baseline gap-2 mb-1 flex-wrap">
-                      <span className={`inline-block text-[10px] font-bold uppercase tracking-wider text-white px-2 py-0.5 rounded-full bg-gradient-to-r ${grad}`}>
+                      <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-[#07c160] bg-[#07c160]/10 px-2 py-0.5 rounded-full">
                         {h.category}
                       </span>
                       <span className="text-[11px] text-gray-400 dark:text-gray-500">{h.date}</span>
@@ -269,7 +260,7 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
                           const mine = e.speaker === '我';
                           return (
                             <div key={i} className="text-xs leading-snug">
-                              <span className={`font-bold ${mine ? 'text-[#07c160]' : 'text-indigo-500 dark:text-indigo-400'}`}>
+                              <span className={`font-bold ${mine ? 'text-[#07c160]' : 'text-gray-600 dark:text-gray-400'}`}>
                                 {e.speaker}
                               </span>
                               <span className="text-gray-400 dark:text-gray-500 mx-1.5 text-[10px]">{e.time}</span>
@@ -284,7 +275,7 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
               })}
             </div>
 
-            <div className="px-7 py-4 bg-[#f5f3ee] dark:bg-white/5 text-[11px] text-gray-500 dark:text-gray-400 flex items-center justify-between">
+            <div className="px-7 py-4 bg-gray-50 dark:bg-white/5 text-[11px] text-gray-500 dark:text-gray-400 flex items-center justify-between border-t border-gray-100 dark:border-white/5">
               <span>WeLink · 高光瞬间 by AI</span>
               <span>{new Date().toLocaleDateString('zh-CN')}</span>
             </div>

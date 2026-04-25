@@ -161,13 +161,13 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
       const node = cardRef.current.cloneNode(true) as HTMLElement;
       const wrapper = document.createElement('div');
       wrapper.style.cssText = `
-        width: 720px; background: #faf7ff; padding: 0;
+        width: 720px; background: #ffffff; padding: 0;
         font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
         position: fixed; left: -10000px; top: 0; z-index: -1;
       `;
       wrapper.appendChild(node);
       const footer = document.createElement('div');
-      footer.style.cssText = 'padding:14px 28px; background:#efe9f7; color:#888; font-size:11px; text-align:center;';
+      footer.style.cssText = 'padding:14px 28px; background:#f8f9fb; color:#888; font-size:11px; text-align:center; border-top:1px solid #eee;';
       footer.innerHTML = `WeLink · 平行宇宙对话 · ${new Date().toLocaleDateString('zh-CN')}`;
       wrapper.appendChild(footer);
       document.body.appendChild(wrapper);
@@ -191,7 +191,7 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
       {/* 设置区 */}
       <div className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-4 mb-4">
         <div className="flex items-center gap-2 mb-3">
-          <Sparkles size={16} className="text-violet-500" />
+          <Sparkles size={16} className="text-[#07c160]" />
           <div className="text-sm font-bold text-[#1d1d1f] dark:text-gray-100">平行宇宙对话</div>
         </div>
         <div className="text-xs text-gray-500 dark:text-gray-400 mb-3">
@@ -204,7 +204,7 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="搜联系人"
-            className="w-full pl-9 pr-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 text-sm text-[#1d1d1f] dark:text-gray-100 border border-transparent focus:border-violet-500 outline-none"
+            className="w-full pl-9 pr-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 text-sm text-[#1d1d1f] dark:text-gray-100 border border-transparent focus:border-[#07c160] outline-none"
           />
         </div>
         <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto mb-3">
@@ -216,7 +216,7 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
                 onClick={() => setPicked(c)}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs transition-colors ${
                   sel
-                    ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white font-bold'
+                    ? 'bg-[#07c160] text-white font-bold'
                     : 'bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'
                 }`}
               >
@@ -234,7 +234,7 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
             <button
               key={s}
               onClick={() => setScenario(s)}
-              className="text-[11px] px-2 py-1 rounded-lg bg-violet-50 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-500/25"
+              className="text-[11px] px-2 py-1 rounded-lg bg-[#07c160]/10 dark:bg-[#07c160]/15 text-[#07c160] hover:bg-[#07c160]/15 dark:hover:bg-[#07c160]/25"
             >
               {s}
             </button>
@@ -245,7 +245,7 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
           onChange={e => setScenario(e.target.value)}
           placeholder="或自己写一个场景：如果我们……"
           rows={2}
-          className="w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 text-sm text-[#1d1d1f] dark:text-gray-100 border border-transparent focus:border-violet-500 outline-none resize-none"
+          className="w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 text-sm text-[#1d1d1f] dark:text-gray-100 border border-transparent focus:border-[#07c160] outline-none resize-none"
         />
 
         <div className="flex items-center justify-between mt-3">
@@ -261,7 +261,7 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
             <button
               onClick={generate}
               disabled={!picked || !scenario.trim() || loading}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-violet-500 to-fuchsia-500 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#07c160] hover:bg-[#06a850] disabled:opacity-50"
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : history.length > 0 ? <RefreshCw size={14} /> : <Wand2 size={14} />}
               {loading ? '生成中…' : history.length > 0 ? '重新演一遍' : '开始演绎'}
@@ -287,19 +287,19 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
             </button>
           </div>
 
-          <div ref={cardRef} className="rounded-2xl bg-[#faf7ff] dark:bg-[#1c1c1e] overflow-hidden border border-violet-100 dark:border-white/10">
-            <div className="px-7 py-5 bg-gradient-to-br from-violet-100 to-fuchsia-100 dark:from-violet-500/10 dark:to-fuchsia-500/10">
-              <div className="text-xs uppercase tracking-widest text-violet-600 dark:text-violet-300 font-bold mb-1">
+          <div ref={cardRef} className="rounded-2xl bg-white dark:bg-[#1c1c1e] overflow-hidden border border-gray-100 dark:border-white/10">
+            <div className="px-7 py-5 bg-[#07c160]/8 dark:bg-[#07c160]/10 border-b border-[#07c160]/15">
+              <div className="text-xs uppercase tracking-widest text-[#07c160] font-bold mb-1">
                 Parallel Universe · 平行宇宙
               </div>
               <div className="text-xl font-black text-[#1d1d1f] dark:text-gray-100 leading-snug">
                 {scenario}
               </div>
-              <div className="text-[11px] text-violet-700/70 dark:text-violet-300/70 mt-1">
+              <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
                 与 {picked ? displayOf(picked) : ''} 的虚构对话 · 仅供娱乐
               </div>
             </div>
-            <div ref={scrollRef} className="px-5 py-5 space-y-3 max-h-[60vh] overflow-y-auto">
+            <div ref={scrollRef} className="px-5 py-5 space-y-3 max-h-[60vh] overflow-y-auto bg-gray-50/40 dark:bg-transparent">
               {history.map((m, i) => {
                 const mine = m.speaker === '我';
                 return (
@@ -308,15 +308,15 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
                       m.avatar ? (
                         <img src={avatarSrc(m.avatar) || ''} className="w-8 h-8 rounded-full object-cover bg-gray-200" alt="" />
                       ) : (
-                        <div className="w-8 h-8 rounded-full bg-violet-200 dark:bg-violet-500/30" />
+                        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-white/10" />
                       )
                     )}
-                    {mine && <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-500 flex items-center justify-center text-white text-xs font-bold">我</div>}
+                    {mine && <div className="w-8 h-8 rounded-full bg-[#07c160] flex items-center justify-center text-white text-xs font-bold">我</div>}
                     <div className={`max-w-[75%] ${mine ? 'text-right' : ''}`}>
-                      <div className={`text-[10px] mb-0.5 ${mine ? 'text-emerald-600' : 'text-violet-600 dark:text-violet-300'}`}>{m.displayName}</div>
+                      <div className={`text-[10px] mb-0.5 ${mine ? 'text-[#07c160]' : 'text-gray-500 dark:text-gray-400'}`}>{m.displayName}</div>
                       <div className={`inline-block px-3 py-2 rounded-2xl text-sm leading-relaxed ${
                         mine
-                          ? 'bg-emerald-500 text-white rounded-tr-sm'
+                          ? 'bg-[#07c160] text-white rounded-tr-sm'
                           : 'bg-white dark:bg-white/10 text-gray-800 dark:text-gray-100 rounded-tl-sm shadow-sm'
                       }`}>
                         {m.content}
