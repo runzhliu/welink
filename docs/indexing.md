@@ -54,7 +54,26 @@ POST /api/init
 
 ### 自动重新初始化
 
-后端重启后内存缓存清空，前端检测到 `is_initialized = false` 且 `hasStarted = true` 时，自动使用上次保存的时间范围重新调用 `/api/init`。
+后端重启后内存缓存清空。恢复"上次的时间范围"有两条路径，按以下优先级生效：
+
+1. **后端自动 init**（推荐路径）：用户调用 `/api/init` 或在 setup 页选好数据目录后，后端会把 `from / to` 同时写入 `preferences.json` 的 `default_init_from / default_init_to` 字段。下次进程启动时 `NewContactService` 读到非零值会自动开始索引，**无需前端介入**，也不依赖浏览器 localStorage。
+2. **前端兜底补救**：如果第 1 步没保存（例如用旧版本启动过、preferences.json 被删除），前端检测到 `is_initialized = false` 且 localStorage 里有 `welink_hasStarted = true` 时，会用 `welink_timeRange` 缓存的范围重新调一次 `/api/init`。
+
+> 路径 1 是 v0.x 之后的行为。早期版本只走路径 2，所以**清浏览器缓存 / 换浏览器 / 容器换主机访问**会导致重启后被引导到 WelcomePage 重选时间。如果遇到这种问题，确认下 `preferences.json`（Docker 下挂在 `welink-prefs` 卷里的 `/app/prefs/preferences.json`）的 `default_init_from / default_init_to` 是否非零，没有就重新选一次时间，往后就稳了。
+
+#### preferences.json 字段示例
+
+```json
+{
+  "data_dir": "/app/data",
+  "default_init_from": 0,
+  "default_init_to": 1735689600,
+  "...": "..."
+}
+```
+
+- `default_init_from = 0` 表示不限起点（取所有历史消息）
+- `default_init_to`  为目标时刻 Unix 秒；Demo 模式下是当前时间 + 10 年
 
 
 ## SQLite 索引优化
