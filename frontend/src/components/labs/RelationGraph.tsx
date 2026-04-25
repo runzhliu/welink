@@ -140,15 +140,9 @@ export const RelationGraph: React.FC = () => {
     return { nodes, edges };
   }, [data]);
 
-  const periodColor = (p: string) => {
-    switch (p) {
-      case 'morning': return '#f59e0b';
-      case 'day': return '#10b981';
-      case 'evening': return '#06b6d4';
-      case 'night': return '#8b5cf6';
-      default: return '#6366f1';
-    }
-  };
+  // 当前后端 peak_hour 都返 -1，period 着色没有信息量；统一用主题绿。
+  // 将来如果后端补上 peak hour 计算，可以恢复为按时段染色。
+  const NODE_COLOR = '#07c160';
 
   const exportPng = async () => {
     if (!data || !cardRef.current || exporting) return;
@@ -187,7 +181,7 @@ export const RelationGraph: React.FC = () => {
       <div className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-4 mb-4 flex items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Network size={16} className="text-indigo-500" />
+            <Network size={16} className="text-[#07c160]" />
             <div className="text-sm font-bold text-[#1d1d1f] dark:text-gray-100">关系星图 · 我的微信宇宙</div>
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -198,7 +192,7 @@ export const RelationGraph: React.FC = () => {
           <button
             onClick={fetchData}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-violet-500 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-[#07c160] hover:bg-[#06a850] disabled:opacity-50"
           >
             {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
             {loading ? '布局中…' : '重新布局'}
@@ -229,7 +223,7 @@ export const RelationGraph: React.FC = () => {
           <div ref={cardRef} className="rounded-2xl bg-[#0a0a14] overflow-hidden">
             <div className="px-6 pt-5 pb-2 flex items-baseline justify-between">
               <div>
-                <div className="text-xs uppercase tracking-widest text-indigo-300 font-bold">Relation Constellation</div>
+                <div className="text-xs uppercase tracking-widest text-[#07c160] font-bold">Relation Constellation</div>
                 <div className="text-xl font-black text-white">我的微信宇宙</div>
               </div>
               <div className="text-[11px] text-white/50">
@@ -246,8 +240,8 @@ export const RelationGraph: React.FC = () => {
                   <line
                     key={i}
                     x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                    stroke={isHi ? '#a78bfa' : '#4338ca'}
-                    strokeOpacity={isHi ? 0.7 : 0.18}
+                    stroke={NODE_COLOR}
+                    strokeOpacity={isHi ? 0.65 : 0.18}
                     strokeWidth={Math.min(0.4 + e.w * 0.4, 3)}
                   />
                 );
@@ -261,8 +255,8 @@ export const RelationGraph: React.FC = () => {
                       cx={n.x}
                       cy={n.y}
                       r={n.r}
-                      fill={periodColor(n.period)}
-                      fillOpacity={isHi ? 0.95 : 0.7}
+                      fill={NODE_COLOR}
+                      fillOpacity={isHi ? 1 : 0.78}
                       stroke={isHi ? '#fff' : 'rgba(255,255,255,0.2)'}
                       strokeWidth={isHi ? 2 : 1}
                     />
@@ -282,17 +276,15 @@ export const RelationGraph: React.FC = () => {
                 );
               })}
             </svg>
-            {/* 图例 */}
+            {/* 图例：去掉时段着色（当前 backend 不计算 peak hour），保留尺寸/连线说明 */}
             <div className="px-6 pb-4 flex flex-wrap gap-3 text-[10px] text-white/60">
-              <Legend color="#f59e0b" label="清晨型 (06-11)" />
-              <Legend color="#10b981" label="白天型 (11-17)" />
-              <Legend color="#06b6d4" label="傍晚型 (17-23)" />
-              <Legend color="#8b5cf6" label="深夜型 (23-06)" />
-              <span className="ml-auto opacity-60">气泡大小 = 消息量 · 连线 = 共同群</span>
+              <span>气泡大小 = 跟我的消息量</span>
+              <span>·</span>
+              <span>连线粗细 = 共同群数</span>
             </div>
           </div>
           {hovered && (
-            <div className="mt-3 rounded-xl border border-indigo-200 dark:border-indigo-500/30 bg-indigo-50 dark:bg-indigo-500/10 p-3 text-xs text-indigo-900 dark:text-indigo-200">
+            <div className="mt-3 rounded-xl border border-[#07c160]/30 bg-[#07c160]/8 dark:bg-[#07c160]/10 p-3 text-xs text-[#1d1d1f] dark:text-gray-200">
               {(() => {
                 const n = layout.nodes.find(x => x.id === hovered);
                 if (!n) return null;
@@ -309,12 +301,5 @@ export const RelationGraph: React.FC = () => {
     </div>
   );
 };
-
-const Legend: React.FC<{ color: string; label: string }> = ({ color, label }) => (
-  <span className="inline-flex items-center gap-1.5">
-    <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-    {label}
-  </span>
-);
 
 export default RelationGraph;

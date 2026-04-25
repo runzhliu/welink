@@ -128,7 +128,7 @@ export const ChatDNA: React.FC = () => {
       <div className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-4 mb-4 flex items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Sparkles size={16} className="text-fuchsia-500" />
+            <Sparkles size={16} className="text-[#07c160]" />
             <div className="text-sm font-bold text-[#1d1d1f] dark:text-gray-100">我的聊天 DNA</div>
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -139,7 +139,7 @@ export const ChatDNA: React.FC = () => {
           <button
             onClick={fetchData}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-fuchsia-500 to-pink-500 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-[#07c160] hover:bg-[#06a850] disabled:opacity-50"
           >
             {loading ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
             {loading ? '统计中…' : data ? '重新统计' : '生成'}
@@ -168,14 +168,14 @@ export const ChatDNA: React.FC = () => {
       {data && (
         <div ref={cardRef} className="rounded-2xl overflow-hidden bg-[#0b0b14] text-white">
           {/* Hero */}
-          <div className="px-7 py-8 bg-gradient-to-br from-fuchsia-600 via-purple-700 to-indigo-800">
-            <div className="text-xs uppercase tracking-[0.2em] text-fuchsia-200 font-bold mb-2">
+          <div className="px-7 py-8 bg-[#07c160]">
+            <div className="text-xs uppercase tracking-[0.2em] text-white/70 font-bold mb-2">
               CHAT DNA · 我的聊天 DNA
             </div>
             <div className="text-3xl font-black mb-3 leading-tight">
-              你和 {data.total_contacts_analyzed} 位好友<br/>聊出了 <span className="text-fuchsia-300">{fmtNum(data.total_messages)}</span> 条消息
+              你和 {data.total_contacts_analyzed} 位好友<br/>聊出了 <span className="text-white">{fmtNum(data.total_messages)}</span> 条消息
             </div>
-            <div className="text-xs text-fuchsia-100/80">
+            <div className="text-xs text-white/75">
               {data.first_date && <>从 {data.first_date} 起 · </>}活跃 {data.days_active} 天 · 你敲了 {fmtNum(data.my_chars)} 个字
             </div>
           </div>
@@ -191,11 +191,11 @@ export const ChatDNA: React.FC = () => {
           {/* Top 联系人 */}
           {data.top_contacts.length > 0 && (
             <div className="px-7 py-5 border-t border-white/5">
-              <SectionTitle icon={<Crown size={14} className="text-amber-400" />}>本年的 5 位主角</SectionTitle>
+              <SectionTitle icon={<Crown size={14} className="text-[#07c160]" />}>本年的 5 位主角</SectionTitle>
               <div className="space-y-2.5">
                 {data.top_contacts.map((c, i) => (
                   <div key={c.username} className="flex items-center gap-3">
-                    <div className="text-amber-400 font-black text-lg w-5 text-center">{i + 1}</div>
+                    <div className="text-[#07c160] font-black text-lg w-5 text-center">{i + 1}</div>
                     {(c.avatar) ? (
                       <img src={avatarSrc(c.avatar) || ''} className="w-9 h-9 rounded-full object-cover bg-white/10" alt="" />
                     ) : (
@@ -208,7 +208,7 @@ export const ChatDNA: React.FC = () => {
                     {/* bar */}
                     <div className="w-24 h-2 rounded-full bg-white/5 overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-amber-400 to-fuchsia-500"
+                        className="h-full bg-[#07c160]"
                         style={{ width: `${(c.messages / data.top_contacts[0].messages) * 100}%` }}
                       />
                     </div>
@@ -222,7 +222,7 @@ export const ChatDNA: React.FC = () => {
           <div className="px-7 py-5 border-t border-white/5 space-y-4">
             {data.quickest_replier && (
               <BadgeCard
-                icon={<Zap size={14} className="text-yellow-300" />}
+                icon={<Zap size={14} className="text-[#07c160]" />}
                 title={`最爱秒回的人 · ${data.quickest_replier.display_name}`}
                 desc={`你给 ta 的中位回复速度是 ${fmtSec(data.quickest_replier.median_sec)}（${data.quickest_replier.samples} 次）`}
                 avatar={data.quickest_replier.avatar}
@@ -230,7 +230,7 @@ export const ChatDNA: React.FC = () => {
             )}
             {data.late_night_buddy && (
               <BadgeCard
-                icon={<Moon size={14} className="text-indigo-300" />}
+                icon={<Moon size={14} className="text-[#07c160]" />}
                 title={`深夜搭子 · ${data.late_night_buddy.display_name}`}
                 desc={`和 ta 在 0-5 点之间聊了 ${data.late_night_buddy.count} 条`}
                 avatar={data.late_night_buddy.avatar}
@@ -238,7 +238,7 @@ export const ChatDNA: React.FC = () => {
             )}
             {data.longest_single_day && (
               <BadgeCard
-                icon={<MessageSquare size={14} className="text-emerald-300" />}
+                icon={<MessageSquare size={14} className="text-[#07c160]" />}
                 title={`最长的一天 · ${data.longest_single_day.date}`}
                 desc={`和 ${data.longest_single_day.display_name} 一天聊了 ${data.longest_single_day.message_count} 条`}
               />
@@ -248,7 +248,7 @@ export const ChatDNA: React.FC = () => {
           {/* Top emoji + opener */}
           <div className="grid grid-cols-2 gap-px bg-white/5">
             <div className="px-7 py-5">
-              <SectionTitle icon={<Smile size={14} className="text-pink-300" />}>最爱用的 emoji</SectionTitle>
+              <SectionTitle icon={<Smile size={14} className="text-[#07c160]" />}>最爱用的 emoji</SectionTitle>
               {data.top_emojis.length === 0 ? (
                 <div className="text-xs text-white/40">没找到 emoji 痕迹</div>
               ) : (
@@ -263,7 +263,7 @@ export const ChatDNA: React.FC = () => {
               )}
             </div>
             <div className="px-7 py-5">
-              <SectionTitle icon={<Quote size={14} className="text-cyan-300" />}>常用开场白</SectionTitle>
+              <SectionTitle icon={<Quote size={14} className="text-[#07c160]" />}>常用开场白</SectionTitle>
               {data.top_openers.length === 0 ? (
                 <div className="text-xs text-white/40">还没有典型开场白</div>
               ) : (
@@ -281,8 +281,8 @@ export const ChatDNA: React.FC = () => {
 
           {/* 长句 */}
           {data.longest_message && (
-            <div className="px-7 py-5 border-t border-white/5 bg-gradient-to-b from-white/0 to-white/5">
-              <SectionTitle icon={<Quote size={14} className="text-cyan-300" />}>你说过最长的一句话</SectionTitle>
+            <div className="px-7 py-5 border-t border-white/5 bg-white/[0.02]">
+              <SectionTitle icon={<Quote size={14} className="text-[#07c160]" />}>你说过最长的一句话</SectionTitle>
               <div className="text-sm text-white/90 italic leading-relaxed">"{data.longest_message}"</div>
               <div className="text-[11px] text-white/40 mt-2">{data.longest_message_len} 字</div>
             </div>
