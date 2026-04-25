@@ -2961,6 +2961,33 @@ func (s *ContactService) loadContactAvatarMap() map[string]string {
 	return m
 }
 
+// GetAllRoomMemberships 一次扫表拿到全部群成员关系：group_username → 该群所有成员 wxid。
+// 给"关系星图"等需要全量两两关系的场景用，避免 N×M 反复扫消息库。
+// 注意：返回的是 chatroom_member 表里登记的成员，包含从未发言的人；
+// 自己（"我"）不会出现在 contact 表里，因此天然被过滤掉。
+func (s *ContactService) GetAllRoomMemberships() map[string][]string {
+	out := make(map[string][]string)
+	rows, err := s.dbMgr.ContactDB.Query(
+		`SELECT cr.username, c.username
+		 FROM chatroom_member cm
+		 JOIN chat_room cr ON cr.id = cm.room_id
+		 JOIN contact c ON c.id = cm.member_id
+		 WHERE cr.username LIKE '%@chatroom'`)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var groupU, memberU string
+		rows.Scan(&groupU, &memberU)
+		if groupU == "" || memberU == "" {
+			continue
+		}
+		out[groupU] = append(out[groupU], memberU)
+	}
+	return out
+}
+
 // loadGroupAllMembers 从 chatroom_member 表获取群聊的完整成员列表（wxid → 显示名）
 func (s *ContactService) loadGroupAllMembers(groupUsername string, nameMap map[string]string) map[string]string {
 	members := make(map[string]string)

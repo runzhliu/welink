@@ -1,20 +1,22 @@
 /**
  * 创意实验室 —— 尝试性功能的集合入口
- *
- * 当前只挂 AI 虚拟群聊一个；以后可以往里加更多"好玩但还没到 tab 级"
- * 的创意功能（AI 话术教练 / 声音克隆试玩 / 情绪年度曲线 / 等）。
  */
 
 import React, { useState } from 'react';
-import { FlaskConical, Users2 } from 'lucide-react';
+import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { VirtualGroupChat } from './VirtualGroupChat';
+import { Highlights } from './Highlights';
+import { ChatDNA } from './ChatDNA';
+import { SoulQuiz } from './SoulQuiz';
+import { RelationGraph } from './RelationGraph';
+import { ParallelChat } from './ParallelChat';
 
 interface Props {
   contacts: ContactStats[];
 }
 
-type LabKey = 'virtual-group';
+type LabKey = 'highlights' | 'dna' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
 
 interface LabDef {
   key: LabKey;
@@ -26,16 +28,49 @@ interface LabDef {
 
 const LABS: LabDef[] = [
   {
+    key: 'highlights',
+    label: '高光瞬间',
+    icon: <Sparkles size={14} />,
+    desc: '挑一位联系人，AI 从全部聊天里挑出最有故事感的几段',
+  },
+  {
+    key: 'dna',
+    label: '聊天 DNA',
+    icon: <Dna size={14} />,
+    badge: 'NEW',
+    desc: '把你的微信聊天浓缩成一张 Wrapped 风格的年度卡片',
+  },
+  {
+    key: 'soul-quiz',
+    label: '灵魂提问机',
+    icon: <HelpCircle size={14} />,
+    badge: 'NEW',
+    desc: 'AI 出 5 道默契测试题，发给好友看 ta 还记得多少',
+  },
+  {
+    key: 'relation-graph',
+    label: '关系星图',
+    icon: <Network size={14} />,
+    badge: 'NEW',
+    desc: '你的微信宇宙：联系人按共同群聚拢成星图',
+  },
+  {
+    key: 'parallel',
+    label: '平行宇宙',
+    icon: <Atom size={14} />,
+    badge: 'NEW',
+    desc: '"如果……" 的虚构对话，AI 用 ta 的风格演一遍',
+  },
+  {
     key: 'virtual-group',
     label: 'AI 虚拟群聊',
     icon: <Users2 size={14} />,
-    badge: 'NEW',
     desc: '把任意联系人拉到一个虚拟群，AI 扮演每个人互相聊天',
   },
 ];
 
 export const LabsPage: React.FC<Props> = ({ contacts }) => {
-  const [active, setActive] = useState<LabKey>('virtual-group');
+  const [active, setActive] = useState<LabKey>('highlights');
 
   return (
     <div className="min-h-full">
@@ -49,7 +84,7 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
         </div>
       </div>
 
-      {/* Lab 选择条（单选，多了再改成 grid） */}
+      {/* Lab 选择条 */}
       <div className="flex flex-wrap gap-2 mb-4">
         {LABS.map(lab => (
           <button
@@ -74,6 +109,11 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
         ))}
       </div>
 
+      {active === 'highlights' && <Highlights contacts={contacts} />}
+      {active === 'dna' && <ChatDNA />}
+      {active === 'soul-quiz' && <SoulQuiz contacts={contacts} />}
+      {active === 'relation-graph' && <RelationGraph />}
+      {active === 'parallel' && <ParallelChat contacts={contacts} />}
       {active === 'virtual-group' && <VirtualGroupChat contacts={contacts} />}
     </div>
   );

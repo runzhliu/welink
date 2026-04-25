@@ -115,7 +115,7 @@ backend:
 | 容器内路径 | Compose 映射 | 作用 | 持久化建议 |
 |---|---|---|---|
 | `/app/data` | `./decrypted:/app/data` | 微信解密数据（只读常规） | 放在仓库里即可，也可以改成 NAS / 其他路径 |
-| `/app/prefs` | `welink-prefs:/app/prefs` | `preferences.json` 持久化配置 | 用 named volume 或换成绑定挂载 |
+| `/app/prefs` | `welink-prefs:/app/prefs` | `preferences.json` 持久化配置（含 LLM key / 屏蔽名单 / 索引时间范围 `default_init_from/to`，丢失会导致容器重启后回到 WelcomePage） | 用 named volume 或换成绑定挂载 |
 
 ### decrypted 放其他路径
 

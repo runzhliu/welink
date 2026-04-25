@@ -706,8 +706,19 @@ func serverMain() {
 		if err := saveAppConfig(&body); err != nil {
 			log.Printf("[APP] Failed to save config: %v", err)
 		}
+		// Docker / 非 App 模式下 saveAppConfig 是 no-op，需要单独把时间范围写到 preferences.json，
+		// 否则容器重启后 prefs.DefaultInitFrom/To 都是 0，自动 init 不会触发，用户还要再选一次时间。
+		existing := loadPreferences()
+		existing.DefaultInitFrom = merged.DefaultInitFrom
+		existing.DefaultInitTo = merged.DefaultInitTo
+		existing.DataDir = body.DataDir
+		if err := savePreferences(existing); err != nil {
+			log.Printf("[APP] persist init range to preferences failed: %v", err)
+		}
 		setupLogFile(body.LogDir)
 		prefs.DataDir = body.DataDir
+		prefs.DefaultInitFrom = merged.DefaultInitFrom
+		prefs.DefaultInitTo = merged.DefaultInitTo
 		return nil
 	}
 
@@ -2874,6 +2885,18 @@ func serverMain() {
 		// AI 开场白草稿
 		registerIcebreakerRoutes(prot, getSvc)
 
+		// 创意实验室 · 高光瞬间（你和 TA 的故事卡片）
+		registerHighlightsRoutes(prot, getSvc)
+
+		// 创意实验室 · 我的聊天 DNA（年度个人卡片）
+		registerChatDNARoutes(prot, getSvc)
+
+		// 创意实验室 · 灵魂提问机（默契测试题）
+		registerSoulQuizRoutes(prot, getSvc)
+
+		// 创意实验室 · 关系星图（联系人力导向图）
+		registerRelationGraphRoutes(prot, getSvc)
+
 		// 群聊 AI 年报
 		registerGroupYearReviewRoutes(prot, getSvc)
 
@@ -3466,6 +3489,14 @@ func serverMain() {
 				c.JSON(400, gin.H{"error": "invalid body"})
 				return
 			}
+			// 把时间范围落盘到 preferences，下次启动时自动按这个范围跑全量索引，
+			// 否则用户每次重启都要重新选时间。
+			existing := loadPreferences()
+			existing.DefaultInitFrom = body.From
+			existing.DefaultInitTo = body.To
+			if err := savePreferences(existing); err != nil {
+				log.Printf("[INIT] persist init range failed: %v", err)
+			}
 			getSvc().Reinitialize(body.From, body.To)
 			c.JSON(200, gin.H{"status": "indexing"})
 		})
@@ -3899,6 +3930,9 @@ func serverMain() {
 	// 虚拟群聊（任意联系人拉进一个虚拟群，AI 扮演每个人）
 	registerVirtualGroupRoutes(api, getSvc)
 	registerVirtualGroupStoreRoutes(api)
+
+	// 创意实验室 · 平行宇宙对话（流式 SSE）
+	registerParallelChatRoutes(api, getSvc)
 
 	// /api/status：未配置时也返回 200，前端 useBackendStatus 靠它判断后端是否可达
 	api.GET("/status", func(c *gin.Context) {
