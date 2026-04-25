@@ -31,13 +31,8 @@ interface QuizResp {
 
 const displayOf = (c: ContactStats) => c.remark || c.nickname || c.username;
 
-const CAT_COLOR: Record<string, string> = {
-  '回忆': 'bg-rose-500/15 text-rose-600 dark:text-rose-300',
-  '口头禅': 'bg-amber-500/15 text-amber-600 dark:text-amber-300',
-  '时间': 'bg-sky-500/15 text-sky-600 dark:text-sky-300',
-  '习惯': 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300',
-  '梗': 'bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-300',
-};
+// 所有 category 共用主题绿；不同类别靠文字本身区分（"回忆"/"梗"等已经够清楚）
+const CAT_COLOR = 'bg-[#07c160]/12 text-[#07c160] dark:text-[#07c160]';
 
 const LETTER = ['A', 'B', 'C', 'D'];
 
@@ -95,13 +90,13 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
       const node = cardRef.current.cloneNode(true) as HTMLElement;
       const wrapper = document.createElement('div');
       wrapper.style.cssText = `
-        width: 720px; background: #fffbf5; padding: 0;
+        width: 720px; background: #ffffff; padding: 0;
         font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
         position: fixed; left: -10000px; top: 0; z-index: -1;
       `;
       wrapper.appendChild(node);
       const footer = document.createElement('div');
-      footer.style.cssText = 'padding:14px 28px; background:#f5f0e6; color:#999; font-size:11px; text-align:center;';
+      footer.style.cssText = 'padding:14px 28px; background:#f8f9fb; color:#888; font-size:11px; text-align:center; border-top:1px solid #eee;';
       footer.innerHTML = `WeLink · 灵魂提问机 · ${new Date().toLocaleDateString('zh-CN')}`;
       wrapper.appendChild(footer);
       document.body.appendChild(wrapper);
@@ -125,7 +120,7 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
       {/* 选联系人 */}
       <div className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-4 mb-4">
         <div className="flex items-center gap-2 mb-3">
-          <HelpCircle size={16} className="text-rose-500" />
+          <HelpCircle size={16} className="text-[#07c160]" />
           <div className="text-sm font-bold text-[#1d1d1f] dark:text-gray-100">默契测试 · 5 道选择题</div>
         </div>
         <div className="text-xs text-gray-500 dark:text-gray-400 mb-3">
@@ -138,7 +133,7 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="搜联系人（备注/昵称）"
-            className="w-full pl-9 pr-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 text-sm text-[#1d1d1f] dark:text-gray-100 border border-transparent focus:border-rose-500 outline-none"
+            className="w-full pl-9 pr-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 text-sm text-[#1d1d1f] dark:text-gray-100 border border-transparent focus:border-[#07c160] outline-none"
           />
         </div>
         <div className="flex flex-wrap gap-1.5 max-h-44 overflow-y-auto mb-3">
@@ -150,7 +145,7 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
                 onClick={() => setPicked(c)}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs transition-colors ${
                   sel
-                    ? 'bg-gradient-to-r from-rose-500 to-pink-500 text-white font-bold'
+                    ? 'bg-[#07c160] text-white font-bold'
                     : 'bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'
                 }`}
               >
@@ -173,7 +168,7 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
           <button
             onClick={generate}
             disabled={!picked || loading}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-rose-500 to-pink-500 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#07c160] hover:bg-[#06a850] disabled:opacity-50"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : data ? <RefreshCw size={14} /> : <Wand2 size={14} />}
             {loading ? '出题中…' : data ? '重新出题' : '生成 5 题'}
@@ -190,13 +185,13 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
           <div className="flex items-center justify-between mb-2">
             <div className="text-xs text-gray-500 dark:text-gray-400">
               已选 {Object.keys(picks).length} / {data.questions.length}
-              {reveal && <span className="ml-2">· <strong className="text-rose-500">得分 {score} / {data.questions.length}</strong></span>}
+              {reveal && <span className="ml-2">· <strong className="text-[#07c160]">得分 {score} / {data.questions.length}</strong></span>}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setReveal(r => !r)}
                 disabled={Object.keys(picks).length === 0}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500 text-white disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#07c160] hover:bg-[#06a850] text-white disabled:opacity-50"
               >
                 <Eye size={12} />
                 {reveal ? '收起答案' : '查看答案'}
@@ -212,16 +207,16 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
             </div>
           </div>
 
-          <div ref={cardRef} className="rounded-2xl bg-[#fffbf5] dark:bg-[#1c1c1e] overflow-hidden border border-amber-100 dark:border-white/10">
-            <div className="px-7 py-5 bg-gradient-to-br from-rose-100 to-amber-100 dark:from-rose-500/10 dark:to-amber-500/10">
-              <div className="text-xs uppercase tracking-widest text-rose-600 dark:text-rose-300 font-bold mb-1">
+          <div ref={cardRef} className="rounded-2xl bg-white dark:bg-[#1c1c1e] overflow-hidden border border-gray-100 dark:border-white/10">
+            <div className="px-7 py-5 bg-[#07c160]/8 dark:bg-[#07c160]/10 border-b border-[#07c160]/15">
+              <div className="text-xs uppercase tracking-widest text-[#07c160] font-bold mb-1">
                 Soul Quiz · 默契测试
               </div>
               <div className="text-2xl font-black text-[#1d1d1f] dark:text-gray-100">
                 只有我和 {data.display_name} 才知道
               </div>
               {reveal && (
-                <div className="mt-2 inline-flex items-center gap-1.5 bg-white dark:bg-white/10 px-3 py-1 rounded-full text-xs font-bold text-rose-600 dark:text-rose-300">
+                <div className="mt-2 inline-flex items-center gap-1.5 bg-white dark:bg-white/10 px-3 py-1 rounded-full text-xs font-bold text-[#07c160]">
                   <Trophy size={12} />
                   得分 {score} / {data.questions.length}
                 </div>
@@ -230,26 +225,27 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
 
             <div className="px-7 py-5 space-y-5">
               {data.questions.map((q, qi) => {
-                const cat = CAT_COLOR[q.category] || 'bg-gray-200 text-gray-600';
                 const my = picks[qi];
                 return (
                   <div key={qi}>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs font-black text-amber-500">Q{qi + 1}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cat}`}>{q.category}</span>
+                      <span className="text-xs font-black text-[#07c160]">Q{qi + 1}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${CAT_COLOR}`}>{q.category}</span>
                     </div>
                     <div className="text-sm font-bold text-[#1d1d1f] dark:text-gray-100 mb-2.5">{q.question}</div>
                     <div className="grid grid-cols-1 gap-1.5">
                       {q.options.map((opt, oi) => {
                         const isMy = my === oi;
                         const isCorrect = q.answer_index === oi;
+                        // 答题中：被选选项用主题绿勾出
+                        // 揭晓后：正确=绿，错选=红（语义性 traffic-light，无可替代）
                         let cls = 'border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-700 dark:text-gray-200';
                         if (reveal) {
-                          if (isCorrect) cls = 'border-emerald-400 bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-200';
-                          else if (isMy) cls = 'border-rose-400 bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-200';
+                          if (isCorrect) cls = 'border-[#07c160] bg-[#07c160]/8 dark:bg-[#07c160]/15 text-[#07c160]';
+                          else if (isMy) cls = 'border-red-400 bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-200';
                           else cls = 'border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-400';
                         } else if (isMy) {
-                          cls = 'border-amber-400 bg-amber-50 dark:bg-amber-500/15 text-amber-800 dark:text-amber-200 font-semibold';
+                          cls = 'border-[#07c160] bg-[#07c160]/8 dark:bg-[#07c160]/15 text-[#07c160] font-semibold';
                         }
                         return (
                           <button
