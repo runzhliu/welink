@@ -2563,6 +2563,36 @@ func (s *ContactService) GetGlobal() GlobalStats {
 	s.cacheMu.RLock(); defer s.cacheMu.RUnlock(); return s.global
 }
 
+// Location 返回当前生效的时区。给 service 外部按"Date+Time 字符串重建 unix 秒"
+// 这种场景用，确保和 ChatMessage 里 Date/Time 的格式化时区一致。
+func (s *ContactService) Location() *time.Location {
+	if s.tz != nil {
+		return s.tz
+	}
+	return time.Local
+}
+
+// Filter 返回当前生效的时间范围 (Unix 秒，0=不限)。外部缓存可以拿这两个值当 cache key，
+// 在 Reinitialize 切换区间后避免命中旧缓存。
+func (s *ContactService) Filter() (int64, int64) {
+	s.cacheMu.RLock()
+	defer s.cacheMu.RUnlock()
+	return s.filterFrom, s.filterTo
+}
+
+// HasContact 判断 username 是否在当前 cached stats 里。
+// 现在是 O(N)；如果将来 cache 加上 username->idx map 可以改成 O(1)。
+func (s *ContactService) HasContact(username string) bool {
+	s.cacheMu.RLock()
+	defer s.cacheMu.RUnlock()
+	for _, st := range s.cache {
+		if st.Username == username {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *ContactService) GetStatus() map[string]interface{} {
 	s.cacheMu.RLock()
 	defer s.cacheMu.RUnlock()

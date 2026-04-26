@@ -91,15 +91,20 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
     if (!data || !cardRef.current || exporting) return;
     setExporting(true);
     setExported(false);
+    // dark 模式下 tailwind `dark:bg-...` 仍生效；导出前临时摘掉 html.dark，避免出图变暗。
+    const root = document.documentElement;
+    const hadDark = root.classList.contains('dark');
+    if (hadDark) root.classList.remove('dark');
+    // wrapper 在 try 外声明，toPng 抛错时 finally 也能把它从 DOM 拆掉，避免悬挂节点累积。
+    let wrapper: HTMLElement | null = null;
     try {
       const node = cardRef.current.cloneNode(true) as HTMLElement;
-      const wrapper = document.createElement('div');
+      wrapper = document.createElement('div');
       wrapper.style.cssText = `
         width: 720px; background: #ffffff; padding: 0;
         font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
         position: fixed; left: -10000px; top: 0; z-index: -1;
       `;
-      // 强制白底，避免 dark 模式被截图
       node.style.background = '#ffffff';
       node.style.color = '#1d1d1f';
       wrapper.appendChild(node);
@@ -118,7 +123,6 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
       document.body.appendChild(wrapper);
 
       const dataUrl = await toPng(wrapper, { pixelRatio: 2, cacheBust: true });
-      document.body.removeChild(wrapper);
 
       const a = document.createElement('a');
       a.href = dataUrl;
@@ -129,6 +133,8 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
     } catch (e) {
       alert('导出失败：' + ((e as Error).message || '未知错误'));
     } finally {
+      if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+      if (hadDark) root.classList.add('dark');
       setExporting(false);
     }
   };
