@@ -15,6 +15,7 @@
 - [AI 分析](#ai-分析)
 - [AI 分身](#ai-分身)
 - [AI 群聊模拟](#ai-群聊模拟)
+- [创意实验室（Labs）](#创意实验室labs)
 - [Skills（技能包）](#skills技能包)
 - [RAG 检索](#rag-检索)
 - [向量检索](#向量检索)
@@ -400,6 +401,113 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 ```
 
 **SSE 响应**：每条 `data:` 为 `{ speaker, content }`，最后 `{ done: true }`。
+
+
+## 创意实验室（Labs）
+
+侧边栏「实验室」Tab 下的 5 个分享类小工具。详见 [创意实验室](./labs)。
+
+### `GET /api/me/dna`
+
+聊天 DNA。Wrapped 风格的年度个人卡：消息总数、最常聊的人 Top 5、活跃时段、emoji 偏好、最长一句话、最早开始聊的人、回复时延中位数等。
+
+**纯统计，无 LLM**。响应字段见 `backend/chat_dna.go` 中的 `DNAResponse`。
+
+进程内缓存 10 分钟。`?refresh=1` 强制重算。`Reinitialize`（切换索引时间范围）后旧缓存自动失效。
+
+> 同时支持 `POST /api/me/dna`，参数与行为完全一致——POST 仅作语义对称，无 body。
+
+### `POST /api/contacts/highlights`
+
+高光瞬间。先按规则（最长聊天日 / 深夜长谈 / 认识当天 / 最近）选出候选片段，再让 LLM 给每段起标题和摘要。
+
+**请求体**
+
+```json
+{
+  "username": "wxid_xxx",
+  "profile_id": "uuid"
+}
+```
+
+**响应**
+
+```json
+{
+  "display_name": "TA",
+  "total_messages": 12345,
+  "days_known": 980,
+  "first_date": "2022-04-01",
+  "last_date": "2026-04-25",
+  "highlights": [
+    {
+      "category": "最长聊天日",
+      "title": "10 字标题",
+      "summary": "一两句话总结，30-60 字",
+      "date": "2024-03-15",
+      "excerpt": [{ "speaker": "我|TA", "time": "23:14", "content": "..." }]
+    }
+  ]
+}
+```
+
+### `POST /api/contacts/soul-quiz`
+
+灵魂提问机。AI 基于你和该联系人的真实聊天，出 5 道默契测试选择题。
+
+**请求体**
+
+```json
+{
+  "username": "wxid_xxx",
+  "profile_id": "uuid"
+}
+```
+
+**响应**：`{ display_name, questions: [{ question, options: [a,b,c,d], answer_index, why?, category }, ...] }`。题数由后端控制（默认 5 题）。`category` ∈ "回忆" / "口头禅" / "时间" / "习惯" / "梗"。
+
+### `POST /api/ai/parallel-chat`
+
+平行宇宙对话。给定一个联系人 + "如果……" 场景，AI 用 TA 的画像引擎流式生成虚构对话。
+
+**请求体**
+
+```json
+{
+  "username": "wxid_xxx",
+  "scenario": "如果我们五年前就认识",
+  "turns": 8,
+  "sample_count": 30,
+  "profile_id": "uuid"
+}
+```
+
+`turns` 1–20，默认 8；`sample_count` 1–200，默认 30。`username` 必须在当前索引的联系人中（不存在直接 404，避免前后端 displayName 对不上）。
+
+**SSE 响应**：每条 `data:` 为：
+
+- `{ meta: true, speaker, display_name }`：开始一句新话
+- `{ delta: "..." }`：当前话的增量内容
+- `{ turn_end: true }` / `{ done: true }`：结束当前话或整段
+
+### `GET /api/me/relation-graph`
+
+关系星图。返回所有联系人按"共同群聊"聚拢的力导向图节点 + 连边。
+
+**响应**：
+
+```json
+{
+  "nodes": [
+    { "id": "wxid_xxx", "display_name": "TA", "avatar": "...", "messages": 1234,
+      "peak_hour": 22, "period": "night", "group_count": 3 }
+  ],
+  "edges": [{ "source": "wxid_a", "target": "wxid_b", "weight": 2 }],
+  "total_contacts": 80
+}
+```
+
+`weight` 表示两个联系人共同所在的群数。前端自跑迷你 force layout 渲染，无 d3-force 依赖。
 
 
 ## Skills（技能包）
