@@ -109,6 +109,7 @@ export default defineConfig({
         items: [
           { text: 'AI 分身（核心功能）', link: '/ai-clone' },
           { text: 'AI 群聊模拟', link: '/ai-group-sim' },
+          { text: '创意实验室（5 个新 Lab）', link: '/labs' },
           { text: '跨联系人 AI 问答', link: '/cross-contact-qa' },
           { text: 'AI 分析功能', link: '/ai-analysis' },
           { text: 'AI 播客', link: '/podcast' },
