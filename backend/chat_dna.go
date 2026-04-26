@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -23,6 +24,18 @@ const (
 	dnaMaxContacts        = 60     // 最多取前 60 个最常聊的私聊
 	dnaMaxMsgPerContact   = 2000   // 每个联系人最多扫 2000 条
 	dnaTopContactsForCard = 5      // 卡片上展示几个 top 联系人
+	dnaCacheTTL           = 10 * time.Minute
+)
+
+// 简单内存缓存：DNA 是全量统计，单次扫描很贵且数据本身变化频率低，
+// 给前端切 tab/重渲染兜个底。?refresh=1 强制重算。
+// cache key 带上 (from,to)：Reinitialize 后区间变了，旧缓存自动失效。
+var (
+	dnaCacheMu   sync.Mutex
+	dnaCacheVal  *DNAResponse
+	dnaCacheAt   time.Time
+	dnaCacheFrom int64
+	dnaCacheTo   int64
 )
 
 type DNATopContact struct {
@@ -100,6 +113,23 @@ func chatDNAHandler(getSvc func() *service.ContactService) gin.HandlerFunc {
 			return
 		}
 
+		from, to := svc.Filter()
+		refresh := c.Query("refresh") == "1"
+		dnaCacheMu.Lock()
+		if !refresh && dnaCacheVal != nil &&
+			dnaCacheFrom == from && dnaCacheTo == to &&
+			time.Since(dnaCacheAt) < dnaCacheTTL {
+			cached := *dnaCacheVal
+			dnaCacheMu.Unlock()
+			c.JSON(http.StatusOK, cached)
+			return
+		}
+		dnaCacheMu.Unlock()
+
+		// 用 service 的 tz：ChatMessage.Date/Time 就是用它格式化的，反解必须一致，
+		// 否则 OS=UTC + 用户=Asia/Shanghai 时反解出来差 8 小时，"最早消息日期"会错位。
+		loc := svc.Location()
+
 		stats := svc.GetCachedStats()
 		// 只看私聊、有消息
 		type sc struct {
@@ -161,7 +191,7 @@ func chatDNAHandler(getSvc func() *service.ContactService) gin.HandlerFunc {
 			if len(msgs) > dnaMaxMsgPerContact {
 				msgs = msgs[len(msgs)-dnaMaxMsgPerContact:]
 			}
-			myReplyDelays := collectMyReplyDelays(msgs)
+			myReplyDelays := collectMyReplyDelays(msgs, loc)
 			if len(myReplyDelays) >= 20 {
 				myReplyMedians = append(myReplyMedians, replyData{
 					username:    p.username,
@@ -195,7 +225,7 @@ func chatDNAHandler(getSvc func() *service.ContactService) gin.HandlerFunc {
 					}
 				}
 
-				if t := tsFromDateTime(m.Date, m.Time); t > 0 && (firstTs == 0 || t < firstTs) {
+				if t := tsFromDateTime(m.Date, m.Time, loc); t > 0 && (firstTs == 0 || t < firstTs) {
 					firstTs = t
 				}
 
@@ -341,10 +371,10 @@ func chatDNAHandler(getSvc func() *service.ContactService) gin.HandlerFunc {
 
 		firstDate := ""
 		if firstTs > 0 {
-			firstDate = time.Unix(firstTs, 0).Format("2006-01-02")
+			firstDate = time.Unix(firstTs, 0).In(loc).Format("2006-01-02")
 		}
 
-		c.JSON(http.StatusOK, DNAResponse{
+		resp := DNAResponse{
 			TotalContactsAnalyzed: len(picks),
 			TotalMessages:         totalMsgs,
 			MyMessages:            myMsgs,
@@ -363,7 +393,16 @@ func chatDNAHandler(getSvc func() *service.ContactService) gin.HandlerFunc {
 			LongestSingleDay:      longestDay,
 			LongestMessage:        longestMsgText,
 			LongestMessageLen:     longestMsgLen,
-		})
+		}
+
+		dnaCacheMu.Lock()
+		dnaCacheVal = &resp
+		dnaCacheAt = time.Now()
+		dnaCacheFrom = from
+		dnaCacheTo = to
+		dnaCacheMu.Unlock()
+
+		c.JSON(http.StatusOK, resp)
 	}
 }
 
@@ -374,14 +413,14 @@ type replyData struct {
 }
 
 // collectMyReplyDelays 找连续序列里"对方最后一条 → 我下一条"的间隔（秒），过滤超过 1 小时的（视为新一段对话）
-func collectMyReplyDelays(msgs []service.ChatMessage) []float64 {
+func collectMyReplyDelays(msgs []service.ChatMessage, loc *time.Location) []float64 {
 	delays := make([]float64, 0, 64)
 	var lastTheirTs int64
 	for _, m := range msgs {
 		if m.Type != 1 {
 			continue
 		}
-		ts := tsFromDateTime(m.Date, m.Time)
+		ts := tsFromDateTime(m.Date, m.Time, loc)
 		if ts <= 0 {
 			continue
 		}
@@ -432,12 +471,15 @@ func parseHour(t string) int {
 	return h
 }
 
-// tsFromDateTime 把 "2024-03-15" + "14:23" 转成本地 unix 秒；不准也无所谓，只用于排序与差值
-func tsFromDateTime(date, t string) int64 {
+// tsFromDateTime 把 "2024-03-15" + "14:23" 转成 unix 秒。loc 必须和 ChatMessage.Date/Time
+// 格式化时用的时区一致（来自 svc.Location()），否则反解差几个小时。
+func tsFromDateTime(date, t string, loc *time.Location) int64 {
 	if date == "" || len(t) < 4 {
 		return 0
 	}
-	loc, _ := time.LoadLocation("Local")
+	if loc == nil {
+		loc = time.Local
+	}
 	parsed, err := time.ParseInLocation("2006-01-02 15:04", date+" "+t, loc)
 	if err != nil {
 		return 0

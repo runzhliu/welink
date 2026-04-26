@@ -48,6 +48,15 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
   const abortRef = useRef<AbortController | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // historyRef 跟随 history，stream 里 push fresh 时直接读 historyRef.current.length 取索引，
+  // 这样 setHistory 的 reducer 保持纯函数（不在回调里写外部变量）。
+  const historyRef = useRef<TurnMsg[]>([]);
+  // setHistory 的所有调用都改走它：同步推进 historyRef，避免 commit 时机让 ref 落后于真实长度。
+  const updateHistory = (next: TurnMsg[] | ((h: TurnMsg[]) => TurnMsg[])) => {
+    const computed = typeof next === 'function' ? (next as (h: TurnMsg[]) => TurnMsg[])(historyRef.current) : next;
+    historyRef.current = computed;
+    setHistory(computed);
+  };
 
   const filtered = useMemo(() => {
     const base = contacts.filter(c => !c.username.endsWith('@chatroom') && (c.total_messages || 0) >= 30);
@@ -69,7 +78,7 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
     if (!picked || !scenario.trim() || loading) return;
     setLoading(true);
     setErr('');
-    setHistory([]);
+    updateHistory([]);
     const abort = new AbortController();
     abortRef.current = abort;
     try {
@@ -95,12 +104,14 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
       const reader = resp.body!.getReader();
       const decoder = new TextDecoder();
       let buf = '';
-      let cur: TurnMsg | null = null;
+      // 用 index 寻址当前条，避免"先 push fresh、再 setHistory(h.map(x => x === fresh ? copy : x))
+      // 把数组里的 fresh 替换成新拷贝后，cur 还指向已不在数组里的 fresh、后续 delta 全丢"的 bug。
+      let curIdx = -1;
       const finalizeCur = () => {
-        if (!cur) return;
-        const target = cur;
-        setHistory(h => h.map(x => (x === target ? { ...x, streaming: false } : x)));
-        cur = null;
+        if (curIdx < 0) return;
+        const i = curIdx;
+        updateHistory(h => h.map((x, idx) => (idx === i ? { ...x, streaming: false } : x)));
+        curIdx = -1;
       };
       while (true) {
         const { done, value } = await reader.read();
@@ -119,22 +130,22 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
             if (chunk.meta && chunk.speaker) {
               finalizeCur();
               const isMine = chunk.speaker === '我';
+              const speaker = chunk.speaker;
               const fresh: TurnMsg = {
-                speaker: chunk.speaker,
+                speaker,
                 displayName: chunk.display_name || (isMine ? '我' : displayOf(picked)),
                 content: '',
                 avatar: isMine ? undefined : (picked.big_head_url || picked.small_head_url),
                 streaming: true,
               };
-              cur = fresh;
-              setHistory(h => [...h, fresh]);
+              curIdx = historyRef.current.length;
+              updateHistory(h => [...h, fresh]);
               continue;
             }
-            if (chunk.delta && cur) {
-              const target = cur;
-              target.content += chunk.delta;
-              const snap = target.content;
-              setHistory(h => h.map(x => (x === target ? { ...x, content: snap } : x)));
+            if (chunk.delta && curIdx >= 0) {
+              const i = curIdx;
+              const delta = chunk.delta;
+              updateHistory(h => h.map((x, idx) => (idx === i ? { ...x, content: x.content + delta } : x)));
             }
             if (chunk.turn_end || chunk.done) finalizeCur();
           } catch (e) {
@@ -157,9 +168,16 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
   const exportPng = async () => {
     if (history.length === 0 || !cardRef.current || exporting) return;
     setExporting(true);
+    // dark 模式下导出：tailwind `dark:` 条件靠 html.class="dark"，clone 后还在同一文档下仍会生效
+    // → 浅灰底 + 浅灰字 + 白底 wrapper 几乎看不见。先临时摘掉 html.dark，渲染完再装回去。
+    const root = document.documentElement;
+    const hadDark = root.classList.contains('dark');
+    if (hadDark) root.classList.remove('dark');
+    // wrapper 在 try 外声明，toPng 抛错时 finally 也能把它从 DOM 拆掉，避免悬挂节点累积。
+    let wrapper: HTMLElement | null = null;
     try {
       const node = cardRef.current.cloneNode(true) as HTMLElement;
-      const wrapper = document.createElement('div');
+      wrapper = document.createElement('div');
       wrapper.style.cssText = `
         width: 720px; background: #ffffff; padding: 0;
         font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
@@ -172,7 +190,6 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
       wrapper.appendChild(footer);
       document.body.appendChild(wrapper);
       const url = await toPng(wrapper, { pixelRatio: 2, cacheBust: true });
-      document.body.removeChild(wrapper);
       const a = document.createElement('a');
       a.href = url;
       a.download = `welink-parallel-${Date.now()}.png`;
@@ -182,6 +199,8 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
     } catch (e) {
       alert('导出失败：' + ((e as Error).message || '未知错误'));
     } finally {
+      if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+      if (hadDark) root.classList.add('dark');
       setExporting(false);
     }
   };
