@@ -283,7 +283,7 @@ export const ChatDNA: React.FC = () => {
           {data.longest_message && (
             <div className="px-7 py-5 border-t border-white/5 bg-white/[0.02]">
               <SectionTitle icon={<Quote size={14} className="text-[#07c160]" />}>你说过最长的一句话</SectionTitle>
-              <div className="text-sm text-white/90 italic leading-relaxed">"{data.longest_message}"</div>
+              <div className="text-sm text-white/90 italic leading-relaxed break-words whitespace-pre-wrap">"{data.longest_message}"</div>
               <div className="text-[11px] text-white/40 mt-2">{data.longest_message_len} 字</div>
             </div>
           )}

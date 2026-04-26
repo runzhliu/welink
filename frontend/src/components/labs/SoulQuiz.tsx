@@ -86,9 +86,14 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
   const exportPng = async () => {
     if (!data || !cardRef.current || exporting) return;
     setExporting(true);
+    const root = document.documentElement;
+    const hadDark = root.classList.contains('dark');
+    if (hadDark) root.classList.remove('dark');
+    // wrapper 在 try 外声明，toPng 抛错时 finally 也能把它从 DOM 拆掉，避免悬挂节点累积。
+    let wrapper: HTMLElement | null = null;
     try {
       const node = cardRef.current.cloneNode(true) as HTMLElement;
-      const wrapper = document.createElement('div');
+      wrapper = document.createElement('div');
       wrapper.style.cssText = `
         width: 720px; background: #ffffff; padding: 0;
         font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
@@ -101,7 +106,6 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
       wrapper.appendChild(footer);
       document.body.appendChild(wrapper);
       const url = await toPng(wrapper, { pixelRatio: 2, cacheBust: true });
-      document.body.removeChild(wrapper);
       const a = document.createElement('a');
       a.href = url;
       a.download = `welink-soul-quiz-${data.display_name}-${Date.now()}.png`;
@@ -111,6 +115,8 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
     } catch (e) {
       alert('导出失败：' + ((e as Error).message || '未知错误'));
     } finally {
+      if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+      if (hadDark) root.classList.add('dark');
       setExporting(false);
     }
   };

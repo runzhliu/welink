@@ -57,6 +57,9 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
   const [savedList, setSavedList] = useState<SavedSession[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // historyRef 跟随 history，stream 里 push fresh 时直接 historyRef.current.length 取索引，
+  // 这样 setHistory 的 reducer 保持纯函数（不在回调里写外部变量）。
+  const historyRef = useRef<TurnMsg[]>([]);
   const batchCancelRef = useRef(false);
 
   // TTS 声音按成员 index 的奇偶分配 A/B —— 让不同人音色不同
@@ -71,6 +74,13 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [history]);
+  // setHistory 的所有调用都改走它：同步推进 historyRef，避免 useEffect/commit 时机
+  // 让 ref 落后于 stream 内连续 push 的真实长度。
+  const updateHistory = (next: TurnMsg[] | ((h: TurnMsg[]) => TurnMsg[])) => {
+    const computed = typeof next === 'function' ? (next as (h: TurnMsg[]) => TurnMsg[])(historyRef.current) : next;
+    historyRef.current = computed;
+    setHistory(computed);
+  };
 
   const filteredContacts = useMemo(() => {
     // 只展示有消息的私聊（过滤群聊 + 消息量为 0 的人）
@@ -126,16 +136,16 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
       const reader = resp.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      // 注意：cur 是外层闭包变量，setHistory 回调延迟执行时 cur 可能已被
-      // finalizeCur 置 null —— 所以每次 setHistory 前必须把 cur 快照到
-      // 局部 const，闭包里引用 snapshot 而不是 cur，否则 React 18 batch
-      // 下会把 null 推进 history 数组，触发下游 .content on null 崩溃。
-      let cur: TurnMsg | null = null;
+      // 用 index 寻址当前条：之前用 `cur` 变量 + `x === cur` 在 setHistory 回调里
+      // 比对引用，但第一个 delta 的 setState 会把数组里的 fresh 替换成浅拷贝；
+      // cur 还指向已不在数组里的 fresh，第二个 delta 起 map 找不到匹配 → 后续
+      // delta 全部丢失，UI 看起来一卡一卡只渲染第一段。
+      let curIdx = -1;
       const finalizeCur = () => {
-        if (!cur) return;
-        const target = cur;
-        setHistory(h => h.map(x => (x === target ? { ...x, streaming: false } : x)));
-        cur = null;
+        if (curIdx < 0) return;
+        const i = curIdx;
+        updateHistory(h => h.map((x, idx) => (idx === i ? { ...x, streaming: false } : x)));
+        curIdx = -1;
       };
       while (true) {
         const { done, value } = await reader.read();
@@ -161,15 +171,14 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
                 avatar: m?.big_head_url || m?.small_head_url,
                 streaming: true,
               };
-              cur = fresh;
-              setHistory(h => [...h, fresh]); // 用快照 fresh，不用 cur
+              curIdx = historyRef.current.length;
+              updateHistory(h => [...h, fresh]);
               continue;
             }
-            if (chunk.delta && cur) {
-              const target = cur;
-              target.content += chunk.delta;
-              const snapshot = target.content;
-              setHistory(h => h.map(x => (x === target ? { ...x, content: snapshot } : x)));
+            if (chunk.delta && curIdx >= 0) {
+              const i = curIdx;
+              const delta = chunk.delta;
+              updateHistory(h => h.map((x, idx) => (idx === i ? { ...x, content: x.content + delta } : x)));
             }
             if (chunk.turn_end) {
               finalizeCur();
@@ -195,7 +204,7 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
   const sendUserTurn = () => {
     const t = userInput.trim();
     if (!t || members.length < 2) return;
-    setHistory(h => [...h, { speaker: '我', displayName: '我', content: t }]);
+    updateHistory(h => [...h, { speaker: '我', displayName: '我', content: t }]);
     setUserInput('');
     // 用户发完，自动让 AI 回一轮
     setTimeout(() => requestTurn('auto'), 50);
@@ -205,7 +214,7 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
     if (loading && abortRef.current) abortRef.current.abort();
     batchCancelRef.current = true;
     setBatchLeft(0);
-    setHistory([]);
+    updateHistory([]);
   };
 
   // 批量连跑 N 条：一次 LLM 调用生成 N 条（不再循环 N 次）。
@@ -283,7 +292,7 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
       setMembers(rebuilt);
       setTopic(s.topic || '');
       // 过滤 null / 缺字段的坏数据（老版本 bug 可能留下的脏记录）
-      setHistory((s.history || [])
+      updateHistory((s.history || [])
         .filter(h => h && typeof h.content === 'string' && typeof h.speaker === 'string')
         .map(h => ({
           speaker: h.speaker, displayName: h.display_name, content: h.content, avatar: h.avatar,
@@ -309,7 +318,7 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
   const newSession = () => {
     if (history.length > 0 && !confirm('开始新群聊会清空当前对话（记得先保存）。继续？')) return;
     setMembers([]);
-    setHistory([]);
+    updateHistory([]);
     setTopic('');
     setSessionId(null);
     setSessionName('');

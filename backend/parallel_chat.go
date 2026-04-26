@@ -41,6 +41,13 @@ func registerParallelChatRoutes(api *gin.RouterGroup, getSvc func() *service.Con
 			return
 		}
 
+		// 校验联系人存在；buildMemberPersona 找不到时会用裸 wxid 当 displayName，
+		// 后端 emit 出来的 display_name 跟前端 picked.display_name 对不上，前端会丢消息。
+		if !svc.HasContact(body.Username) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "联系人不存在"})
+			return
+		}
+
 		prefs := loadPreferences()
 		cfg := llmConfigForProfile(body.ProfileID, prefs)
 		if cfg.provider == "" {
@@ -108,23 +115,14 @@ func registerParallelChatRoutes(api *gin.RouterGroup, getSvc func() *service.Con
 			if raw == "" || emitted >= turns {
 				return
 			}
-			// 容忍 :  / ：  / [名字]
-			for _, sep := range []string{"：", ": ", ":"} {
-				if idx := strings.Index(raw, sep); idx != -1 {
-					raw = strings.Replace(raw, sep, "：", 1)
-					break
-				}
-			}
-			idx := strings.Index(raw, "：")
-			if idx == -1 {
+			// 取行首 12 个 rune 内的"第一个冒号"（中文/半角都接受）作为分隔符。
+			// 不能像之前那样 strings.Index(raw, "：")，否则若说话人写半角 `:`、
+			// 而消息内容里恰好含全角 `：`，会被错切到内容里 → 整条丢。
+			name, content := splitSpeakerLine(raw)
+			if name == "" || content == "" {
 				return
 			}
-			name := strings.TrimSpace(raw[:idx])
-			name = strings.Trim(name, "[]【】")
-			content := strings.TrimSpace(raw[idx+len("："):])
-			if content == "" {
-				return
-			}
+			name = strings.Trim(name, "[]【】 ")
 			var speaker string
 			if name == "我" || strings.EqualFold(name, "me") || strings.EqualFold(name, "I") {
 				speaker = "我"
@@ -173,4 +171,31 @@ func registerParallelChatRoutes(api *gin.RouterGroup, getSvc func() *service.Con
 			{Role: "user", Content: userPrompt},
 		}, prefs, body.ProfileID)
 	})
+}
+
+// splitSpeakerLine 从 "名字：内容" 这类行抽出 (name, content)。
+// 只看行首前 12 个 rune 内的首个冒号（: 或 ：），避免内容里的冒号干扰；
+// 找不到返回空串。
+func splitSpeakerLine(raw string) (string, string) {
+	const maxNameRunes = 12
+	cnt := 0
+	byteIdx := -1
+	sepRuneLen := 0
+	for i, r := range raw {
+		if r == '：' || r == ':' {
+			byteIdx = i
+			sepRuneLen = len(string(r))
+			break
+		}
+		cnt++
+		if cnt > maxNameRunes {
+			break
+		}
+	}
+	if byteIdx <= 0 {
+		return "", ""
+	}
+	name := strings.TrimSpace(raw[:byteIdx])
+	content := strings.TrimSpace(raw[byteIdx+sepRuneLen:])
+	return name, content
 }
