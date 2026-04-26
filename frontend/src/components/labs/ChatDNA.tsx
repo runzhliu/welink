@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { avatarSrc } from '../../utils/avatar';
+import { useToast } from '../common/Toast';
 
 interface TopContact {
   username: string;
@@ -66,6 +67,7 @@ const fmtSec = (s: number) => {
 };
 
 export const ChatDNA: React.FC = () => {
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [data, setData] = useState<DNAResp | null>(null);
@@ -117,7 +119,7 @@ export const ChatDNA: React.FC = () => {
       setExported(true);
       setTimeout(() => setExported(false), 3000);
     } catch (e) {
-      alert('导出失败：' + ((e as Error).message || '未知错误'));
+      toast.error('导出失败：' + ((e as Error).message || '未知错误'));
     } finally {
       setExporting(false);
     }

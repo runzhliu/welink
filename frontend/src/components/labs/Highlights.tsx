@@ -10,6 +10,7 @@ import { Sparkles, Loader2, Search, Share2, Check, Wand2, RefreshCw } from 'luci
 import { toPng } from 'html-to-image';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
+import { useToast } from '../common/Toast';
 
 interface Props {
   contacts: ContactStats[];
@@ -42,6 +43,7 @@ const displayOf = (c: ContactStats) => c.remark || c.nickname || c.username;
 
 
 export const Highlights: React.FC<Props> = ({ contacts }) => {
+  const toast = useToast();
   const [picked, setPicked] = useState<ContactStats | null>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
@@ -131,7 +133,7 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
       setExported(true);
       setTimeout(() => setExported(false), 3000);
     } catch (e) {
-      alert('导出失败：' + ((e as Error).message || '未知错误'));
+      toast.error('导出失败：' + ((e as Error).message || '未知错误'));
     } finally {
       if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
       if (hadDark) root.classList.add('dark');

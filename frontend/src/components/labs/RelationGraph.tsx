@@ -9,6 +9,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { Network, Loader2, RefreshCw, Share2, Check } from 'lucide-react';
 import { toPng } from 'html-to-image';
+import { useToast } from '../common/Toast';
 
 interface Node {
   id: string;
@@ -42,6 +43,7 @@ const SVG_W = 720;
 const SVG_H = 540;
 
 export const RelationGraph: React.FC = () => {
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [data, setData] = useState<GraphResp | null>(null);
@@ -147,9 +149,11 @@ export const RelationGraph: React.FC = () => {
   const exportPng = async () => {
     if (!data || !cardRef.current || exporting) return;
     setExporting(true);
+    // wrapper 在 try 外声明，toPng 抛错时 finally 也能把它从 DOM 拆掉，避免悬挂节点累积。
+    let wrapper: HTMLElement | null = null;
     try {
       const node = cardRef.current.cloneNode(true) as HTMLElement;
-      const wrapper = document.createElement('div');
+      wrapper = document.createElement('div');
       wrapper.style.cssText = `
         width: 760px; background: #0a0a14; padding: 20px;
         font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
@@ -162,7 +166,6 @@ export const RelationGraph: React.FC = () => {
       wrapper.appendChild(footer);
       document.body.appendChild(wrapper);
       const url = await toPng(wrapper, { pixelRatio: 2, cacheBust: true });
-      document.body.removeChild(wrapper);
       const a = document.createElement('a');
       a.href = url;
       a.download = `welink-relation-graph-${Date.now()}.png`;
@@ -170,8 +173,9 @@ export const RelationGraph: React.FC = () => {
       setExported(true);
       setTimeout(() => setExported(false), 3000);
     } catch (e) {
-      alert('导出失败：' + ((e as Error).message || '未知错误'));
+      toast.error('导出失败：' + ((e as Error).message || '未知错误'));
     } finally {
+      if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
       setExporting(false);
     }
   };

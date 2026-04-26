@@ -12,6 +12,7 @@ import {
 import { toPng } from 'html-to-image';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
+import { useToast } from '../common/Toast';
 
 interface Props {
   contacts: ContactStats[];
@@ -37,6 +38,7 @@ const CAT_COLOR = 'bg-[#07c160]/12 text-[#07c160] dark:text-[#07c160]';
 const LETTER = ['A', 'B', 'C', 'D'];
 
 export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
+  const toast = useToast();
   const [picked, setPicked] = useState<ContactStats | null>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
@@ -113,7 +115,7 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
       setExported(true);
       setTimeout(() => setExported(false), 3000);
     } catch (e) {
-      alert('导出失败：' + ((e as Error).message || '未知错误'));
+      toast.error('导出失败：' + ((e as Error).message || '未知错误'));
     } finally {
       if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
       if (hadDark) root.classList.add('dark');
