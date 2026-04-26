@@ -7,7 +7,11 @@
 FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+# 用官方 registry 装包：仓库的 .npmrc 钉死了 npmmirror（淘宝镜像）方便国内开发，
+# 但 CI / docker build 跑到 npmmirror 偶尔会出现 "Exit handler never called!"
+# 的神秘失败 —— typescript 没装上、tsc not found、build 直接 exit 127。
+# Docker 内强制官方源避坑；--registry 会覆盖 lockfile 的 resolved URL。
+RUN npm ci --no-audit --no-fund --registry=https://registry.npmjs.org/
 COPY . .
 RUN npm run build
 

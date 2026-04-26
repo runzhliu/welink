@@ -8,7 +8,9 @@ RUN apk add --no-cache git
 
 WORKDIR /app
 COPY package.json ./
-RUN npm install
+# 仓库 .npmrc 走 npmmirror（国内镜像）方便开发，但 docker build 偶尔会卡死，
+# 强制走官方源避坑（同前端 Dockerfile）。
+RUN npm install --registry=https://registry.npmjs.org/
 COPY . .
 
 # 将版本号注入到文档中（替换占位符 {{VERSION}}）
