@@ -4,6 +4,11 @@
 decrypted/
 data/
 
+# 用户偏好（含 AI provider 的 API key、OAuth token；dev 模式默认写到仓库根，
+# App 模式走 ~/Library/Application Support/WeLink/）。绝对不能提交。
+preferences.json
+prefs.json
+
 # ===========================
 # 后端
 # ===========================
