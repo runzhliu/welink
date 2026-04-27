@@ -103,7 +103,8 @@ const AddInput: React.FC<{
 // ─── AI 配置区块 ───────────────────────────────────────────────────────────────
 
 const PROVIDERS = [
-  { value: 'deepseek', label: 'DeepSeek', defaultURL: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat', keyUrl: 'https://platform.deepseek.com/api_keys' },
+  { value: 'deepseek', label: 'DeepSeek', defaultURL: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-v4-pro', keyUrl: 'https://platform.deepseek.com/api_keys' },
+  { value: 'doubao',   label: '豆包（火山方舟）', defaultURL: 'https://ark.cn-beijing.volces.com/api/v3', defaultModel: 'doubao-seed-2-0-pro-260215', keyUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey' },
   { value: 'kimi',     label: 'Kimi (Moonshot)', defaultURL: 'https://api.moonshot.cn/v1', defaultModel: 'kimi-k2.5', keyUrl: 'https://platform.moonshot.cn/console/api-keys' },
   { value: 'gemini',   label: 'Gemini', defaultURL: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-2.0-flash', keyUrl: 'https://aistudio.google.com/apikey' },
   { value: 'glm',      label: 'GLM（智谱 AI）', defaultURL: 'https://open.bigmodel.cn/api/paas/v4', defaultModel: 'glm-4-flash', keyUrl: 'https://open.bigmodel.cn/usercenter/apikeys' },
