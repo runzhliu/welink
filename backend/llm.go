@@ -82,7 +82,15 @@ func defaultsFor(p *llmConfig) {
 			p.baseURL = "https://api.deepseek.com/v1"
 		}
 		if p.model == "" {
-			p.model = "deepseek-chat"
+			p.model = "deepseek-v4-pro"
+		}
+	case "doubao":
+		// 豆包 = 字节火山方舟（Volcengine Ark），OpenAI 兼容
+		if p.baseURL == "" {
+			p.baseURL = "https://ark.cn-beijing.volces.com/api/v3"
+		}
+		if p.model == "" {
+			p.model = "doubao-seed-2-0-pro-260215"
 		}
 	case "kimi":
 		if p.baseURL == "" {

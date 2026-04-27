@@ -83,7 +83,8 @@ const PROVIDER_LABELS: Record<string, string> = {
   grok: 'Grok', openai: 'OpenAI', claude: 'Claude', ollama: 'Ollama', custom: '自定义',
 };
 const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
-  deepseek: 'deepseek-chat', kimi: 'kimi-k2.5', gemini: 'gemini-2.0-flash',
+  deepseek: 'deepseek-v4-pro', doubao: 'doubao-seed-2-0-pro-260215',
+  kimi: 'kimi-k2.5', gemini: 'gemini-2.0-flash',
   glm: 'glm-4-flash', grok: 'grok-3-mini', openai: 'gpt-4o-mini',
   claude: 'claude-haiku-4-5-20251001', ollama: 'llama3',
 };

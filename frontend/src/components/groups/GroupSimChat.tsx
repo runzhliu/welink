@@ -451,7 +451,8 @@ export const GroupSimChat: React.FC<Props> = ({ group, onOpenSettings }) => {
           {mood && <><span className="text-gray-200">·</span><span>{MOOD_OPTIONS.find(m => m.value === mood)?.label}</span></>}
           {profileId && profiles.length > 0 && (() => {
             const defaultModels: Record<string, string> = {
-              deepseek: 'deepseek-chat', kimi: 'kimi-k2.5', gemini: 'gemini-2.0-flash',
+              deepseek: 'deepseek-v4-pro', doubao: 'doubao-seed-2-0-pro-260215',
+              kimi: 'kimi-k2.5', gemini: 'gemini-2.0-flash',
               glm: 'glm-4-flash', grok: 'grok-3-mini', minimax: 'MiniMax-Text-01',
               'minimax-cn': 'MiniMax-Text-01', openai: 'gpt-4o-mini', claude: 'claude-haiku-4-5-20251001',
               ollama: 'llama3',
