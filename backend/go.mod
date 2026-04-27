@@ -7,13 +7,15 @@ require (
 	github.com/go-ego/gse v1.0.2
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	github.com/klauspost/compress v1.18.4
-	github.com/minio/minio-go/v7 v7.0.100
+	github.com/minio/minio-go/v7 v7.1.0
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
+	golang.org/x/crypto v0.46.0
 	modernc.org/sqlite v1.28.0
 )
 
 require (
 	github.com/bytedance/sonic v1.9.1 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
@@ -43,9 +45,9 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/vcaesar/cedar v0.30.0 // indirect
+	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.3.0 // indirect
-	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/mod v0.30.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
