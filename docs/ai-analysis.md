@@ -76,7 +76,8 @@ Prompt 中可以使用以下变量，运行时自动替换：
 
 | Provider | 说明 | 默认模型 |
 |----------|------|---------|
-| `deepseek` | DeepSeek | `deepseek-chat` |
+| `deepseek` | DeepSeek | `deepseek-v4-pro` |
+| `doubao` | 豆包（火山方舟 Volcengine Ark） | `doubao-seed-2-0-pro-260215` |
 | `kimi` | Kimi（月之暗面） | `kimi-k2.5` |
 | `gemini` | Google Gemini（AI Studio） | `gemini-2.0-flash` |
 | `vertex` | **Google Vertex AI**（原生） | `google/gemini-2.0-flash-001` |
@@ -316,7 +317,7 @@ A: 当前 Bedrock 实现使用**非流式 Converse API**（整段返回后一次
 **`POST /api/ai/llm/test`** — 测试主 LLM 连接是否正常（会先使用当前保存的配置发送 "Hi"）
 
 ```json
-{ "ok": true, "provider": "deepseek", "model": "deepseek-chat" }
+{ "ok": true, "provider": "deepseek", "model": "deepseek-v4-pro" }
 ```
 
 **`POST /api/ai/mem/test`** — 测试记忆提炼模型连接是否正常
@@ -457,6 +458,7 @@ estimated_tokens = msgCount × 15 + 500
 | Provider | 模型上限 | 80% 保守限制 |
 |----------|---------|-------------|
 | deepseek | 64,000 | 51,200 |
+| doubao | 256,000 | 204,800 |
 | kimi | 128,000 | 102,400 |
 | gemini | 1,000,000 | 800,000 |
 | glm | 128,000 | 102,400 |
