@@ -73,9 +73,9 @@ func setupLogFile(logDir string) {
 	if err != nil {
 		return
 	}
-	// Go 标准 log
-	log.SetOutput(f)
-	// Gin 请求日志 + 错误日志
+	// 把 slog（含 std log 桥接）切到文件
+	InitObs(f, false)
+	// Gin 请求日志 + 错误日志（Gin 不走 slog，单独指过去）
 	gin.DefaultWriter = f
 	gin.DefaultErrorWriter = f
 	log.Printf("日志已重定向到 %s", filepath.Join(logDir, "welink.log"))

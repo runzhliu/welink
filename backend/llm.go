@@ -379,16 +379,35 @@ func testLLMConnProfile(profileID string, prefs Preferences) (string, error) {
 
 // dispatchLLMStream 统一流式分发
 func dispatchLLMStream(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) error {
+	t := startTimer("llm_stream")
+	var err error
 	switch cfg.provider {
 	case "claude":
-		return streamClaude(send, msgs, cfg)
+		err = streamClaude(send, msgs, cfg)
 	case "bedrock":
-		return streamBedrock(send, msgs, cfg)
+		err = streamBedrock(send, msgs, cfg)
 	case "vertex":
-		return streamVertex(send, msgs, cfg)
+		err = streamVertex(send, msgs, cfg)
 	default:
-		return streamOpenAICompat(send, msgs, cfg)
+		err = streamOpenAICompat(send, msgs, cfg)
 	}
+	t.Done(err,
+		"provider", cfg.provider,
+		"model", cfg.model,
+		"msg_count", len(msgs),
+		"prompt_chars", llmPromptChars(msgs),
+		"reasoning", cfg.reasoningEffort,
+	)
+	return err
+}
+
+// llmPromptChars 累加所有消息正文长度，用于埋点。
+func llmPromptChars(msgs []LLMMessage) int {
+	n := 0
+	for _, m := range msgs {
+		n += len(m.Content)
+	}
+	return n
 }
 
 // ─── OpenAI 兼容流式实现 ───────────────────────────────────────────────────────
@@ -658,16 +677,29 @@ func CompleteLLM(msgs []LLMMessage, prefs Preferences) (string, error) {
 		model:    prefs.LLMModel,
 	}
 	defaultsFor(&cfg)
+	t := startTimer("llm_complete")
+	var (
+		out string
+		err error
+	)
 	switch cfg.provider {
 	case "claude":
-		return completeClaudeSync(msgs, cfg)
+		out, err = completeClaudeSync(msgs, cfg)
 	case "bedrock":
-		return completBedrockSync(msgs, cfg)
+		out, err = completBedrockSync(msgs, cfg)
 	case "vertex":
-		return completVertexSync(msgs, cfg)
+		out, err = completVertexSync(msgs, cfg)
 	default:
-		return completeOpenAICompatSync(msgs, cfg)
+		out, err = completeOpenAICompatSync(msgs, cfg)
 	}
+	t.Done(err,
+		"provider", cfg.provider,
+		"model", cfg.model,
+		"msg_count", len(msgs),
+		"prompt_chars", llmPromptChars(msgs),
+		"resp_chars", len(out),
+	)
+	return out, err
 }
 
 func completeOpenAICompatSync(msgs []LLMMessage, cfg llmConfig) (string, error) {

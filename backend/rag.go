@@ -327,7 +327,18 @@ func prepareFTSQuery(q string) (ftsQuery string, likeTerms []string) {
 // SearchFTS 在 FTS5 索引中搜索，返回 top-K 命中 + 上下文窗口扩展（±5 条）。
 // 短查询（<3字符）自动退化为 LIKE 全文扫描。
 // 返回 (结果列表, 直接命中seqSet, error)。
-func SearchFTS(key, query string, topK int) ([]RAGResult, map[int]bool, error) {
+func SearchFTS(key, query string, topK int) (results []RAGResult, hits map[int]bool, err error) {
+	t := startTimer("rag_fts")
+	defer func() {
+		t.Done(err,
+			"key", key,
+			"query_chars", len(query),
+			"top_k", topK,
+			"hits", len(hits),
+			"results", len(results),
+		)
+	}()
+
 	aiDBMu.Lock()
 	db := aiDB
 	aiDBMu.Unlock()
@@ -422,7 +433,6 @@ func SearchFTS(key, query string, topK int) ([]RAGResult, map[int]bool, error) {
 
 	// 查询每个合并范围内的消息
 	seen := make(map[int]bool)
-	var results []RAGResult
 	for _, r := range merged {
 		winRows, err := db.Query(`
 			SELECT seq, datetime, sender, content FROM msg_fts
@@ -446,7 +456,8 @@ func SearchFTS(key, query string, topK int) ([]RAGResult, map[int]bool, error) {
 	}
 
 	sort.Slice(results, func(i, j int) bool { return results[i].Seq < results[j].Seq })
-	return results, seqSet, nil
+	hits = seqSet
+	return results, hits, nil
 }
 
 // ─── 查询改写 ─────────────────────────────────────────────────────────────────
