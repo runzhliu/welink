@@ -82,10 +82,23 @@ func GetEmbeddingsBatch(texts []string, cfg EmbeddingConfig) ([][]float32, error
 		}
 		return out, nil
 	}
+	t := startTimer("embed_batch")
+	var (
+		vecs [][]float32
+		err  error
+	)
 	if cfg.Provider == "ollama" {
-		return ollamaEmbeddingsBatch(texts, cfg)
+		vecs, err = ollamaEmbeddingsBatch(texts, cfg)
+	} else {
+		vecs, err = openAIEmbeddingsBatch(texts, cfg)
 	}
-	return openAIEmbeddingsBatch(texts, cfg)
+	t.Done(err,
+		"provider", cfg.Provider,
+		"model", cfg.Model,
+		"batch_size", len(texts),
+		"dims", cfg.Dims,
+	)
+	return vecs, err
 }
 
 func openAIEmbeddingsBatch(texts []string, cfg EmbeddingConfig) ([][]float32, error) {

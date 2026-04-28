@@ -412,7 +412,18 @@ type vecCandidate struct {
 
 // SearchVec 对指定联系人执行向量相似度检索，返回 top-K 命中 + 上下文窗口扩展。
 // 采用分块加载：每次只读 vecChunkRows 条 embedding，内存安全，适用于大群聊（10 万条以上）。
-func SearchVec(key, query string, topK int, prefs Preferences) ([]RAGResult, map[int]bool, error) {
+func SearchVec(key, query string, topK int, prefs Preferences) (results []RAGResult, hits map[int]bool, err error) {
+	t := startTimer("rag_vec")
+	defer func() {
+		t.Done(err,
+			"key", key,
+			"query_chars", len(query),
+			"top_k", topK,
+			"hits", len(hits),
+			"results", len(results),
+		)
+	}()
+
 	aiDBMu.Lock()
 	db := aiDB
 	aiDBMu.Unlock()
@@ -495,14 +506,13 @@ func SearchVec(key, query string, topK int, prefs Preferences) ([]RAGResult, map
 
 	// 按 seq 范围查询消息内容
 	seen := make(map[int]bool)
-	var results []RAGResult
 	for _, r := range merged {
-		winRows, err := db.Query(
+		winRows, qerr := db.Query(
 			`SELECT seq, datetime, sender, content FROM vec_messages
 			 WHERE contact_key = ? AND seq >= ? AND seq <= ?`,
 			key, r.start, r.end,
 		)
-		if err != nil {
+		if qerr != nil {
 			continue
 		}
 		for winRows.Next() {
@@ -519,5 +529,6 @@ func SearchVec(key, query string, topK int, prefs Preferences) ([]RAGResult, map
 	}
 
 	sort.Slice(results, func(i, j int) bool { return results[i].Seq < results[j].Seq })
-	return results, seqSet, nil
+	hits = seqSet
+	return results, hits, nil
 }

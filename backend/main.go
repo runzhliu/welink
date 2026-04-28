@@ -113,6 +113,10 @@ func main() {
 }
 
 func serverMain() {
+	// 0. 初始化结构化日志（slog） + 把 std log 桥接进去。
+	// setupLogFile 之后会重新调用 InitObs 把输出切到 welink.log。
+	InitObs(os.Stderr, false)
+
 	// 1. 加载配置（preferences.json > 环境变量 > 默认值）
 	prefs := effectiveConfig(loadPreferences())
 	// 检查是否有旧 config.yaml 需要迁移

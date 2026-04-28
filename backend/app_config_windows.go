@@ -68,7 +68,8 @@ func setupLogFile(logDir string) {
 	if err != nil {
 		return
 	}
-	log.SetOutput(f)
+	// 把 slog（含 std log 桥接）切到文件
+	InitObs(f, false)
 	gin.DefaultWriter = f
 	gin.DefaultErrorWriter = f
 	log.Printf("日志已重定向到 %s", filepath.Join(logDir, "welink.log"))
