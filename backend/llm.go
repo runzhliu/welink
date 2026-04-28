@@ -165,6 +165,110 @@ func defaultsFor(p *llmConfig) {
 		if p.model == "" {
 			p.model = "google/gemini-2.0-flash-001"
 		}
+	case "qwen":
+		// 阿里通义千问 / DashScope 兼容模式
+		if p.baseURL == "" {
+			p.baseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+		}
+		if p.model == "" {
+			p.model = "qwen-plus"
+		}
+	case "hunyuan":
+		// 腾讯混元，OpenAI 兼容
+		if p.baseURL == "" {
+			p.baseURL = "https://api.hunyuan.cloud.tencent.com/v1"
+		}
+		if p.model == "" {
+			p.model = "hunyuan-turbo"
+		}
+	case "qianfan":
+		// 百度千帆 / 文心一言，OpenAI 兼容端点
+		if p.baseURL == "" {
+			p.baseURL = "https://qianfan.baidubce.com/v2"
+		}
+		if p.model == "" {
+			p.model = "ernie-4.0-turbo-8k"
+		}
+	case "openrouter":
+		if p.baseURL == "" {
+			p.baseURL = "https://openrouter.ai/api/v1"
+		}
+		if p.model == "" {
+			p.model = "openai/gpt-4o-mini"
+		}
+	case "mistral":
+		if p.baseURL == "" {
+			p.baseURL = "https://api.mistral.ai/v1"
+		}
+		if p.model == "" {
+			p.model = "mistral-large-latest"
+		}
+	case "groq":
+		if p.baseURL == "" {
+			p.baseURL = "https://api.groq.com/openai/v1"
+		}
+		if p.model == "" {
+			p.model = "llama-3.3-70b-versatile"
+		}
+	case "together":
+		if p.baseURL == "" {
+			p.baseURL = "https://api.together.xyz/v1"
+		}
+		if p.model == "" {
+			p.model = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+		}
+	case "fireworks":
+		if p.baseURL == "" {
+			p.baseURL = "https://api.fireworks.ai/inference/v1"
+		}
+		if p.model == "" {
+			p.model = "accounts/fireworks/models/llama-v3p3-70b-instruct"
+		}
+	case "perplexity":
+		if p.baseURL == "" {
+			p.baseURL = "https://api.perplexity.ai"
+		}
+		if p.model == "" {
+			p.model = "sonar"
+		}
+	case "cohere":
+		// Cohere v2 提供 OpenAI 兼容端点
+		if p.baseURL == "" {
+			p.baseURL = "https://api.cohere.ai/compatibility/v1"
+		}
+		if p.model == "" {
+			p.model = "command-r-plus"
+		}
+	case "siliconflow":
+		// 硅基流动
+		if p.baseURL == "" {
+			p.baseURL = "https://api.siliconflow.cn/v1"
+		}
+		if p.model == "" {
+			p.model = "deepseek-ai/DeepSeek-V3"
+		}
+	case "yi":
+		// 零一万物
+		if p.baseURL == "" {
+			p.baseURL = "https://api.lingyiwanwu.com/v1"
+		}
+		if p.model == "" {
+			p.model = "yi-large"
+		}
+	case "stepfun":
+		// 阶跃星辰
+		if p.baseURL == "" {
+			p.baseURL = "https://api.stepfun.com/v1"
+		}
+		if p.model == "" {
+			p.model = "step-2-16k"
+		}
+	case "azure":
+		// Azure OpenAI：用户必须填写完整 BaseURL（含 deployment 路径）
+		// 例：https://{resource}.openai.azure.com/openai/deployments/{deployment}
+		if p.model == "" {
+			p.model = "gpt-4o-mini"
+		}
 	}
 }
 
