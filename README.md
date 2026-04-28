@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/runzhliu-welink-badge.png)](https://mseep.ai/app/runzhliu-welink)
+
 <p align="center">
   <img src="logo.svg" width="80" height="80" alt="WeLink Logo" />
 </p>
