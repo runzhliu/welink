@@ -8,9 +8,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sparkles, Loader2, Search, Wand2, Square, Share2, Check, RefreshCw,
 } from 'lucide-react';
-import { toPng } from 'html-to-image';
+import html2canvas from 'html2canvas';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
+import { prepareForCapture } from '../../utils/exportPng';
 import { getServerURL, getToken } from '../../runtimeConfig';
 import { useToast } from '../common/Toast';
 
@@ -191,7 +192,14 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
       footer.innerHTML = `WeLink · 平行宇宙对话 · ${new Date().toLocaleDateString('zh-CN')}`;
       wrapper.appendChild(footer);
       document.body.appendChild(wrapper);
-      const url = await toPng(wrapper, { pixelRatio: 2, cacheBust: true });
+      await prepareForCapture(wrapper);
+      const canvas = await html2canvas(wrapper, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+      const url = canvas.toDataURL('image/png');
       const a = document.createElement('a');
       a.href = url;
       a.download = `welink-parallel-${Date.now()}.png`;

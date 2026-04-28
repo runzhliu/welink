@@ -9,8 +9,9 @@ import axios from 'axios';
 import {
   Sparkles, Loader2, Share2, Check, Crown, Clock, Moon, MessageSquare, Zap, Smile, Quote,
 } from 'lucide-react';
-import { toPng } from 'html-to-image';
+import html2canvas from 'html2canvas';
 import { avatarSrc } from '../../utils/avatar';
+import { prepareForCapture } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
 
 interface TopContact {
@@ -110,7 +111,14 @@ export const ChatDNA: React.FC = () => {
       footer.innerHTML = `WeLink · 我的聊天 DNA · ${new Date().toLocaleDateString('zh-CN')}`;
       wrapper.appendChild(footer);
       document.body.appendChild(wrapper);
-      const dataUrl = await toPng(wrapper, { pixelRatio: 2, cacheBust: true });
+      await prepareForCapture(wrapper);
+      const canvas = await html2canvas(wrapper, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#0b0b14',
+        logging: false,
+      });
+      const dataUrl = canvas.toDataURL('image/png');
       document.body.removeChild(wrapper);
       const a = document.createElement('a');
       a.href = dataUrl;
