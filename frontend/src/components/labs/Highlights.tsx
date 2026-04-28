@@ -7,9 +7,10 @@
 import React, { useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { Sparkles, Loader2, Search, Share2, Check, Wand2, RefreshCw } from 'lucide-react';
-import { toPng } from 'html-to-image';
+import html2canvas from 'html2canvas';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
+import { prepareForCapture } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
 
 interface Props {
@@ -123,8 +124,15 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
       `;
       wrapper.appendChild(footer);
       document.body.appendChild(wrapper);
+      await prepareForCapture(wrapper);
 
-      const dataUrl = await toPng(wrapper, { pixelRatio: 2, cacheBust: true });
+      const canvas = await html2canvas(wrapper, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+      const dataUrl = canvas.toDataURL('image/png');
 
       const a = document.createElement('a');
       a.href = dataUrl;

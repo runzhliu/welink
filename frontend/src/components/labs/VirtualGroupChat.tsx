@@ -9,10 +9,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Users, MessageSquarePlus, Loader2, Send, Trash2, X, Search, Sparkles, Shuffle, Zap, Square, Share2, Check, Save, History, Plus,
 } from 'lucide-react';
-import { toPng } from 'html-to-image';
+import html2canvas from 'html2canvas';
 import axios from 'axios';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
+import { prepareForCapture } from '../../utils/exportPng';
 import { getServerURL, getToken } from '../../runtimeConfig';
 import { TTSButton } from '../common/TTSButton';
 
@@ -378,8 +379,15 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
       `;
       wrapper.appendChild(footer);
       document.body.appendChild(wrapper);
+      await prepareForCapture(wrapper);
 
-      const dataUrl = await toPng(wrapper, { pixelRatio: 2, cacheBust: true });
+      const canvas = await html2canvas(wrapper, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+      const dataUrl = canvas.toDataURL('image/png');
       document.body.removeChild(wrapper);
 
       // 下载
