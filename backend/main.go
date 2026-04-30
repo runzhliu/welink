@@ -2901,6 +2901,15 @@ func serverMain() {
 		// 创意实验室 · 关系星图（联系人力导向图）
 		registerRelationGraphRoutes(prot, getSvc)
 
+		// 创意实验室 · 断联预警（按静默天数+历史亲密度排榜）
+		registerDriftAlertRoutes(prot, getSvc)
+
+		// 创意实验室 · 群聊 Wrapped（纯统计版，与 group-year-review 的 AI 叙事版区分）
+		registerGroupWrappedRoutes(prot, getSvc)
+
+		// 创意实验室 · 关系考古（单联系人时间轴里程碑）
+		registerMilestonesRoutes(prot, getSvc)
+
 		// 群聊 AI 年报
 		registerGroupYearReviewRoutes(prot, getSvc)
 

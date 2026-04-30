@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom } from 'lucide-react';
+import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { VirtualGroupChat } from './VirtualGroupChat';
 import { Highlights } from './Highlights';
@@ -11,12 +11,15 @@ import { ChatDNA } from './ChatDNA';
 import { SoulQuiz } from './SoulQuiz';
 import { RelationGraph } from './RelationGraph';
 import { ParallelChat } from './ParallelChat';
+import { DriftAlert } from './DriftAlert';
+import { GroupWrapped } from './GroupWrapped';
+import { Milestones } from './Milestones';
 
 interface Props {
   contacts: ContactStats[];
 }
 
-type LabKey = 'highlights' | 'dna' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
+type LabKey = 'highlights' | 'dna' | 'drift' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
 
 interface LabDef {
   key: LabKey;
@@ -39,6 +42,27 @@ const LABS: LabDef[] = [
     icon: <Dna size={14} />,
     badge: 'NEW',
     desc: '把你的微信聊天浓缩成一张 Wrapped 风格的年度卡片',
+  },
+  {
+    key: 'drift',
+    label: '断联预警',
+    icon: <AlertCircle size={14} />,
+    badge: 'NEW',
+    desc: '找出消息频率从高变低、超过 30 天没说话的老朋友',
+  },
+  {
+    key: 'group-wrapped',
+    label: '群聊 Wrapped',
+    icon: <Gift size={14} />,
+    badge: 'NEW',
+    desc: '挑一个群浓缩成一张 Wrapped 卡：发言榜、最常被 @、媒体大王、群口头禅',
+  },
+  {
+    key: 'milestones',
+    label: '关系考古',
+    icon: <Compass size={14} />,
+    badge: 'NEW',
+    desc: '单联系人时间轴：首次互动、首次深夜、最长断联、重联、周年',
   },
   {
     key: 'soul-quiz',
@@ -111,6 +135,9 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
 
       {active === 'highlights' && <Highlights contacts={contacts} />}
       {active === 'dna' && <ChatDNA />}
+      {active === 'drift' && <DriftAlert />}
+      {active === 'group-wrapped' && <GroupWrapped />}
+      {active === 'milestones' && <Milestones contacts={contacts} />}
       {active === 'soul-quiz' && <SoulQuiz contacts={contacts} />}
       {active === 'relation-graph' && <RelationGraph />}
       {active === 'parallel' && <ParallelChat contacts={contacts} />}
