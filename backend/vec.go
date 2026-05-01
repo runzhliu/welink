@@ -171,7 +171,7 @@ func StartVecIndexBackground(key, username string, isGroup bool, svc *service.Co
 	job.Error = ""
 	job.mu.Unlock()
 
-	go buildVecIndexCore(key, username, isGroup, svc, prefs, func(p vecIndexProgress) {
+	progressFn := func(p vecIndexProgress) {
 		job.mu.Lock()
 		job.Step = p.Step
 		job.Current = p.Current
@@ -180,7 +180,18 @@ func StartVecIndexBackground(key, username string, isGroup bool, svc *service.Co
 		job.Error = p.Error
 		job.FactCount = p.FactCount
 		job.mu.Unlock()
-	})
+	}
+	go func() {
+		// 后台 goroutine 不在 gin 的 panic recover 兜底范围内。
+		// embedding 跑批可能踩到 JSON 解析、map 操作、外部 API 异常 panic，
+		// 必须自己兜底，把错误反馈到 job 状态而不是炸进程。
+		defer func() {
+			if r := recover(); r != nil {
+				progressFn(vecIndexProgress{Step: "error", Error: fmt.Sprintf("内部错误：%v", r)})
+			}
+		}()
+		buildVecIndexCore(key, username, isGroup, svc, prefs, progressFn)
+	}()
 }
 
 // buildVecIndexCore 是实际构建逻辑，通过 progressFn 回调上报进度。

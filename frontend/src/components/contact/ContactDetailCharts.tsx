@@ -139,7 +139,7 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
           </div>
           <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
             {detail.money_timeline!.map((evt, i) => (
-              <div key={i} className="flex items-center gap-3 text-xs">
+              <div key={`${evt.time}-${evt.kind}-${i}`} className="flex items-center gap-3 text-xs">
                 <span className="text-gray-400 w-32 flex-shrink-0 font-mono">{evt.time}</span>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold ${
                   evt.kind === '红包'

@@ -89,10 +89,14 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
 
   // 检查是否有缓存的分身档案 + 载入长期记忆
   useEffect(() => {
+    // cancelled 守卫：快速切换联系人时，旧请求的回调可能晚于新组件挂载到达，
+    // 不加守卫会把旧联系人的 session/messages 串到新联系人界面上。
+    let cancelled = false;
     setRestoring(true);
     fetch(`/api/ai/clone/session/${encodeURIComponent(username)}`)
       .then(r => r.json())
       .then(async (data: { exists: boolean; session_id?: string; private_count?: number; group_count?: number; has_profile?: boolean; has_recent?: boolean; avg_msg_len?: number; emoji_pct?: number; updated_at?: number }) => {
+        if (cancelled) return;
         if (data.exists && data.session_id) {
           setSessionId(data.session_id);
           setLearnResult({
@@ -109,8 +113,10 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
           // 载入过去跟这个分身的对话历史（持久化的长期记忆）
           try {
             const h = await fetch(`/api/ai/clone/history/${encodeURIComponent(username)}`);
+            if (cancelled) return;
             if (h.ok) {
               const j = await h.json() as { messages?: { role: string; content: string }[] };
+              if (cancelled) return;
               if (j.messages && j.messages.length > 0) {
                 setMessages(j.messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })));
               }
@@ -119,7 +125,8 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
         }
       })
       .catch(() => {})
-      .finally(() => setRestoring(false));
+      .finally(() => { if (!cancelled) setRestoring(false); });
+    return () => { cancelled = true; };
   }, [username]);
 
   useEffect(() => {

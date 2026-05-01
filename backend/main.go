@@ -2435,9 +2435,6 @@ func serverMain() {
 
 		prefs := loadPreferences()
 		go func() {
-			aiDBMu.Lock()
-			db := aiDB
-			aiDBMu.Unlock()
 			setErr := func(msg string) {
 				job.mu.Lock()
 				job.Step = "error"
@@ -2445,6 +2442,17 @@ func serverMain() {
 				job.Done = true
 				job.mu.Unlock()
 			}
+			// 后台 goroutine 没有 gin 的 panic recover 兜底，
+			// 任何 panic（map nil deref / SQL 异常 / LLM 流解析炸了）
+			// 都会让整个进程崩溃，必须自己 recover 并把错误反馈给 job 状态。
+			defer func() {
+				if r := recover(); r != nil {
+					setErr(fmt.Sprintf("内部错误：%v", r))
+				}
+			}()
+			aiDBMu.Lock()
+			db := aiDB
+			aiDBMu.Unlock()
 			if db == nil {
 				setErr("数据库未初始化")
 				return
