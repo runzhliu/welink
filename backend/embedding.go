@@ -119,7 +119,7 @@ func openAIEmbeddingsBatch(texts []string, cfg EmbeddingConfig) ([][]float32, er
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClientFast.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("embedding 请求失败：%w", err)
 	}
@@ -161,7 +161,7 @@ func ollamaEmbeddingsBatch(texts []string, cfg EmbeddingConfig) ([][]float32, er
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClientFast.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Ollama embedding 请求失败：%w", err)
 	}

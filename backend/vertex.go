@@ -185,7 +185,7 @@ func testVertexConn(cfg llmConfig) (string, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+resolved.apiKey)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClientFast.Do(req)
 	if err != nil {
 		return cfg.model, err
 	}

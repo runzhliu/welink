@@ -136,7 +136,7 @@ func streamBedrock(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) err
 
 	signAWSRequest(req, body, region, "bedrock", accessKey, secretKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClientLLMStream.Do(req)
 	if err != nil {
 		return fmt.Errorf("请求失败：%w", err)
 	}
@@ -244,7 +244,7 @@ func completBedrockSync(msgs []LLMMessage, cfg llmConfig) (string, error) {
 
 	signAWSRequest(req, body, region, "bedrock", accessKey, secretKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClientLLMSync.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("请求失败：%w", err)
 	}

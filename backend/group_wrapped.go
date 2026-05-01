@@ -213,6 +213,16 @@ func groupWrappedHandler(getSvc func() *service.ContactService) gin.HandlerFunc 
 		}
 
 		gwCacheMu.Lock()
+		// 顺手清掉过期项，避免长期累积。cache key 含 room|from|to，
+		// 大量切换群或调整时间范围会持续增长，必须主动 GC。
+		if len(gwCache) >= 10 {
+			now := time.Now()
+			for k, e := range gwCache {
+				if now.Sub(e.at) >= gwCacheTTL {
+					delete(gwCache, k)
+				}
+			}
+		}
 		gwCache[key] = gwCacheEntry{val: resp, at: time.Now()}
 		gwCacheMu.Unlock()
 

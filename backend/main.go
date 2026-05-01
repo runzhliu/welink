@@ -3997,7 +3997,7 @@ func serverMain() {
 
 		req, _ := http.NewRequest("GET", rawURL, nil) // #nosec G107 — URL 来自受信任的数据库记录
 		req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; WelinkApp/1.0)")
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := httpClientFast.Do(req)
 		if err != nil || resp.StatusCode != http.StatusOK {
 			c.Status(http.StatusBadGateway)
 			return

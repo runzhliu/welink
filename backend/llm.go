@@ -453,7 +453,7 @@ func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.apiKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClientLLMStream.Do(req)
 	if err != nil {
 		return fmt.Errorf("请求失败：%w", err)
 	}
@@ -610,7 +610,7 @@ func streamClaude(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) erro
 	req.Header.Set("x-api-key", cfg.apiKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClientLLMStream.Do(req)
 	if err != nil {
 		return fmt.Errorf("请求失败：%w", err)
 	}
@@ -732,7 +732,7 @@ func completeOpenAICompatSync(msgs []LLMMessage, cfg llmConfig) (string, error) 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.apiKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClientLLMSync.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("请求失败：%w", err)
 	}
@@ -798,7 +798,7 @@ func completeClaudeSync(msgs []LLMMessage, cfg llmConfig) (string, error) {
 	req.Header.Set("x-api-key", cfg.apiKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClientLLMSync.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("请求失败：%w", err)
 	}
@@ -874,7 +874,7 @@ func testLLMConn(prefs Preferences) (string, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.apiKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClientFast.Do(req)
 	if err != nil {
 		return cfg.model, fmt.Errorf("请求失败：%w", err)
 	}

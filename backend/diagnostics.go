@@ -216,7 +216,7 @@ func llmProbe(p LLMProfile) DiagnosticsLLMProfile {
 		req.Header.Set("Authorization", "Bearer "+cfg.apiKey)
 	}
 	start := time.Now()
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClientFast.Do(req)
 	d.LatencyMs = time.Since(start).Milliseconds()
 	if err != nil {
 		d.Status = "error"

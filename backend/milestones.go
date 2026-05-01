@@ -228,6 +228,16 @@ func milestonesHandler(getSvc func() *service.ContactService) gin.HandlerFunc {
 		resp.Anniversary = computeAnniversary(resp.FirstDate, loc)
 
 		msCacheMu.Lock()
+		// 顺手清掉过期项，避免长期累积。cache key 含 username|from|to，
+		// 大量切换联系人或调整时间范围会持续增长，必须主动 GC。
+		if len(msCache) >= 10 {
+			now := time.Now()
+			for k, e := range msCache {
+				if now.Sub(e.at) >= msCacheTTL {
+					delete(msCache, k)
+				}
+			}
+		}
 		msCache[key] = msCacheEntry{val: resp, at: time.Now()}
 		msCacheMu.Unlock()
 
