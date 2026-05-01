@@ -15,6 +15,11 @@ docker compose up
 
 首次启动会自动从 [GitHub Container Registry](https://github.com/runzhliu/welink/pkgs/container/welink%2Fbackend) 拉镜像，无需本地编译。
 
+> ⚠ **空目录陷阱（最常见的踩坑）**：必须在 `docker compose up` **之前**把解密产物放进
+> `./decrypted/`。如果这个目录不存在，docker compose 会自动创建一个空目录然后挂上去
+> —— 容器看起来正常启动，前端却会一直停在「未找到 WeChat 解密数据」引导页。
+> 起来之后随时可以这样自查：`docker compose exec backend ls -la /app/data`。
+
 ## 仓库目录布局
 
 ```
@@ -372,10 +377,18 @@ Demo 数据以阿森纳 2025/26 赛季球员和教练组为联系人，消息内
 - `docker compose logs frontend` 看 Nginx 是否报错
 - 宿主机防火墙（Linux 下 `ufw` / `firewalld`）可能拦截了 3418，开放下：`sudo ufw allow 3418`
 
-### 首页显示"找不到数据目录"
-- 确认 `decrypted/` 里有 `contact/contact.db` 和至少一个 `message/message_*.db`
-- 检查 Compose 挂载：`docker compose exec backend ls -la /app/data/`
-- 若路径正确但仍失败，看 `docker compose logs backend` 有没有权限错误
+### 首页显示"找不到数据目录" / 「等待挂载 decrypted/ 数据目录」
+
+按这个顺序排查（90% 是第 1 条）：
+
+1. **空目录陷阱** —— 宿主机 `./decrypted/` 不存在时 docker compose 会自动建一个空目录挂上去。
+   先 `docker compose exec backend ls -la /app/data` 看容器里的内容，如果是空的或没有 `contact/`、`message/` 子目录，就是这种情况：
+   - `docker compose down`
+   - 把解密产物放进仓库根的 `decrypted/`（结构必须是 `decrypted/contact/contact.db` + `decrypted/message/message_*.db`）
+   - `docker compose up`
+2. **解密产物结构不对** —— 容器里能看到文件但路径不对（比如直接是 `decrypted/contact.db` 而不是 `decrypted/contact/contact.db`）。重新整理目录后重启即可。
+3. **挂载到了别的路径** —— 你改过 `docker-compose.yml` 的 volume，但容器内路径不是 `/app/data`。要么改回 `/app/data`，要么加 `DATA_DIR=/your/path` 环境变量告诉后端去哪找。
+4. **权限问题** —— 容器里 `welink` 用户（UID 1001）读不到。`docker compose logs backend` 有没有 `permission denied`，有的话参考下面的「权限错误」一节。
 
 ### 权限错误 `permission denied`
 Alpine 镜像里跑 `welink` 用户（UID 1001）。若 `decrypted/` 在 NAS 上，确保 NAS 权限对 UID 1001 可读。或在 Compose 里声明 user：
