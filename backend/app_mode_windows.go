@@ -121,7 +121,7 @@ func startApp() {
 	}()
 
 	w.Run()
-	os.Exit(0)
+	gracefulExit(0)
 }
 
 // waitForServer polls /api/health until the server is up (up to 30 s). Returns false on timeout.

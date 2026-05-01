@@ -104,8 +104,8 @@ func startApp() {
   <div class="error" id="error"></div>
 </body></html>`)
 
-	// Cmd+Q / Ctrl+Q → 正常退出
-	w.Bind("__welinkQuit", func() { os.Exit(0) })
+	// Cmd+Q / Ctrl+Q → 正常退出（先 flush WAL 再 exit，避免下次启动需要 replay）
+	w.Bind("__welinkQuit", func() { gracefulExit(0) })
 	w.Init(`document.addEventListener('keydown', function(e) {
 		if ((e.metaKey || e.ctrlKey) && e.key === 'q') {
 			if (window.__welinkQuit) window.__welinkQuit();
@@ -138,7 +138,7 @@ func startApp() {
 	}()
 
 	w.Run()
-	os.Exit(0)
+	gracefulExit(0)
 }
 
 // waitForServer polls /api/health until the server is up (up to 30 s). Returns false on timeout.

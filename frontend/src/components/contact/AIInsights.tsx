@@ -67,12 +67,16 @@ export const AIInsights: React.FC<Props> = ({ username, displayName, avatarUrl, 
 
   // 预加载摘要数据
   useEffect(() => {
+    // cancelled 守卫：username 切换或弹窗关闭时，旧请求回调不要再 setState，
+    // 否则上一个联系人的 summary 会闪在新界面上。
+    let cancelled = false;
     setSummaryLoading(true);
     fetch(`/api/contacts/ai-summary?username=${encodeURIComponent(username)}`)
       .then(r => r.json())
-      .then(d => setSummary(d))
+      .then(d => { if (!cancelled) setSummary(d); })
       .catch(() => {})
-      .finally(() => setSummaryLoading(false));
+      .finally(() => { if (!cancelled) setSummaryLoading(false); });
+    return () => { cancelled = true; };
   }, [username]);
 
   // 持久化 key
@@ -82,11 +86,13 @@ export const AIInsights: React.FC<Props> = ({ username, displayName, avatarUrl, 
 
   // 加载已保存的结果
   useEffect(() => {
+    let cancelled = false;
     setResult('');
     setError('');
     fetch(`/api/ai/conversations?key=${encodeURIComponent(storageKey)}`)
       .then(r => r.json())
       .then(d => {
+        if (cancelled) return;
         if (d?.messages?.length) {
           // 取最后一条 assistant 消息作为保存的结果
           const last = [...d.messages].reverse().find((m: { role: string; content: string }) => m.role === 'assistant');
@@ -94,6 +100,7 @@ export const AIInsights: React.FC<Props> = ({ username, displayName, avatarUrl, 
         }
       })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [storageKey]);
 
   const generate = useCallback(async () => {
