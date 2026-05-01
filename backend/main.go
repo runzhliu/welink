@@ -2910,6 +2910,9 @@ func serverMain() {
 		// 创意实验室 · 关系考古（单联系人时间轴里程碑）
 		registerMilestonesRoutes(prot, getSvc)
 
+		// 创意实验室 · 这句话谁说过（跨全库语义反向搜索）
+		registerEchoSearchRoutes(prot, getSvc)
+
 		// 群聊 AI 年报
 		registerGroupYearReviewRoutes(prot, getSvc)
 

@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge } from 'lucide-react';
+import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { VirtualGroupChat } from './VirtualGroupChat';
 import { Highlights } from './Highlights';
@@ -15,12 +15,13 @@ import { DriftAlert } from './DriftAlert';
 import { GroupWrapped } from './GroupWrapped';
 import { Milestones } from './Milestones';
 import { GroupROI } from './GroupROI';
+import { EchoSearch } from './EchoSearch';
 
 interface Props {
   contacts: ContactStats[];
 }
 
-type LabKey = 'highlights' | 'dna' | 'drift' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
+type LabKey = 'highlights' | 'dna' | 'drift' | 'echo' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
 
 interface LabDef {
   key: LabKey;
@@ -50,6 +51,13 @@ const LABS: LabDef[] = [
     icon: <AlertCircle size={14} />,
     badge: 'NEW',
     desc: '找出消息频率从高变低、超过 30 天没说话的老朋友',
+  },
+  {
+    key: 'echo',
+    label: '这句话谁说过',
+    icon: <Search size={14} />,
+    badge: 'NEW',
+    desc: '输入一句话，跨全库语义反查谁说过最像的话——找回那句"我记得有人说过"',
   },
   {
     key: 'group-roi',
@@ -144,6 +152,7 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
       {active === 'highlights' && <Highlights contacts={contacts} />}
       {active === 'dna' && <ChatDNA />}
       {active === 'drift' && <DriftAlert />}
+      {active === 'echo' && <EchoSearch />}
       {active === 'group-roi' && <GroupROI />}
       {active === 'group-wrapped' && <GroupWrapped />}
       {active === 'milestones' && <Milestones contacts={contacts} />}
