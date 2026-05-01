@@ -14,9 +14,11 @@ interface Props {
 const COMPOSE_SNIPPET = `services:
   backend:
     volumes:
-      - ./decrypted:/data/decrypted:ro
-    environment:
-      - WELINK_DATA_DIR=/data/decrypted`;
+      # 把宿主机的 ./decrypted 挂到容器内 /app/data
+      # ⚠ ./decrypted 必须先存在并放好解密产物，
+      #   否则 docker compose 会自动创建一个空目录，
+      #   挂载上去但里面什么数据都没有。
+      - ./decrypted:/app/data`;
 
 export const SetupRequiredPage: React.FC<Props> = ({ info, onReady }) => {
   const [copied, setCopied] = useState(false);
@@ -97,7 +99,20 @@ export const SetupRequiredPage: React.FC<Props> = ({ info, onReady }) => {
           {isLinux ? (
             <div className="space-y-3 text-sm text-gray-700 dk-text-soft">
               <p>
-                在 <code className="font-mono text-[#07c160]">docker-compose.yml</code> 中挂载 decrypted 目录，然后重启容器：
+                <strong>常见原因</strong>：宿主机仓库根目录下 <code className="font-mono">decrypted/</code> 不存在，
+                docker compose 会自动创建一个空目录挂载上去 —— 看起来挂上了但里面没数据。
+              </p>
+              <p>
+                确认 <code className="font-mono">decrypted/</code> 真的存在并包含
+                <code className="font-mono"> contact/contact.db</code> 与 <code className="font-mono">message/message_*.db</code>，
+                然后重启容器：
+              </p>
+              <pre className="text-xs bg-gray-50 dk-bg-soft rounded-lg p-3 overflow-x-auto text-gray-700">
+                docker compose exec backend ls -la /app/data
+              </pre>
+              <p>
+                也可以编辑 <code className="font-mono text-[#07c160]">docker-compose.yml</code>，
+                把 volume 改到你实际的解密目录：
               </p>
               <div className="relative">
                 <pre className="text-xs bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto">

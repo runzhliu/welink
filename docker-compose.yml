@@ -10,6 +10,12 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
+      # ⚠ 启动前请确认宿主机仓库根目录下 decrypted/ 存在，且包含
+      #   contact/contact.db 和 message/message_*.db。
+      #   如果 ./decrypted 不存在，docker compose 会**自动创建一个空目录**
+      #   并挂上去 —— 此时容器看起来正常启动，但 WeLink 会展示
+      #   「未找到 WeChat 解密数据」引导页（前端持续轮询直到数据就位）。
+      #   可在容器内验证：docker compose exec backend ls -la /app/data
       - ./decrypted:/app/data
       - welink-prefs:/app/prefs
     environment:

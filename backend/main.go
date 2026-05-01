@@ -166,7 +166,11 @@ func serverMain() {
 		if env := os.Getenv("WELINK_DATA_DIR"); env != "" {
 			add(env)
 		}
-		add("/data/decrypted") // Docker 容器内常用挂载点
+		if env := os.Getenv("DATA_DIR"); env != "" {
+			add(env)
+		}
+		add("/app/data")       // Dockerfile 默认 DATA_DIR / docker-compose.yml 挂载点
+		add("/data/decrypted") // 历史兼容：旧版文档里出现过的挂载点
 		if cwd, err := os.Getwd(); err == nil {
 			add(filepath.Join(cwd, "decrypted"))
 		}
@@ -246,10 +250,17 @@ func serverMain() {
 		case hasFrontend:
 			log.Printf("→ 请在应用首页选择 decrypted/ 目录，或点击「使用 Demo 数据」体验。")
 		case runtime.GOOS == "linux":
-			log.Printf("→ Docker：确认 docker-compose.yml 中已挂载 decrypted/，例如：")
-			log.Printf("    volumes:")
-			log.Printf("      - ./decrypted:/data/decrypted:ro")
-			log.Printf("   或设置环境变量 DEMO_MODE=true 使用演示数据。")
+			log.Printf("→ Docker：宿主机仓库根目录下需有 decrypted/（含 contact/contact.db + message/message_*.db），")
+			log.Printf("   docker-compose.yml 默认挂载是 ./decrypted:/app/data。常见原因：")
+			log.Printf("     1. ./decrypted 目录不存在 —— docker compose 会自动创建空目录，看起来挂上了但里面没数据")
+			log.Printf("     2. 解密产物没放在 decrypted/ 而是放在了别的目录")
+			log.Printf("     3. decrypted/ 里没有 contact/ 和 message/ 两个子目录")
+			log.Printf("   解决方式（任选）：")
+			log.Printf("     - 把解密产物（包含 contact/ message/）放进 ./decrypted")
+			log.Printf("     - 改 docker-compose.yml 的 volumes 指向你实际的解密目录：")
+			log.Printf("         volumes:")
+			log.Printf("           - /your/path/decrypted:/app/data")
+			log.Printf("     - 或临时体验：docker compose -f docker-compose.demo.yml up")
 		default:
 			log.Printf("→ 本地开发：把 decrypted/ 放到仓库根目录，或设置 WELINK_DATA_DIR；亦可 DEMO_MODE=true 体验演示数据。")
 		}
