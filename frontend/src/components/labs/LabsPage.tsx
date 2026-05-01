@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass } from 'lucide-react';
+import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { VirtualGroupChat } from './VirtualGroupChat';
 import { Highlights } from './Highlights';
@@ -14,12 +14,13 @@ import { ParallelChat } from './ParallelChat';
 import { DriftAlert } from './DriftAlert';
 import { GroupWrapped } from './GroupWrapped';
 import { Milestones } from './Milestones';
+import { GroupROI } from './GroupROI';
 
 interface Props {
   contacts: ContactStats[];
 }
 
-type LabKey = 'highlights' | 'dna' | 'drift' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
+type LabKey = 'highlights' | 'dna' | 'drift' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
 
 interface LabDef {
   key: LabKey;
@@ -49,6 +50,13 @@ const LABS: LabDef[] = [
     icon: <AlertCircle size={14} />,
     badge: 'NEW',
     desc: '找出消息频率从高变低、超过 30 天没说话的老朋友',
+  },
+  {
+    key: 'group-roi',
+    label: '群语料 ROI',
+    icon: <Gauge size={14} />,
+    badge: 'NEW',
+    desc: '给每个群打分：值得多看 / 可以静音 / 可以放手，告别"加了 200 个群不知道留谁"',
   },
   {
     key: 'group-wrapped',
@@ -136,6 +144,7 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
       {active === 'highlights' && <Highlights contacts={contacts} />}
       {active === 'dna' && <ChatDNA />}
       {active === 'drift' && <DriftAlert />}
+      {active === 'group-roi' && <GroupROI />}
       {active === 'group-wrapped' && <GroupWrapped />}
       {active === 'milestones' && <Milestones contacts={contacts} />}
       {active === 'soul-quiz' && <SoulQuiz contacts={contacts} />}
