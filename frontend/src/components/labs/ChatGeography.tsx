@@ -424,7 +424,7 @@ const ShareCard: React.FC<{
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#1d1d1f' }}>{p.name}</div>
                 {p.top_with && p.top_with.length > 0 && (
-                  <div style={{ fontSize: 11, color: '#8a94a6', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: 11, color: '#8a94a6', marginTop: 2, lineHeight: 1.5, wordBreak: 'break-word' }}>
                     最常和 {p.top_with.map(c => `${c.display_name}×${c.count}`).join(' / ')} 聊起
                   </div>
                 )}

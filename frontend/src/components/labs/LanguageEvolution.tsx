@@ -356,9 +356,9 @@ const YearCard: React.FC<{ y: YearStat }> = ({ y }) => {
         </div>
       )}
       {y.longest_message && (
-        <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+        <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed min-w-0">
           <span className="text-gray-400">那年说过最长一句（{y.longest_len} 字）：</span>
-          <span className="block mt-0.5 italic">「{y.longest_message}」</span>
+          <span className="block mt-0.5 italic break-all whitespace-pre-wrap">「{y.longest_message}」</span>
         </div>
       )}
     </div>
