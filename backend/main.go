@@ -2932,6 +2932,18 @@ func serverMain() {
 		// 创意实验室 · 这句话谁说过（跨全库语义反向搜索）
 		registerEchoSearchRoutes(prot, getSvc)
 
+		// 创意实验室 · 群金句榜（被引用最多的消息 / 名场面，零 LLM）
+		registerGoldenQuotesRoutes(prot, getSvc)
+
+		// 创意实验室 · 人情债（承诺/邀约挖掘，LLM 抽取）
+		registerPromiseDebtsRoutes(prot, getSvc)
+
+		// 创意实验室 · 我的语言进化史（按年画"我"说话风格变化曲线，零 LLM）
+		registerLanguageEvolutionRoutes(prot, getSvc)
+
+		// 创意实验室 · 聊天地图（地名词典子串匹配，零 LLM）
+		registerChatGeographyRoutes(prot, getSvc)
+
 		// 群聊 AI 年报
 		registerGroupYearReviewRoutes(prot, getSvc)
 

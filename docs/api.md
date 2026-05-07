@@ -490,6 +490,155 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 - `{ delta: "..." }`：当前话的增量内容
 - `{ turn_end: true }` / `{ done: true }`：结束当前话或整段
 
+### `GET /api/me/chat-geography[?limit=30]`
+
+聊天地图。词典子串匹配抽地名，按 tier 分类聚合。零 LLM、本地缓存 2h。
+
+**Tier 取值**
+
+- `china_metro` 一线 / 直辖市
+- `china_city` 中国城市
+- `china_scenic` 国内景点
+- `region` 港 / 澳 / 台
+- `abroad_city` 海外城市
+- `abroad_country` 国家 / 大区
+
+**响应**
+
+```json
+{
+  "places": [
+    {
+      "name": "东京",
+      "tier": "abroad_city",
+      "mentions": 87,            // 总提及次数（同消息内同名只计 1）
+      "contacts": 5,             // 多少个不同联系人聊起
+      "top_with": [              // Top 3 同行者
+        { "username": "wxid_x", "display_name": "TA", "avatar": "...", "count": 23 }
+      ]
+    }
+  ],
+  "total_mentions": 1234,
+  "unique_places": 45,
+  "contacts_scanned": 80,
+  "messages_scanned": 65432,
+  "generated_at": 1714867200
+}
+```
+
+`limit` 默认 30、最大 100。`refresh=1` 强制重算。
+
+### `GET /api/me/language-evolution`
+
+我的语言进化史。按年聚合"我"发的所有文本消息，输出 4 条说话风格指标的演变 + 每年的"那年的我"卡片。零 LLM、本地缓存 2h、`?refresh=1` 强制重算。
+
+**响应**
+
+```json
+{
+  "years": [
+    {
+      "year": 2024,
+      "my_messages": 12345,
+      "my_chars": 234567,
+      "avg_chars": 19.0,
+      "emoji_count": 1100,
+      "emoji_per_100": 8.9,
+      "english_msgs": 1456,
+      "english_pct": 0.118,
+      "active_days": 320,
+      "msgs_per_day": 38.6,
+      "top_openers": [{ "text": "在吗", "count": 123 }],
+      "longest_message": "...",
+      "longest_len": 280
+    }
+  ],
+  "total_my_messages": 65432,
+  "total_my_chars": 1234567,
+  "first_year": 2018,
+  "last_year": 2026,
+  "contacts_scanned": 80,
+  "generated_at": 1714867200
+}
+```
+
+少于 50 条文本的年份会被剔除（统计不稳）。
+
+### `POST /api/contacts/promise-debts`
+
+人情债 / 承诺与邀约挖掘。两段式：先用宽口径正则把"答应/改天/下次/等我/请你/寄你..."嫌疑句的上下文窗口捞出来，再让 LLM 精筛 + 结构化抽取真正的承诺。
+
+**请求体**
+
+```json
+{
+  "username": "wxid_xxx",
+  "profile_id": "uuid"
+}
+```
+
+**响应**
+
+```json
+{
+  "display_name": "TA",
+  "avatar": "...",
+  "total_messages": 8421,
+  "scanned_messages": 6500,    // 扫描的文本消息数
+  "candidate_count": 35,       // 命中正则后合并的上下文窗口数
+  "debts": [
+    {
+      "text": "TA 答应下次去东京带我去那家拉面店",
+      "direction": "they_owe",            // i_owe / they_owe / mutual
+      "category": "聚餐",                  // 聚餐/见面/寄送/借还/通话/旅行邀约/答复/其他
+      "target_date_text": "下次去东京",
+      "target_date": "",                  // 可推断为具体日期时填 YYYY-MM-DD
+      "source_quote": "下次我们去东京我带你去尝那家拉面",
+      "source_speaker": "TA",
+      "source_date": "2024-08-12",
+      "confidence": "high"                // high/medium/low
+    }
+  ],
+  "generated_at": 1714867200
+}
+```
+
+后端会按方向（`they_owe > mutual > i_owe`）+ 置信度（high>medium>low）排序后返回，前端按 tab 过滤展示。
+
+### `GET /api/groups/golden-quotes?room=xxx@chatroom&limit=10`
+
+群金句榜。扫该群所有 `local_type=49 + <refermsg>` 引用消息，按原文被引用次数排出 Top N "名场面"。
+
+零 LLM。最多扫 60,000 条消息（按时间倒序裁剪），10 分钟缓存。`limit` 默认 10、最大 50。同一条原文被不同人引用合并计数（svrid 去重 + 文本 fallback）；只被引用过 1 次的不上榜；自己 quote 自己不计。
+
+**响应**：
+
+```json
+{
+  "group_name": "XXX 群",
+  "room_id": "12345@chatroom",
+  "total_scanned": 8000,    // 扫描的消息数
+  "total_quotes": 312,      // 命中引用的次数
+  "unique_quoted": 47,      // 不同的"被引用原文"数
+  "truncated": false,       // 是否触发 60k 上限
+  "quotes": [
+    {
+      "svrid": "1234567890",
+      "speaker": "张三",
+      "speaker_wxid": "wxid_xxx",
+      "avatar": "...",
+      "content": "金句原文",
+      "quote_count": 8,                          // 被引用次数
+      "ts": 1700000000, "date": "2024-03-15", "time": "23:14",
+      "repliers": [                              // 翻牌人 Top 3
+        { "speaker": "李四", "avatar": "...", "count": 3 }
+      ]
+    }
+  ],
+  "generated_at": 1714867200
+}
+```
+
 ### `GET /api/me/relation-graph`
 
 关系星图。返回所有联系人按"共同群聊"聚拢的力导向图节点 + 连边。
