@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search } from 'lucide-react';
+import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search, Quote, HeartHandshake, TrendingUp, Globe2 } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { VirtualGroupChat } from './VirtualGroupChat';
 import { Highlights } from './Highlights';
@@ -16,12 +16,16 @@ import { GroupWrapped } from './GroupWrapped';
 import { Milestones } from './Milestones';
 import { GroupROI } from './GroupROI';
 import { EchoSearch } from './EchoSearch';
+import { GoldenQuotes } from './GoldenQuotes';
+import { PromiseDebts } from './PromiseDebts';
+import { LanguageEvolution } from './LanguageEvolution';
+import { ChatGeography } from './ChatGeography';
 
 interface Props {
   contacts: ContactStats[];
 }
 
-type LabKey = 'highlights' | 'dna' | 'drift' | 'echo' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
+type LabKey = 'highlights' | 'dna' | 'drift' | 'echo' | 'golden-quotes' | 'promise-debts' | 'language-evolution' | 'chat-geography' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
 
 interface LabDef {
   key: LabKey;
@@ -58,6 +62,34 @@ const LABS: LabDef[] = [
     icon: <Search size={14} />,
     badge: 'NEW',
     desc: '输入一句话，跨全库语义反查谁说过最像的话——找回那句"我记得有人说过"',
+  },
+  {
+    key: 'golden-quotes',
+    label: '群金句榜',
+    icon: <Quote size={14} />,
+    badge: 'NEW',
+    desc: '扫群里所有「引用回复」，按原文被翻牌次数排出 Top 10 名场面 / 梗 —— 零 LLM 即时返回',
+  },
+  {
+    key: 'promise-debts',
+    label: '人情债',
+    icon: <HeartHandshake size={14} />,
+    badge: 'NEW',
+    desc: 'AI 挖出"答应了但没做"的承诺与邀约：下次约饭 / 改天找时间 / 我寄给你 ……看看 TA 欠你 vs 你欠 TA',
+  },
+  {
+    key: 'language-evolution',
+    label: '语言进化史',
+    icon: <TrendingUp size={14} />,
+    badge: 'NEW',
+    desc: '按年画"我"说话风格的 4 条曲线：句长 / emoji 浓度 / 英文夹杂率 / 日均产量 —— 你这些年话变了吗？',
+  },
+  {
+    key: 'chat-geography',
+    label: '聊天地图',
+    icon: <Globe2 size={14} />,
+    badge: 'NEW',
+    desc: '从所有私聊里抽出地名（中国城市 / 景点 / 海外城市 / 国家），bubble cloud 看你聊起最多的地方',
   },
   {
     key: 'group-roi',
@@ -153,6 +185,10 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
       {active === 'dna' && <ChatDNA />}
       {active === 'drift' && <DriftAlert />}
       {active === 'echo' && <EchoSearch />}
+      {active === 'golden-quotes' && <GoldenQuotes />}
+      {active === 'promise-debts' && <PromiseDebts contacts={contacts} />}
+      {active === 'language-evolution' && <LanguageEvolution />}
+      {active === 'chat-geography' && <ChatGeography />}
       {active === 'group-roi' && <GroupROI />}
       {active === 'group-wrapped' && <GroupWrapped />}
       {active === 'milestones' && <Milestones contacts={contacts} />}
