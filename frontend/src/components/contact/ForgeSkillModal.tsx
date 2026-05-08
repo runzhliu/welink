@@ -25,16 +25,17 @@ interface LLMProfileItem {
   model?: string;
 }
 
-type FormatKey = 'claude-skill' | 'claude-agent' | 'codex' | 'opencode' | 'cursor' | 'generic';
+type FormatKey = 'claude-skill' | 'claude-agent' | 'codex' | 'opencode' | 'cursor' | 'generic' | 'lora-jsonl';
 type GroupTargetKind = 'whole' | 'member';
 
-const FORMATS: Array<{ key: FormatKey; name: string; description: string; icon: string }> = [
+const FORMATS: Array<{ key: FormatKey; name: string; description: string; icon: string; selfOnly?: boolean }> = [
   { key: 'claude-skill', name: 'Claude Code Skill', description: '目录式，含 SKILL.md frontmatter，放到 ~/.claude/skills/', icon: '📁' },
   { key: 'claude-agent', name: 'Claude Code Subagent', description: '单文件 .md，放到 ~/.claude/agents/，可通过 @agent 调用', icon: '🤖' },
   { key: 'codex', name: 'OpenAI Codex AGENTS.md', description: '项目根 AGENTS.md，Codex CLI 自动读取', icon: '🧠' },
   { key: 'opencode', name: 'OpenCode Agent', description: '.opencode/agent/<name>.md，支持 subagent 模式', icon: '💡' },
   { key: 'cursor', name: 'Cursor Rule', description: '.cursor/rules/<name>.mdc，支持 glob 自动应用', icon: '✏️' },
   { key: 'generic', name: '通用 Markdown', description: '工具无关，可粘贴到任何 AI 对话或手动转换', icon: '📄' },
+  { key: 'lora-jsonl', name: 'LoRA 训练集 (高级)', description: '导出 Alpaca jsonl + 训练食谱，自己拿去 Unsloth 微调本地模型。仅本地，不调 LLM', icon: '🧪', selfOnly: true },
 ];
 
 // 消息条数预设：默认 500 平衡质量和成本
@@ -78,6 +79,13 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
       }
     }).catch(() => {});
   }, [open, skillType, username]);
+
+  // lora-jsonl 仅 self 类型可用：切到非 self 类型时回退默认
+  useEffect(() => {
+    if (format === 'lora-jsonl' && skillType !== 'self') {
+      setFormat('claude-skill');
+    }
+  }, [skillType, format]);
 
   useEffect(() => {
     if (open) {
@@ -422,7 +430,7 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
         <div className="mb-5">
           <div className="text-xs font-bold text-gray-500 dk-text mb-2">输出格式</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {FORMATS.map(f => (
+            {FORMATS.filter(f => !f.selfOnly || skillType === 'self').map(f => (
               <button
                 key={f.key}
                 onClick={() => setFormat(f.key)}
@@ -441,6 +449,17 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
               </button>
             ))}
           </div>
+          {format === 'lora-jsonl' && (
+            <div className="mt-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-[11px] text-amber-800 dark:text-amber-200 leading-relaxed">
+              <div className="font-bold mb-1">⚠️ 高级模式 · 请先了解</div>
+              <ul className="space-y-1 list-disc pl-4">
+                <li>导出的 zip 含 <code className="px-1 bg-amber-100 dark:bg-amber-500/20 rounded">data.jsonl</code> + 训练食谱，<b>需要至少 500 条配对样本</b>才能导出</li>
+                <li>不会调用 LLM、不消耗 token，纯本地数据处理</li>
+                <li>训练需要自备 GPU（推荐 16G 显存以上）和 Unsloth/LLaMA-Factory 等工具</li>
+                <li><b>训练产物（GGUF 模型）含你的真实风格，请勿公开分享</b></li>
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* 错误提示 */}

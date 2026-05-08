@@ -162,7 +162,7 @@ export async function forgeSkill(opts: {
   skill_type: 'contact' | 'self' | 'group' | 'group-member';
   username?: string;
   member_speaker?: string;
-  format: 'claude-skill' | 'claude-agent' | 'codex' | 'opencode' | 'cursor' | 'generic';
+  format: 'claude-skill' | 'claude-agent' | 'codex' | 'opencode' | 'cursor' | 'generic' | 'lora-jsonl';
   profile_id?: string;
   msg_limit?: number;
 }): Promise<ForgeSkillResult> {

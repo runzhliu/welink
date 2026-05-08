@@ -1776,12 +1776,21 @@ func serverMain() {
 		}
 		prefs := loadPreferences()
 		cfg := llmConfigForProfile(body.ProfileID, prefs)
-		if cfg.provider == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
-			return
+		// lora-jsonl 是纯本地数据导出，不需要 LLM
+		isLoRA := body.Format == "lora-jsonl"
+		if !isLoRA {
+			if cfg.provider == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
+				return
+			}
+			if cfg.apiKey == "" && cfg.provider != "ollama" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+				return
+			}
 		}
-		if cfg.apiKey == "" && cfg.provider != "ollama" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+		// lora-jsonl 仅支持 self 类型
+		if isLoRA && body.SkillType != "self" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "LoRA 数据集导出仅支持 skill_type=self"})
 			return
 		}
 		svc := getSvc()
@@ -1839,7 +1848,16 @@ func serverMain() {
 			// 标记为运行中
 			_ = UpdateSkillStatus(id, SkillStatusRunning, "", "", 0, "")
 
-			zipBytes, filename, err := ForgeSkillZip(s, opts, p)
+			var (
+				zipBytes []byte
+				filename string
+				err      error
+			)
+			if opts.Format == "lora-jsonl" {
+				zipBytes, filename, err = BuildLoRAExportZip(s)
+			} else {
+				zipBytes, filename, err = ForgeSkillZip(s, opts, p)
+			}
 			if err != nil {
 				log.Printf("[skill %s] forge failed: %v", id, err)
 				_ = UpdateSkillStatus(id, SkillStatusFailed, err.Error(), "", 0, "")
