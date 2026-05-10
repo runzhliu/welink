@@ -1095,9 +1095,202 @@ const MemLLMSettingsSection: React.FC = () => {
   );
 };
 
-// ─── AI 配置分组（Tab 切换三个子区块）────────────────────────────────────────
+// ─── AI 文生图配置区块 ────────────────────────────────────────────────────────
 
-type AITab = 'llm' | 'embedding' | 'memory';
+const IMAGE_PROVIDERS = [
+  { value: 'doubao', label: '豆包 / 即梦（火山方舟）', defaultURL: 'https://ark.cn-beijing.volces.com/api/v3', defaultModel: 'doubao-seedream-3-0-t2i-250415' },
+] as const;
+
+type ImageProviderValue = typeof IMAGE_PROVIDERS[number]['value'];
+
+const ImageSettingsSection: React.FC = () => {
+  const [enabled, setEnabled] = useState(false);
+  const [provider, setProvider] = useState<ImageProviderValue>('doubao');
+  const [apiKey, setApiKey] = useState('');
+  const [baseURL, setBaseURL] = useState('');
+  const [model, setModel] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [testImage, setTestImage] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    axios.get<Record<string, unknown>>('/api/preferences').then(r => {
+      setEnabled(Boolean(r.data.image_enabled));
+      if (r.data.image_provider) setProvider(r.data.image_provider as ImageProviderValue);
+      setApiKey((r.data.image_api_key as string) ?? '');
+      setBaseURL((r.data.image_base_url as string) ?? '');
+      setModel((r.data.image_model as string) ?? '');
+    }).catch(() => {}).finally(() => setLoaded(true));
+  }, []);
+
+  const providerInfo = IMAGE_PROVIDERS.find(p => p.value === provider) ?? IMAGE_PROVIDERS[0];
+
+  // 走独立的 /api/preferences/image，不和 LLM/Embedding 字段混
+  const buildPayload = () => ({
+    image_enabled: enabled,
+    image_provider: provider,
+    image_api_key: apiKey,
+    image_base_url: baseURL,
+    image_model: model,
+  });
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      await axios.put('/api/preferences/image', buildPayload());
+      setSaveMsg({ ok: true, text: '已保存' });
+    } catch {
+      setSaveMsg({ ok: false, text: '保存失败' });
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveMsg(null), 3000);
+    }
+  };
+
+  const handleTest = async () => {
+    setTesting(true);
+    setSaveMsg(null);
+    setTestImage(null);
+    try {
+      // 先保存最新配置，再发起测试调用（生图比较贵，跑一次约 1-2 毛钱）
+      await axios.put('/api/preferences/image', buildPayload());
+      const r = await axios.post<{ ok: boolean; url: string; model: string }>('/api/image/test');
+      setTestImage(r.data.url);
+      setSaveMsg({ ok: true, text: `连接成功（${r.data.model}）` });
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? '连接失败';
+      setSaveMsg({ ok: false, text: msg });
+    } finally {
+      setTesting(false);
+      setTimeout(() => setSaveMsg(null), 8000);
+    }
+  };
+
+  if (!loaded) return null;
+
+  const urlPlaceholder = providerInfo.defaultURL ? `默认：${providerInfo.defaultURL}` : '请输入 Base URL';
+  const modelPlaceholder = providerInfo.defaultModel ? `默认：${providerInfo.defaultModel}` : '请输入模型名';
+
+  return (
+    <div>
+      <p className="text-sm text-gray-400 mb-4">
+        用于群年报封面、高光瞬间插画、联系人 AI 头像。所有生图都需要在卡片上手动点「生成」按钮触发，不会自动调用。
+        <br />
+        生图费用约为文本调用的 10-50 倍（火山方舟约 0.05-0.2 元/张），首次试用建议先用「测试连接」确认配置正确。
+      </p>
+
+      <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4 dk-card dk-border">
+        {/* 总开关 */}
+        <label className="flex items-center gap-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={e => setEnabled(e.target.checked)}
+            className="w-4 h-4 accent-[#07c160]"
+          />
+          <span className="text-sm font-bold text-gray-700 dark:text-gray-300">启用 AI 生图</span>
+          <span className="text-xs text-gray-400">关闭后所有「生成插画」按钮会被隐藏</span>
+        </label>
+
+        {/* Provider */}
+        <div>
+          <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">生图提供商</label>
+          <select
+            value={provider}
+            onChange={e => setProvider(e.target.value as ImageProviderValue)}
+            className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#07c160] bg-[#f8f9fb] dk-input"
+          >
+            {IMAGE_PROVIDERS.map(p => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* API Key */}
+        <div>
+          <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">API Key</label>
+          <input
+            type="password"
+            value={apiKey === '__HAS_KEY__' ? '' : apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            placeholder={apiKey === '__HAS_KEY__' ? '●●●●●● 已保存（留空保留）' : '请输入 API Key'}
+            className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#07c160] bg-[#f8f9fb] font-mono dk-input"
+          />
+          <p className="text-[10px] text-gray-400 mt-1">
+            火山方舟控制台 → API Key 管理（与豆包文本 Key 通用）
+          </p>
+        </div>
+
+        {/* Base URL */}
+        <div>
+          <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+            Base URL <span className="text-gray-400 font-normal normal-case">（留空使用默认）</span>
+          </label>
+          <input
+            type="text"
+            value={baseURL}
+            onChange={e => setBaseURL(e.target.value)}
+            placeholder={urlPlaceholder}
+            className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#07c160] bg-[#f8f9fb] font-mono dk-input"
+          />
+        </div>
+
+        {/* Model */}
+        <div>
+          <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+            模型 <span className="text-gray-400 font-normal normal-case">（留空使用默认）</span>
+          </label>
+          <input
+            type="text"
+            value={model}
+            onChange={e => setModel(e.target.value)}
+            placeholder={modelPlaceholder}
+            className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#07c160] bg-[#f8f9fb] font-mono dk-input"
+          />
+        </div>
+
+        {/* Buttons */}
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-5 py-2.5 bg-[#07c160] text-white text-sm font-bold rounded-xl hover:bg-[#06ad56] disabled:opacity-50 transition-colors"
+          >
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            保存
+          </button>
+          <button
+            onClick={handleTest}
+            disabled={testing || saving || !apiKey}
+            className="flex items-center gap-1.5 px-4 py-2.5 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 text-sm font-bold rounded-xl hover:border-[#07c160] hover:text-[#07c160] disabled:opacity-50 transition-colors"
+          >
+            {testing ? <Loader2 size={14} className="animate-spin" /> : <AlertCircle size={14} />}
+            测试连接（生成 1 张图）
+          </button>
+          {saveMsg && (
+            <span className={`text-sm font-semibold ${saveMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
+              {saveMsg.ok ? '✓ ' : '✕ '}{saveMsg.text}
+            </span>
+          )}
+        </div>
+
+        {testImage && (
+          <div className="pt-2">
+            <p className="text-xs text-gray-400 mb-2">测试图（一只橘猫）：</p>
+            <img src={testImage} alt="测试图" className="w-48 h-48 rounded-xl border border-gray-100 dark:border-white/10 object-cover" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── AI 配置分组（Tab 切换四个子区块）────────────────────────────────────────
+
+type AITab = 'llm' | 'embedding' | 'memory' | 'image';
 
 const AIConfigGroup: React.FC = () => {
   const [tab, setTab] = useState<AITab>('llm');
@@ -1106,6 +1299,7 @@ const AIConfigGroup: React.FC = () => {
     { key: 'llm',       label: '分析模型' },
     { key: 'embedding', label: '向量 Embedding' },
     { key: 'memory',    label: '记忆提炼' },
+    { key: 'image',     label: 'AI 生图' },
   ];
 
   return (
@@ -1144,6 +1338,9 @@ const AIConfigGroup: React.FC = () => {
       </div>
       <div className={tab === 'memory' ? '' : 'hidden'}>
         <MemLLMSettingsSection />
+      </div>
+      <div className={tab === 'image' ? '' : 'hidden'}>
+        <ImageSettingsSection />
       </div>
     </section>
   );
