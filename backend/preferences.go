@@ -163,6 +163,14 @@ type Preferences struct {
 	EmbeddingModel    string `json:"embedding_model,omitempty"`
 	EmbeddingDims     int    `json:"embedding_dims,omitempty"` // 0 = 由模型默认值决定
 
+	// 文生图配置（年报封面 / 高光插画 / AI 头像等场景）
+	// 默认 disabled — 生图比文本贵 10-50 倍，必须用户主动开启 + 主动点按钮触发
+	ImageEnabled  bool   `json:"image_enabled,omitempty"`
+	ImageProvider string `json:"image_provider,omitempty"` // doubao 等；默认 doubao（火山方舟即梦）
+	ImageAPIKey   string `json:"image_api_key,omitempty"`
+	ImageBaseURL  string `json:"image_base_url,omitempty"`
+	ImageModel    string `json:"image_model,omitempty"`
+
 	// 向量检索缓存（内存）
 	VecCacheMaxKeys int `json:"vec_cache_max_keys,omitempty"` // 最多缓存几个联系人的 embedding，0 = 默认 3
 
@@ -313,9 +321,10 @@ func sanitizeForExport(p Preferences, stripSecrets bool) Preferences {
 	// 播客 TTS API Key
 	p.PodcastTTSAPIKey = ""
 
-	// LLM / Embedding
+	// LLM / Embedding / Image
 	p.LLMAPIKey = ""
 	p.EmbeddingAPIKey = ""
+	p.ImageAPIKey = ""
 	for i := range p.LLMProfiles {
 		p.LLMProfiles[i].APIKey = ""
 	}
@@ -431,6 +440,7 @@ func sanitizeForResponse(p Preferences) Preferences {
 	out := p
 	out.LLMAPIKey = redact(out.LLMAPIKey)
 	out.EmbeddingAPIKey = redact(out.EmbeddingAPIKey)
+	out.ImageAPIKey = redact(out.ImageAPIKey)
 	out.GeminiClientSecret = redact(out.GeminiClientSecret)
 	out.GeminiAccessToken = ""
 	out.GeminiRefreshToken = ""

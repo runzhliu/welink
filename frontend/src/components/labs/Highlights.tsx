@@ -4,9 +4,9 @@
  * 流程：选联系人 → POST /api/contacts/highlights → 渲染卡片 → 可截图导出
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { Sparkles, Loader2, Search, Share2, Check, Wand2, RefreshCw } from 'lucide-react';
+import { Sparkles, Loader2, Search, Share2, Check, Wand2, RefreshCw, Image as ImageIcon } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
@@ -53,6 +53,44 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+
+  // AI 生图：每段高光独立触发，避免一次性烧 5-8 张
+  const [imageEnabled, setImageEnabled] = useState(false);
+  const [images, setImages] = useState<Record<number, string>>({});
+  const [imgLoading, setImgLoading] = useState<Record<number, boolean>>({});
+  const [imgError, setImgError] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    axios.get<{ image_enabled?: boolean }>('/api/preferences')
+      .then(r => setImageEnabled(Boolean(r.data.image_enabled)))
+      .catch(() => {});
+  }, []);
+
+  // 切换联系人 / 重新生成时清空旧图
+  useEffect(() => {
+    setImages({});
+    setImgLoading({});
+    setImgError({});
+  }, [data]);
+
+  const generateImage = async (idx: number, h: Highlight) => {
+    setImgLoading(prev => ({ ...prev, [idx]: true }));
+    setImgError(prev => ({ ...prev, [idx]: '' }));
+    try {
+      const prompt = `场景化抽象插画。主题：${h.title}。情绪/分类：${h.category}。氛围描述：${h.summary}。要求：构图电影感、光影柔和、不出现具体人物面孔、不出现文字、聚焦氛围与意境，类似杂志插画。`;
+      const r = await axios.post<{ url: string }>('/api/image/generate', {
+        prompt,
+        size: '1792x1024',
+        scene: 'highlight',
+      });
+      setImages(prev => ({ ...prev, [idx]: r.data.url }));
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? '生成失败';
+      setImgError(prev => ({ ...prev, [idx]: msg }));
+    } finally {
+      setImgLoading(prev => ({ ...prev, [idx]: false }));
+    }
+  };
 
   const filtered = useMemo(() => {
     const base = contacts.filter(
@@ -264,9 +302,30 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
                       </span>
                       <span className="text-[11px] text-gray-400 dark:text-gray-500">{h.date}</span>
                     </div>
-                    <div className="text-base font-bold text-[#1d1d1f] dark:text-gray-100 mb-1.5">
-                      {h.title}
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <div className="text-base font-bold text-[#1d1d1f] dark:text-gray-100 flex-1">
+                        {h.title}
+                      </div>
+                      {imageEnabled && !images[idx] && (
+                        <button
+                          onClick={() => generateImage(idx, h)}
+                          disabled={imgLoading[idx]}
+                          title="为这段高光生成 AI 插画"
+                          className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold text-[#a78bfa] bg-[#a78bfa]/10 hover:bg-[#a78bfa]/20 disabled:opacity-50"
+                        >
+                          {imgLoading[idx] ? <Loader2 size={10} className="animate-spin" /> : <ImageIcon size={10} />}
+                          {imgLoading[idx] ? '出图中…' : 'AI 插画'}
+                        </button>
+                      )}
                     </div>
+                    {images[idx] && (
+                      <div className="mb-2.5 rounded-xl overflow-hidden border border-gray-100 dark:border-white/10">
+                        <img src={images[idx]} alt={h.title} className="w-full h-auto block" />
+                      </div>
+                    )}
+                    {imgError[idx] && (
+                      <div className="mb-2 text-[11px] text-[#fa5151]">插画生成失败：{imgError[idx]}</div>
+                    )}
                     <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-2.5">
                       {h.summary}
                     </div>

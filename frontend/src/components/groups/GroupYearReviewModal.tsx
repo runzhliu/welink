@@ -4,7 +4,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { X, Loader2, Calendar, MessageSquare, Users, Crown, Sparkles, Quote, TrendingUp, AlertCircle } from 'lucide-react';
+import axios from 'axios';
+import { X, Loader2, Calendar, MessageSquare, Users, Crown, Sparkles, Quote, TrendingUp, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import type { GroupYearReview } from '../../types';
 import { groupExtraApi } from '../../services/api';
 import { avatarSrc } from '../../utils/avatar';
@@ -24,11 +25,50 @@ export const GroupYearReviewModal: React.FC<Props> = ({ username, fallbackName, 
   const [error, setError] = useState('');
   const [page, setPage] = useState(0);
 
+  // AI 封面生图（按钮触发，默认不消耗 token）
+  const [imageEnabled, setImageEnabled] = useState(false);
+  const [coverURL, setCoverURL] = useState<string | null>(null);
+  const [coverLoading, setCoverLoading] = useState(false);
+  const [coverError, setCoverError] = useState('');
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [onClose]);
+
+  // 读取生图开关一次（影响是否显示「生成封面」按钮）
+  useEffect(() => {
+    axios.get<{ image_enabled?: boolean }>('/api/preferences')
+      .then(r => setImageEnabled(Boolean(r.data.image_enabled)))
+      .catch(() => {});
+  }, []);
+
+  // 切换年份时清掉旧封面
+  useEffect(() => {
+    setCoverURL(null);
+    setCoverError('');
+  }, [year]);
+
+  const handleGenerateCover = async () => {
+    if (!data?.highlight) return;
+    setCoverLoading(true);
+    setCoverError('');
+    try {
+      const prompt = `抽象艺术风格的年度回顾封面，主题：${data.group_name} ${data.year} 年。氛围：${data.highlight.slice(0, 200)}。要求：构图大气、色彩温暖、不出现具体人物面孔、不出现文字、聚焦光影与意境。`;
+      const r = await axios.post<{ url: string }>('/api/image/generate', {
+        prompt,
+        size: '1024x1024',
+        scene: 'group_year_review_cover',
+      });
+      setCoverURL(r.data.url);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? '生成失败';
+      setCoverError(msg);
+    } finally {
+      setCoverLoading(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -184,14 +224,51 @@ export const GroupYearReviewModal: React.FC<Props> = ({ username, fallbackName, 
         title: 'AI 年度叙事',
         icon: <Sparkles size={18} />,
         render: () => (
-          <div className="relative bg-gradient-to-br from-[#f5f7fb] to-[#fff7e6] dark:from-[#576b95]/10 dark:to-[#ff9500]/10 rounded-2xl p-6 border border-[#576b95]/20">
-            <div className="absolute top-3 right-3">
-              <TTSButton text={highlight} size={16} title="朗读年度叙事" />
+          <div className="space-y-4">
+            {/* AI 生成的封面图（手动触发） */}
+            {coverURL && (
+              <div className="rounded-2xl overflow-hidden border border-gray-100 dark:border-white/10">
+                <img src={coverURL} alt="AI 生成的年度封面" className="w-full h-auto block" />
+              </div>
+            )}
+
+            <div className="relative bg-gradient-to-br from-[#f5f7fb] to-[#fff7e6] dark:from-[#576b95]/10 dark:to-[#ff9500]/10 rounded-2xl p-6 border border-[#576b95]/20">
+              <div className="absolute top-3 right-3">
+                <TTSButton text={highlight} size={16} title="朗读年度叙事" />
+              </div>
+              <Sparkles className="text-[#576b95] mb-3" size={24} />
+              <div className="text-base text-[#1d1d1f] dk-text leading-[1.9] whitespace-pre-wrap">
+                {highlight}
+              </div>
             </div>
-            <Sparkles className="text-[#576b95] mb-3" size={24} />
-            <div className="text-base text-[#1d1d1f] dk-text leading-[1.9] whitespace-pre-wrap">
-              {highlight}
-            </div>
+
+            {/* 生成封面按钮 / 错误提示（仅启用了生图时显示） */}
+            {imageEnabled && !coverURL && (
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  onClick={handleGenerateCover}
+                  disabled={coverLoading}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#a78bfa] to-[#fb7185] text-white text-sm font-bold rounded-xl shadow-sm hover:shadow-md disabled:opacity-50 transition-all"
+                >
+                  {coverLoading ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
+                  {coverLoading ? '正在出图…（约 10-30 秒）' : '✨ 生成 AI 封面图'}
+                </button>
+                {coverError && (
+                  <div className="text-xs text-[#fa5151]">{coverError}</div>
+                )}
+              </div>
+            )}
+            {coverURL && imageEnabled && (
+              <div className="flex justify-center">
+                <button
+                  onClick={handleGenerateCover}
+                  disabled={coverLoading}
+                  className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  {coverLoading ? '重新生成中…' : '换一张封面'}
+                </button>
+              </div>
+            )}
           </div>
         ),
       });

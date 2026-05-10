@@ -3,7 +3,8 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame, Sparkles, Maximize2, Minimize2, Mic } from 'lucide-react';
+import axios from 'axios';
+import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame, Sparkles, Maximize2, Minimize2, Mic, Image as ImageIcon, RotateCcw } from 'lucide-react';
 import { ChatReplay } from './ChatReplay';
 import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
@@ -85,6 +86,47 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
   const [exportMsg, setExportMsg] = useState<{ ok: boolean; message: string } | null>(null);
   const [groupsReady, setGroupsReady] = useState(false);
   const [lightbox, setLightbox] = useState(false);
+
+  // AI 头像（基于聊天风格生成的抽象头像）
+  const [imageEnabled, setImageEnabled] = useState(false);
+  const [aiAvatarURL, setAiAvatarURL] = useState<string | null>(null);
+  const [aiAvatarTags, setAiAvatarTags] = useState<string[]>([]);
+  const [aiAvatarLoading, setAiAvatarLoading] = useState(false);
+  const [aiAvatarError, setAiAvatarError] = useState('');
+  const [useAiAvatar, setUseAiAvatar] = useState(false);
+
+  useEffect(() => {
+    axios.get<{ image_enabled?: boolean }>('/api/preferences')
+      .then(r => setImageEnabled(Boolean(r.data.image_enabled)))
+      .catch(() => {});
+  }, []);
+
+  // 切换联系人时清掉旧 AI 头像
+  useEffect(() => {
+    setAiAvatarURL(null);
+    setAiAvatarTags([]);
+    setAiAvatarError('');
+    setUseAiAvatar(false);
+  }, [contact?.username]);
+
+  const generateAiAvatar = async () => {
+    if (!contact) return;
+    setAiAvatarLoading(true);
+    setAiAvatarError('');
+    try {
+      const r = await axios.post<{ url: string; tags?: string[] }>('/api/contacts/ai-avatar', {
+        username: contact.username,
+      });
+      setAiAvatarURL(r.data.url);
+      setAiAvatarTags(r.data.tags ?? []);
+      setUseAiAvatar(true);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? '生成失败';
+      setAiAvatarError(msg);
+    } finally {
+      setAiAvatarLoading(false);
+    }
+  };
   const exportPanelRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -320,24 +362,61 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
 
         {/* Header */}
         <div className="mb-6 sm:mb-8 pr-10 sm:pr-0 flex items-center gap-4">
-          {avatarUrl ? (
-            <button
-              onClick={() => setLightbox(true)}
-              className="flex-shrink-0 rounded-2xl overflow-hidden shadow-md hover:opacity-90 hover:scale-105 transition-all duration-150 cursor-zoom-in"
-              title="查看大图"
-            >
-              <img
-                src={avatarSrc(avatarUrl)}
-                alt={displayName}
-                className="w-14 h-14 sm:w-20 sm:h-20 object-cover"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
-            </button>
-          ) : (
-            <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-2xl sm:text-3xl font-black flex-shrink-0 shadow-md">
-              {displayName.charAt(0)}
-            </div>
-          )}
+          <div className="relative flex-shrink-0">
+            {useAiAvatar && aiAvatarURL ? (
+              <button
+                onClick={() => setLightbox(true)}
+                className="rounded-2xl overflow-hidden shadow-md hover:opacity-90 hover:scale-105 transition-all duration-150 cursor-zoom-in ring-2 ring-[#a78bfa]"
+                title="AI 生成的抽象头像（点击查看大图）"
+              >
+                <img
+                  src={aiAvatarURL}
+                  alt={displayName}
+                  className="w-14 h-14 sm:w-20 sm:h-20 object-cover"
+                />
+              </button>
+            ) : avatarUrl ? (
+              <button
+                onClick={() => setLightbox(true)}
+                className="rounded-2xl overflow-hidden shadow-md hover:opacity-90 hover:scale-105 transition-all duration-150 cursor-zoom-in"
+                title="查看大图"
+              >
+                <img
+                  src={avatarSrc(avatarUrl)}
+                  alt={displayName}
+                  className="w-14 h-14 sm:w-20 sm:h-20 object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              </button>
+            ) : (
+              <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-2xl sm:text-3xl font-black shadow-md">
+                {displayName.charAt(0)}
+              </div>
+            )}
+            {/* 右下角小按钮：生成 AI 头像 / 切换回真实头像 */}
+            {imageEnabled && (
+              <>
+                {!aiAvatarURL ? (
+                  <button
+                    onClick={generateAiAvatar}
+                    disabled={aiAvatarLoading}
+                    title="基于聊天风格生成 AI 抽象头像"
+                    className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-[#a78bfa] to-[#fb7185] text-white shadow-md hover:scale-110 active:scale-95 transition-transform flex items-center justify-center disabled:opacity-50"
+                  >
+                    {aiAvatarLoading ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setUseAiAvatar(v => !v)}
+                    title={useAiAvatar ? '切换回真实头像' : '切换到 AI 头像'}
+                    className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-white/15 text-gray-600 dark:text-gray-300 shadow-md hover:scale-110 active:scale-95 transition-transform flex items-center justify-center"
+                  >
+                    <RotateCcw size={12} />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap mb-0.5">
               <h3 className={`dk-text text-xl sm:text-3xl font-black tracking-tight text-[#1d1d1f]${privacyMode ? ' privacy-blur' : ''}`}>
@@ -386,6 +465,20 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                   </span>
                 )}
               </div>
+            )}
+            {/* AI 头像生成的性格关键词 / 错误提示 */}
+            {aiAvatarTags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                <span className="text-[10px] text-[#a78bfa] font-bold uppercase tracking-wider">AI 气质：</span>
+                {aiAvatarTags.map((tag, i) => (
+                  <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#a78bfa]/10 text-[#a78bfa] font-semibold">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+            {aiAvatarError && (
+              <div className="text-[11px] text-[#fa5151] mt-1.5">AI 头像生成失败：{aiAvatarError}</div>
             )}
           </div>
         </div>
