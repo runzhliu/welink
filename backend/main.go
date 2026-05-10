@@ -1040,6 +1040,44 @@ func serverMain() {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 
+	// ── AI 文生图配置（独立路由，避免与 /preferences/llm 互相覆盖）──────────
+	api.PUT("/preferences/image", func(c *gin.Context) {
+		// 公有云 Demo 模式下禁止修改（生图也走外部 API，同样防滥用）
+		if isDemoMode && DemoAIDisabled() {
+			demoBlockLLMWrite(c)
+			return
+		}
+		var incoming struct {
+			ImageEnabled  bool   `json:"image_enabled"`
+			ImageProvider string `json:"image_provider"`
+			ImageAPIKey   string `json:"image_api_key"`
+			ImageBaseURL  string `json:"image_base_url"`
+			ImageModel    string `json:"image_model"`
+		}
+		if err := c.ShouldBindJSON(&incoming); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		existing := loadPreferences()
+		// 占位符 / 空值 → 保留原 key，与 /preferences/llm 行为一致
+		keepOld := func(newKey string) bool {
+			return newKey == "" || newKey == hasKeyPlaceholder || strings.Contains(newKey, "****")
+		}
+		existing.ImageEnabled = incoming.ImageEnabled
+		existing.ImageProvider = incoming.ImageProvider
+		if !keepOld(incoming.ImageAPIKey) {
+			existing.ImageAPIKey = incoming.ImageAPIKey
+		}
+		existing.ImageBaseURL = incoming.ImageBaseURL
+		existing.ImageModel = incoming.ImageModel
+		if err := savePreferences(existing); err != nil {
+			log.Printf("[PREFS] Failed to save image preferences: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
 	// ── 配置热加载 ──────────────────────────────────────────────────────────
 	api.PUT("/preferences/config", func(c *gin.Context) {
 		var incoming struct {
@@ -2964,6 +3002,12 @@ func serverMain() {
 
 		// 群聊 AI 年报
 		registerGroupYearReviewRoutes(prot, getSvc)
+
+		// AI 文生图（年报封面 / 高光插画 / AI 头像）
+		registerImageRoutes(prot)
+
+		// 联系人 AI 头像（基于聊天风格抽象生成）
+		registerAIAvatarRoutes(prot, getSvc)
 
 		// 导出中心（Markdown / Notion / 飞书）
 		registerExportRoutes(prot, getSvc)
