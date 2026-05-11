@@ -1268,7 +1268,7 @@ const ImageSettingsSection: React.FC = () => {
     // 并行拉 provider 元数据 + 现有偏好
     Promise.all([
       axios.get<{ providers: ImageProviderMeta[] }>('/api/image/providers').then(r => r.data.providers).catch(() => [] as ImageProviderMeta[]),
-      axios.get<Record<string, unknown>>('/api/preferences').then(r => r.data).catch(() => ({})),
+      axios.get<Record<string, unknown>>('/api/preferences').then(r => r.data).catch(() => ({} as Record<string, unknown>)),
     ]).then(([metas, prefs]) => {
       setProviders(metas);
       setEnabled(Boolean(prefs.image_enabled));
