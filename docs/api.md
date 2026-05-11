@@ -917,11 +917,48 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 
 ## AI 文生图
 
-生图能力，覆盖三个场景：群年报封面 / 高光瞬间插画 / 联系人 AI 头像。默认 provider 是火山方舟（豆包）即梦 `doubao-seedream-3-0-t2i-250415`，走 OpenAI 兼容的 `/images/generations`。
+生图能力，覆盖三个场景：群年报封面 / 高光瞬间插画 / 联系人 AI 头像。支持 4 个 provider：
+
+| Provider | 端点 | 默认模型 |
+|---|---|---|
+| **doubao** | 火山方舟 OpenAI 兼容 `/images/generations` | `doubao-seedream-3-0-t2i-250415` |
+| **openai** | 官方 `/v1/images/generations` | `gpt-image-1`（也支持 `dall-e-3`） |
+| **siliconflow** | OpenAI 兼容 `/v1/images/generations` | `black-forest-labs/FLUX.1-schnell` |
+| **gemini** | Generative Language API `:predict` | `imagen-3.0-generate-002` |
+
+支持 **多 profile 配置**：在 `preferences.image_profiles` 数组里配置多组（每组带 `id / name / provider / api_key / base_url / model`），所有生图调用接受可选 `profile_id` 指定走哪条；不传走第一条（默认）。
+
+**异步队列**：生图是 10-60 秒量级，单 HTTP 请求阻塞太久。后端有一个 2 并发的 goroutine pool 处理任务队列，状态全落 `ai_analysis.db.image_tasks`：
+
+- 推荐前端用 **`POST /image/tasks` 提交 + 1.5s 轮询 `GET /image/tasks/:id`**，能拿到伪进度（0-100）并支持中途取消
+- 老 `POST /image/generate` 同步接口仍然可用，**内部已包装成「提交任务 + 等到 done」**，与之前调用方式 100% 兼容
+- 同 hash 缓存命中时直接返回 `done`，不会真入队
 
 **缓存**：`sha256(provider|model|size|prompt)` → `~/.welink/ai_images/<hash>.png`。命中直接返回 hash，不重复调 API。前端必须用 `GET /api/image/cache/:hash` 同源拿图——火山方舟返回的临时 URL 24h 过期，且 `html-to-image` 导出分享卡要求图片同源。
 
 Demo 模式会写一张 SVG 占位图，不调真 provider。
+
+### `GET /api/image/providers`
+
+返回内置 provider 元数据（前端用于渲染下拉框、默认 model、支持尺寸）。
+
+```json
+{
+  "providers": [
+    {
+      "value": "doubao",
+      "label": "豆包 / 即梦（火山方舟）",
+      "default_base_url": "https://ark.cn-beijing.volces.com/api/v3",
+      "default_model": "doubao-seedream-3-0-t2i-250415",
+      "models": [{ "value": "...", "label": "..." }],
+      "sizes": ["1024x1024", "1024x1792", "1792x1024"],
+      "key_url": "https://console.volcengine.com/ark/...",
+      "auth_hint": "...",
+      "price_hint": "约 0.05-0.2 元/张"
+    }
+  ]
+}
+```
 
 ### `POST /api/image/generate`
 
@@ -933,7 +970,8 @@ Demo 模式会写一张 SVG 占位图，不调真 provider。
 {
   "prompt": "...",
   "size": "1024x1024",
-  "scene": "highlight"
+  "scene": "highlight",
+  "profile_id": "img-default"
 }
 ```
 
@@ -942,6 +980,7 @@ Demo 模式会写一张 SVG 占位图，不调真 provider。
 | `prompt` | 必填，≤ 2000 字符 |
 | `size` | `1024x1024` / `1024x1792` / `1792x1024`，默认 `1024x1024` |
 | `scene` | 埋点用，可选 `year_review` / `highlight` / `avatar` |
+| `profile_id` | 可选，指定走哪条 `image_profiles` 配置；空 = 第一条（默认） |
 
 未启用生图（`prefs.image_enabled=false`）且非 Demo 模式 → `403`。
 
@@ -959,12 +998,174 @@ Demo 模式会写一张 SVG 占位图，不调真 provider。
 
 按 hash 提供缓存图。`Cache-Control: public, max-age=31536000, immutable`，content-type 自动 sniff（SVG / PNG / JPEG）。
 
-### `POST /api/image/test`
+### `POST /api/image/tasks`
 
-用极短 prompt 验证生图配置是否可用。无 body。
+异步提交一个生图任务。立即返回 `task_id`，前端轮询 `GET /api/image/tasks/:id` 拿进度。
+
+**请求体**：与 `/image/generate` 同字段，外加 `ref_user` / `ref_kind` 用作场景关联。
 
 ```json
-{ "ok": true, "hash": "...", "url": "/api/image/cache/...", "model": "doubao-seedream-..." }
+{
+  "prompt": "...",
+  "size": "1024x1024",
+  "scene": "highlight",
+  "profile_id": "img-default",
+  "ref_user": "wxid_xxx",
+  "ref_kind": "avatar"
+}
+```
+
+**响应**
+
+```json
+{
+  "id": "1714867200000000abcdef0123456789",
+  "task": {
+    "id": "...",
+    "status": "queued",
+    "progress": 0,
+    "prompt": "...",
+    "provider": "doubao",
+    "model": "doubao-seedream-3-0-t2i-250415",
+    "size": "1024x1024",
+    "created_at": 1714867200
+  }
+}
+```
+
+**短路**：如果该 (provider, model, size, prompt) 已有本地缓存图，**直接返回 `status: "done"` + `result_hash` 已填**，不会真的入队。
+
+### `GET /api/image/tasks/:id`
+
+查询单个任务的当前状态。前端 1.5s 轮询。
+
+```json
+{
+  "id": "...",
+  "status": "running",
+  "progress": 42,
+  "scene": "highlight",
+  "prompt": "...",
+  "provider": "doubao",
+  "model": "doubao-seedream-3-0-t2i-250415",
+  "size": "1024x1024",
+  "result_hash": "",
+  "error": "",
+  "started_at": 1714867202,
+  "finished_at": 0,
+  "created_at": 1714867200
+}
+```
+
+`status` 取值：`queued / running / done / failed / canceled`。`done` 时 `result_hash` 非空，前端可拼 `/api/image/cache/<result_hash>` 拿图。
+
+**进度**：当前为「伪进度」—— worker 起跑置 5%，调 API 期间每秒 +2% 封顶 85%，完成后跳 100。
+
+### `GET /api/image/tasks?status=&scene=&limit=50&offset=0`
+
+任务列表。按 `created_at` 降序。
+
+| Query | 说明 |
+|-------|------|
+| `status` | 限定状态 |
+| `scene` | 限定场景 |
+| `limit` | 默认 50，最大 200 |
+| `offset` | 分页偏移 |
+
+返回 `{ tasks: [...] }`。
+
+### `DELETE /api/image/tasks/:id`
+
+取消任务。
+- `queued` → 直接置 `canceled`
+- `running` → 软取消：标 `canceled`、若外部 API 还在跑则等其返回后丢弃结果（不计入 result）
+
+终态任务（done / failed / canceled）调用是 no-op。
+
+### `GET /api/images?q=&scene=&provider=&starred=&include_deleted=&limit=60&offset=0`
+
+AI 画廊列表。每张成功生成的图自动入库（`images` 表 + `images_fts` 虚拟表）。
+
+| Query | 说明 |
+|-------|------|
+| `q` | 全文检索 prompt + tags（FTS5） |
+| `scene` | 限定场景：`avatar` / `highlight` / `group_year_review_cover` / ... |
+| `provider` | 限定 provider |
+| `starred` | `1` = 仅收藏 |
+| `include_deleted` | `1` = 包含软删的图（默认排除） |
+| `limit` | 默认 60，最大 200 |
+| `offset` | 分页偏移 |
+
+返回 `{ images: [...], total: N }`。`images[]` 按「收藏优先 + 时间倒序」排列。
+
+```json
+{
+  "hash": "abc...",
+  "prompt": "...",
+  "scene": "highlight",
+  "provider": "doubao",
+  "model": "doubao-seedream-3-0-t2i-250415",
+  "size": "1792x1024",
+  "task_id": "...",
+  "parent_hash": "",
+  "starred": false,
+  "tags": [],
+  "used_in": [{ "kind": "avatar", "ref": "wxid_xxx", "at": 1714867200 }],
+  "created_at": 1714867200,
+  "url": "/api/image/cache/abc..."
+}
+```
+
+### `GET /api/images/:hash`
+
+单张图详情（含 used_in 引用清单）。软删的图也返回（`deleted_at != 0`）。
+
+### `PATCH /api/images/:hash`
+
+更新单张图的元数据。
+
+```json
+{ "starred": true, "tags": ["年报", "工作群"] }
+```
+
+字段可选；`tags` 改动会同步更新 FTS。
+
+### `DELETE /api/images/:hash[?hard=true]`
+
+- 默认软删（写 `deleted_at`，30 天后由后台 GC 物理清理）
+- `?hard=true` 立即硬删：删 DB 行 + FTS 行 + 物理 png 文件
+
+### `POST /api/images/:hash/regenerate`
+
+基于现有图重生成。body 可选覆盖 `prompt / size / profile_id`，未传则沿用源图。
+
+```json
+{ "prompt": "...新文案...", "size": "1024x1024" }
+```
+
+行为等价于 `POST /api/image/tasks`，但自动带源图 scene + 在源图的 `used_in` 加一条 `regen_source` 标记（前端可看到一张图的全部派生作品）。返回与 `/image/tasks` 一致：
+
+```json
+{
+  "id": "1714867200...",
+  "task": { "id": "...", "status": "queued", ... },
+  "parent_hash": "abc..."
+}
+```
+
+
+### `POST /api/image/test`
+
+用极短 prompt 验证生图配置是否可用。可选 body：
+
+```json
+{ "profile_id": "img-default" }
+```
+
+无 body 或不传 `profile_id` = 测试默认 profile。
+
+```json
+{ "ok": true, "hash": "...", "url": "/api/image/cache/...", "provider": "doubao", "model": "doubao-seedream-..." }
 ```
 
 ### `POST /api/contacts/ai-avatar`
@@ -974,7 +1175,7 @@ Demo 模式会写一张 SVG 占位图，不调真 provider。
 **请求体**
 
 ```json
-{ "username": "wxid_xxx" }
+{ "username": "wxid_xxx", "profile_id": "img-default" }
 ```
 
 文字消息少于 10 条直接 400。
@@ -1185,17 +1386,35 @@ AI 分身 Tab 的多轮对话独立持久化（区别于 `/api/ai/conversations`
 
 ### `PUT /api/preferences/image`
 
-更新文生图配置：
+更新文生图配置。**新前端走 `image_profiles` 数组**（多 provider 并行配置）：
 
 ```json
 {
   "image_enabled": true,
-  "image_provider": "doubao",
-  "image_api_key": "...",
-  "image_base_url": "https://ark.cn-beijing.volces.com/api/v3",
-  "image_model": "doubao-seedream-3-0-t2i-250415"
+  "image_profiles": [
+    {
+      "id": "img-default",
+      "name": "默认",
+      "provider": "doubao",
+      "api_key": "...",
+      "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+      "model": "doubao-seedream-3-0-t2i-250415"
+    },
+    {
+      "id": "img-openai",
+      "name": "OpenAI 备用",
+      "provider": "openai",
+      "api_key": "sk-...",
+      "base_url": "",
+      "model": "gpt-image-1"
+    }
+  ]
 }
 ```
+
+逐条按 `id` 比对：`api_key` 为空或 `__HAS_KEY__` 时保留原 key（与 `/preferences/llm` 同逻辑）。第一条会被同步到老的 `image_provider/image_api_key/image_base_url/image_model` 单字段以兼容旧前端读取。
+
+**老前端兼容**：仍接受单字段 payload `{ image_enabled, image_provider, image_api_key, image_base_url, image_model }`，后端会自动同步到 `image_profiles[0]`。
 
 ### `PUT /api/preferences/anniversaries`
 

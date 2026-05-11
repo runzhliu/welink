@@ -277,6 +277,11 @@ func serverMain() {
 		dbMgr.RegisterExtraDB("ai_analysis.db", aiAnalysisDBPath())
 	}
 
+	// 启动文生图异步任务 worker pool（默认 2，与文本 WorkerCount 解耦避免相互拖累）
+	StartImageWorkers(imageWorkerCountDefault)
+	// 启动画廊软删 GC（每天扫一次，清理 30 天前软删的图）
+	StartGalleryGC()
+
 	// Demo 模式：把预置的 AI 数据（记忆/索引/分身/技能）灌进 ai_analysis.db，
 	// 让所有 AI 功能一开就是"有内容可看"的状态。
 	if isDemoMode {
@@ -1048,7 +1053,9 @@ func serverMain() {
 			return
 		}
 		var incoming struct {
-			ImageEnabled  bool   `json:"image_enabled"`
+			ImageEnabled  bool           `json:"image_enabled"`
+			ImageProfiles []ImageProfile `json:"image_profiles"`
+			// 老字段兼容（前端没改造完时仍能接收）
 			ImageProvider string `json:"image_provider"`
 			ImageAPIKey   string `json:"image_api_key"`
 			ImageBaseURL  string `json:"image_base_url"`
@@ -1064,12 +1071,50 @@ func serverMain() {
 			return newKey == "" || newKey == hasKeyPlaceholder || strings.Contains(newKey, "****")
 		}
 		existing.ImageEnabled = incoming.ImageEnabled
-		existing.ImageProvider = incoming.ImageProvider
-		if !keepOld(incoming.ImageAPIKey) {
-			existing.ImageAPIKey = incoming.ImageAPIKey
+
+		// 优先按 ImageProfiles 数组保存（新前端走这条路径）；逐条按 ID 复用旧 key。
+		if incoming.ImageProfiles != nil {
+			for i, p := range incoming.ImageProfiles {
+				if keepOld(p.APIKey) {
+					restored := false
+					for _, old := range existing.ImageProfiles {
+						if old.ID == p.ID && old.Provider == p.Provider {
+							incoming.ImageProfiles[i].APIKey = old.APIKey
+							restored = true
+							break
+						}
+					}
+					if !restored {
+						incoming.ImageProfiles[i].APIKey = ""
+					}
+				}
+			}
+			existing.ImageProfiles = incoming.ImageProfiles
+			// 同步 [0] 到老单字段以保持向后兼容
+			if len(incoming.ImageProfiles) > 0 {
+				p := incoming.ImageProfiles[0]
+				existing.ImageProvider = p.Provider
+				existing.ImageAPIKey = p.APIKey
+				existing.ImageBaseURL = p.BaseURL
+				existing.ImageModel = p.Model
+			}
+		} else {
+			// 老前端：单字段路径
+			existing.ImageProvider = incoming.ImageProvider
+			if !keepOld(incoming.ImageAPIKey) {
+				existing.ImageAPIKey = incoming.ImageAPIKey
+			}
+			existing.ImageBaseURL = incoming.ImageBaseURL
+			existing.ImageModel = incoming.ImageModel
+			// 同步到 profiles[0] 让新 GenerateImage 也能读到
+			if len(existing.ImageProfiles) == 0 {
+				existing.ImageProfiles = []ImageProfile{{ID: "img-default", Name: "默认"}}
+			}
+			existing.ImageProfiles[0].Provider = existing.ImageProvider
+			existing.ImageProfiles[0].APIKey = existing.ImageAPIKey
+			existing.ImageProfiles[0].BaseURL = existing.ImageBaseURL
+			existing.ImageProfiles[0].Model = existing.ImageModel
 		}
-		existing.ImageBaseURL = incoming.ImageBaseURL
-		existing.ImageModel = incoming.ImageModel
 		if err := savePreferences(existing); err != nil {
 			log.Printf("[PREFS] Failed to save image preferences: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
@@ -3005,6 +3050,7 @@ func serverMain() {
 
 		// AI 文生图（年报封面 / 高光插画 / AI 头像）
 		registerImageRoutes(prot)
+		registerImageGalleryRoutes(prot)
 
 		// 联系人 AI 头像（基于聊天风格抽象生成）
 		registerAIAvatarRoutes(prot, getSvc)

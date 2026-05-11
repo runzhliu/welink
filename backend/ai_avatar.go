@@ -24,7 +24,8 @@ func registerAIAvatarRoutes(prot *gin.RouterGroup, getSvc func() *service.Contac
 }
 
 type aiAvatarRequest struct {
-	Username string `json:"username"`
+	Username  string `json:"username"`
+	ProfileID string `json:"profile_id,omitempty"`
 }
 
 type aiAvatarResponse struct {
@@ -82,10 +83,16 @@ func aiAvatarHandler(getSvc func() *service.ContactService) gin.HandlerFunc {
 			return
 		}
 
-		// 拼生图 prompt
+		// 拼生图 prompt（通过异步队列同步等结果，避免阻塞 server goroutine）
 		prompt := buildAvatarPrompt(tags)
-		cfg := defaultImageConfig(prefs)
-		hash, err := GenerateImage(prompt, "1024x1024", cfg)
+		hash, err := GenerateImageSync(SubmitImageOptions{
+			Prompt:    prompt,
+			Size:      "1024x1024",
+			Scene:     "avatar",
+			ProfileID: req.ProfileID,
+			RefUser:   req.Username,
+			RefKind:   "avatar",
+		})
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
