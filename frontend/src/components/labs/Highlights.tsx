@@ -6,12 +6,13 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { Sparkles, Loader2, Search, Share2, Check, Wand2, RefreshCw, Image as ImageIcon } from 'lucide-react';
+import { Sparkles, Loader2, Search, Share2, Check, Wand2, RefreshCw, Image as ImageIcon, X } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
 import { prepareForCapture } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
+import { useImageTask } from '../../hooks/useImageTask';
 
 interface Props {
   contacts: ContactStats[];
@@ -54,11 +55,8 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
   const [exported, setExported] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // AI 生图：每段高光独立触发，避免一次性烧 5-8 张
+  // AI 生图：每段高光独立触发（子组件 HighlightImageSlot 各持一个 hook 实例）
   const [imageEnabled, setImageEnabled] = useState(false);
-  const [images, setImages] = useState<Record<number, string>>({});
-  const [imgLoading, setImgLoading] = useState<Record<number, boolean>>({});
-  const [imgError, setImgError] = useState<Record<number, string>>({});
 
   useEffect(() => {
     axios.get<{ image_enabled?: boolean }>('/api/preferences')
@@ -66,31 +64,8 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
       .catch(() => {});
   }, []);
 
-  // 切换联系人 / 重新生成时清空旧图
-  useEffect(() => {
-    setImages({});
-    setImgLoading({});
-    setImgError({});
-  }, [data]);
-
-  const generateImage = async (idx: number, h: Highlight) => {
-    setImgLoading(prev => ({ ...prev, [idx]: true }));
-    setImgError(prev => ({ ...prev, [idx]: '' }));
-    try {
-      const prompt = `场景化抽象插画。主题：${h.title}。情绪/分类：${h.category}。氛围描述：${h.summary}。要求：构图电影感、光影柔和、不出现具体人物面孔、不出现文字、聚焦氛围与意境，类似杂志插画。`;
-      const r = await axios.post<{ url: string }>('/api/image/generate', {
-        prompt,
-        size: '1792x1024',
-        scene: 'highlight',
-      });
-      setImages(prev => ({ ...prev, [idx]: r.data.url }));
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? '生成失败';
-      setImgError(prev => ({ ...prev, [idx]: msg }));
-    } finally {
-      setImgLoading(prev => ({ ...prev, [idx]: false }));
-    }
-  };
+  // 切换联系人 / 重新生成时通过 key 强制重建子组件清空旧图
+  const slotsKey = data ? `${data.display_name}-${data.first_date}` : 'empty';
 
   const filtered = useMemo(() => {
     const base = contacts.filter(
@@ -306,25 +281,9 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
                       <div className="text-base font-bold text-[#1d1d1f] dark:text-gray-100 flex-1">
                         {h.title}
                       </div>
-                      {imageEnabled && !images[idx] && (
-                        <button
-                          onClick={() => generateImage(idx, h)}
-                          disabled={imgLoading[idx]}
-                          title="为这段高光生成 AI 插画"
-                          className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold text-[#a78bfa] bg-[#a78bfa]/10 hover:bg-[#a78bfa]/20 disabled:opacity-50"
-                        >
-                          {imgLoading[idx] ? <Loader2 size={10} className="animate-spin" /> : <ImageIcon size={10} />}
-                          {imgLoading[idx] ? '出图中…' : 'AI 插画'}
-                        </button>
-                      )}
                     </div>
-                    {images[idx] && (
-                      <div className="mb-2.5 rounded-xl overflow-hidden border border-gray-100 dark:border-white/10">
-                        <img src={images[idx]} alt={h.title} className="w-full h-auto block" />
-                      </div>
-                    )}
-                    {imgError[idx] && (
-                      <div className="mb-2 text-[11px] text-[#fa5151]">插画生成失败：{imgError[idx]}</div>
+                    {imageEnabled && (
+                      <HighlightImageSlot key={`${slotsKey}-${idx}`} highlight={h} />
                     )}
                     <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-2.5">
                       {h.summary}
@@ -362,3 +321,77 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
 };
 
 export default Highlights;
+
+// ─── 单段高光的 AI 插画槽位 ───────────────────────────────────────────────────
+// 每个 idx 实例化一个 useImageTask hook，独立追踪自己的生图状态。
+// 父级用 key 重建以重置（切换联系人时）。
+const HighlightImageSlot: React.FC<{ highlight: Highlight }> = ({ highlight }) => {
+  const task = useImageTask();
+
+  const startGenerate = () => {
+    const prompt = `场景化抽象插画。主题：${highlight.title}。情绪/分类：${highlight.category}。氛围描述：${highlight.summary}。要求：构图电影感、光影柔和、不出现具体人物面孔、不出现文字、聚焦氛围与意境，类似杂志插画。`;
+    void task.submit({ prompt, size: '1792x1024', scene: 'highlight' });
+  };
+
+  const isBusy = task.status === 'queued' || task.status === 'running';
+
+  return (
+    <div className="mb-2">
+      {/* 出图状态：进行中 */}
+      {isBusy && (
+        <div className="mb-2 flex items-center gap-2">
+          <div className="flex-1 h-1.5 rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden">
+            <div
+              className="h-full bg-[#a78bfa] transition-[width] duration-500"
+              style={{ width: `${Math.max(task.progress, 5)}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono tabular-nums">
+            {task.progress}%
+          </span>
+          <button
+            onClick={() => void task.cancel()}
+            title="取消"
+            className="p-1 text-gray-300 hover:text-red-400"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* 出图成功 */}
+      {task.status === 'done' && task.url && (
+        <div className="mb-2.5 rounded-xl overflow-hidden border border-gray-100 dark:border-white/10 relative group">
+          <img src={task.url} alt={highlight.title} className="w-full h-auto block" />
+          <button
+            onClick={() => { task.reset(); startGenerate(); }}
+            title="再生成一次"
+            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 dark:bg-black/70 px-2 py-1 rounded-lg text-[10px] font-bold text-gray-700 dark:text-gray-200 backdrop-blur"
+          >
+            重新生成
+          </button>
+        </div>
+      )}
+
+      {/* 出图失败 / 取消 */}
+      {task.status === 'failed' && (
+        <div className="mb-2 text-[11px] text-[#fa5151]">插画生成失败：{task.error}</div>
+      )}
+      {task.status === 'canceled' && (
+        <div className="mb-2 text-[11px] text-gray-400">已取消生成</div>
+      )}
+
+      {/* 触发按钮（idle / 失败 / 取消时显示） */}
+      {(task.status === 'idle' || task.status === 'failed' || task.status === 'canceled') && (
+        <button
+          onClick={startGenerate}
+          title="为这段高光生成 AI 插画"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold text-[#a78bfa] bg-[#a78bfa]/10 hover:bg-[#a78bfa]/20"
+        >
+          <ImageIcon size={10} />
+          {task.status === 'idle' ? 'AI 插画' : '再试一次'}
+        </button>
+      )}
+    </div>
+  );
+};

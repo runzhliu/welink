@@ -10,6 +10,7 @@ import type { GroupYearReview } from '../../types';
 import { groupExtraApi } from '../../services/api';
 import { avatarSrc } from '../../utils/avatar';
 import { TTSButton } from '../common/TTSButton';
+import { useImageTask } from '../../hooks/useImageTask';
 
 interface Props {
   username: string;
@@ -27,9 +28,10 @@ export const GroupYearReviewModal: React.FC<Props> = ({ username, fallbackName, 
 
   // AI 封面生图（按钮触发，默认不消耗 token）
   const [imageEnabled, setImageEnabled] = useState(false);
-  const [coverURL, setCoverURL] = useState<string | null>(null);
-  const [coverLoading, setCoverLoading] = useState(false);
-  const [coverError, setCoverError] = useState('');
+  const coverTask = useImageTask();
+  const coverURL = coverTask.url;
+  const coverLoading = coverTask.status === 'queued' || coverTask.status === 'running';
+  const coverError = coverTask.status === 'failed' ? (coverTask.error || '生成失败') : '';
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -46,28 +48,18 @@ export const GroupYearReviewModal: React.FC<Props> = ({ username, fallbackName, 
 
   // 切换年份时清掉旧封面
   useEffect(() => {
-    setCoverURL(null);
-    setCoverError('');
+    coverTask.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year]);
 
-  const handleGenerateCover = async () => {
+  const handleGenerateCover = () => {
     if (!data?.highlight) return;
-    setCoverLoading(true);
-    setCoverError('');
-    try {
-      const prompt = `抽象艺术风格的年度回顾封面，主题：${data.group_name} ${data.year} 年。氛围：${data.highlight.slice(0, 200)}。要求：构图大气、色彩温暖、不出现具体人物面孔、不出现文字、聚焦光影与意境。`;
-      const r = await axios.post<{ url: string }>('/api/image/generate', {
-        prompt,
-        size: '1024x1024',
-        scene: 'group_year_review_cover',
-      });
-      setCoverURL(r.data.url);
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? '生成失败';
-      setCoverError(msg);
-    } finally {
-      setCoverLoading(false);
-    }
+    const prompt = `抽象艺术风格的年度回顾封面，主题：${data.group_name} ${data.year} 年。氛围：${data.highlight.slice(0, 200)}。要求：构图大气、色彩温暖、不出现具体人物面孔、不出现文字、聚焦光影与意境。`;
+    void coverTask.submit({
+      prompt,
+      size: '1024x1024',
+      scene: 'group_year_review_cover',
+    });
   };
 
   useEffect(() => {
@@ -242,30 +234,49 @@ export const GroupYearReviewModal: React.FC<Props> = ({ username, fallbackName, 
               </div>
             </div>
 
-            {/* 生成封面按钮 / 错误提示（仅启用了生图时显示） */}
-            {imageEnabled && !coverURL && (
+            {/* 生成封面按钮 / 进度 / 错误提示（仅启用了生图时显示） */}
+            {imageEnabled && !coverURL && !coverLoading && (
               <div className="flex flex-col items-center gap-2">
                 <button
                   onClick={handleGenerateCover}
-                  disabled={coverLoading}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#a78bfa] to-[#fb7185] text-white text-sm font-bold rounded-xl shadow-sm hover:shadow-md disabled:opacity-50 transition-all"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#a78bfa] to-[#fb7185] text-white text-sm font-bold rounded-xl shadow-sm hover:shadow-md transition-all"
                 >
-                  {coverLoading ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
-                  {coverLoading ? '正在出图…（约 10-30 秒）' : '✨ 生成 AI 封面图'}
+                  <ImageIcon size={14} />
+                  ✨ 生成 AI 封面图
                 </button>
-                {coverError && (
-                  <div className="text-xs text-[#fa5151]">{coverError}</div>
+                {coverError && <div className="text-xs text-[#fa5151]">{coverError}</div>}
+                {coverTask.status === 'canceled' && (
+                  <div className="text-xs text-gray-400">已取消</div>
                 )}
+              </div>
+            )}
+            {imageEnabled && coverLoading && (
+              <div className="flex flex-col items-center gap-2 w-full max-w-xs mx-auto">
+                <div className="flex items-center gap-2 w-full">
+                  <Loader2 size={14} className="animate-spin text-[#a78bfa]" />
+                  <div className="flex-1 h-1.5 rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#a78bfa] to-[#fb7185] transition-[width] duration-500"
+                      style={{ width: `${Math.max(coverTask.progress, 5)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-gray-400 font-mono tabular-nums">{coverTask.progress}%</span>
+                </div>
+                <button
+                  onClick={() => void coverTask.cancel()}
+                  className="text-xs text-gray-400 hover:text-red-500"
+                >
+                  取消
+                </button>
               </div>
             )}
             {coverURL && imageEnabled && (
               <div className="flex justify-center">
                 <button
-                  onClick={handleGenerateCover}
-                  disabled={coverLoading}
+                  onClick={() => { coverTask.reset(); handleGenerateCover(); }}
                   className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 >
-                  {coverLoading ? '重新生成中…' : '换一张封面'}
+                  换一张封面
                 </button>
               </div>
             )}

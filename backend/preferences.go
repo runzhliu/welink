@@ -71,6 +71,17 @@ type DataDirProfile struct {
 	LastIndexedAt int64  `json:"last_indexed_at,omitempty"` // 上次成功索引的 Unix 秒
 }
 
+// ImageProfile 单个文生图配置项，支持多 provider 并行配置。
+// 第一条 = 默认；其它条作为备选，调用 GenerateImage 时可显式传 profile_id 切换。
+type ImageProfile struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Provider string `json:"provider"` // doubao / openai / siliconflow / gemini
+	APIKey   string `json:"api_key,omitempty"`
+	BaseURL  string `json:"base_url,omitempty"`
+	Model    string `json:"model,omitempty"`
+}
+
 // LLMProfile 单个 LLM 配置项，支持多 provider 并行配置与一键切换。
 type LLMProfile struct {
 	ID       string `json:"id"`
@@ -93,7 +104,9 @@ type LLMProfile struct {
 // CurrentSchemaVersion 是当前代码理解的 preferences.json 格式版本。
 // 每次做带破坏性语义的改动（字段语义翻转、删除、合并）时 +1，并在 migratePreferences 加对应 case。
 // 只加字段且 zero-value 兼容的改动不用升级版本。
-const CurrentSchemaVersion = 1
+//
+// v2: ImageProvider/ImageAPIKey/ImageBaseURL/ImageModel 单字段 → ImageProfiles 数组。
+const CurrentSchemaVersion = 2
 
 type Preferences struct {
 	// 0 或缺失 = 旧版本（需要迁移）；>= CurrentSchemaVersion = 当前版本
@@ -165,7 +178,9 @@ type Preferences struct {
 
 	// 文生图配置（年报封面 / 高光插画 / AI 头像等场景）
 	// 默认 disabled — 生图比文本贵 10-50 倍，必须用户主动开启 + 主动点按钮触发
-	ImageEnabled  bool   `json:"image_enabled,omitempty"`
+	ImageEnabled  bool           `json:"image_enabled,omitempty"`
+	ImageProfiles []ImageProfile `json:"image_profiles,omitempty"`
+	// 以下单字段保持向后兼容（migration 会同步为 ImageProfiles[0]，新代码读 ImageProfiles）
 	ImageProvider string `json:"image_provider,omitempty"` // doubao 等；默认 doubao（火山方舟即梦）
 	ImageAPIKey   string `json:"image_api_key,omitempty"`
 	ImageBaseURL  string `json:"image_base_url,omitempty"`
@@ -328,6 +343,9 @@ func sanitizeForExport(p Preferences, stripSecrets bool) Preferences {
 	for i := range p.LLMProfiles {
 		p.LLMProfiles[i].APIKey = ""
 	}
+	for i := range p.ImageProfiles {
+		p.ImageProfiles[i].APIKey = ""
+	}
 
 	// 云笔记
 	p.NotionToken = ""
@@ -381,9 +399,21 @@ func migratePreferences(p Preferences) Preferences {
 	if p.SchemaVersion < 1 {
 		p.SchemaVersion = 1
 	}
-	// 未来升级在这里加：
-	// if p.SchemaVersion < 2 { ... ; p.SchemaVersion = 2 }
-	// if p.SchemaVersion < 3 { ... ; p.SchemaVersion = 3 }
+	// v1 → v2：ImageProvider/ImageAPIKey/ImageBaseURL/ImageModel 单字段 → ImageProfiles 数组。
+	// 把老用户原有的单字段同步成 ImageProfiles[0]；单字段保留兼容旧代码读取。
+	if p.SchemaVersion < 2 {
+		if len(p.ImageProfiles) == 0 && (p.ImageProvider != "" || p.ImageAPIKey != "") {
+			p.ImageProfiles = []ImageProfile{{
+				ID:       "img-default",
+				Name:     "默认",
+				Provider: p.ImageProvider,
+				APIKey:   p.ImageAPIKey,
+				BaseURL:  p.ImageBaseURL,
+				Model:    p.ImageModel,
+			}}
+		}
+		p.SchemaVersion = 2
+	}
 	return p
 }
 
@@ -464,6 +494,14 @@ func sanitizeForResponse(p Preferences) Preferences {
 			sanitized[i].APIKey = redact(sanitized[i].APIKey)
 		}
 		out.LLMProfiles = sanitized
+	}
+	if len(out.ImageProfiles) > 0 {
+		sanitized := make([]ImageProfile, len(out.ImageProfiles))
+		copy(sanitized, out.ImageProfiles)
+		for i := range sanitized {
+			sanitized[i].APIKey = redact(sanitized[i].APIKey)
+		}
+		out.ImageProfiles = sanitized
 	}
 	return out
 }
