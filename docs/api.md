@@ -12,21 +12,29 @@
 - [有趣发现](#有趣发现)
 - [日历 / 时光机](#日历--时光机)
 - [全局搜索](#全局搜索)
+- [每日社交简报](#每日社交简报)
 - [AI 分析](#ai-分析)
 - [AI 分身](#ai-分身)
 - [AI 群聊模拟](#ai-群聊模拟)
+- [AI 虚拟群聊](#ai-虚拟群聊)
 - [创意实验室（Labs）](#创意实验室labs)
+- [断联预警 / 反向语义搜索](#断联预警--反向语义搜索)
+- [群聊 Wrapped / 里程碑](#群聊-wrapped--里程碑)
 - [Skills（技能包）](#skills技能包)
+- [AI 文生图](#ai-文生图)
 - [RAG 检索](#rag-检索)
 - [向量检索](#向量检索)
 - [记忆提炼](#记忆提炼)
+- [记忆库（Memory CRUD）](#记忆库memory-crud)
 - [AI 对话历史](#ai-对话历史)
+- [AI 分身对话历史](#ai-分身对话历史)
 - [用户偏好](#用户偏好)
 - [Gemini OAuth](#gemini-oauth)
 - [锁屏](#锁屏)
 - [数据库浏览器](#数据库浏览器)
 - [导出中心](#导出中心)
 - [App 管理（桌面版）](#app-管理桌面版)
+- [移动端配对](#移动端配对)
 - [系统](#系统)
 - [错误响应格式](#错误响应格式)
 
@@ -291,6 +299,37 @@ Ghost 月：单月消息骤降 ≥80% 的"失联月"。
 跨所有联系人和群聊搜索消息。`type` 可选 `all`/`contact`/`group`。每个联系人/群聊最多返回 5 条匹配。
 
 
+## 每日社交简报
+
+首页左侧 Tab「今日简报」对应的数据源。每天看昨天，懒生成 + 入库。
+
+### `GET /api/daily-digest/today?date=YYYY-MM-DD`
+
+返回某天的社交摘要（默认昨天）。如果 DB 里没有缓存就实时生成并写入。
+
+```json
+{
+  "date": "2026-05-10",
+  "total_messages": 312,
+  "active_contacts": 18,
+  "active_groups": 5,
+  "highlights": [
+    { "kind": "long_chat", "username": "wxid_x", "display_name": "TA", "summary": "和 TA 聊了 80 条" },
+    { "kind": "new_topic", "summary": "群里第一次聊到 \"求职\"" }
+  ],
+  "suggest_reach_out": ["wxid_a", "wxid_b"]
+}
+```
+
+### `GET /api/daily-digest/list?days=30`
+
+近 N 天历史简报，按日期降序。`days` 默认 30。
+
+### `POST /api/daily-digest/regen?date=YYYY-MM-DD`
+
+强制重新生成某天简报（默认昨天）。调试或重新索引后用。
+
+
 ## AI 分析
 
 ### `POST /api/ai/analyze`
@@ -401,6 +440,84 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 ```
 
 **SSE 响应**：每条 `data:` 为 `{ speaker, content }`，最后 `{ done: true }`。
+
+
+## AI 虚拟群聊
+
+把任意 2-8 个联系人拉进一个虚拟群（这些人现实里可能从没在同群聊过），AI 扮演每个人轮流发言。风格来源优先级：已训练的 clone_profiles.prompt → 私聊样例兜底。
+
+### `POST /api/ai/virtual-group/chat`
+
+生成一句或 N 句虚拟群聊（SSE 流式）。
+
+**请求体**
+
+```json
+{
+  "members": ["wxid_a", "wxid_b"],
+  "history": [
+    { "speaker": "wxid_a", "content": "之前说过的话" }
+  ],
+  "next_speaker": "",
+  "topic": "可选话题",
+  "profile_id": "uuid",
+  "turns": 1,
+  "sample_count": 30
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `members` | 2-8 个联系人 wxid |
+| `next_speaker` | 空 / `auto` 自动轮转；`random` 随机；或指定某个 member 的 wxid |
+| `turns` | 1 = 单句（老行为）；2-15 一次生成多句，由 LLM 自选顺序 |
+| `sample_count` | 未训练分身时每人采样多少条消息（默认 30，上限 200） |
+
+**SSE 响应**：每条 `data:` 为 `{ speaker, display_name, content }`，最后 `{ done: true }`。
+
+### `GET /api/ai/virtual-group/sessions`
+
+列出已保存的虚拟群会话（按 `updated_at` 倒序，最多 100 条）。
+
+```json
+{
+  "sessions": [
+    {
+      "id": 12,
+      "name": "深夜话题局",
+      "topic": "聊一聊离职这事",
+      "members": [{ "username": "wxid_a", "name": "TA", "avatar": "..." }],
+      "history": [{ "speaker": "wxid_a", "display_name": "TA", "content": "..." }],
+      "created_at": 1714000000,
+      "updated_at": 1714867200
+    }
+  ]
+}
+```
+
+### `GET /api/ai/virtual-group/sessions/:id`
+
+读取单个会话详情（含成员 + 完整 history）。
+
+### `POST /api/ai/virtual-group/sessions`
+
+保存或更新虚拟群会话。body 带 `id` 则 UPDATE，否则 INSERT。
+
+```json
+{
+  "id": 0,
+  "name": "...",
+  "topic": "...",
+  "members": [{ "username": "wxid_a", "name": "TA" }],
+  "history": [{ "speaker": "wxid_a", "display_name": "TA", "content": "..." }]
+}
+```
+
+**响应**：`{ "id": 12 }`。
+
+### `DELETE /api/ai/virtual-group/sessions/:id`
+
+删除会话。返回 `{ "ok": true }`。
 
 
 ## 创意实验室（Labs）
@@ -659,13 +776,127 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 `weight` 表示两个联系人共同所在的群数。前端自跑迷你 force layout 渲染，无 d3-force 依赖。
 
 
+## 断联预警 / 反向语义搜索
+
+### `GET /api/me/drift?refresh=0`
+
+断联预警 / Drift Alert。扫所有私聊（总消息数 ≥ 50）的 `LastMessageTs`，按静默天数 ≥ 30 排出 Top 30，并给出三档分级人数 + 三张"之最"高亮卡。零 LLM、10 分钟缓存，`?refresh=1` 强制重算。
+
+**响应**
+
+```json
+{
+  "today": "2026-05-10",
+  "total_analyzed": 142,
+  "total_adrift": 38,
+  "summary": {
+    "tier_30_plus": 18,
+    "tier_90_plus": 12,
+    "tier_180_plus": 8
+  },
+  "top": [
+    {
+      "username": "wxid_xxx",
+      "display_name": "TA",
+      "avatar": "...",
+      "total_messages": 1234,
+      "last_message_ts": 1700000000,
+      "last_date": "2024-09-12",
+      "days_silent": 215,
+      "heartbreak_index": 18.7
+    }
+  ],
+  "superlatives": {
+    "longest_silent": { "username": "...", "...": "..." },
+    "biggest_volume": { "username": "...", "...": "..." },
+    "oldest_friend":  { "username": "...", "...": "..." }
+  }
+}
+```
+
+### `GET /api/me/echo?q=...&topK=20&days=365`
+
+「这句话谁说过」反向语义搜索。embed 一次 query → 跨已建索引的 `vec_messages` 找最相似消息 → 按说话人聚合返回。
+
+**Query 参数**
+
+| 字段 | 默认 | 说明 |
+|------|------|------|
+| `q` | — | 必填，要搜的句子，≤ 200 字 |
+| `topK` | 20 | 每个 contact 内最多保留候选数（≤ 100） |
+| `min_msgs` | 50 | 只搜消息数 ≥ N 的 contact |
+| `days` | 365 | 时间窗（天） |
+| `include_groups` | `0` | `1` 时把群聊也纳入扫描 |
+| `include_self` | `0` | `1` 时把"我"的消息也纳入 |
+
+**响应**
+
+```json
+{
+  "query": "再不学就晚了",
+  "total_hits": 24,
+  "keys_scanned": 78,
+  "keys_skipped": 12,
+  "elapsed_ms": 1830,
+  "groups": [
+    {
+      "key": "wxid_x",
+      "display_name": "TA",
+      "avatar": "...",
+      "is_group": false,
+      "hit_count": 3,
+      "top_sim": 0.81,
+      "hits": [
+        { "datetime": "2024-03-15 22:08", "sender": "TA", "content": "再不学就晚了……", "similarity": 0.81 }
+      ]
+    }
+  ]
+}
+```
+
+相似度 < 0.35 的命中视为噪声丢弃。最多扫 800 个 contact（防御性兜底）。
+
+
+## 群聊 Wrapped / 里程碑
+
+### `GET /api/groups/wrapped?room=xxx@chatroom&refresh=0`
+
+群聊 Wrapped 卡。和 `/api/groups/year-review` 区别：那个是按年生成 + LLM 叙事，这个是"对整段筛选时间范围"的纯统计速览（Top 发言人、消息类型分布、最忙一天、被引用最多原文等），无 LLM。可作为群画像顶部 Hero 卡。10 分钟缓存。
+
+### `POST /api/contacts/milestones`
+
+聊天里程碑。某联系人的初识日期 + 第一条消息预览、消息量门槛（100/500/1K/5K…）、最火月份、认识天数等。纯统计、5 分钟缓存。
+
+**请求体**
+
+```json
+{ "username": "wxid_xxx" }
+```
+
+仅支持私聊（带 `@chatroom` 直接 400）。
+
+
 ## Skills（技能包）
 
 把聊天记录炼化为 Claude Code / Codex / Cursor 等 AI 工具的 Skill 文件包。
 
 ### `POST /api/ai/forge-skill`
 
-异步炼化任务。请求体主要字段：`skill_type`（`contact` / `self` / `group`）、`username`、`profile_id`、`msg_limit`、`output_format`（`claude-skill` / `claude-agent` / `codex` / `opencode` / `cursor` / `generic`）。返回 `skill_id`，用于后续查状态。
+异步炼化任务。请求体主要字段：`skill_type`（`contact` / `self` / `group` / `group-member`）、`username`、`member_speaker`（仅 group-member）、`profile_id`、`msg_limit`、`format`。返回 `skill_id`，用于后续查状态。
+
+支持的 `format`：
+
+| 值 | 产物 |
+|----|------|
+| `claude-skill` | Claude Code Skills 目录式 |
+| `claude-agent` | Claude Code Subagent 单文件 |
+| `codex` | OpenAI Codex CLI `AGENTS.md` |
+| `opencode` | OpenCode Agent |
+| `cursor` | Cursor Rules `.mdc`（含 glob） |
+| `generic` | 通用 Markdown |
+| `lora-jsonl` | **LoRA 训练集 zip**：Alpaca jsonl + 训练食谱。纯本地处理无 LLM，仅 `skill_type=self` 支持，用于本地微调（Unsloth / LLaMA-Factory） |
+
+`lora-jsonl` 模式跳过 LLM 配置校验；其它格式要求已配置 provider + API Key（Ollama 例外）。
 
 ### `GET /api/skills`
 
@@ -682,6 +913,81 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 ### `DELETE /api/skills/:id`
 
 删除单个 Skill（同时删除本地文件）。
+
+
+## AI 文生图
+
+生图能力，覆盖三个场景：群年报封面 / 高光瞬间插画 / 联系人 AI 头像。默认 provider 是火山方舟（豆包）即梦 `doubao-seedream-3-0-t2i-250415`，走 OpenAI 兼容的 `/images/generations`。
+
+**缓存**：`sha256(provider|model|size|prompt)` → `~/.welink/ai_images/<hash>.png`。命中直接返回 hash，不重复调 API。前端必须用 `GET /api/image/cache/:hash` 同源拿图——火山方舟返回的临时 URL 24h 过期，且 `html-to-image` 导出分享卡要求图片同源。
+
+Demo 模式会写一张 SVG 占位图，不调真 provider。
+
+### `POST /api/image/generate`
+
+生成一张图（同步阻塞）。
+
+**请求体**
+
+```json
+{
+  "prompt": "...",
+  "size": "1024x1024",
+  "scene": "highlight"
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `prompt` | 必填，≤ 2000 字符 |
+| `size` | `1024x1024` / `1024x1792` / `1792x1024`，默认 `1024x1024` |
+| `scene` | 埋点用，可选 `year_review` / `highlight` / `avatar` |
+
+未启用生图（`prefs.image_enabled=false`）且非 Demo 模式 → `403`。
+
+**响应**
+
+```json
+{
+  "hash": "ab12...",
+  "url": "/api/image/cache/ab12...",
+  "cached": false
+}
+```
+
+### `GET /api/image/cache/:hash`
+
+按 hash 提供缓存图。`Cache-Control: public, max-age=31536000, immutable`，content-type 自动 sniff（SVG / PNG / JPEG）。
+
+### `POST /api/image/test`
+
+用极短 prompt 验证生图配置是否可用。无 body。
+
+```json
+{ "ok": true, "hash": "...", "url": "/api/image/cache/...", "model": "doubao-seedream-..." }
+```
+
+### `POST /api/contacts/ai-avatar`
+
+联系人 AI 头像：扫该联系人最近 200 条 type=1 文本 → LLM 抽 3-5 个性格关键词 → 拼 prompt 调 `GenerateImage`，产物是抽象意象头像（无人脸、无五官、无文字）。
+
+**请求体**
+
+```json
+{ "username": "wxid_xxx" }
+```
+
+文字消息少于 10 条直接 400。
+
+**响应**
+
+```json
+{
+  "url": "/api/image/cache/...",
+  "hash": "...",
+  "tags": ["温柔细腻", "段子手", "碎碎念"]
+}
+```
 
 
 ## RAG 检索
@@ -745,6 +1051,49 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 测试记忆提炼模型配置。
 
 
+## 记忆库（Memory CRUD）
+
+侧边栏「记忆库」Tab，让用户看见、编辑、置顶 LLM 提炼出来的事实（`mem_facts` 表）。
+
+### `GET /api/memory/list?contact=&q=&pinned=&limit=100&offset=0`
+
+分页 + 筛选检索。
+
+| Query | 说明 |
+|-------|------|
+| `contact` | 限定单个 contact_key，空 = 全量 |
+| `q` | 关键词（fact LIKE） |
+| `pinned` | `1` = 仅置顶 |
+| `limit` | 默认 100，最大 500 |
+| `offset` | 分页偏移 |
+
+返回 `{ facts: [...], total: N }`，按 `pinned DESC, id DESC` 排序。
+
+### `GET /api/memory/contacts`
+
+按 `contact_key` 聚合：`{ contacts: [{ contact_key, count, pinned_count }] }`。
+
+### `POST /api/memory`
+
+手动添加一条记忆。
+
+```json
+{ "contact_key": "contact:wxid_x", "fact": "TA 喜欢阿森纳", "pinned": false }
+```
+
+### `PUT /api/memory/:id`
+
+更新某条记忆的文本。body `{ "fact": "..." }`。
+
+### `DELETE /api/memory/:id`
+
+删除一条记忆。
+
+### `PUT /api/memory/:id/pin`
+
+切换置顶状态。body `{ "pinned": true }`。
+
+
 ## AI 对话历史
 
 ### `GET /api/ai/conversations?key=contact:wxid`
@@ -795,6 +1144,31 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 ```
 
 
+## AI 分身对话历史
+
+AI 分身 Tab 的多轮对话独立持久化（区别于 `/api/ai/conversations`），按联系人分组。
+
+### `GET /api/ai/clone/history/:username`
+
+拉回该联系人的全部分身对话，按时间升序（旧→新）。
+
+### `POST /api/ai/clone/history/:username`
+
+追加一条对话。
+
+```json
+{ "role": "user|assistant", "content": "..." }
+```
+
+### `DELETE /api/ai/clone/history/:username`
+
+清空该联系人的全部分身对话。
+
+### `DELETE /api/ai/clone/history/msg/:id`
+
+撤回单条消息。
+
+
 ## 用户偏好
 
 ### `GET /api/preferences`
@@ -808,6 +1182,20 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 ### `PUT /api/preferences/llm`
 
 更新 LLM 配置（多 Profile 支持、Embedding 配置、记忆提炼配置）。
+
+### `PUT /api/preferences/image`
+
+更新文生图配置：
+
+```json
+{
+  "image_enabled": true,
+  "image_provider": "doubao",
+  "image_api_key": "...",
+  "image_base_url": "https://ark.cn-beijing.volces.com/api/v3",
+  "image_model": "doubao-seedream-3-0-t2i-250415"
+}
+```
 
 ### `PUT /api/preferences/anniversaries`
 
@@ -832,6 +1220,18 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 ### `PUT /api/preferences/download-dir`
 
 设置导出目录。必须在 `UserHomeDir` 之下且可写；校验失败自动回滚到上一个有效值。空串 = 恢复平台默认（`~/Downloads`）。
+
+### `POST /api/preferences/reset`
+
+重置用户配置到默认值。
+
+### `GET /api/preferences/export`
+
+把当前配置导出为 JSON（API Key 等敏感字段会被脱敏为 `__HAS_KEY__`）。
+
+### `POST /api/preferences/import`
+
+上传 JSON 覆盖当前配置。遇到脱敏占位符保留原值。
 
 
 ## Gemini OAuth
@@ -1123,6 +1523,53 @@ multipart 上传 `.db` 文件恢复 AI 数据。流程：写入临时文件 → 
 ### `POST /api/app/bundle-logs`
 
 打包 `welink.log` + `frontend.log` 为 ZIP，API Key 自动脱敏为 `[REDACTED]`。
+
+### `GET /api/app/check-update`
+
+后台轮询 GitHub Releases 检查是否有新版本，返回 `{ current, latest, has_update, release_notes }`。前端在启动 5s 后调用，弹 Release Notes Modal。
+
+
+## 移动端配对
+
+把 PC 端 WeLink 通过 LAN 共享给手机端 App（Phase 1）。开启 / 关闭 / 重新生成 token 都要求本机回环请求（`isLoopbackRequest`），手机端只能用 `verify` 探活。
+
+token 存储在 `preferences.json` 的 `mobile_pairing_token` 字段（导出配置时脱敏）。
+
+### `GET /api/app/pairing/status`
+
+查询配对开关。同源（本机）才能看到 token 和 LAN IP 列表。
+
+```json
+{ "enabled": true, "token": "abc123...", "lan_ips": ["192.168.1.7", "10.0.0.3"] }
+```
+
+外部带对的 token 访问时只看到 `{ "enabled": true }`。
+
+### `POST /api/app/pairing/enable`
+
+开启配对，生成新 token。**仅限本机调用**，否则 403。
+
+### `POST /api/app/pairing/disable`
+
+关闭并清空 token（之前配过的手机全失效）。**仅限本机调用**。
+
+### `POST /api/app/pairing/regen`
+
+换新 token（老手机会失效，需要重新扫码）。**仅限本机调用**。
+
+### `POST /api/app/pairing/verify`
+
+手机 App 拿到 token 后探活，验证 OK 再存本地。此端点不在鉴权白名单里 — 用 `subtle.ConstantTimeCompare` 比较。
+
+```json
+{ "token": "abc123..." }
+```
+
+**响应**
+
+```json
+{ "ok": true, "version": "0.2.x" }
+```
 
 
 ## 系统
