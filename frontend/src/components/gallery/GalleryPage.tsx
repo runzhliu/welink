@@ -11,12 +11,22 @@ import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { Image as ImageIcon, Search, Star, X, Trash2, RefreshCw, Loader2, Download, Sparkles } from 'lucide-react';
 import { useImageTask } from '../../hooks/useImageTask';
+import { contactsApi, groupsApi } from '../../services/api';
+import { avatarSrc } from '../../utils/avatar';
 
 interface UsedInEntry {
   kind: string;
   ref?: string;
   at?: number;
 }
+
+// wxid / chatroom id → 显示名 + 头像 URL 映射
+interface RefDirectoryEntry {
+  name: string;
+  avatar: string;
+  kind: 'contact' | 'group';
+}
+type RefDirectory = Record<string, RefDirectoryEntry>;
 
 interface ImageRec {
   hash: string;
@@ -90,6 +100,32 @@ export const GalleryPage: React.FC = () => {
   }, [q, scene, starredOnly]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // 拉一次联系人/群目录，用于把 used_in 里的 wxid 翻译成显示名 + 头像
+  const [directory, setDirectory] = useState<RefDirectory>({});
+  useEffect(() => {
+    Promise.all([
+      contactsApi.getStats().catch(() => []),
+      groupsApi.getList().catch(() => []),
+    ]).then(([contacts, groups]) => {
+      const dir: RefDirectory = {};
+      for (const c of contacts) {
+        dir[c.username] = {
+          name: c.remark || c.nickname || c.username,
+          avatar: c.small_head_url || c.big_head_url || '',
+          kind: 'contact',
+        };
+      }
+      for (const g of groups) {
+        dir[g.username] = {
+          name: g.name || g.username,
+          avatar: g.small_head_url || '',
+          kind: 'group',
+        };
+      }
+      setDirectory(dir);
+    });
+  }, []);
 
   const toggleStar = async (img: ImageRec) => {
     setImages(prev => prev.map(i => i.hash === img.hash ? { ...i, starred: !i.starred } : i));
@@ -170,7 +206,7 @@ export const GalleryPage: React.FC = () => {
         </div>
       )}
 
-      {detail && <ImageDetailModal img={detail} onClose={() => setDetail(null)} onRegen={() => { setRegenSrc(detail); setDetail(null); }} />}
+      {detail && <ImageDetailModal img={detail} directory={directory} onClose={() => setDetail(null)} onRegen={() => { setRegenSrc(detail); setDetail(null); }} />}
       {regenSrc && (
         <RegenerateModal
           src={regenSrc}
@@ -234,9 +270,10 @@ const GalleryCard: React.FC<{
 
 const ImageDetailModal: React.FC<{
   img: ImageRec;
+  directory: RefDirectory;
   onClose: () => void;
   onRegen: () => void;
-}> = ({ img, onClose, onRegen }) => {
+}> = ({ img, directory, onClose, onRegen }) => {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handler);
@@ -269,13 +306,38 @@ const ImageDetailModal: React.FC<{
             {img.used_in && img.used_in.length > 0 && (
               <div>
                 <div className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wide">用在哪</div>
-                <div className="space-y-1">
-                  {img.used_in.map((u, i) => (
-                    <div key={i} className="text-xs text-gray-600 dark:text-gray-400">
-                      <span className="font-bold text-[#a78bfa]">{u.kind}</span>
-                      {u.ref && <span className="ml-1 font-mono">· {u.ref}</span>}
-                    </div>
-                  ))}
+                <div className="space-y-1.5">
+                  {img.used_in.map((u, i) => {
+                    const entry = u.ref ? directory[u.ref] : undefined;
+                    return (
+                      <div key={i} className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-[#a78bfa]">{u.kind}</span>
+                        {u.ref && (
+                          <>
+                            <span className="text-gray-300 dark:text-gray-600">·</span>
+                            {entry?.avatar && (
+                              <img
+                                src={avatarSrc(entry.avatar)}
+                                alt=""
+                                className="w-4 h-4 rounded-full object-cover flex-shrink-0"
+                                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            )}
+                            {entry ? (
+                              <>
+                                <span className="font-semibold text-gray-700 dark:text-gray-200">{entry.name}</span>
+                                <span className="font-mono text-[10px] text-gray-400 dark:text-gray-500" title={u.ref}>
+                                  {u.ref.length > 18 ? u.ref.slice(0, 16) + '…' : u.ref}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="font-mono" title={u.ref}>{u.ref}</span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
