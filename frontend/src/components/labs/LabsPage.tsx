@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search, Quote, HeartHandshake, TrendingUp, Globe2 } from 'lucide-react';
+import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search, Quote, HeartHandshake, TrendingUp, Globe2, HeartPulse } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { VirtualGroupChat } from './VirtualGroupChat';
 import { Highlights } from './Highlights';
@@ -20,12 +20,13 @@ import { GoldenQuotes } from './GoldenQuotes';
 import { PromiseDebts } from './PromiseDebts';
 import { LanguageEvolution } from './LanguageEvolution';
 import { ChatGeography } from './ChatGeography';
+import { HealthLog } from './HealthLog';
 
 interface Props {
   contacts: ContactStats[];
 }
 
-type LabKey = 'highlights' | 'dna' | 'drift' | 'echo' | 'golden-quotes' | 'promise-debts' | 'language-evolution' | 'chat-geography' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
+type LabKey = 'highlights' | 'dna' | 'drift' | 'echo' | 'golden-quotes' | 'promise-debts' | 'language-evolution' | 'chat-geography' | 'health-log' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
 
 interface LabDef {
   key: LabKey;
@@ -90,6 +91,13 @@ const LABS: LabDef[] = [
     icon: <Globe2 size={14} />,
     badge: 'NEW',
     desc: '从所有私聊里抽出地名（中国城市 / 景点 / 海外城市 / 国家），bubble cloud 看你聊起最多的地方',
+  },
+  {
+    key: 'health-log',
+    label: '健康日记',
+    icon: <HeartPulse size={14} />,
+    badge: 'NEW',
+    desc: '扫聊天记录里"感冒/发烧/医院/吃药……"的提及，7 天合并成一次发作，看「我」vs「TA 们」谁更常生病',
   },
   {
     key: 'group-roi',
@@ -189,6 +197,7 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
       {active === 'promise-debts' && <PromiseDebts contacts={contacts} />}
       {active === 'language-evolution' && <LanguageEvolution />}
       {active === 'chat-geography' && <ChatGeography />}
+      {active === 'health-log' && <HealthLog />}
       {active === 'group-roi' && <GroupROI />}
       {active === 'group-wrapped' && <GroupWrapped />}
       {active === 'milestones' && <Milestones contacts={contacts} />}
