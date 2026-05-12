@@ -3045,6 +3045,9 @@ func serverMain() {
 		// 创意实验室 · 聊天地图（地名词典子串匹配，零 LLM）
 		registerChatGeographyRoutes(prot, getSvc)
 
+		// 创意实验室 · 健康日记（症状/就医关键词扫描 + 7 天窗口合并，零 LLM）
+		registerHealthLogRoutes(prot, getSvc)
+
 		// 群聊 AI 年报
 		registerGroupYearReviewRoutes(prot, getSvc)
 
