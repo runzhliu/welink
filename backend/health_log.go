@@ -55,7 +55,7 @@ var healthSymptomPattern = regexp.MustCompile(
 		`|口腔溃疡|嘴上起泡|嘴角溃疡` +
 		`|月经|大姨妈|痛经|经期` +
 		`|流感|新冠|阳了|二阳|甲流|乙流|诺如` +
-		`|fever|sick|flu|covid|migraine|cold ?\\(?(头?|nose|head)`,
+		`|fever|sick|flu|covid|migraine`,
 )
 
 // 行为词：去医院/吃药这类强信号。即使不出现症状词，单独出现也算"生病线索"。
