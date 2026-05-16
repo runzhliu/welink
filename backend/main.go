@@ -4089,6 +4089,9 @@ func serverMain() {
 	registerVirtualGroupRoutes(api, getSvc)
 	registerVirtualGroupStoreRoutes(api)
 
+	// 视觉小说 / 互动小说（联系人 NPC + 章节剧情 + 多结局）
+	registerVNRoutes(api, getSvc)
+
 	// 创意实验室 · 平行宇宙对话（流式 SSE）
 	registerParallelChatRoutes(api, getSvc)
 

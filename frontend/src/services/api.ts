@@ -478,4 +478,127 @@ export const exportApi = {
   saveConfig: (cfg: ExportConfigDTO) => api.put<void, { ok: boolean }>('/export/config', cfg),
 };
 
+// ─── 视觉小说（VN / 互动小说）────────────────────────────────────────────────
+
+export interface VNFactDTO {
+  fact: string;
+}
+
+export interface VNChoiceDTO {
+  text: string;
+  tone?: string;
+  state_delta?: Record<string, unknown>;
+}
+
+export interface VNStateDTO {
+  affinity: number;
+  tension?: number;
+  flags?: string[];
+  critical_hits?: number;
+  dealbreaker?: boolean;
+}
+
+export interface VNEndingDTO {
+  type: 'true' | 'happy' | 'normal' | 'bad' | 'secret';
+  title?: string;
+  epilogue?: string;
+  turning_points?: string[];
+}
+
+export interface VNStoryDTO {
+  id: number;
+  username: string;
+  title: string;
+  synopsis: string;
+  mode: 'free' | 'quest' | 'memory';
+  quest: string;
+  facts_snap?: VNFactDTO[];
+  state: VNStateDTO;
+  status: 'running' | 'ended';
+  ending_type?: string;
+  ending?: VNEndingDTO;
+  max_chapters: number;
+  profile_id?: string;
+  created_at: number;
+  ended_at?: number;
+  updated_at: number;
+}
+
+export interface VNChapterDTO {
+  id: number;
+  story_id: number;
+  chapter_idx: number;
+  narration: string;
+  choices: VNChoiceDTO[];
+  chosen_idx: number;
+  state_after?: VNStateDTO;
+  image_hash?: string;
+  generated_at: number;
+  decided_at?: number;
+}
+
+export interface VNStartResponse {
+  story_id: number;
+  display_name: string;
+  mode: string;
+  max_chapters: number;
+  facts: VNFactDTO[];
+  has_persona: boolean;
+}
+
+export interface VNChooseResponse {
+  state: VNStateDTO;
+  can_continue: boolean;
+  ended: boolean;
+}
+
+export interface VNStoryFull {
+  story: VNStoryDTO;
+  chapters: VNChapterDTO[];
+}
+
+export const vnApi = {
+  start: (req: {
+    username: string;
+    mode?: 'free' | 'quest' | 'memory';
+    quest?: string;
+    memory_date?: string;
+    max_chapters?: number;
+    profile_id?: string;
+  }) => api.post<void, VNStartResponse>('/vn/start', req),
+
+  choose: (storyId: number, chapterIdx: number, optionIdx: number) =>
+    api.post<void, VNChooseResponse>(`/vn/stories/${storyId}/choose`, {
+      chapter_idx: chapterIdx,
+      option_idx: optionIdx,
+    }),
+
+  getStory: (storyId: number) =>
+    api.get<void, VNStoryFull>(`/vn/stories/${storyId}`),
+
+  listStories: (username: string, limit = 30) =>
+    api.get<void, { stories: VNStoryDTO[] }>(`/vn/stories?username=${encodeURIComponent(username)}&limit=${limit}`),
+
+  rewind: (storyId: number, toChapter: number) =>
+    api.post<void, { removed: number; state: VNStateDTO }>(`/vn/stories/${storyId}/rewind`, { to_chapter: toChapter }),
+
+  deleteStory: (storyId: number) =>
+    api.delete<void, { ok: boolean }>(`/vn/stories/${storyId}`),
+
+  listEndings: (username: string) =>
+    api.get<void, { unlocked: { ending_type: string; story_id: number; unlocked_at: number }[]; total: number }>(
+      `/vn/endings/${encodeURIComponent(username)}`,
+    ),
+
+  /**
+   * 为指定章节生成封面图（同步阻塞，约 10-30s）。返回的 hash 已经入库 vn_chapters.image_hash，
+   * 下次读档时会自动带上。
+   */
+  generateCover: (storyId: number, chapterIdx: number, profileId?: string) =>
+    api.post<void, { hash: string; url: string }>(`/vn/stories/${storyId}/cover`, {
+      chapter_idx: chapterIdx,
+      profile_id: profileId ?? '',
+    }),
+};
+
 export default api;
