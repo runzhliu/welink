@@ -17,6 +17,7 @@
 - [AI 分身](#ai-分身)
 - [AI 群聊模拟](#ai-群聊模拟)
 - [AI 虚拟群聊](#ai-虚拟群聊)
+- [视觉小说 / 互动小说（VN）](#视觉小说--互动小说vn)
 - [创意实验室（Labs）](#创意实验室labs)
 - [断联预警 / 反向语义搜索](#断联预警--反向语义搜索)
 - [群聊 Wrapped / 里程碑](#群聊-wrapped--里程碑)
@@ -518,6 +519,161 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 ### `DELETE /api/ai/virtual-group/sessions/:id`
 
 删除会话。返回 `{ "ok": true }`。
+
+
+## 视觉小说 / 互动小说（VN）
+
+把某个联系人变成一段章节化、有选项、多结局的视觉小说。复用「AI 分身」的人设 + 「mem_facts」的真实事件素材；按需流式生成每一章，每章入库后玩家选完选项再生成下一章。
+
+**设计要点**
+
+- 章节数动态 5-8 章（默认 6）；玩家踩 `dealbreaker` 或 `affinity<20` 时第 3 章后可短路 bad 结局
+- 状态 `vn_state`：`{affinity 0-100, tension 0-100, flags[], critical_hits, dealbreaker}`，每章合并一次 `state_delta`
+- 5 类结局：`true / happy / normal / bad / secret`，由 LLM 主导 + 阈值兜底
+- 每章自动入库，可读档回滚到任意已选章节
+- 同一联系人不限存档数
+- 无 mem_facts 时退化到纯人设；无 clone_profile 时用通用兜底人设
+
+### `POST /api/vn/start`
+
+同步建档：抽取人设快照 + 事实素材，写 vn_stories 行。**不**返回第一章（用下面的 SSE）。
+
+**请求体**
+
+```json
+{
+  "username": "wxid_xxx",
+  "mode": "free",
+  "quest": "",
+  "max_chapters": 6,
+  "profile_id": ""
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `username` | 必填，联系人 wxid |
+| `mode` | `free`（默认）/ `quest`（玩家给目标）/ `memory`（基于真实回忆改编） |
+| `quest` | `mode=quest` 时必填，玩家暗中追求的目标，如「让 TA 答应一起去日本」 |
+| `memory_date` | `mode=memory` 时必填，YYYY-MM-DD；服务端会用 `svc.GetDayMessages` 抓那一天的真实对话作为剧情起点素材，prompt 提示「假如那天换种回应」 |
+| `max_chapters` | 默认 6，范围 3-10 |
+| `profile_id` | 可选 LLM profile id |
+
+**响应**
+
+```json
+{
+  "story_id": 12,
+  "display_name": "TA",
+  "mode": "free",
+  "max_chapters": 6,
+  "facts": [{ "fact": "TA 最近在准备搬家" }],
+  "has_persona": true
+}
+```
+
+`has_persona=false` 时前端可提示「未训练分身，剧情个性化弱」。
+
+### `GET /api/vn/stories/:id/next` (SSE)
+
+流式生成下一章。事件类型：
+
+| 事件 | 字段 | 说明 |
+|------|------|------|
+| meta | `chapter_idx, total` | 即将开始生成的章节序号 + 总章节数 |
+| delta | `delta` | narration 增量（按 ~12 字一段，模拟打字机） |
+| done | `chapter, state, ending?, title?, synopsis?` | 收尾事件：完整章节（含 choices）+ 当前状态；最后一章一并带 `ending` |
+| error | `error` | 失败信息 |
+
+**重要**：调用前必须先把上一章 `choose` 完，否则返回错误「请先调 /choose」。
+
+### `POST /api/vn/stories/:id/choose`
+
+提交玩家本章选择，合并 state_delta 到存档。
+
+**请求体**
+
+```json
+{ "chapter_idx": 0, "option_idx": 2 }
+```
+
+**响应**
+
+```json
+{
+  "state": { "affinity": 55, "tension": 0, "flags": ["..."], "critical_hits": 0, "dealbreaker": false },
+  "can_continue": true,
+  "ended": false
+}
+```
+
+### `GET /api/vn/stories/:id`
+
+加载完整存档（含全部章节）。
+
+```json
+{
+  "story": { "id": 12, "username": "...", "title": "...", "synopsis": "...",
+             "mode": "free", "state": {...}, "status": "running|ended",
+             "ending_type": "happy", "max_chapters": 6, ... },
+  "chapters": [
+    { "chapter_idx": 0, "narration": "...", "choices": [...], "chosen_idx": 2,
+      "state_after": {...}, "image_hash": "", "generated_at": ..., "decided_at": ... }
+  ]
+}
+```
+
+### `GET /api/vn/stories?username=&limit=30`
+
+某联系人的历史存档列表（仅元数据，不含章节）。按 `updated_at` 倒序。
+
+### `POST /api/vn/stories/:id/rewind`
+
+读档回滚到指定章节。删除 > `to_chapter` 的所有章节，把 state 回退到该章 `state_after`。
+
+```json
+{ "to_chapter": 2 }
+```
+
+`to_chapter` 自身的 chosen_idx 会被清空（便于重选）；status 重置为 running，结局信息清空。
+
+### `DELETE /api/vn/stories/:id`
+
+删档（级联删除章节）。
+
+### `GET /api/vn/endings/:username`
+
+该联系人已解锁的结局清单 + 总结局数。多周目用。
+
+```json
+{
+  "unlocked": [
+    { "ending_type": "happy", "story_id": 12, "unlocked_at": 1714867200 }
+  ],
+  "total": 5
+}
+```
+
+### `POST /api/vn/stories/:id/cover`
+
+为某一章生成场景封面图（**同步**，约 10-30 秒）。复用 `image_queue` + `GenerateImageSync`，prompt 由后端构造（电影感、不画人脸、保留剧情氛围）。完成后 hash 自动落 `vn_chapters.image_hash`，下次读档时该章会带封面。
+
+**请求体**
+
+```json
+{ "chapter_idx": 0, "profile_id": "" }
+```
+
+**响应**
+
+```json
+{
+  "hash": "abc123...",
+  "url": "/api/image/cache/abc123..."
+}
+```
+
+要求设置页 `image_enabled=true` + 已配置生图 provider，否则 `403` / `400`。同 hash 会命中本地缓存秒返。
 
 
 ## 创意实验室（Labs）

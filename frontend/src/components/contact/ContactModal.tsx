@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import axios from 'axios';
-import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame, Sparkles, Maximize2, Minimize2, Mic, Image as ImageIcon, RotateCcw } from 'lucide-react';
+import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame, Sparkles, Maximize2, Minimize2, Mic, Image as ImageIcon, RotateCcw, BookOpen } from 'lucide-react';
 import { ChatReplay } from './ChatReplay';
 import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
@@ -15,6 +15,7 @@ import { LLMAnalysisTab } from './LLMAnalysisTab';
 import { AICloneTab } from './AICloneTab';
 import { ForgeSkillModal } from './ForgeSkillModal';
 import { PodcastModal } from './PodcastModal';
+import { VNModal } from './VNModal';
 import { RelationshipThermometer } from './RelationshipThermometer';
 import { SecretWordsCard } from './SecretWordsCard';
 import { ConfirmDialog } from '../common/ConfirmDialog';
@@ -62,6 +63,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
   // showReplay removed — now a tab
   const [forgeOpen, setForgeOpen] = useState(false);
   const [podcastOpen, setPodcastOpen] = useState(false);
+  const [vnOpen, setVnOpen] = useState(false);
 
   // 联系人切换时重置到指定 tab（支持从首页跳转到 AI 分析）
   useEffect(() => {
@@ -324,6 +326,13 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
             title="炼化为 Skill（导出给 Claude Code / Codex / Cursor 等工具使用）"
           >
             <Sparkles size={20} strokeWidth={2} />
+          </button>
+          <button
+            onClick={() => setVnOpen(true)}
+            className="p-2 rounded-xl text-gray-300 hover:text-[#a78bfa] hover:bg-[#a78bfa]/10 transition-colors duration-200"
+            title="互动小说 — 把 TA 当 NPC，写一段有选项的剧情"
+          >
+            <BookOpen size={20} strokeWidth={2} />
           </button>
           <button
             onClick={() => setFullscreen(v => !v)}
@@ -923,6 +932,14 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
       onClose={() => setPodcastOpen(false)}
       contact={contact}
     />
+
+    {vnOpen && (
+      <VNModal
+        username={contact.username}
+        displayName={displayName}
+        onClose={() => setVnOpen(false)}
+      />
+    )}
 
     <ConfirmDialog
       open={blockConfirmOpen}
