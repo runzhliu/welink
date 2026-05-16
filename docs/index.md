@@ -25,6 +25,9 @@ features:
     details: 让 AI 学习任何联系人的聊天风格，模拟和 TA 对话。追忆远方的亲人、重逢失联的老友——TA 会用 TA 的方式回应你。
     link: /ai-clone
     linkText: 了解更多
+  - icon: 🎮
+    title: 互动小说
+    details: 把联系人变成 NPC，写一段章节化、有选项、5 种结局的视觉小说。Wrapped 风格通关回顾 + 本剧亲密度 vs 真实关系热度对比 + 长图导出。
   - icon: 🔮
     title: Skill 炼化
     details: 把聊天记录炼化为 Claude Code / Codex / Cursor 等 AI 工具的 Skill 文件包。3 种类型 × 6 种格式。
@@ -243,6 +246,7 @@ docker compose up
     <span>数据不出机</span>
     <span>AI 分身</span>
     <span>AI 虚拟群聊</span>
+    <span>互动小说</span>
     <span>关系动态预测</span>
     <span>每日社交简报</span>
     <span>断联预警</span>
@@ -258,6 +262,7 @@ docker compose up
     <span>数据不出机</span>
     <span>AI 分身</span>
     <span>AI 虚拟群聊</span>
+    <span>互动小说</span>
     <span>关系动态预测</span>
     <span>每日社交简报</span>
     <span>断联预警</span>
