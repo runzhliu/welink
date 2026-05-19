@@ -21,6 +21,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -223,13 +224,7 @@ func vnNextChapterHandler(getSvc func() *service.ContactService) gin.HandlerFunc
 			"total":       story.MaxChapters,
 		})
 
-		// 构造 prompts
-		systemPrompt := vnBuildSystemPrompt(story, nextIdx)
-		userPrompt := vnBuildUserPrompt(story, existing)
-
-		// LLM 调用 —— 强制 JSON 输出，先用非流式调用兜稳；
-		// 我们对 narration 做"逐字打字机"的体感降级：拿到完整 JSON 后按字符 emit delta。
-		// 这避免了流式途中 JSON 不完整、无法解析的麻烦。
+		// LLM 配置预处理（预生成命中也会复用）
 		prefs := loadPreferences()
 		profPrefs := prefs
 		if story.ProfileID != "" {
@@ -239,43 +234,102 @@ func vnNextChapterHandler(getSvc func() *service.ContactService) gin.HandlerFunc
 			profPrefs.LLMBaseURL = cfg.baseURL
 			profPrefs.LLMModel = cfg.model
 		}
-		raw, err := CompleteLLM([]LLMMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: userPrompt},
-		}, profPrefs)
-		if err != nil {
-			send(map[string]interface{}{"error": "LLM 调用失败：" + err.Error()})
+
+		// 预生成命中检查：上一章存在 + 玩家所选选项被预测对了
+		if nextIdx > 0 {
+			lastCh := existing[len(existing)-1]
+			if hit := vnPrefetchGet(id, nextIdx, lastCh.ChosenIdx); hit != nil {
+				log.Printf("[vn] prefetch HIT story=%d chapter=%d", id, nextIdx)
+				// 命中：把缓存的 narration 一次性 emit（保留打字机体感）
+				emitTypewriter(hit.Narration, send)
+				ch := &VNChapter{
+					StoryID:    id,
+					ChapterIdx: nextIdx,
+					Narration:  hit.Narration,
+					Choices:    hit.Choices,
+					ChosenIdx:  -1,
+					StateAfter: story.State,
+				}
+				if _, err := InsertVNChapter(ch); err != nil {
+					send(map[string]interface{}{"error": "章节入库失败：" + err.Error()})
+					return
+				}
+				if nextIdx == 0 && (hit.Title != "" || hit.Synopsis != "") {
+					_ = UpdateVNStoryTitle(id, hit.Title, hit.Synopsis)
+				}
+				final := map[string]interface{}{
+					"done":        true,
+					"chapter":     ch,
+					"state":       story.State,
+					"chapter_idx": nextIdx,
+				}
+				if hit.Title != "" {
+					final["title"] = hit.Title
+				}
+				if hit.Synopsis != "" {
+					final["synopsis"] = hit.Synopsis
+				}
+				send(final)
+				// 命中后再调度下一章预生成
+				vnSchedulePrefetch(story, ch, profPrefs)
+				return
+			}
+		}
+
+		// 构造 prompts
+		systemPrompt := vnBuildSystemPrompt(story)
+		userPrompt := vnBuildUserPrompt(story, existing)
+
+		// LLM 调用 —— 真·流式：边接 chunk 边判断段落。
+		// 协议：LLM 先写 <narration>…</narration>，再写 <meta>{…}</meta>。
+		// narration 段内的 delta 立刻 SSE 推给前端（边写边出字）；meta 段 buffer 起来，
+		// 流结束后解析 JSON 拿 choices / state_delta / ending。失败兜底走老 CompleteLLM。
+		var parsed struct {
+			Title      string           `json:"title,omitempty"`
+			Synopsis   string           `json:"synopsis,omitempty"`
+			Choices    []VNChoice       `json:"choices"`
+			Ending     *VNEndingPayload `json:"ending,omitempty"`
+		}
+		narration, metaRaw, streamErr := vnStreamGenerate(systemPrompt, userPrompt, profPrefs, send)
+		if streamErr != nil {
+			send(map[string]interface{}{"error": "LLM 调用失败：" + streamErr.Error()})
 			return
 		}
-
-		raw = stripCodeFence(strings.TrimSpace(raw))
-		var parsed struct {
-			Title         string                 `json:"title,omitempty"`
-			Synopsis      string                 `json:"synopsis,omitempty"`
-			Narration     string                 `json:"narration"`
-			Choices       []VNChoice             `json:"choices"`
-			StateDelta    map[string]interface{} `json:"state_delta,omitempty"`
-			Ending        *VNEndingPayload       `json:"ending,omitempty"`
-		}
-		if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-			// 失败重试一次：把 "请重新输出严格 JSON" 加到末尾
-			retryUser := userPrompt + "\n\n注意：刚才你的输出不是严格 JSON，请重新输出，不要任何代码块围栏。"
-			raw2, err2 := CompleteLLM([]LLMMessage{
-				{Role: "system", Content: systemPrompt},
-				{Role: "user", Content: retryUser},
-			}, profPrefs)
-			if err2 != nil {
-				send(map[string]interface{}{"error": "LLM 第二次调用失败：" + err2.Error()})
+		if metaRaw != "" {
+			if err := json.Unmarshal([]byte(metaRaw), &parsed); err != nil {
+				// meta 段没拿到合法 JSON，兜底再非流式调一次老格式
+				narrFallback, metaFallback, fbErr := vnFallbackComplete(systemPrompt, userPrompt, profPrefs)
+				if fbErr != nil {
+					send(map[string]interface{}{"error": "LLM 返回格式异常且兜底失败：" + err.Error()})
+					return
+				}
+				if narration == "" && narrFallback != "" {
+					emitTypewriter(narrFallback, send)
+					narration = narrFallback
+				}
+				if err := json.Unmarshal([]byte(metaFallback), &parsed); err != nil {
+					send(map[string]interface{}{"error": "LLM 返回格式异常：" + err.Error(), "raw": metaFallback})
+					return
+				}
+			}
+		} else {
+			// 完全没拿到 meta 段（模型也许不听话，直接吐了纯 JSON 或纯文本），兜底走老路
+			narrFallback, metaFallback, fbErr := vnFallbackComplete(systemPrompt, userPrompt, profPrefs)
+			if fbErr != nil {
+				send(map[string]interface{}{"error": "LLM 调用失败：" + fbErr.Error()})
 				return
 			}
-			raw = stripCodeFence(strings.TrimSpace(raw2))
-			if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-				send(map[string]interface{}{"error": "LLM 返回格式异常：" + err.Error(), "raw": raw})
+			if narration == "" && narrFallback != "" {
+				emitTypewriter(narrFallback, send)
+				narration = narrFallback
+			}
+			if err := json.Unmarshal([]byte(metaFallback), &parsed); err != nil {
+				send(map[string]interface{}{"error": "LLM 返回格式异常：" + err.Error(), "raw": metaFallback})
 				return
 			}
 		}
 
-		if strings.TrimSpace(parsed.Narration) == "" {
+		if strings.TrimSpace(narration) == "" {
 			send(map[string]interface{}{"error": "LLM 没返回 narration"})
 			return
 		}
@@ -285,9 +339,6 @@ func vnNextChapterHandler(getSvc func() *service.ContactService) gin.HandlerFunc
 			return
 		}
 
-		// 打字机：按字符切片 emit delta（每 ~12 字一段，约 20-30 段）
-		emitTypewriter(parsed.Narration, send)
-
 		// 合并 state（state_delta 仅在玩家 choose 时再算，本步先不动 story.State）
 		// 但若 LLM 给了 ending → 直接收尾
 		stateAfter := story.State
@@ -296,7 +347,7 @@ func vnNextChapterHandler(getSvc func() *service.ContactService) gin.HandlerFunc
 		ch := &VNChapter{
 			StoryID:     id,
 			ChapterIdx:  nextIdx,
-			Narration:   parsed.Narration,
+			Narration:   narration,
 			Choices:     parsed.Choices,
 			ChosenIdx:   -1,
 			StateAfter:  stateAfter,
@@ -340,10 +391,16 @@ func vnNextChapterHandler(getSvc func() *service.ContactService) gin.HandlerFunc
 			final["synopsis"] = parsed.Synopsis
 		}
 		send(final)
+
+		// 调度下一章预生成（结局章 / 已到末章则跳过；vnSchedulePrefetch 内部也会再判一次）
+		if parsed.Ending == nil {
+			vnSchedulePrefetch(story, ch, profPrefs)
+		}
 	}
 }
 
 // emitTypewriter 把 narration 按 ~12 个字一段 emit delta，模拟打字机效果。
+// 现在主路径走真·流式 vnStreamGenerate，这里只在 fallback 兜底时使用。
 func emitTypewriter(text string, send func(map[string]interface{})) {
 	runes := []rune(text)
 	step := 12
@@ -354,6 +411,177 @@ func emitTypewriter(text string, send func(map[string]interface{})) {
 		}
 		send(map[string]interface{}{"delta": string(runes[i:end])})
 	}
+}
+
+// vnStreamGenerate 真·流式生成本章内容：
+//   - 边接 LLM chunk 边按 <narration>…</narration> / <meta>…</meta> 切段
+//   - narration 段内 chunk 通过 send 立刻推 {delta: "..."} 给前端
+//   - meta 段攒在 buffer 里，流结束后整体返回（meta JSON 由调用方解析）
+//
+// 返回：narration（已 emit 完的文本拼接结果，便于落库）、metaRaw（裸 JSON）、err
+func vnStreamGenerate(systemPrompt, userPrompt string, prefs Preferences, send func(map[string]interface{})) (string, string, error) {
+	// 段状态机
+	const (
+		stPreface = iota // 还没看到 <narration>，把 chunk 丢掉（兼容 LLM 偶尔前面加废话）
+		stNarr           // 在 <narration>…</narration> 内
+		stBetween        // </narration> 之后、<meta> 之前
+		stMeta           // 在 <meta>…</meta> 内
+		stPostMeta       // </meta> 之后，忽略
+	)
+	var (
+		state          = stPreface
+		buf            strings.Builder // 当前段累积 buffer（用于跨 chunk 找标签）
+		narrationOut   strings.Builder // 已 emit 给前端的 narration 全文
+		metaOut        strings.Builder
+		streamErrOuter error
+	)
+
+	emitNarr := func(s string) {
+		if s == "" {
+			return
+		}
+		narrationOut.WriteString(s)
+		send(map[string]interface{}{"delta": s})
+	}
+
+	// 在 buf 中查找标签；若找到就把标签前的内容 flush 到当前段、并切到 next 状态、剩余部分作为下一轮处理对象。
+	// 返回 true 表示状态变了（外层需要重新循环检查 buf）
+	advance := func() bool {
+		s := buf.String()
+		switch state {
+		case stPreface:
+			if i := strings.Index(s, "<narration>"); i >= 0 {
+				buf.Reset()
+				buf.WriteString(s[i+len("<narration>"):])
+				state = stNarr
+				return true
+			}
+			// 没找到也要防止 buf 一直涨：保留末尾 ~16 字节即可（够 <narration> 跨 chunk 拼接）
+			if len(s) > 64 {
+				buf.Reset()
+				buf.WriteString(s[len(s)-16:])
+			}
+		case stNarr:
+			if i := strings.Index(s, "</narration>"); i >= 0 {
+				emitNarr(s[:i])
+				buf.Reset()
+				buf.WriteString(s[i+len("</narration>"):])
+				state = stBetween
+				return true
+			}
+			// 没看到 </narration>：把 buf 大部分 flush 给前端（保留末尾 ~16 字节防截断标签）
+			if len(s) > 32 {
+				safe := len(s) - 16
+				emitNarr(s[:safe])
+				buf.Reset()
+				buf.WriteString(s[safe:])
+			}
+		case stBetween:
+			if i := strings.Index(s, "<meta>"); i >= 0 {
+				buf.Reset()
+				buf.WriteString(s[i+len("<meta>"):])
+				state = stMeta
+				return true
+			}
+			if len(s) > 64 {
+				buf.Reset()
+				buf.WriteString(s[len(s)-16:])
+			}
+		case stMeta:
+			if i := strings.Index(s, "</meta>"); i >= 0 {
+				metaOut.WriteString(s[:i])
+				buf.Reset()
+				state = stPostMeta
+				return true
+			}
+		}
+		return false
+	}
+
+	sendChunk := func(chunk StreamChunk) {
+		if chunk.Error != "" {
+			streamErrOuter = fmt.Errorf("%s", chunk.Error)
+			return
+		}
+		if chunk.Done {
+			// 收尾：还在 meta 段就把剩余 buf 一起塞进去（缺 </meta> 兼容）
+			if state == stMeta {
+				metaOut.WriteString(buf.String())
+				buf.Reset()
+			}
+			return
+		}
+		if chunk.Delta == "" {
+			return
+		}
+		buf.WriteString(chunk.Delta)
+		for advance() {
+		}
+	}
+
+	streamLLMCore(sendChunk, []LLMMessage{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
+	}, prefs)
+	if streamErrOuter != nil {
+		return narrationOut.String(), strings.TrimSpace(metaOut.String()), streamErrOuter
+	}
+
+	// 兼容：LLM 完全不听话，整段是裸 JSON（preface 状态没切走）
+	if state == stPreface && narrationOut.Len() == 0 {
+		raw := stripCodeFence(strings.TrimSpace(buf.String()))
+		if strings.HasPrefix(raw, "{") {
+			// 试着按老格式 {narration, choices, ending} 解析
+			var legacy struct {
+				Narration string `json:"narration"`
+			}
+			if err := json.Unmarshal([]byte(raw), &legacy); err == nil && legacy.Narration != "" {
+				emitNarr(legacy.Narration)
+				return narrationOut.String(), raw, nil
+			}
+		}
+	}
+
+	return narrationOut.String(), strings.TrimSpace(metaOut.String()), nil
+}
+
+// vnFallbackComplete 走老的非流式调用 + 解析老 JSON 格式，作为流式失败的兜底。
+// 返回 narration、metaRaw（统一成 {choices,ending,title,synopsis} JSON 字符串）、err
+func vnFallbackComplete(systemPrompt, userPrompt string, prefs Preferences) (string, string, error) {
+	retryUser := userPrompt + "\n\n（兼容模式）请用一段 JSON 输出，不要 <narration>/<meta> 标签：{\"narration\":\"...\",\"choices\":[...],\"ending\":null,\"title\":\"...\",\"synopsis\":\"...\"}，不要任何代码块围栏。"
+	raw, err := CompleteLLM([]LLMMessage{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: retryUser},
+	}, prefs)
+	if err != nil {
+		return "", "", err
+	}
+	raw = stripCodeFence(strings.TrimSpace(raw))
+	var full struct {
+		Title     string           `json:"title,omitempty"`
+		Synopsis  string           `json:"synopsis,omitempty"`
+		Narration string           `json:"narration"`
+		Choices   []VNChoice       `json:"choices"`
+		Ending    *VNEndingPayload `json:"ending,omitempty"`
+	}
+	if err := json.Unmarshal([]byte(raw), &full); err != nil {
+		return "", "", err
+	}
+	// 把 narration 之外的字段重打成 metaRaw，让上层一致地走 json.Unmarshal
+	metaObj := map[string]interface{}{
+		"choices": full.Choices,
+	}
+	if full.Title != "" {
+		metaObj["title"] = full.Title
+	}
+	if full.Synopsis != "" {
+		metaObj["synopsis"] = full.Synopsis
+	}
+	if full.Ending != nil {
+		metaObj["ending"] = full.Ending
+	}
+	metaBytes, _ := json.Marshal(metaObj)
+	return full.Narration, string(metaBytes), nil
 }
 
 // ── POST /vn/stories/:id/choose ─────────────────────────────────────────────
@@ -518,6 +746,7 @@ func vnRewindHandler() gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		vnPrefetchClearStory(id)
 		c.JSON(http.StatusOK, gin.H{"removed": removed, "state": newState})
 	}
 }
@@ -531,6 +760,7 @@ func vnDeleteHandler() gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		vnPrefetchClearStory(id)
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	}
 }
@@ -659,8 +889,16 @@ func vnSampleFacts(username string, n int) []VNFact {
 }
 
 // vnBuildSystemPrompt 拼 system prompt（人设 + 模式 + 输出规范）。
-func vnBuildSystemPrompt(story *VNStory, chapterIdx int) string {
+//
+// 设计：把"稳定前缀"和"每章变化的尾部"严格分开，让 OpenAI / Gemini / Anthropic
+// 的自动 prompt prefix 缓存都能在第 2 章起命中：
+//   - 前缀（每次相同）：人设 + facts + 模式 + 输出格式 + 选项规则 + 创作约束
+//   - 尾部（每章不同）：章节进度 + 当前 state + 是否收束
+// 注意：前缀里不要插任何动态字段（chapterIdx、state、quest 之外的 mode-specific 文案要单列）。
+func vnBuildSystemPrompt(story *VNStory) string {
 	var sb strings.Builder
+
+	// ───── 稳定前缀（cacheable）─────
 	sb.WriteString("你是一个视觉小说（互动小说）编剧。你正在按章节生成一段沉浸式剧情，由玩家扮演\"我\"，与一位 NPC 互动。\n\n")
 	sb.WriteString("【NPC 人设】\n")
 	sb.WriteString(story.PersonaSnap)
@@ -683,22 +921,19 @@ func vnBuildSystemPrompt(story *VNStory, chapterIdx int) string {
 		sb.WriteString("【模式：free】自由探索剧情，无固定目标。\n\n")
 	}
 
-	fmt.Fprintf(&sb, "【章节进度】当前正在写第 %d 章（从 0 计），共 %d 章。\n", chapterIdx, story.MaxChapters)
-	fmt.Fprintf(&sb, "【当前关系状态】affinity=%d/100, tension=%d/100, flags=%v, dealbreaker=%v\n\n",
-		story.State.Affinity, story.State.Tension, story.State.Flags, story.State.Dealbreaker)
-
-	sb.WriteString("【输出规则】严格输出一段 JSON，不要任何代码块围栏，不要解释，结构如下：\n")
-	sb.WriteString("{\n")
-	if chapterIdx == 0 {
-		sb.WriteString(`  "title": "为本次剧情起一个 8-16 字的标题",` + "\n")
-		sb.WriteString(`  "synopsis": "30-60 字的剧情简介",` + "\n")
-	}
-	sb.WriteString(`  "narration": "200-400 字的本章叙述，第二人称代入（\"你看见 TA…\"），不要把选项剧透出去",` + "\n")
+	// 输出规则（稳定，每章都一样；首章额外要 title/synopsis 这一条用 user 段提示，避免破坏前缀）
+	sb.WriteString("【输出规则】严格按以下两段格式输出，不要代码块围栏，不要解释，不要在两个段之外写任何字符。\n")
+	sb.WriteString("第一段 <narration>：自由文本，200-400 字本章叙述，第二人称代入（\"你看见 TA…\"），不要把选项剧透出去。\n")
+	sb.WriteString("第二段 <meta>：严格 JSON，结构：\n")
+	sb.WriteString("<narration>\n…叙述正文…\n</narration>\n<meta>\n{\n")
+	sb.WriteString(`  "title": "可选，开篇章给 8-16 字标题，其它章不写或留空",` + "\n")
+	sb.WriteString(`  "synopsis": "可选，开篇章给 30-60 字简介，其它章不写或留空",` + "\n")
 	sb.WriteString(`  "choices": [` + "\n")
 	sb.WriteString(`    {"text": "8-18 字的玩家选项", "tone": "soft|firm|silent|playful|...", "state_delta": {"affinity": 5, "flags": ["mentioned_japan"]}}` + "\n")
 	sb.WriteString(`  ],` + "\n")
 	sb.WriteString(`  "ending": null` + "\n")
-	sb.WriteString("}\n\n")
+	sb.WriteString("}\n</meta>\n\n")
+	sb.WriteString("说明：narration 段不要写 JSON、不要写选项；meta 段不要再重复叙述。两段之间必须有完整的 </narration> 和 <meta> 标签。\n\n")
 
 	sb.WriteString("【choices 规则】\n")
 	sb.WriteString("- 2-4 个选项，每个选项 8-18 字\n")
@@ -708,13 +943,8 @@ func vnBuildSystemPrompt(story *VNStory, chapterIdx int) string {
 	sb.WriteString("- state_delta.critical_hits=1 表示这是关键关系节点（命中过多次的存档容易进 true 结局）\n")
 	sb.WriteString("- state_delta.dealbreaker=true 表示这是雷区选项，会推向 bad 结局\n\n")
 
-	if chapterIdx+1 >= story.MaxChapters {
-		sb.WriteString("【收束】本章是最后一章，必须给 ending 字段，不要再出 choices（choices 设为空数组）。\n")
-		sb.WriteString("ending 结构：{\"type\":\"true|happy|normal|bad|secret\",\"title\":\"...\",\"epilogue\":\"60-100 字结语\",\"turning_points\":[\"每章一句话回顾\", ...]}\n")
-		sb.WriteString("结局判定参考：affinity >= 80 且 critical_hits >= 1 → true；>=60 → happy；30-59 → normal；<30 或 dealbreaker → bad；命中 secret_route 等隐藏 flag → secret\n\n")
-	} else if chapterIdx >= 3 && (story.State.Affinity < 20 || story.State.Dealbreaker) {
-		sb.WriteString("【提前收束】当前 state 已经触发坏结局条件（affinity 过低或 dealbreaker=true），请在本章给 ending 字段（type=bad）短路结束，不要再出 choices。\n\n")
-	}
+	sb.WriteString("【结局判定参考】affinity >= 80 且 critical_hits >= 1 → true；>=60 → happy；30-59 → normal；<30 或 dealbreaker → bad；命中 secret_route 等隐藏 flag → secret\n")
+	sb.WriteString("ending 结构：{\"type\":\"true|happy|normal|bad|secret\",\"title\":\"...\",\"epilogue\":\"60-100 字结语\",\"turning_points\":[\"每章一句话回顾\", ...]}\n\n")
 
 	sb.WriteString("【创作约束】\n")
 	sb.WriteString("- 用 NPC 人设里描述的语气词、平均句长、emoji 习惯写对话和心理描写\n")
@@ -725,9 +955,30 @@ func vnBuildSystemPrompt(story *VNStory, chapterIdx int) string {
 	return sb.String()
 }
 
-// vnBuildUserPrompt 拼 user prompt（历史摘要 + 上次选项）。
+// vnBuildRuntimeBlock 把每章不同的运行时状态拼成一段（章节进度 / 当前 state / 收束提示）。
+// 放在 user prompt 里而不是 system prompt，避免破坏 system 前缀的 cache 命中。
+func vnBuildRuntimeBlock(story *VNStory, chapterIdx int) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "【章节进度】当前正在写第 %d 章（从 0 计），共 %d 章。\n", chapterIdx, story.MaxChapters)
+	fmt.Fprintf(&sb, "【当前关系状态】affinity=%d/100, tension=%d/100, flags=%v, dealbreaker=%v\n",
+		story.State.Affinity, story.State.Tension, story.State.Flags, story.State.Dealbreaker)
+	if chapterIdx == 0 {
+		sb.WriteString("【提示】这是开篇第 1 章，meta.title 与 meta.synopsis 必填。\n")
+	}
+	if chapterIdx+1 >= story.MaxChapters {
+		sb.WriteString("【收束】本章是最后一章，必须给 ending 字段，不要再出 choices（choices 设为空数组）。\n")
+	} else if chapterIdx >= 3 && (story.State.Affinity < 20 || story.State.Dealbreaker) {
+		sb.WriteString("【提前收束】当前 state 已经触发坏结局条件（affinity 过低或 dealbreaker=true），请在本章给 ending 字段（type=bad）短路结束，不要再出 choices。\n")
+	}
+	return sb.String()
+}
+
+// vnBuildUserPrompt 拼 user prompt（运行时状态 + 历史摘要 + 上次选项）。
+// 所有"每章变化"的内容都集中在这里，让 system 前缀保持稳定以命中 prompt cache。
 func vnBuildUserPrompt(story *VNStory, existing []VNChapter) string {
 	var sb strings.Builder
+	sb.WriteString(vnBuildRuntimeBlock(story, len(existing)))
+	sb.WriteString("\n")
 	if len(existing) == 0 {
 		sb.WriteString("现在写开篇第 1 章，请创建一个有钩子的场景作为起点。")
 		return sb.String()
