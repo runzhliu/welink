@@ -578,6 +578,14 @@ func NewDBManager(dataDir string) (*DBManager, error) {
 		return nil, fmt.Errorf("failed to read message dir: %v", err)
 	}
 
+	// 待后台建索引的可写库（首次大库建索引可能要几分钟，不能阻塞 NewDBManager —— 否则
+	// /app/setup 这一同步 HTTP 请求会超过前端 120s axios 超时，用户看到 "timeout exceeded"）。
+	type indexTarget struct {
+		db   *sql.DB
+		name string
+	}
+	var toIndex []indexTarget
+
 	for _, file := range files {
 		if strings.HasPrefix(file.Name(), "message_") && strings.HasSuffix(file.Name(), ".db") &&
 		   !strings.Contains(file.Name(), "fts") && !strings.Contains(file.Name(), "resource") {
@@ -605,16 +613,27 @@ func NewDBManager(dataDir string) (*DBManager, error) {
 				log.Printf("Opened %s in read-only mode (immutable)", file.Name())
 			}
 
-			// 创建性能优化索引（只读时跳过）
+			// 创建性能优化索引（只读时跳过）：挪到后台串行执行，见下方 goroutine。
 			if !readOnly {
-				createOptimizationIndexes(mdb, file.Name())
+				toIndex = append(toIndex, indexTarget{db: mdb, name: file.Name()})
 			}
 
 			mgr.MessageDBs = append(mgr.MessageDBs, mdb)
 		}
 	}
 
-	log.Printf("DBManager initialized: 1 contact DB, %d message DBs found.", len(mgr.MessageDBs))
+	// 后台建索引：*sql.DB 是连接池，并发安全；建索引途中来的查询会走全表扫（慢但不阻塞），
+	// 撞上 CREATE INDEX 写锁时靠 busy_timeout(5000) 兜底。串行建避免多库同时抢 IO。
+	if len(toIndex) > 0 {
+		go func() {
+			for _, t := range toIndex {
+				createOptimizationIndexes(t.db, t.name)
+			}
+			log.Printf("Background index build finished for %d message DBs.", len(toIndex))
+		}()
+	}
+
+	log.Printf("DBManager initialized: 1 contact DB, %d message DBs found (indexing %d in background).", len(mgr.MessageDBs), len(toIndex))
 	return mgr, nil
 }
 
