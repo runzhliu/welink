@@ -179,9 +179,24 @@ dmg: _dmg-package  ## 打包 macOS .app + 通用二进制 + DMG
 	@echo "    用法：将 WeLink.app 拖入 /Applications，decrypted/ 放在与 WeLink.app 同级目录后双击运行。"
 
 _dmg-frontend:
-	cd frontend && npm install && npm run build
+	# frontend 项目可能位于带 noowners 挂载的外置盘上（npm install 装出来的
+	# esbuild 等原生二进制会 EACCES）。绕道：把源码 rsync 到 /tmp（系统盘，
+	# 无 noowners），在那里 npm install + build，再把 dist/ 拷回来。
+	# 不删 /tmp 缓存，下次增量 rsync + npm install 走缓存，秒级完成。
+	@mkdir -p /tmp/welink-frontend-build
+	rsync -a --delete \
+		--exclude node_modules --exclude dist --exclude .vite \
+		frontend/ /tmp/welink-frontend-build/
+	cd /tmp/welink-frontend-build && npm install && npm run build
 	rm -rf backend/static && mkdir -p backend/static
-	cp -r frontend/dist/. backend/static/
+	cp -r /tmp/welink-frontend-build/dist/. backend/static/
+	# dist 也拷一份回项目目录，保留之前的行为（其他 target 可能引用 frontend/dist）
+	rm -rf frontend/dist && mkdir -p frontend/dist
+	cp -r /tmp/welink-frontend-build/dist/. frontend/dist/
+
+# 手动清掉 /tmp 下的前端 build 缓存（释放空间或确实需要纯净重 install 时再用）
+_dmg-frontend-clean:
+	rm -rf /tmp/welink-frontend-build
 
 _dmg-binary: _dmg-frontend
 	# webview_go 需要 CGO（WKWebView）；-isysroot 指向 macOS SDK，解决 stdlib.h not found
