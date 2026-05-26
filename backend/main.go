@@ -20,6 +20,7 @@ package main
 
 import (
 	"archive/zip"
+	"context"
 	"crypto/md5"
 	"database/sql"
 	"encoding/base64"
@@ -3346,6 +3347,8 @@ func serverMain() {
 		})
 
 		// 全局跨联系人消息搜索
+		// 后端硬超时 8s：群多的库每库 LIKE 全表扫，无超时会一直跑超过前端 axios 120s 限制。
+		// 已完成扫描的对象会作为部分结果返回，未完成的下次再试。
 		prot.GET("/search", func(c *gin.Context) {
 			q := c.Query("q")
 			if q == "" {
@@ -3353,7 +3356,9 @@ func serverMain() {
 				return
 			}
 			searchType := c.DefaultQuery("type", "all")
-			c.JSON(http.StatusOK, getSvc().GlobalSearch(q, searchType))
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 8*time.Second)
+			defer cancel()
+			c.JSON(http.StatusOK, getSvc().GlobalSearch(ctx, q, searchType))
 		})
 
 		// 某月的文本消息（情感分析详情）
