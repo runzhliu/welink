@@ -3,47 +3,59 @@
  * 重构版本 - 组件化 + 微信风格设计
  */
 
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { lazy, Suspense, useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { Loader2 } from 'lucide-react';
 import { PrivacyModeContext } from './contexts/PrivacyModeContext';
 import { SelfInfoProvider } from './contexts/SelfInfoContext';
 import { LockProvider, useLock } from './contexts/LockContext';
 import { LockOverlay } from './components/common/LockOverlay';
-import { MemoryLibraryPage } from './components/memory/MemoryLibraryPage';
 
-// Layout Components
+// Layout —— 永远在屏
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 
-// Dashboard Components
+// 首屏 / 总在 mount 的页面
 import { AIHomePage } from './components/dashboard/AIHomePage';
-import { DailyDigestPage } from './components/dashboard/DailyDigestPage';
-import { LabsPage } from './components/labs/LabsPage';
-import { GalleryPage } from './components/gallery/GalleryPage';
-import { StatsPage } from './components/dashboard/StatsPage';
-// FunStatsPage 已合并到 StatsPage 底部
-import { ContactsPage } from './components/dashboard/ContactsPage';
-import { URLCollectionPage } from './components/dashboard/URLCollectionPage';
-import { ExportCenterPage } from './components/dashboard/ExportCenterPage';
-import { DatabaseView } from './components/dashboard/DatabaseView';
-import { SearchView } from './components/search/SearchView';
-import { ChatCalendarPage } from './components/calendar/ChatCalendarPage';
-import { AnniversaryPage } from './components/anniversary/AnniversaryPage';
-import { SkillsView } from './components/skills/SkillsView';
-import { GroupsView, GroupDetailModal } from './components/groups/GroupsView';
-import { useDarkMode } from './hooks/useDarkMode';
 
-// Contact Components
-import { ContactModal } from './components/contact/ContactModal';
-
-// Common Components
+// 启动前流程（用户还没进 tab 切换时就要用）
 import { InitializingScreen } from './components/common/InitializingScreen';
 import { WelcomePage } from './components/common/WelcomePage';
 import { AppSetupPage } from './components/common/AppSetupPage';
 import { SetupRequiredPage } from './components/common/SetupRequiredPage';
+
+// 高频热路径 / 体积不大 —— 保持同步加载
 import { CommandPalette } from './components/common/CommandPalette';
 import { ReleaseNotesModal } from './components/common/ReleaseNotesModal';
-import { SettingsPage } from './components/settings';
 import { SpotlightTour, type TourStep } from './components/common/SpotlightTour';
+import { useDarkMode } from './hooks/useDarkMode';
+
+// ─── 懒加载的 tab 页与大 modal ───────────────────────────────────────────────
+// 切到对应 tab / 打开 modal 才下载对应 chunk；首屏 JS 大幅缩水
+const DailyDigestPage    = lazy(() => import('./components/dashboard/DailyDigestPage').then(m => ({ default: m.DailyDigestPage })));
+const StatsPage          = lazy(() => import('./components/dashboard/StatsPage').then(m => ({ default: m.StatsPage })));
+const ContactsPage       = lazy(() => import('./components/dashboard/ContactsPage').then(m => ({ default: m.ContactsPage })));
+const URLCollectionPage  = lazy(() => import('./components/dashboard/URLCollectionPage').then(m => ({ default: m.URLCollectionPage })));
+const ExportCenterPage   = lazy(() => import('./components/dashboard/ExportCenterPage').then(m => ({ default: m.ExportCenterPage })));
+const DatabaseView       = lazy(() => import('./components/dashboard/DatabaseView').then(m => ({ default: m.DatabaseView })));
+const SearchView         = lazy(() => import('./components/search/SearchView').then(m => ({ default: m.SearchView })));
+const ChatCalendarPage   = lazy(() => import('./components/calendar/ChatCalendarPage').then(m => ({ default: m.ChatCalendarPage })));
+const AnniversaryPage    = lazy(() => import('./components/anniversary/AnniversaryPage').then(m => ({ default: m.AnniversaryPage })));
+const SkillsView         = lazy(() => import('./components/skills/SkillsView').then(m => ({ default: m.SkillsView })));
+const LabsPage           = lazy(() => import('./components/labs/LabsPage').then(m => ({ default: m.LabsPage })));
+const GalleryPage        = lazy(() => import('./components/gallery/GalleryPage').then(m => ({ default: m.GalleryPage })));
+const MemoryLibraryPage  = lazy(() => import('./components/memory/MemoryLibraryPage').then(m => ({ default: m.MemoryLibraryPage })));
+const SettingsPage       = lazy(() => import('./components/settings').then(m => ({ default: m.SettingsPage })));
+// GroupsView 与 GroupDetailModal 同源；Vite 会合并成同一个 chunk，先后引用相互预热
+const GroupsView         = lazy(() => import('./components/groups/GroupsView').then(m => ({ default: m.GroupsView })));
+const GroupDetailModal   = lazy(() => import('./components/groups/GroupsView').then(m => ({ default: m.GroupDetailModal })));
+const ContactModal       = lazy(() => import('./components/contact/ContactModal').then(m => ({ default: m.ContactModal })));
+
+// 切 tab / 打开 modal 时的兜底 loading
+const ChunkLoading: React.FC = () => (
+  <div className="flex items-center justify-center h-64 text-gray-400">
+    <Loader2 size={24} className="animate-spin" />
+  </div>
+);
 
 // App API
 import { appApi } from './services/appApi';
@@ -498,6 +510,7 @@ function AppInner() {
 
       {/* Main Content */}
       <main className={`flex-1 overflow-y-auto dk-page ${activeTab === 'dashboard' ? 'pb-16 sm:pb-0' : 'p-4 sm:p-10 pb-20 sm:pb-10'}`}>
+        <Suspense fallback={<ChunkLoading />}>
         {activeTab === 'dashboard' ? (
           <AIHomePage
             contacts={contacts}
@@ -582,6 +595,7 @@ function AppInner() {
             <DatabaseView />
           </div>
         )}
+        </Suspense>
       </main>
 
       {/* 首次启动多步引导 */}
@@ -612,26 +626,32 @@ function AppInner() {
         onToggleDark={toggleDark}
       />
 
-      {/* Contact Detail Modal */}
-      <ContactModal
-        contact={selectedContact}
-        onClose={handleCloseModal}
-        onGroupClick={(g) => { setSelectedContact(null); setSelectedGroup(g); }}
-        onBlock={(username) => { addBlockedUser(username); }}
-        onOpenSettings={() => { handleCloseModal(); setActiveTab('settings'); }}
-      />
+      {/* Contact Detail Modal —— 条件挂载，第一次点联系人才触发 chunk 下载 */}
+      <Suspense fallback={null}>
+        {selectedContact && (
+          <ContactModal
+            contact={selectedContact}
+            onClose={handleCloseModal}
+            onGroupClick={(g) => { setSelectedContact(null); setSelectedGroup(g); }}
+            onBlock={(username) => { addBlockedUser(username); }}
+            onOpenSettings={() => { handleCloseModal(); setActiveTab('settings'); }}
+          />
+        )}
+      </Suspense>
 
       {/* Group Detail Modal (triggered from contact modal) */}
-      {selectedGroup && (
-        <GroupDetailModal
-          group={selectedGroup}
-          onClose={() => setSelectedGroup(null)}
-          allContacts={allContacts}
-          onContactClick={(c) => { setSelectedGroup(null); setSelectedContact(c); }}
-          onBlock={(username) => { addBlockedGroup(username); }}
-          onOpenSettings={() => { setSelectedGroup(null); setActiveTab('settings'); }}
-        />
-      )}
+      <Suspense fallback={null}>
+        {selectedGroup && (
+          <GroupDetailModal
+            group={selectedGroup}
+            onClose={() => setSelectedGroup(null)}
+            allContacts={allContacts}
+            onContactClick={(c) => { setSelectedGroup(null); setSelectedContact(c); }}
+            onBlock={(username) => { addBlockedGroup(username); }}
+            onOpenSettings={() => { setSelectedGroup(null); setActiveTab('settings'); }}
+          />
+        )}
+      </Suspense>
     </div>
     </PrivacyModeContext.Provider>
     </SelfInfoProvider>
