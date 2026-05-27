@@ -19,18 +19,54 @@ import (
 //
 // 老代码继续用 log.Printf —— 这里把 std log 的输出桥接进 slog，不动 97 处旧调用。
 
-// InitObs 初始化全局 slog logger。
-// debug=true 时输出 DEBUG 级别，否则 INFO。
-// out 是日志落地的 writer（通常是 stdout 或 welink.log 文件）。
+// InitObs 初始化全局 slog logger 并桥接 stdlib log。
+//
+//   - out: 日志落地的 writer（nil → os.Stderr）。App 模式会传 welink.log 文件
+//   - debug: 强制开启 DEBUG 级别；非 debug 模式下读环境变量决定
+//
+// 环境变量（debug=false 时生效）：
+//
+//   - WELINK_LOG_LEVEL=debug|info|warn|error  默认 info
+//   - WELINK_LOG_FORMAT=json|text             默认 text（人类可读）
+//
+// 旧的 100+ log.Printf 调用会通过 stdLogBridge 进入 slog（INFO 级别 +
+// source=stdlog 字段），不需要逐个改写。新代码请直接用 slog 以获得结构化字段。
 func InitObs(out io.Writer, debug bool) {
 	if out == nil {
 		out = os.Stderr
 	}
 	level := slog.LevelInfo
-	if debug || strings.EqualFold(os.Getenv("WELINK_LOG_LEVEL"), "debug") {
+	if debug {
 		level = slog.LevelDebug
+	} else {
+		switch strings.ToLower(os.Getenv("WELINK_LOG_LEVEL")) {
+		case "debug":
+			level = slog.LevelDebug
+		case "warn", "warning":
+			level = slog.LevelWarn
+		case "error":
+			level = slog.LevelError
+		}
 	}
-	h := slog.NewJSONHandler(out, &slog.HandlerOptions{Level: level})
+
+	opts := &slog.HandlerOptions{Level: level}
+	// 默认格式按输出位置选：
+	//   - stderr / stdout（容器日志 / 终端 / go run）→ text，人类可读
+	//   - 其他 writer（如 welink.log 文件）→ json，方便 jq / 日志收集器解析
+	// WELINK_LOG_FORMAT=json|text 显式覆盖
+	useJSON := out != os.Stderr && out != os.Stdout
+	switch strings.ToLower(os.Getenv("WELINK_LOG_FORMAT")) {
+	case "json":
+		useJSON = true
+	case "text":
+		useJSON = false
+	}
+	var h slog.Handler
+	if useJSON {
+		h = slog.NewJSONHandler(out, opts)
+	} else {
+		h = slog.NewTextHandler(out, opts)
+	}
 	slog.SetDefault(slog.New(h))
 
 	// 把 std log 的输出桥接到 slog —— 老 log.Printf 调用现在会变成
