@@ -12,8 +12,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { Flame, Loader2, RefreshCw, Share2, Check, X, EyeOff, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import { prepareForCapture } from '../../utils/exportPng';
+import { captureCardToPng } from '../../utils/exportPng';
 import { avatarSrc } from '../../utils/avatar';
 import { useToast } from '../common/Toast';
 import { WelinkBrand } from './_shared';
@@ -152,38 +151,16 @@ export const FlirtProbe: React.FC = () => {
   const exportPng = async () => {
     if (!data || !cardRef.current || exporting) return;
     setExporting(true);
-    let wrapper: HTMLElement | null = null;
-    try {
-      const node = cardRef.current.cloneNode(true) as HTMLElement;
-      wrapper = document.createElement('div');
-      wrapper.style.cssText = `
-        width: 720px; background: #ffffff; padding: 0;
-        font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-        position: fixed; left: -10000px; top: 0; z-index: -1;
-      `;
-      wrapper.appendChild(node);
-      document.body.appendChild(wrapper);
-      prepareForCapture(wrapper);
-      await new Promise(r => setTimeout(r, 50));
-      const canvas = await html2canvas(wrapper, {
-        backgroundColor: '#ffffff', scale: 2, useCORS: true, logging: false,
-      });
-      canvas.toBlob((blob) => {
-        if (!blob) { toast.error('生成图片失败'); return; }
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `flirt-probe-${today.replace(/\//g, '-')}.png`;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        setExported(true);
-        setTimeout(() => setExported(false), 2000);
-      }, 'image/png');
-    } catch (e) {
-      toast.error('截图失败：' + (e as Error).message);
-    } finally {
-      if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-      setExporting(false);
+    const r = await captureCardToPng(cardRef.current, {
+      filename: `flirt-probe-${today.replace(/\//g, '-')}.png`,
+      backgroundColor: '#ffffff',
+    });
+    setExporting(false);
+    if (r.ok) {
+      setExported(true);
+      setTimeout(() => setExported(false), 2000);
+    } else {
+        toast.error('截图失败：' + (r.error || '未知错误'));
     }
   };
 

@@ -10,9 +10,8 @@ import axios from 'axios';
 import {
   AlertCircle, Loader2, Share2, Check, Clock, Heart, History, Zap, Crown,
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
 import { avatarSrc } from '../../utils/avatar';
-import { prepareForCapture } from '../../utils/exportPng';
+import { captureCardToPng } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
 import { welinkBrandHTML } from './_shared';
 
@@ -85,41 +84,21 @@ export const DriftAlert: React.FC = () => {
   const exportPng = async () => {
     if (!data || !cardRef.current || exporting) return;
     setExporting(true);
-    let wrapper: HTMLElement | null = null;
-    try {
-      const node = cardRef.current.cloneNode(true) as HTMLElement;
-      wrapper = document.createElement('div');
-      wrapper.style.cssText = `
-        width: 720px; background: #1a0d12; padding: 0;
-        font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-        position: fixed; left: -10000px; top: 0; z-index: -1;
-      `;
-      wrapper.appendChild(node);
-      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+    const r = await captureCardToPng(cardRef.current, {
+      filename: `drift-alert-${data.today}.png`,
+      backgroundColor: '#1a0d12',
+      appendHTML: welinkBrandHTML({
         label: '断联预警',
         date: data.today,
         variant: 'dark',
-      }));
-      document.body.appendChild(wrapper);
-      await prepareForCapture(wrapper);
-      const canvas = await html2canvas(wrapper, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#1a0d12',
-        logging: false,
-      });
-      const dataUrl = canvas.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = dataUrl;
-      a.download = `welink-drift-${Date.now()}.png`;
-      a.click();
+      }),
+    });
+    setExporting(false);
+    if (r.ok) {
       setExported(true);
-      setTimeout(() => setExported(false), 3000);
-    } catch (e) {
-      toast.error('导出失败：' + ((e as Error).message || '未知错误'));
-    } finally {
-      if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-      setExporting(false);
+      setTimeout(() => setExported(false), 2000);
+    } else {
+        toast.error('截图失败：' + (r.error || '未知错误'));
     }
   };
 

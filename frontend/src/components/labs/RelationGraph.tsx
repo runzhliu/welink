@@ -8,8 +8,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { Network, Loader2, RefreshCw, Share2, Check } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import { prepareForCapture } from '../../utils/exportPng';
+import { captureCardToPng } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
 import { welinkBrandHTML } from './_shared';
 
@@ -151,42 +150,22 @@ export const RelationGraph: React.FC = () => {
   const exportPng = async () => {
     if (!data || !cardRef.current || exporting) return;
     setExporting(true);
-    // wrapper 在 try 外声明，toPng 抛错时 finally 也能把它从 DOM 拆掉，避免悬挂节点累积。
-    let wrapper: HTMLElement | null = null;
-    try {
-      const node = cardRef.current.cloneNode(true) as HTMLElement;
-      wrapper = document.createElement('div');
-      wrapper.style.cssText = `
-        width: 760px; background: #0a0a14; padding: 20px;
-        font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-        position: fixed; left: -10000px; top: 0; z-index: -1;
-      `;
-      wrapper.appendChild(node);
-      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+    const r = await captureCardToPng(cardRef.current, {
+      filename: `welink-relation-graph-${Date.now()}.png`,
+      backgroundColor: '#0a0a14',
+      width: 760,
+      appendHTML: welinkBrandHTML({
         label: '我的关系星图',
         date: new Date().toLocaleDateString('zh-CN'),
         variant: 'dark',
-      }));
-      document.body.appendChild(wrapper);
-      await prepareForCapture(wrapper);
-      const canvas = await html2canvas(wrapper, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#0a0a14',
-        logging: false,
-      });
-      const url = canvas.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `welink-relation-graph-${Date.now()}.png`;
-      a.click();
+      }),
+    });
+    setExporting(false);
+    if (r.ok) {
       setExported(true);
       setTimeout(() => setExported(false), 3000);
-    } catch (e) {
-      toast.error('导出失败：' + ((e as Error).message || '未知错误'));
-    } finally {
-      if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-      setExporting(false);
+    } else {
+      toast.error('导出失败：' + (r.error || '未知错误'));
     }
   };
 

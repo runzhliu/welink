@@ -9,10 +9,9 @@ import axios from 'axios';
 import {
   HelpCircle, Loader2, Search, Wand2, RefreshCw, Share2, Check, Eye, Trophy,
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
-import { prepareForCapture } from '../../utils/exportPng';
+import { captureCardToPng } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
 import { welinkBrandHTML } from './_shared';
 
@@ -90,46 +89,21 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
   const exportPng = async () => {
     if (!data || !cardRef.current || exporting) return;
     setExporting(true);
-    const root = document.documentElement;
-    const hadDark = root.classList.contains('dark');
-    if (hadDark) root.classList.remove('dark');
-    // wrapper 在 try 外声明，toPng 抛错时 finally 也能把它从 DOM 拆掉，避免悬挂节点累积。
-    let wrapper: HTMLElement | null = null;
-    try {
-      const node = cardRef.current.cloneNode(true) as HTMLElement;
-      wrapper = document.createElement('div');
-      wrapper.style.cssText = `
-        width: 720px; background: #ffffff; padding: 0;
-        font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-        position: fixed; left: -10000px; top: 0; z-index: -1;
-      `;
-      wrapper.appendChild(node);
-      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+    const r = await captureCardToPng(cardRef.current, {
+      filename: `welink-soul-quiz-${Date.now()}.png`,
+      backgroundColor: '#ffffff',
+      appendHTML: welinkBrandHTML({
         label: '灵魂提问机',
         date: new Date().toLocaleDateString('zh-CN'),
         variant: 'light',
-      }));
-      document.body.appendChild(wrapper);
-      await prepareForCapture(wrapper);
-      const canvas = await html2canvas(wrapper, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-      });
-      const url = canvas.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `welink-soul-quiz-${data.display_name}-${Date.now()}.png`;
-      a.click();
+      }),
+    });
+    setExporting(false);
+    if (r.ok) {
       setExported(true);
-      setTimeout(() => setExported(false), 3000);
-    } catch (e) {
-      toast.error('导出失败：' + ((e as Error).message || '未知错误'));
-    } finally {
-      if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-      if (hadDark) root.classList.add('dark');
-      setExporting(false);
+      setTimeout(() => setExported(false), 2000);
+    } else {
+        toast.error('截图失败：' + (r.error || '未知错误'));
     }
   };
 

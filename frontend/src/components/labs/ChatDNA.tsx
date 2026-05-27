@@ -9,9 +9,8 @@ import axios from 'axios';
 import {
   Sparkles, Loader2, Share2, Check, Crown, Clock, Moon, MessageSquare, Zap, Smile, Quote,
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
 import { avatarSrc } from '../../utils/avatar';
-import { prepareForCapture } from '../../utils/exportPng';
+import { captureCardToPng } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
 import { welinkBrandHTML } from './_shared';
 
@@ -97,40 +96,21 @@ export const ChatDNA: React.FC = () => {
   const exportPng = async () => {
     if (!data || !cardRef.current || exporting) return;
     setExporting(true);
-    try {
-      const node = cardRef.current.cloneNode(true) as HTMLElement;
-      const wrapper = document.createElement('div');
-      wrapper.style.cssText = `
-        width: 720px; background: #0b0b14; padding: 0;
-        font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-        position: fixed; left: -10000px; top: 0; z-index: -1;
-      `;
-      wrapper.appendChild(node);
-      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+    const r = await captureCardToPng(cardRef.current, {
+      filename: `welink-chat-dna-${Date.now()}.png`,
+      backgroundColor: '#0b0b14',
+      appendHTML: welinkBrandHTML({
         label: '我的聊天 DNA',
         date: new Date().toLocaleDateString('zh-CN'),
         variant: 'dark',
-      }));
-      document.body.appendChild(wrapper);
-      await prepareForCapture(wrapper);
-      const canvas = await html2canvas(wrapper, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#0b0b14',
-        logging: false,
-      });
-      const dataUrl = canvas.toDataURL('image/png');
-      document.body.removeChild(wrapper);
-      const a = document.createElement('a');
-      a.href = dataUrl;
-      a.download = `welink-chat-dna-${Date.now()}.png`;
-      a.click();
+      }),
+    });
+    setExporting(false);
+    if (r.ok) {
       setExported(true);
-      setTimeout(() => setExported(false), 3000);
-    } catch (e) {
-      toast.error('导出失败：' + ((e as Error).message || '未知错误'));
-    } finally {
-      setExporting(false);
+      setTimeout(() => setExported(false), 2000);
+    } else {
+        toast.error('截图失败：' + (r.error || '未知错误'));
     }
   };
 

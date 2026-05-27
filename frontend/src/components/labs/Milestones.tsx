@@ -12,10 +12,9 @@ import {
   Compass, Loader2, Search, Wand2, Share2, Check, RefreshCw,
   MessageCircle, BookOpen, Moon, TrendingUp, CloudOff, Hand, Flame, Cake,
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
-import { prepareForCapture } from '../../utils/exportPng';
+import { captureCardToPng } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
 import { welinkBrandHTML, WelinkBrand } from './_shared';
 
@@ -251,41 +250,21 @@ export const Milestones: React.FC<Props> = ({ contacts }) => {
   const exportPng = async () => {
     if (!data || !cardRef.current || exporting) return;
     setExporting(true);
-    let wrapper: HTMLElement | null = null;
-    try {
-      const node = cardRef.current.cloneNode(true) as HTMLElement;
-      wrapper = document.createElement('div');
-      wrapper.style.cssText = `
-        width: 720px; background: #0b0b14; padding: 0;
-        font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-        position: fixed; left: -10000px; top: 0; z-index: -1;
-      `;
-      wrapper.appendChild(node);
-      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+    const r = await captureCardToPng(cardRef.current, {
+      filename: `welink-milestones-${Date.now()}.png`,
+      backgroundColor: '#0b0b14',
+      appendHTML: welinkBrandHTML({
         label: '关系考古',
         date: new Date().toLocaleDateString('zh-CN'),
         variant: 'dark',
-      }));
-      document.body.appendChild(wrapper);
-      await prepareForCapture(wrapper);
-      const canvas = await html2canvas(wrapper, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#0b0b14',
-        logging: false,
-      });
-      const dataUrl = canvas.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = dataUrl;
-      a.download = `welink-milestones-${data.display_name}-${Date.now()}.png`;
-      a.click();
+      }),
+    });
+    setExporting(false);
+    if (r.ok) {
       setExported(true);
-      setTimeout(() => setExported(false), 3000);
-    } catch (e) {
-      toast.error('导出失败：' + ((e as Error).message || '未知错误'));
-    } finally {
-      if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-      setExporting(false);
+      setTimeout(() => setExported(false), 2000);
+    } else {
+        toast.error('截图失败：' + (r.error || '未知错误'));
     }
   };
 
@@ -389,7 +368,7 @@ export const Milestones: React.FC<Props> = ({ contacts }) => {
                   <img src={avatarSrc(data.avatar) || ''} className="w-12 h-12 rounded-full object-cover bg-white/20 shrink-0" alt="" />
                 )}
                 <div className="min-w-0">
-                  <div className="text-2xl font-black mb-1 truncate">我和 {data.display_name} 的考古档案</div>
+                  <div className="text-2xl font-black mb-1 break-words">我和 {data.display_name} 的考古档案</div>
                   <div className="text-xs text-white/85">
                     {data.first_date && <>{data.first_date} → {data.last_date} · </>}
                     相识 {fmtNum(data.days_known)} 天 · 共 {fmtNum(data.total_messages)} 条消息
