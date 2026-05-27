@@ -22,7 +22,7 @@ import { RelationshipGraphPanel } from './RelationshipGraphPanel';
 import {
   MEMBER_RANK_LIMIT_KEY, MEMBER_NAME_WIDTH_KEY,
   DEFAULT_RANK_LIMIT, DEFAULT_NAME_WIDTH,
-} from '../common/SettingsPage';
+} from '../settings/constants';
 import { LLMAnalysisTab } from '../contact/LLMAnalysisTab';
 import { GroupSimChat } from './GroupSimChat';
 import { RelativeTime } from '../common/RelativeTime';
