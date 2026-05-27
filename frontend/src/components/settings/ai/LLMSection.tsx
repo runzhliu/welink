@@ -76,6 +76,16 @@ export const LLMSection: React.FC = () => {
     checkGeminiStatus();
   }, [loadPreferences]);
 
+  // 卸载时清掉 Gemini OAuth 轮询，避免 orphan interval 持续打后端
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, []);
+
   const buildPayload = () => ({
     llm_profiles: profiles,
     gemini_client_id: geminiClientID,
