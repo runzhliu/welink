@@ -20,11 +20,6 @@ export const LLMSection: React.FC = () => {
   const [geminiAuthorized, setGeminiAuthorized] = useState(false);
   const [geminiAuthBusy, setGeminiAuthBusy] = useState(false);
   const pollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
-  // 保存 Embedding 字段，防止保存 LLM 时覆盖
-  const embeddingPrefsRef = React.useRef<{
-    embedding_provider?: string; embedding_api_key?: string;
-    embedding_base_url?: string; embedding_model?: string; embedding_dims?: number;
-  }>({});
 
   const checkGeminiStatus = async () => {
     try {
@@ -43,8 +38,6 @@ export const LLMSection: React.FC = () => {
         llm_base_url?: string; llm_model?: string;
         gemini_client_id?: string; gemini_client_secret?: string;
         ai_analysis_db_path?: string;
-        embedding_provider?: string; embedding_api_key?: string;
-        embedding_base_url?: string; embedding_model?: string; embedding_dims?: number;
       }>('/api/preferences');
       if (r.data.llm_profiles && r.data.llm_profiles.length > 0) {
         setProfiles(r.data.llm_profiles);
@@ -61,13 +54,6 @@ export const LLMSection: React.FC = () => {
       setGeminiClientID(r.data.gemini_client_id ?? '');
       setGeminiClientSecret(r.data.gemini_client_secret ?? '');
       setAiDBPath(r.data.ai_analysis_db_path ?? '');
-      embeddingPrefsRef.current = {
-        embedding_provider: r.data.embedding_provider,
-        embedding_api_key: r.data.embedding_api_key,
-        embedding_base_url: r.data.embedding_base_url,
-        embedding_model: r.data.embedding_model,
-        embedding_dims: r.data.embedding_dims,
-      };
     } catch {} finally { setLoaded(true); }
   }, []);
 
@@ -86,19 +72,28 @@ export const LLMSection: React.FC = () => {
     };
   }, []);
 
-  const buildPayload = () => ({
-    llm_profiles: profiles,
-    gemini_client_id: geminiClientID,
-    gemini_client_secret: geminiClientSecret,
-    ai_analysis_db_path: aiDBPath,
-    ...embeddingPrefsRef.current,
-  });
+  // save 时实时拉最新 prefs 再 merge，避免覆盖别的 tab 刚保存的字段
+  // （embedding / mem_llm 等非本 tab 字段从 fresh.data 带过来，本 tab 字段用本地最新值）
+  const buildPayload = async () => {
+    let fresh: Record<string, unknown> = {};
+    try {
+      const r = await axios.get<Record<string, unknown>>('/api/preferences');
+      fresh = r.data;
+    } catch { /* 拿不到就只发本 tab 的字段，等同于旧行为 */ }
+    return {
+      ...fresh,
+      llm_profiles: profiles,
+      gemini_client_id: geminiClientID,
+      gemini_client_secret: geminiClientSecret,
+      ai_analysis_db_path: aiDBPath,
+    };
+  };
 
   const handleSave = async () => {
     setSaving(true);
     setSaveMsg(null);
     try {
-      await axios.put('/api/preferences/llm', buildPayload());
+      await axios.put('/api/preferences/llm', await buildPayload());
       await loadPreferences(); // 重新从后端加载，确保 __HAS_KEY__ 标记正确
       setSaveMsg({ ok: true, text: '已保存' });
     } catch {
@@ -113,7 +108,7 @@ export const LLMSection: React.FC = () => {
     setTestingId(profileId);
     setTestMsgs(prev => { const n = { ...prev }; delete n[profileId]; return n; });
     try {
-      await axios.put('/api/preferences/llm', buildPayload());
+      await axios.put('/api/preferences/llm', await buildPayload());
       await loadPreferences(); // 重新加载确保 key 标记正确
       const r = await axios.post<{ ok: boolean; provider: string; model: string }>('/api/ai/llm/test', { profile_id: profileId });
       setTestMsgs(prev => ({ ...prev, [profileId]: { ok: true, text: `连接成功（${r.data.provider} · ${r.data.model}）` } }));
@@ -132,7 +127,7 @@ export const LLMSection: React.FC = () => {
       setTimeout(() => setSaveMsg(null), 3000);
       return;
     }
-    await axios.put('/api/preferences/llm', buildPayload()).catch(() => {});
+    await axios.put('/api/preferences/llm', await buildPayload()).catch(() => {});
     try {
       const r = await axios.get<{ url: string }>('/api/auth/gemini/url');
       window.open(r.data.url, '_blank');

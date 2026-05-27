@@ -21,51 +21,45 @@ export const EmbeddingSection: React.FC = () => {
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [testing, setTesting] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  // 保存 LLM 字段，防止保存 Embedding 时覆盖
-  const llmPrefsRef = React.useRef<{
-    llm_provider?: string; llm_api_key?: string; llm_base_url?: string; llm_model?: string;
-    gemini_client_id?: string; gemini_client_secret?: string; ai_analysis_db_path?: string;
-  }>({});
 
   useEffect(() => {
     axios.get<{
       embedding_provider?: string; embedding_api_key?: string;
       embedding_base_url?: string; embedding_model?: string;
       vec_cache_max_keys?: number;
-      llm_provider?: string; llm_api_key?: string; llm_base_url?: string; llm_model?: string;
-      gemini_client_id?: string; gemini_client_secret?: string; ai_analysis_db_path?: string;
     }>('/api/preferences').then(r => {
       if (r.data.embedding_provider) setProvider(r.data.embedding_provider as EmbeddingProviderValue);
       setApiKey(r.data.embedding_api_key ?? '');
       setBaseURL(r.data.embedding_base_url ?? '');
       setModel(r.data.embedding_model ?? '');
       setCacheMaxKeys(r.data.vec_cache_max_keys || 3);
-      llmPrefsRef.current = {
-        llm_provider: r.data.llm_provider,
-        llm_api_key: r.data.llm_api_key,
-        llm_base_url: r.data.llm_base_url,
-        llm_model: r.data.llm_model,
-        gemini_client_id: r.data.gemini_client_id,
-        gemini_client_secret: r.data.gemini_client_secret,
-        ai_analysis_db_path: r.data.ai_analysis_db_path,
-      };
     }).catch(() => {}).finally(() => setLoaded(true));
   }, []);
 
   const providerInfo = EMBEDDING_PROVIDERS.find(p => p.value === provider) ?? EMBEDDING_PROVIDERS[0];
 
+  // save 时实时拉最新 prefs 再 merge —— 不会覆盖 LLM tab 刚保存的字段
+  const buildPayload = async () => {
+    let fresh: Record<string, unknown> = {};
+    try {
+      const r = await axios.get<Record<string, unknown>>('/api/preferences');
+      fresh = r.data;
+    } catch { /* ignore */ }
+    return {
+      ...fresh,
+      embedding_provider: provider,
+      embedding_api_key: apiKey,
+      embedding_base_url: baseURL,
+      embedding_model: model,
+      vec_cache_max_keys: cacheMaxKeys,
+    };
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setSaveMsg(null);
     try {
-      await axios.put('/api/preferences/llm', {
-        ...llmPrefsRef.current,
-        embedding_provider: provider,
-        embedding_api_key: apiKey,
-        embedding_base_url: baseURL,
-        embedding_model: model,
-        vec_cache_max_keys: cacheMaxKeys,
-      });
+      await axios.put('/api/preferences/llm', await buildPayload());
       setSaveMsg({ ok: true, text: '已保存' });
     } catch {
       setSaveMsg({ ok: false, text: '保存失败' });
@@ -80,14 +74,7 @@ export const EmbeddingSection: React.FC = () => {
     setSaveMsg(null);
     try {
       // 先保存当前配置，再测试
-      await axios.put('/api/preferences/llm', {
-        ...llmPrefsRef.current,
-        embedding_provider: provider,
-        embedding_api_key: apiKey,
-        embedding_base_url: baseURL,
-        embedding_model: model,
-        vec_cache_max_keys: cacheMaxKeys,
-      });
+      await axios.put('/api/preferences/llm', await buildPayload());
       const r = await axios.post<{ ok: boolean; provider: string; model: string }>('/api/ai/vec/test-embedding');
       setSaveMsg({ ok: true, text: `连接成功（${r.data.provider} · ${r.data.model}）` });
     } catch (e: unknown) {
