@@ -16,7 +16,7 @@ export default defineConfig({
           markdown: ['react-markdown', 'remark-gfm', 'marked'], // AI 分析卡 / 对话回放
           qrcode: ['qrcode'],                      // 年度回顾 / 分享卡
           pinyin: ['tiny-pinyin'],                 // Cmd+K 命令面板
-          'image-export': ['html2canvas', 'html-to-image'], // 分享为图片 / 年度回顾
+          'image-export': ['html2canvas'],         // 分享为图片 / 年度回顾
           'grid-layout': ['react-grid-layout'],    // 洞察页拖拽排版
           // react / react-dom 不拆：vite 默认已经合理处理 vendor
           // lucide-react 几乎每页都用，留在主 chunk
