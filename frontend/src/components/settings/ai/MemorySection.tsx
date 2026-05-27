@@ -12,7 +12,6 @@ export const MemorySection: React.FC = () => {
   const [testing, setTesting] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const otherPrefsRef = React.useRef<Record<string, unknown>>({});
 
   useEffect(() => {
     axios.get<Record<string, unknown>>('/api/preferences').then(r => {
@@ -20,21 +19,28 @@ export const MemorySection: React.FC = () => {
       setModel((r.data.mem_llm_model as string) ?? '');
       setMainProvider((r.data.llm_provider as string) ?? 'deepseek');
       setMainModel((r.data.llm_model as string) ?? '');
-      // 保存其他字段，防止保存时覆盖
-      const { mem_llm_base_url: _a, mem_llm_model: _b, ...rest } = r.data;
-      otherPrefsRef.current = rest;
     }).catch(() => {}).finally(() => setLoaded(true));
   }, []);
+
+  // save 时实时拉最新 prefs 再 merge —— 不会覆盖 LLM / Embedding tab 刚保存的字段
+  const buildPayload = async () => {
+    let fresh: Record<string, unknown> = {};
+    try {
+      const r = await axios.get<Record<string, unknown>>('/api/preferences');
+      fresh = r.data;
+    } catch { /* ignore */ }
+    return {
+      ...fresh,
+      mem_llm_base_url: baseURL,
+      mem_llm_model: model,
+    };
+  };
 
   const handleSave = async () => {
     setSaving(true);
     setSaveMsg(null);
     try {
-      await axios.put('/api/preferences/llm', {
-        ...otherPrefsRef.current,
-        mem_llm_base_url: baseURL,
-        mem_llm_model: model,
-      });
+      await axios.put('/api/preferences/llm', await buildPayload());
       setSaveMsg({ ok: true, text: '已保存' });
     } catch {
       setSaveMsg({ ok: false, text: '保存失败' });
@@ -48,11 +54,7 @@ export const MemorySection: React.FC = () => {
     setTesting(true);
     setSaveMsg(null);
     try {
-      await axios.put('/api/preferences/llm', {
-        ...otherPrefsRef.current,
-        mem_llm_base_url: baseURL,
-        mem_llm_model: model,
-      });
+      await axios.put('/api/preferences/llm', await buildPayload());
       const r = await axios.post<{ ok: boolean; provider: string; model: string }>('/api/ai/mem/test');
       setSaveMsg({ ok: true, text: `连接成功（${r.data.provider} · ${r.data.model}）` });
     } catch (e: unknown) {
