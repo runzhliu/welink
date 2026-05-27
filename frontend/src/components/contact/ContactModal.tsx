@@ -2,27 +2,36 @@
  * 联系人详情弹窗组件
  */
 
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { lazy, Suspense, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import axios from 'axios';
 import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame, Sparkles, Maximize2, Minimize2, Mic, Image as ImageIcon, RotateCcw, BookOpen } from 'lucide-react';
-import { ChatReplay } from './ChatReplay';
 import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
-import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
+import type { SearchContextTarget } from '../search/SearchContextModal';
 import { contactsApi } from '../../services/api';
 import { exportContactCsv, exportContactTxt, EXPORT_LIMIT, parseExportResult } from '../../utils/exportChat';
+// 默认 tab（wordcloud / detail / sentiment）的内容：保持同步加载
 import { WordCloudCanvas } from './WordCloudCanvas';
-import { LLMAnalysisTab } from './LLMAnalysisTab';
-import { AICloneTab } from './AICloneTab';
-import { ForgeSkillModal } from './ForgeSkillModal';
-import { PodcastModal } from './PodcastModal';
-import { VNModal } from './VNModal';
 import { RelationshipThermometer } from './RelationshipThermometer';
 import { SecretWordsCard } from './SecretWordsCard';
 import { ConfirmDialog } from '../common/ConfirmDialog';
-import { AIInsights } from './AIInsights';
 import { ContactDetailCharts } from './ContactDetailCharts';
 import { SentimentChart } from './SentimentChart';
 import { MessageTypePieChart } from '../common/MessageTypePieChart';
+// ─── 重内容懒加载：只在点对应 tab / 打开对应 modal 才下 chunk ──────────────
+const LLMAnalysisTab     = lazy(() => import('./LLMAnalysisTab').then(m => ({ default: m.LLMAnalysisTab })));
+const AICloneTab         = lazy(() => import('./AICloneTab').then(m => ({ default: m.AICloneTab })));
+const AIInsights         = lazy(() => import('./AIInsights').then(m => ({ default: m.AIInsights })));
+const ChatReplay         = lazy(() => import('./ChatReplay').then(m => ({ default: m.ChatReplay })));
+const PodcastModal       = lazy(() => import('./PodcastModal').then(m => ({ default: m.PodcastModal })));
+const VNModal            = lazy(() => import('./VNModal').then(m => ({ default: m.VNModal })));
+const ForgeSkillModal    = lazy(() => import('./ForgeSkillModal').then(m => ({ default: m.ForgeSkillModal })));
+const SearchContextModal = lazy(() => import('../search/SearchContextModal').then(m => ({ default: m.SearchContextModal })));
+
+const TabLoading: React.FC = () => (
+  <div className="flex items-center justify-center h-48 text-gray-400">
+    <Loader2 size={24} className="animate-spin" />
+  </div>
+);
 import { useWordCloud } from '../../hooks/useContacts';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { avatarSrc } from '../../utils/avatar';
@@ -758,43 +767,45 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
           )
         )}
 
-        {tab === 'ai' && (
-          <LLMAnalysisTab
-            username={contact.username}
-            displayName={displayName}
-            isGroup={false}
-            totalMessages={contact.total_messages}
-            avatarUrl={avatarUrl || undefined}
-            onOpenSettings={onOpenSettings}
-          />
-        )}
+        <Suspense fallback={<TabLoading />}>
+          {tab === 'ai' && (
+            <LLMAnalysisTab
+              username={contact.username}
+              displayName={displayName}
+              isGroup={false}
+              totalMessages={contact.total_messages}
+              avatarUrl={avatarUrl || undefined}
+              onOpenSettings={onOpenSettings}
+            />
+          )}
 
-        {tab === 'clone' && (
-          <AICloneTab
-            username={contact.username}
-            displayName={displayName}
-            avatarUrl={avatarUrl || undefined}
-            onOpenSettings={onOpenSettings}
-          />
-        )}
+          {tab === 'clone' && (
+            <AICloneTab
+              username={contact.username}
+              displayName={displayName}
+              avatarUrl={avatarUrl || undefined}
+              onOpenSettings={onOpenSettings}
+            />
+          )}
 
-        {tab === 'insights' && (
-          <AIInsights
-            username={contact.username}
-            displayName={displayName}
-            avatarUrl={avatarUrl || undefined}
-            onOpenSettings={onOpenSettings}
-          />
-        )}
+          {tab === 'insights' && (
+            <AIInsights
+              username={contact.username}
+              displayName={displayName}
+              avatarUrl={avatarUrl || undefined}
+              onOpenSettings={onOpenSettings}
+            />
+          )}
 
-        {tab === 'replay' && (
-          <ChatReplay
-            username={contact.username}
-            displayName={displayName}
-            avatarUrl={avatarUrl || undefined}
-            onClose={() => setTab('wordcloud')}
-          />
-        )}
+          {tab === 'replay' && (
+            <ChatReplay
+              username={contact.username}
+              displayName={displayName}
+              avatarUrl={avatarUrl || undefined}
+              onClose={() => setTab('wordcloud')}
+            />
+          )}
+        </Suspense>
 
         {tab === 'search' && (
           <div>
@@ -884,12 +895,14 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
       </div>{/* end outer rounded clip div */}
     </div>
 
-    {contextTarget && (
-      <SearchContextModal
-        {...contextTarget}
-        onClose={() => setContextTarget(null)}
-      />
-    )}
+    <Suspense fallback={null}>
+      {contextTarget && (
+        <SearchContextModal
+          {...contextTarget}
+          onClose={() => setContextTarget(null)}
+        />
+      )}
+    </Suspense>
 
     {/* 头像大图 Lightbox */}
     {lightbox && avatarUrl && (
@@ -916,30 +929,36 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
       </div>
     )}
 
-    {forgeOpen && (
-      <ForgeSkillModal
-        open={forgeOpen}
-        onClose={() => setForgeOpen(false)}
-        skillType="contact"
-        username={contact.username}
-        displayName={displayName}
-        onOpenSettings={onOpenSettings}
-      />
-    )}
+    <Suspense fallback={null}>
+      {forgeOpen && (
+        <ForgeSkillModal
+          open={forgeOpen}
+          onClose={() => setForgeOpen(false)}
+          skillType="contact"
+          username={contact.username}
+          displayName={displayName}
+          onOpenSettings={onOpenSettings}
+        />
+      )}
 
-    <PodcastModal
-      open={podcastOpen}
-      onClose={() => setPodcastOpen(false)}
-      contact={contact}
-    />
+      {/* PodcastModal 之前总挂着但 !open 时内部 return null —— 改条件挂载后语义一致，
+          第一次打开播客才下载 chunk */}
+      {podcastOpen && (
+        <PodcastModal
+          open={podcastOpen}
+          onClose={() => setPodcastOpen(false)}
+          contact={contact}
+        />
+      )}
 
-    {vnOpen && (
-      <VNModal
-        username={contact.username}
-        displayName={displayName}
-        onClose={() => setVnOpen(false)}
-      />
-    )}
+      {vnOpen && (
+        <VNModal
+          username={contact.username}
+          displayName={displayName}
+          onClose={() => setVnOpen(false)}
+        />
+      )}
+    </Suspense>
 
     <ConfirmDialog
       open={blockConfirmOpen}
