@@ -160,6 +160,9 @@ type Preferences struct {
 	// 关系预测「不再推荐此人」名单（仍可在联系人/群聊中看到，只是首页 forecast 不再提醒）
 	ForecastIgnored []string `json:"forecast_ignored,omitempty"`
 
+	// 「暧昧探测」Lab 排除名单（标记真伴侣/家人/客户等不参与暧昧统计的人）
+	FlirtExcluded []string `json:"flirt_excluded,omitempty"`
+
 	// LLM 配置（多 provider，支持在 AI 分析页面切换）
 	LLMProfiles      []LLMProfile `json:"llm_profiles,omitempty"`
 	// 以下单配置字段保持向后兼容（自动同步为 LLMProfiles[0]）

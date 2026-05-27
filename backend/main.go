@@ -901,6 +901,27 @@ func serverMain() {
 		c.JSON(http.StatusOK, gin.H{"forecast_ignored": existing.ForecastIgnored})
 	})
 
+	// 暧昧探测 Lab 排除名单（伴侣/家人/客户等"不应该出现在榜上"的人）
+	api.PUT("/preferences/flirt-excluded", func(c *gin.Context) {
+		var body struct {
+			FlirtExcluded []string `json:"flirt_excluded"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			return
+		}
+		if body.FlirtExcluded == nil {
+			body.FlirtExcluded = []string{}
+		}
+		existing := loadPreferences()
+		existing.FlirtExcluded = body.FlirtExcluded
+		if err := savePreferences(existing); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"flirt_excluded": existing.FlirtExcluded})
+	})
+
 	// 自定义纪念日保存
 	api.PUT("/preferences/anniversaries", func(c *gin.Context) {
 		var body struct {
@@ -3048,6 +3069,9 @@ func serverMain() {
 
 		// 创意实验室 · 健康日记（症状/就医关键词扫描 + 7 天窗口合并，零 LLM）
 		registerHealthLogRoutes(prot, getSvc)
+
+		// 创意实验室 · 暧昧探测（5 类暧昧信号扫描 + 双向度统计，零 LLM）
+		registerFlirtProbeRoutes(prot, getSvc)
 
 		// 群聊 AI 年报
 		registerGroupYearReviewRoutes(prot, getSvc)
