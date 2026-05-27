@@ -57,13 +57,14 @@ interface Resp {
   generated_at: number;
 }
 
-// 5 类信号的展示色 + 中文名
+// 5 类信号的展示色 + 中文名。
+// 用实色 100 系列背景 + 700 系列文字（不用 /20 透明，html2canvas 截图更稳）。
 const CAT_META: Record<string, { label: string; color: string; bg: string }> = {
-  endearment: { label: '亲昵称呼', color: 'text-pink-600 dark:text-pink-400', bg: 'bg-pink-100 dark:bg-pink-500/20' },
-  longing:    { label: '想念',     color: 'text-red-600 dark:text-red-400',   bg: 'bg-red-100 dark:bg-red-500/20' },
-  late_night: { label: '深夜亲密', color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-100 dark:bg-purple-500/20' },
-  action:     { label: '暧昧动作', color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-100 dark:bg-orange-500/20' },
-  emoji:      { label: '暧昧表情', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-500/20' },
+  endearment: { label: '亲昵称呼', color: 'text-pink-700',   bg: 'bg-pink-100' },
+  longing:    { label: '想念',     color: 'text-red-700',    bg: 'bg-red-100' },
+  late_night: { label: '深夜亲密', color: 'text-purple-700', bg: 'bg-purple-100' },
+  action:     { label: '暧昧动作', color: 'text-orange-700', bg: 'bg-orange-100' },
+  emoji:      { label: '暧昧表情', color: 'text-amber-700',  bg: 'bg-amber-100' },
 };
 
 const fmtMD = (d: string) => (d && d.length >= 10 ? `${d.slice(5, 7)}-${d.slice(8, 10)}` : d);
@@ -247,8 +248,8 @@ export const FlirtProbe: React.FC = () => {
 
       {data && data.total_contacts_with_hits > 0 && (
         <div ref={cardRef} className="rounded-2xl bg-white dark:bg-[#1c1c1e] overflow-hidden border border-gray-100 dark:border-white/10">
-          {/* Hero */}
-          <div className="px-7 py-6 bg-gradient-to-br from-pink-500/8 to-rose-500/8 dark:from-pink-500/15 dark:to-rose-500/15 border-b border-pink-200/40 dark:border-pink-500/20">
+          {/* Hero —— 用实色而非 gradient，html2canvas 渲染稳 */}
+          <div className="px-7 py-6 bg-pink-50 dark:bg-pink-500/10 border-b border-pink-200 dark:border-pink-500/20">
             <div className="text-xs uppercase tracking-widest text-pink-600 dark:text-pink-400 font-bold mb-1">
               Flirt Probe · 暧昧探测
             </div>
@@ -317,19 +318,19 @@ export const FlirtProbe: React.FC = () => {
                                 const m = CAT_META[cat];
                                 if (!m) return null;
                                 return (
-                                  <span key={cat} className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${m.color} ${m.bg}`}>
-                                    {m.label}·{cnt}
+                                  <span key={cat} className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap ${m.color} ${m.bg}`}>
+                                    <span>{m.label}</span>
+                                    <span className="font-mono opacity-70">{cnt}</span>
                                   </span>
                                 );
                               })}
                           </div>
-                          {/* 双向条 */}
-                          <div className="flex items-center gap-1 h-1.5 w-full max-w-[260px]">
-                            <div className="flex-1 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden" style={{ flexGrow: widthPct }}>
-                              <div className="h-full flex" style={{ width: '100%' }}>
-                                <div className="bg-pink-500" style={{ width: `${myFrac}%` }} title={`我 ${c.my_hits} 次`} />
-                                <div className="bg-rose-400" style={{ width: `${100 - myFrac}%` }} title={`TA ${c.their_hits} 次`} />
-                              </div>
+                          {/* 双向条：track 固定宽度 = 0%-100% 比例尺；内层 flex 按 me/them 分两色
+                              小数量也至少 2% 宽，避免完全看不到 */}
+                          <div className="h-1.5 w-full max-w-[260px] bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+                            <div className="h-full flex" style={{ width: `${Math.max(2, widthPct)}%` }}>
+                              <div className="h-full bg-pink-500" style={{ width: `${myFrac}%` }} title={`我 ${c.my_hits} 次`} />
+                              <div className="h-full bg-rose-400" style={{ width: `${100 - myFrac}%` }} title={`TA ${c.their_hits} 次`} />
                             </div>
                           </div>
                           <div className="flex items-center justify-between text-[10px] text-gray-400 mt-0.5 max-w-[260px]">
@@ -387,23 +388,31 @@ export const FlirtProbe: React.FC = () => {
               <div className="text-sm font-bold text-[#1d1d1f] dark:text-gray-100 mb-3">
                 最近的暧昧片段
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {data.timeline.slice(0, 15).map((t, i) => (
                   <div key={i} className="flex items-start gap-2 text-xs">
                     <span className="font-mono text-[10px] text-gray-400 w-20 flex-shrink-0 mt-0.5">{t.date}</span>
                     <span className={`inline-block w-1 h-1 rounded-full mt-2 flex-shrink-0 ${t.who === 'me' ? 'bg-pink-500' : 'bg-rose-400'}`} />
                     <div className="flex-1 min-w-0">
-                      <span className={`text-[10px] font-bold uppercase tracking-wider mr-1.5 ${t.who === 'me' ? 'text-pink-500' : 'text-rose-400'}`}>
-                        {t.who === 'me' ? '我' : t.display_name}
-                      </span>
-                      <span className="text-gray-700 dark:text-gray-300 break-words">{t.snippet}</span>
-                      <span className="ml-1.5">
-                        {(t.categories ?? []).slice(0, 2).map(cat => {
-                          const m = CAT_META[cat];
-                          if (!m) return null;
-                          return <span key={cat} className={`text-[8px] ml-1 px-1 rounded ${m.bg} ${m.color}`}>{m.label}</span>;
-                        })}
-                      </span>
+                      <div>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider mr-1.5 ${t.who === 'me' ? 'text-pink-500' : 'text-rose-400'}`}>
+                          {t.who === 'me' ? '我' : t.display_name}
+                        </span>
+                        <span className="text-gray-700 dark:text-gray-300 break-words">{t.snippet}</span>
+                      </div>
+                      {(t.categories ?? []).length > 0 && (
+                        <div className="mt-0.5 flex flex-wrap gap-1">
+                          {(t.categories ?? []).slice(0, 2).map(cat => {
+                            const m = CAT_META[cat];
+                            if (!m) return null;
+                            return (
+                              <span key={cat} className={`text-[9px] px-1.5 py-0 rounded font-bold whitespace-nowrap ${m.bg} ${m.color}`}>
+                                {m.label}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
