@@ -339,8 +339,11 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
       chatNode.style.height = 'auto';
 
       const wrapper = document.createElement('div');
+      // CJK 字体放最前 —— 避免 canvas 端 system-ui fallback 漏字 (考→老 等)
       wrapper.style.cssText = `
-        width: 720px; background: #ffffff; padding: 0; font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        width: 720px; background: #ffffff; padding: 0;
+        font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Micro Hei', system-ui, -apple-system, sans-serif;
+        letter-spacing: 0;
         position: fixed; left: -10000px; top: 0; z-index: -1;
       `;
       // header —— logo + 标题；用 inline-svg 以保证 html2canvas 总能渲染
@@ -389,6 +392,20 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
+        // onclone：把字体强制套到每个非 mono 元素上 + 去 truncate，避免 ellipsis 切字
+        onclone: (clonedDoc) => {
+          const stack = "'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Micro Hei', system-ui, -apple-system, sans-serif";
+          clonedDoc.querySelectorAll<HTMLElement>('*').forEach(el => {
+            let cur = '';
+            try { cur = clonedDoc.defaultView?.getComputedStyle(el).fontFamily ?? ''; } catch {}
+            if (!/mono|courier|consolas|menlo/i.test(cur)) el.style.fontFamily = stack;
+            if (el.classList.contains('truncate')) {
+              el.classList.remove('truncate');
+              el.style.whiteSpace = 'normal';
+              el.style.overflow = 'visible';
+            }
+          });
+        },
       });
       const dataUrl = canvas.toDataURL('image/png');
       document.body.removeChild(wrapper);

@@ -8,10 +8,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sparkles, Loader2, Search, Wand2, Square, Share2, Check, RefreshCw,
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
-import { prepareForCapture } from '../../utils/exportPng';
+import { captureCardToPng } from '../../utils/exportPng';
 import { getServerURL, getToken } from '../../runtimeConfig';
 import { useToast } from '../common/Toast';
 import { welinkBrandHTML } from './_shared';
@@ -172,48 +171,21 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
   const exportPng = async () => {
     if (history.length === 0 || !cardRef.current || exporting) return;
     setExporting(true);
-    // dark 模式下导出：tailwind `dark:` 条件靠 html.class="dark"，clone 后还在同一文档下仍会生效
-    // → 浅灰底 + 浅灰字 + 白底 wrapper 几乎看不见。先临时摘掉 html.dark，渲染完再装回去。
-    const root = document.documentElement;
-    const hadDark = root.classList.contains('dark');
-    if (hadDark) root.classList.remove('dark');
-    // wrapper 在 try 外声明，toPng 抛错时 finally 也能把它从 DOM 拆掉，避免悬挂节点累积。
-    let wrapper: HTMLElement | null = null;
-    try {
-      const node = cardRef.current.cloneNode(true) as HTMLElement;
-      wrapper = document.createElement('div');
-      wrapper.style.cssText = `
-        width: 720px; background: #ffffff; padding: 0;
-        font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-        position: fixed; left: -10000px; top: 0; z-index: -1;
-      `;
-      wrapper.appendChild(node);
-      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+    const r = await captureCardToPng(cardRef.current, {
+      filename: `welink-parallel-${Date.now()}.png`,
+      backgroundColor: '#ffffff',
+      appendHTML: welinkBrandHTML({
         label: '平行宇宙对话',
         date: new Date().toLocaleDateString('zh-CN'),
         variant: 'light',
-      }));
-      document.body.appendChild(wrapper);
-      await prepareForCapture(wrapper);
-      const canvas = await html2canvas(wrapper, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-      });
-      const url = canvas.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `welink-parallel-${Date.now()}.png`;
-      a.click();
+      }),
+    });
+    setExporting(false);
+    if (r.ok) {
       setExported(true);
-      setTimeout(() => setExported(false), 3000);
-    } catch (e) {
-      toast.error('导出失败：' + ((e as Error).message || '未知错误'));
-    } finally {
-      if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-      if (hadDark) root.classList.add('dark');
-      setExporting(false);
+      setTimeout(() => setExported(false), 2000);
+    } else {
+        toast.error('截图失败：' + (r.error || '未知错误'));
     }
   };
 
