@@ -193,6 +193,36 @@ Warp 2024 底支持 MCP。Warp AI 设置 → MCP Tools → 添加：
 }
 ```
 
+## Hermes-Agent（Nous Research）
+
+[Hermes-Agent](https://github.com/nousresearch/hermes-agent) 是 Nous Research 的自我改进 AI agent，原生支持任意 MCP server。**注意它的 schema 跟 Claude 系不一样** —— `args` 是独立字段、整个配置走 YAML。
+
+编辑 `~/.hermes/config.yaml`，在 `mcp_servers` 下加：
+
+```yaml
+mcp_servers:
+  welink:
+    command: "/绝对路径/welink-mcp"
+    args: []   # welink-mcp 不需要参数，留空即可
+    env:
+      WELINK_URL: "http://localhost:8080"
+```
+
+重启 Hermes 后用 `/tools` 或 `/mcp` 列出已加载工具，应该能看到 `welink` 下的 19 个 `get_*` / `search_messages`。
+
+::: tip OpenClaw 用户
+[OpenClaw](https://github.com/openclaw/openclaw)（Nous 的多通道 IM 收件箱 + 个人助手）底层用 Hermes —— 在 `~/.hermes/config.yaml` 加上面这段，OpenClaw 端也能立刻调用 WeLink 工具，无需再额外配置。
+:::
+
+典型问法（中文直接问，Hermes 会自动路由到 WeLink 工具）：
+
+- 「我微信里有谁三个月没聊了？」→ `get_cooling_contacts`
+- 「summarize my chat with alice in 2024-03」→ `get_contact_messages` + LLM 总结
+- 「我和老王的关系最近有什么变化？」→ `get_contact_sentiment` + `get_relationship_forecast`
+- 「找一下我微信里聊过 docker 部署的对话」→ `search_messages`
+
+如果想让 Hermes 把 WeLink 当成一个长期能力（不用每次提示工具名），把上面的「触发场景」段落抄到 `~/.hermes/skills/welink/SKILL.md` 里作为常驻 skill；详见 Hermes 文档的 [Skills](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills) 章节。
+
 ---
 
 ## 验证连接
