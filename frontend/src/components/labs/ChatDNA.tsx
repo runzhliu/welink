@@ -13,6 +13,7 @@ import html2canvas from 'html2canvas';
 import { avatarSrc } from '../../utils/avatar';
 import { prepareForCapture } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
+import { welinkBrandHTML } from './_shared';
 
 interface TopContact {
   username: string;
@@ -105,11 +106,11 @@ export const ChatDNA: React.FC = () => {
         position: fixed; left: -10000px; top: 0; z-index: -1;
       `;
       wrapper.appendChild(node);
-      const footer = document.createElement('div');
-      footer.style.cssText =
-        'padding:14px 28px; background:#0b0b14; color:#888; font-size:11px; text-align:center; border-top:1px solid rgba(255,255,255,0.06);';
-      footer.innerHTML = `WeLink · 我的聊天 DNA · ${new Date().toLocaleDateString('zh-CN')}`;
-      wrapper.appendChild(footer);
+      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+        label: '我的聊天 DNA',
+        date: new Date().toLocaleDateString('zh-CN'),
+        variant: 'dark',
+      }));
       document.body.appendChild(wrapper);
       await prepareForCapture(wrapper);
       const canvas = await html2canvas(wrapper, {

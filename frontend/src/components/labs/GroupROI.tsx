@@ -18,6 +18,7 @@ import type { GroupInfo } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
 import { prepareForCapture } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
+import { welinkBrandHTML } from './_shared';
 
 type Tier = 'keep' | 'mute' | 'leave';
 
@@ -225,11 +226,11 @@ export const GroupROI: React.FC = () => {
         position: fixed; left: -10000px; top: 0; z-index: -1;
       `;
       wrapper.appendChild(node);
-      const footer = document.createElement('div');
-      footer.style.cssText =
-        'padding:14px 28px; background:#f7f8fa; color:#8a94a6; font-size:11px; text-align:center; border-top:1px solid #eef1f7;';
-      footer.innerHTML = `WeLink · 群语料 ROI · welink.click · ${today}`;
-      wrapper.appendChild(footer);
+      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+        label: '群语料 ROI',
+        date: today,
+        variant: 'light',
+      }));
       document.body.appendChild(wrapper);
       await prepareForCapture(wrapper);
       const canvas = await html2canvas(wrapper, {

@@ -11,6 +11,7 @@ import { Network, Loader2, RefreshCw, Share2, Check } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { prepareForCapture } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
+import { welinkBrandHTML } from './_shared';
 
 interface Node {
   id: string;
@@ -161,10 +162,11 @@ export const RelationGraph: React.FC = () => {
         position: fixed; left: -10000px; top: 0; z-index: -1;
       `;
       wrapper.appendChild(node);
-      const footer = document.createElement('div');
-      footer.style.cssText = 'padding:14px 4px 4px; color:#666; font-size:11px; text-align:center;';
-      footer.innerHTML = `WeLink · 我的关系星图 · ${new Date().toLocaleDateString('zh-CN')}`;
-      wrapper.appendChild(footer);
+      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+        label: '我的关系星图',
+        date: new Date().toLocaleDateString('zh-CN'),
+        variant: 'dark',
+      }));
       document.body.appendChild(wrapper);
       await prepareForCapture(wrapper);
       const canvas = await html2canvas(wrapper, {

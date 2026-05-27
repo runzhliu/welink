@@ -17,6 +17,7 @@ import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
 import { prepareForCapture } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
+import { welinkBrandHTML, WelinkBrand } from './_shared';
 
 interface Props {
   contacts: ContactStats[];
@@ -260,11 +261,11 @@ export const Milestones: React.FC<Props> = ({ contacts }) => {
         position: fixed; left: -10000px; top: 0; z-index: -1;
       `;
       wrapper.appendChild(node);
-      const footer = document.createElement('div');
-      footer.style.cssText =
-        'padding:14px 28px; background:#0b0b14; color:#888; font-size:11px; text-align:center; border-top:1px solid rgba(255,255,255,0.06);';
-      footer.innerHTML = `WeLink · 关系考古 · ${new Date().toLocaleDateString('zh-CN')}`;
-      wrapper.appendChild(footer);
+      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+        label: '关系考古',
+        date: new Date().toLocaleDateString('zh-CN'),
+        variant: 'dark',
+      }));
       document.body.appendChild(wrapper);
       await prepareForCapture(wrapper);
       const canvas = await html2canvas(wrapper, {
@@ -441,10 +442,11 @@ export const Milestones: React.FC<Props> = ({ contacts }) => {
               )}
             </div>
 
-            <div className="px-7 py-4 bg-white/[0.02] text-[11px] text-white/40 flex items-center justify-between border-t border-white/5">
-              <span>WeLink · 关系考古</span>
-              <span>{new Date().toLocaleDateString('zh-CN')}</span>
-            </div>
+            <WelinkBrand
+              label="关系考古"
+              leftText={<span>{new Date().toLocaleDateString('zh-CN')}</span>}
+              variant="dark"
+            />
           </div>
         </>
       )}

@@ -14,6 +14,7 @@ import { avatarSrc } from '../../utils/avatar';
 import { prepareForCapture } from '../../utils/exportPng';
 import { getServerURL, getToken } from '../../runtimeConfig';
 import { useToast } from '../common/Toast';
+import { welinkBrandHTML } from './_shared';
 
 interface Props {
   contacts: ContactStats[];
@@ -187,10 +188,11 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
         position: fixed; left: -10000px; top: 0; z-index: -1;
       `;
       wrapper.appendChild(node);
-      const footer = document.createElement('div');
-      footer.style.cssText = 'padding:14px 28px; background:#f8f9fb; color:#888; font-size:11px; text-align:center; border-top:1px solid #eee;';
-      footer.innerHTML = `WeLink · 平行宇宙对话 · ${new Date().toLocaleDateString('zh-CN')}`;
-      wrapper.appendChild(footer);
+      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+        label: '平行宇宙对话',
+        date: new Date().toLocaleDateString('zh-CN'),
+        variant: 'light',
+      }));
       document.body.appendChild(wrapper);
       await prepareForCapture(wrapper);
       const canvas = await html2canvas(wrapper, {
