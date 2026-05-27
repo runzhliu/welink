@@ -1,8 +1,25 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // build 之后会在 dist/stats.{html,json} 生成 treemap + 原始数据：
+    // 每个 chunk 占了哪些 npm 包 / 源文件、各自体积、gzip 后大小
+    // 想看就 `open dist/stats.html`；想跑脚本就读 stats.json
+    visualizer({
+      filename: 'dist/stats.html',
+      template: 'treemap',
+      gzipSize: true,
+      brotliSize: true,
+    }),
+    visualizer({
+      filename: 'dist/stats.json',
+      template: 'raw-data',
+      gzipSize: true,
+    }),
+  ],
   build: {
     sourcemap: false,
     // charts chunk 单独 500KB+ 是预期内的（recharts 本身大，但首屏不加载）
