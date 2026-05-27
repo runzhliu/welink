@@ -425,6 +425,11 @@ func buildHealthLog(svc *service.ContactService) *HealthLogResponse {
 	return resp
 }
 
+// healthMaxMsgLen 单条消息超过这个长度直接跳过健康检测：
+// 微信里粘贴的小作文 / 链接预览 / 群转发能轻易突破 10KB，
+// 4 条正则全跑完会无谓地烧 CPU；判定健康提及也不需要看那么长的文本。
+const healthMaxMsgLen = 4096
+
 // looksLikeHealthMention 判定一条消息是否疑似"生病/就医"。
 //
 // 规则：
@@ -433,6 +438,9 @@ func buildHealthLog(svc *service.ContactService) *HealthLogResponse {
 //   3. 命中否定/预防词 → 一票否决
 //   4. 命中话题噪声（电视剧/新闻等）+ 命中症状 → 否决（很可能是在聊别的）
 func looksLikeHealthMention(s string) bool {
+	if len(s) > healthMaxMsgLen {
+		return false
+	}
 	if healthNegationPattern.MatchString(s) {
 		return false
 	}
