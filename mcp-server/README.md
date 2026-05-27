@@ -153,3 +153,8 @@ search_messages、get_ai_usage_stats、get_relationship_forecast
 
 **返回数据为空**
 - 后端可能还在索引中，访问 `http://localhost:3418` 等待「分析完成」提示后再试
+
+
+## 其他 MCP 客户端
+
+本文档以 Claude Code 为例。其他客户端的配置片段（Claude Desktop / Cline / Continue.dev / Cursor / Windsurf / Zed / Copilot Chat / LibreChat / Hermes-Agent / OpenClaw 等）见 [docs/mcp-clients.md](../docs/mcp-clients.md)。任何支持 MCP 协议 stdio transport 的客户端都能接入，schema 大同小异：声明一个 command + 可选 env 即可。
