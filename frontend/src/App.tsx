@@ -42,7 +42,7 @@ import { AppSetupPage } from './components/common/AppSetupPage';
 import { SetupRequiredPage } from './components/common/SetupRequiredPage';
 import { CommandPalette } from './components/common/CommandPalette';
 import { ReleaseNotesModal } from './components/common/ReleaseNotesModal';
-import { SettingsPage } from './components/common/SettingsPage';
+import { SettingsPage } from './components/settings';
 import { SpotlightTour, type TourStep } from './components/common/SpotlightTour';
 
 // App API

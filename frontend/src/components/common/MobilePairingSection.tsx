@@ -96,7 +96,7 @@ export const MobilePairingSection: React.FC = () => {
   };
 
   return (
-    <section className="mb-8" data-settings-tags="移动 手机 mobile android qr 二维码 配对 pairing">
+    <section className="mb-8" data-section-id="mobile" data-settings-tags="移动 手机 mobile android qr 二维码 配对 pairing">
       <div className="flex items-center gap-2 mb-3">
         <Smartphone size={18} className="text-[#07c160]" />
         <h3 className="text-base font-bold text-[#1d1d1f] dk-text">移动端配对（手机远程访问）</h3>

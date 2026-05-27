@@ -35,7 +35,20 @@ welink/
 ├── frontend/         # React + TypeScript + Vite
 │   ├── src/
 │   │   ├── App.tsx           # 主路由
-│   │   ├── components/       # UI 组件
+│   │   ├── components/       # UI 组件（按页面/功能分目录）
+│   │   │   ├── common/       # 通用：Header / Toast / Modal / FeedbackModal …
+│   │   │   ├── layout/       # 布局骨架 / 侧边栏
+│   │   │   ├── settings/     # 设置页（ai/ privacy/ display/ system/ support/）
+│   │   │   ├── dashboard/    # AI 首页 / 洞察 / 数据库 / 导出
+│   │   │   ├── contact/      # 联系人详情
+│   │   │   ├── groups/       # 群聊详情
+│   │   │   ├── calendar/     # 时光机
+│   │   │   ├── labs/         # 创意实验室
+│   │   │   ├── skills/       # Skills 管理
+│   │   │   ├── search/       # 全局搜索
+│   │   │   ├── memory/       # 记忆库
+│   │   │   ├── gallery/      # AI 画廊
+│   │   │   └── anniversary/  # 纪念日 / Wrapped
 │   │   ├── hooks/            # 数据 Hook
 │   │   ├── services/api.ts   # API 调用
 │   │   ├── utils/            # 工具函数

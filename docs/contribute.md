@@ -172,11 +172,18 @@ welink/
 │   └── model/           # 数据模型
 ├── frontend/            # React 前端
 │   └── src/components/
-│       ├── common/      # 通用组件（Header, Toast, Section 等）
+│       ├── common/      # 通用组件（Header, Toast, Modal 等）
+│       ├── settings/    # 设置页 —— 按分类拆分（ai/privacy/display/system/support/...）
 │       ├── dashboard/   # AI 首页 / 洞察 / 数据库 / 导出
 │       ├── contact/     # 联系人详情
 │       ├── groups/      # 群聊详情
-│       └── calendar/    # 时光机
+│       ├── calendar/    # 时光机
+│       ├── labs/        # 创意实验室小工具
+│       ├── skills/      # Skill 包管理
+│       ├── search/      # 全局搜索
+│       ├── memory/      # 记忆库 CRUD
+│       ├── gallery/     # AI 画廊
+│       └── anniversary/ # 纪念日 / 群 Wrapped
 ├── mcp-server/          # MCP Server（Go）
 └── docs/                # VitePress 文档站
 ```
