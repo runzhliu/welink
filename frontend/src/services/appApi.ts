@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getServerURL, getToken } from '../runtimeConfig';
+import { emitToast } from '../components/common/Toast';
 
 const api = axios.create({ timeout: 120000 });
 api.interceptors.request.use(cfg => {
@@ -12,6 +13,26 @@ api.interceptors.request.use(cfg => {
   }
   return cfg;
 });
+
+// 与 api.ts 同步：超时 / 网络挂 / 5xx 统一弹 toast，4xx 留给调用方
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isCancel(error)) return Promise.reject(error);
+    const code = error?.code;
+    const status = error?.response?.status;
+    const url = error?.config?.url || '';
+    if (code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')) {
+      emitToast('error', `请求超时（${url}），后端可能仍在处理，请稍后重试`);
+    } else if (!error?.response) {
+      emitToast('error', '网络异常或后端未响应，请检查连接');
+    } else if (status && status >= 500) {
+      const detail = error.response?.data?.error || error.message || '未知错误';
+      emitToast('error', `服务端错误 ${status}：${detail}`);
+    }
+    return Promise.reject(error);
+  }
+);
 
 export interface SelfInfo {
   wxid: string;

@@ -6,6 +6,7 @@
 import axios from 'axios';
 import type { ContactStats, GlobalStats, WordCount, DBInfo, BackendStatus, TableInfo, ColumnInfo, TableData, ContactDetail, GroupInfo, GroupDetail, FilteredStats, SentimentResult, GroupChatMessage, CoolingEntry, GlobalSearchGroup, QueryResult } from '../types';
 import { getServerURL, getToken } from '../runtimeConfig';
+import { emitToast } from '../components/common/Toast';
 
 // 配置 axios 实例
 const api = axios.create({
@@ -32,10 +33,29 @@ api.interceptors.request.use(
   }
 );
 
-// 响应拦截器
+// 响应拦截器：把通用的网络/超时/服务端错误统一抛 toast，
+// 避免每个调用方各自 try-catch、用户遇到错误只看到一直转圈。
+// 业务级错误（已带 response.data.error）交给调用方决定怎么展示。
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
+    // 取消请求：调用方主动 cancel，不报错
+    if (axios.isCancel(error)) {
+      return Promise.reject(error);
+    }
+    const code = error?.code;
+    const status = error?.response?.status;
+    const url = error?.config?.url || '';
+    if (code === 'ECONNABORTED' || /timeout/i.test(error?.message || '')) {
+      emitToast('error', `请求超时（${url}），后端可能仍在处理，请稍后重试`);
+    } else if (!error?.response) {
+      // 网络层挂掉（断网 / 后端崩溃 / CORS）
+      emitToast('error', '网络异常或后端未响应，请检查连接');
+    } else if (status && status >= 500) {
+      const detail = error.response?.data?.error || error.message || '未知错误';
+      emitToast('error', `服务端错误 ${status}：${detail}`);
+    }
+    // 4xx 不主动弹 toast：通常是业务错误，调用方知道怎么处理
     console.error('API Error:', error);
     return Promise.reject(error);
   }
