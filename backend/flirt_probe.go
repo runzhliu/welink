@@ -421,6 +421,18 @@ func buildFlirtProbe(svc *service.ContactService, excluded []string) *FlirtProbe
 	}
 	resp.Timeline = allTimeline
 
+	// Go 的 nil slice 会被 json.Marshal 成 null，前端 null.length 会崩。
+	// 这里统一把可能为 nil 的数组字段兜底成空 slice。
+	if resp.TopContacts == nil {
+		resp.TopContacts = []FLContactRow{}
+	}
+	if resp.Timeline == nil {
+		resp.Timeline = []FLTimelineItem{}
+	}
+	if resp.ExcludedUsernames == nil {
+		resp.ExcludedUsernames = []string{}
+	}
+
 	t.Done(nil,
 		"scanned_contacts", len(picks),
 		"hits_contacts", resp.TotalContactsWithHits,
