@@ -108,7 +108,7 @@ export const FlirtProbe: React.FC = () => {
     if (!confirm(`把「${displayName}」从暧昧探测里排除？\n\n该联系人将不再出现在榜单上。可以随时在底部「排除名单」区移回来。`)) return;
     setExcludeBusy(username);
     try {
-      const next = [...data.excluded_usernames, username];
+      const next = [...(data.excluded_usernames ?? []), username];
       await axios.put('/api/preferences/flirt-excluded', { flirt_excluded: next });
       toast.success(`已排除「${displayName}」`);
       await fetchData(true); // 强制刷新缓存
@@ -125,7 +125,7 @@ export const FlirtProbe: React.FC = () => {
     if (!data) return;
     setExcludeBusy(username);
     try {
-      const next = data.excluded_usernames.filter(u => u !== username);
+      const next = (data.excluded_usernames ?? []).filter(u => u !== username);
       await axios.put('/api/preferences/flirt-excluded', { flirt_excluded: next });
       toast.success('已从排除名单移出');
       await fetchData(true);
@@ -202,7 +202,7 @@ export const FlirtProbe: React.FC = () => {
             {refreshing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
             刷新
           </button>
-          {data && data.top_contacts.length > 0 && (
+          {data && (data.top_contacts?.length ?? 0) > 0 && (
             <button
               onClick={exportPng}
               disabled={exporting}
@@ -310,7 +310,7 @@ export const FlirtProbe: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
                             <div className="text-sm font-semibold text-[#1d1d1f] dark:text-gray-200 truncate max-w-[160px]">{c.display_name}</div>
-                            {Object.entries(c.categories)
+                            {Object.entries(c.categories ?? {})
                               .sort((a, b) => b[1] - a[1])
                               .slice(0, 3)
                               .map(([cat, cnt]) => {
@@ -356,7 +356,7 @@ export const FlirtProbe: React.FC = () => {
                       </div>
 
                       {/* 展开：Top 高光语录 */}
-                      {isExpanded && c.top_quotes.length > 0 && (
+                      {isExpanded && (c.top_quotes?.length ?? 0) > 0 && (
                         <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-gray-100 dark:border-white/5">
                           {c.top_quotes.map((q, i) => (
                             <div key={i} className="flex items-start gap-2 text-xs">
@@ -373,16 +373,16 @@ export const FlirtProbe: React.FC = () => {
                   );
                 })}
               </div>
-              {data.top_contacts.length > top10.length && (
+              {(data.top_contacts?.length ?? 0) > top10.length && (
                 <div className="text-[10px] text-gray-400 text-center mt-3">
-                  还有 {data.top_contacts.length - top10.length} 位榜上有名；想看完整可去对应联系人详情翻聊天记录
+                  还有 {(data.top_contacts?.length ?? 0) - top10.length} 位榜上有名；想看完整可去对应联系人详情翻聊天记录
                 </div>
               )}
             </div>
           )}
 
           {/* 时间线 */}
-          {data.timeline.length > 0 && (
+          {(data.timeline?.length ?? 0) > 0 && (
             <div className="px-7 py-5 border-b border-gray-100 dark:border-white/5">
               <div className="text-sm font-bold text-[#1d1d1f] dark:text-gray-100 mb-3">
                 最近的暧昧片段
@@ -398,7 +398,7 @@ export const FlirtProbe: React.FC = () => {
                       </span>
                       <span className="text-gray-700 dark:text-gray-300 break-words">{t.snippet}</span>
                       <span className="ml-1.5">
-                        {t.categories.slice(0, 2).map(cat => {
+                        {(t.categories ?? []).slice(0, 2).map(cat => {
                           const m = CAT_META[cat];
                           if (!m) return null;
                           return <span key={cat} className={`text-[8px] ml-1 px-1 rounded ${m.bg} ${m.color}`}>{m.label}</span>;
@@ -417,7 +417,7 @@ export const FlirtProbe: React.FC = () => {
           )}
 
           {/* 排除名单管理 */}
-          {data.excluded_usernames.length > 0 && (
+          {(data.excluded_usernames?.length ?? 0) > 0 && (
             <div className="px-7 py-4 border-b border-gray-100 dark:border-white/5">
               <div className="text-xs text-gray-500 mb-2 flex items-center gap-1">
                 <EyeOff size={11} />
