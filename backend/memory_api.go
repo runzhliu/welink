@@ -44,8 +44,10 @@ func registerMemoryRoutes(api *gin.RouterGroup) {
 			whereParts = append(whereParts, "pinned = 1")
 		}
 		if q != "" {
-			whereParts = append(whereParts, "fact LIKE ?")
-			args = append(args, "%"+q+"%")
+			// LIKE 转义：用户搜 "100%" / "_abc" 时不应被当作通配符匹配，
+			// 否则 % 会展成任意串、_ 会展成单字符，返回一堆无关结果。
+			whereParts = append(whereParts, `fact LIKE ? ESCAPE '\'`)
+			args = append(args, "%"+escapeLikePattern(q)+"%")
 		}
 		where := ""
 		if len(whereParts) > 0 {
@@ -298,4 +300,12 @@ func BuildPinnedMemoryBlock(contactKey string) string {
 		fmt.Fprintf(&sb, "- %s\n", f.Fact)
 	}
 	return sb.String()
+}
+
+// escapeLikePattern 给用户输入的 LIKE 关键词转义 SQLite 通配符（% _ \）。
+// 调用方拼接 "%" + escape(q) + "%" 并配合 `ESCAPE '\'` 使用，
+// 避免用户搜 "100%" / "a_b" 时被当作通配符匹配。
+func escapeLikePattern(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
 }
