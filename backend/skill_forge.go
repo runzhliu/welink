@@ -20,6 +20,8 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -325,6 +327,40 @@ func slugify(name string) string {
 	}
 	if len([]rune(s)) > 40 {
 		s = string([]rune(s)[:40])
+	}
+	return s
+}
+
+// agentskills.io 严格 slug：
+//   - 只允许小写 a-z, 0-9, hyphen
+//   - 不能 lead/trail hyphen，不能连续 hyphen
+//   - 最长 64 字符
+//   - 中文/符号被剥光时用 fallbackSrc 的 sha256 短哈希兜底，
+//     避免一批名字（"老王"/"工作群"/"老妈"…）全部塌成同一个 slug
+//
+// spec: https://agentskills.io/specification
+var asciiSlugRe = regexp.MustCompile(`[^a-z0-9-]+`)
+var multiHyphenRe = regexp.MustCompile(`-+`)
+
+func slugifyAgentSkill(name, fallbackSrc string) string {
+	s := strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+	s = asciiSlugRe.ReplaceAllString(s, "-")
+	s = multiHyphenRe.ReplaceAllString(s, "-")
+	s = strings.Trim(s, "-")
+	if s == "" {
+		// 中文/全角符号被剥光：用原始名 hash 出稳定后缀
+		src := fallbackSrc
+		if src == "" {
+			src = name
+		}
+		if src == "" {
+			src = time.Now().Format(time.RFC3339Nano)
+		}
+		h := sha256.Sum256([]byte(src))
+		s = "skill-" + hex.EncodeToString(h[:])[:8]
+	}
+	if len(s) > 64 {
+		s = strings.TrimRight(s[:64], "-")
 	}
 	return s
 }
@@ -929,37 +965,49 @@ func whenToUse(pkg *SkillPackage) string {
 	return ""
 }
 
-// formatClaudeSkill — Claude Code Skills 目录式
+// formatClaudeSkill — agentskills.io 标准格式（Claude Code / Hermes / OpenClaw / 30+ runtime 通用）
+// spec: https://agentskills.io/specification —— dir 名必须等于 frontmatter name
 func formatClaudeSkill(pkg *SkillPackage) (map[string][]byte, string) {
-	dir := "skill-" + pkg.Name
+	// pkg.Name 是中文/符号容忍的旧 slug；这里再过一遍 agentskills.io 严格规则
+	// fallback 用 DisplayName 做哈希，避免中文名集中塌成同一个 slug
+	name := slugifyAgentSkill(pkg.Name, pkg.DisplayName)
+	dir := name
 	files := make(map[string][]byte)
 
-	// SKILL.md 主入口，带 frontmatter
+	// SKILL.md 主入口；metadata 用于回溯来源，符合 spec 的 optional metadata 段
 	frontmatter := fmt.Sprintf(`---
 name: %s
 description: %s
+metadata:
+  source: welink
+  skill_type: %s
+  display_name: %s
+  generated_at: "%s"
 ---
 
-`, pkg.Name, escapeYAML(pkg.Description))
+`, name, escapeYAML(pkg.Description), pkg.SkillType, escapeYAML(pkg.DisplayName), pkg.GeneratedAt.UTC().Format(time.RFC3339))
 	files[dir+"/SKILL.md"] = []byte(frontmatter + buildMainBody(pkg))
 
-	// 附加信息
-	files[dir+"/README.md"] = []byte(fmt.Sprintf(`# %s (Claude Code Skill)
+	// 附加信息（spec 允许任意额外文件）
+	files[dir+"/README.md"] = []byte(fmt.Sprintf(`# %s (Agent Skill)
 
-这是一个由 WeLink 生成的 Claude Code Skill。
+这是一个由 WeLink 生成的 [agentskills.io](https://agentskills.io) 标准 skill 包，
+兼容 Claude Code / Hermes-Agent / OpenClaw / Cursor / OpenCode / Goose 等 30+ runtime。
 
 ## 安装
 
-把整个 `+"`%s`"+` 目录复制到：
+把整个 `+"`%s`"+` 目录复制到对应 runtime 的 skills 目录：
 
-- 用户级：`+"`~/.claude/skills/`"+`
-- 项目级：`+"`.claude/skills/`"+`
+- **Claude Code**（用户级）：`+"`~/.claude/skills/`"+`
+- **Claude Code**（项目级）：`+"`.claude/skills/`"+`
+- **Hermes-Agent**：`+"`~/.hermes/skills/`"+`
+- **其他 runtime**：见各 runtime 文档，路径通常都叫 `+"`skills/`"+`
 
-然后重启 Claude Code，这个 skill 就会在相关对话中被自动引用。
+重启 runtime 后，这个 skill 会在相关对话中被自动引用。
 
 ## 文件结构
 
-- `+"`SKILL.md`"+` — skill 主入口（含 frontmatter）
+- `+"`SKILL.md`"+` — skill 主入口（含 frontmatter + metadata.source=welink）
 - `+"`README.md`"+` — 本文件
 `, pkg.DisplayName, dir))
 
