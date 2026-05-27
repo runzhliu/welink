@@ -290,7 +290,9 @@ export const FlirtProbe: React.FC = () => {
               </div>
               <div className="space-y-2">
                 {top10.map((c, idx) => {
-                  const widthPct = (c.total_hits / topHitsMax) * 100;
+                  // sqrt 缩放：让小数据点也有可读宽度（线性下 30:1095 = 2.7%、肉眼几乎看不见；
+                  // sqrt 后 30:1095 ≈ 16.5%，能看清是双向比例还是单向）
+                  const widthPct = Math.sqrt(c.total_hits / topHitsMax) * 100;
                   const myFrac = c.total_hits > 0 ? (c.my_hits / c.total_hits) * 100 : 0;
                   const isExpanded = expandedRow === c.username;
                   return (
@@ -326,10 +328,10 @@ export const FlirtProbe: React.FC = () => {
                                 );
                               })}
                           </div>
-                          {/* 双向条：track 固定宽度 = 0%-100% 比例尺；内层 flex 按 me/them 分两色
-                              小数量也至少 2% 宽，避免完全看不到 */}
-                          <div className="h-1.5 w-full max-w-[260px] bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
-                            <div className="h-full flex" style={{ width: `${Math.max(2, widthPct)}%` }}>
+                          {/* 双向条：track 宽度 = sqrt(占比)；内层 flex 按 me/them 分两色
+                              h-2 比 h-1.5 厚一点便于读双色；最小 8% 保证可见 */}
+                          <div className="h-2 w-full max-w-[260px] bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+                            <div className="h-full flex" style={{ width: `${Math.max(8, widthPct)}%` }}>
                               <div className="h-full bg-pink-500" style={{ width: `${myFrac}%` }} title={`我 ${c.my_hits} 次`} />
                               <div className="h-full bg-rose-400" style={{ width: `${100 - myFrac}%` }} title={`TA ${c.their_hits} 次`} />
                             </div>
