@@ -16,6 +16,7 @@ import html2canvas from 'html2canvas';
 import { prepareForCapture } from '../../utils/exportPng';
 import { avatarSrc } from '../../utils/avatar';
 import { useToast } from '../common/Toast';
+import { WelinkBrand } from './_shared';
 
 interface FLQuote {
   date: string;
@@ -450,14 +451,15 @@ export const FlirtProbe: React.FC = () => {
             </div>
           )}
 
-          <div className="px-7 py-3 bg-gray-50 dark:bg-white/5 text-[10px] text-gray-400 flex items-center justify-between border-t border-gray-100 dark:border-white/5">
-            <span>
-              已扫描 {data.scanned_contacts} 个私聊 · 命中 {data.total_contacts_with_hits} 人
-              <span className="ml-1">·</span> 双向 {data.mutual_pairs} 对
-              <Flame size={9} className="inline ml-1 text-pink-400" />
-            </span>
-            <span>WeLink · 暧昧探测</span>
-          </div>
+          <WelinkBrand
+            label="暧昧探测"
+            leftText={
+              <>
+                已扫描 {data.scanned_contacts} 个私聊 · 命中 {data.total_contacts_with_hits} 人 · 双向 {data.mutual_pairs} 对
+                <Flame size={9} className="inline ml-1 text-pink-400" />
+              </>
+            }
+          />
         </div>
       )}
     </div>

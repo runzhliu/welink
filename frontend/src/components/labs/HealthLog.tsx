@@ -17,6 +17,7 @@ import html2canvas from 'html2canvas';
 import { prepareForCapture } from '../../utils/exportPng';
 import { avatarSrc } from '../../utils/avatar';
 import { useToast } from '../common/Toast';
+import { welinkBrandHTML, WelinkBrand } from './_shared';
 
 interface ContactRow {
   username: string;
@@ -130,11 +131,11 @@ export const HealthLog: React.FC = () => {
         position: fixed; left: -10000px; top: 0; z-index: -1;
       `;
       wrapper.appendChild(node);
-      const footer = document.createElement('div');
-      footer.style.cssText =
-        'padding:14px 28px; background:#f7f8fa; color:#8a94a6; font-size:11px; text-align:center; border-top:1px solid #eef1f7;';
-      footer.innerHTML = `WeLink · 健康日记 · welink.click · ${today}`;
-      wrapper.appendChild(footer);
+      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+        label: '健康日记',
+        date: today,
+        variant: 'light',
+      }));
       document.body.appendChild(wrapper);
       await prepareForCapture(wrapper);
       const canvas = await html2canvas(wrapper, {
@@ -368,10 +369,10 @@ export const HealthLog: React.FC = () => {
             </div>
           )}
 
-          <div className="px-7 py-3 bg-gray-50 dark:bg-white/5 text-[10px] text-gray-400 flex items-center justify-between border-t border-gray-100 dark:border-white/5">
-            <span>已扫描 {data.scanned_contacts} 个联系人 · 命中 {data.contacts_with_hits} 人</span>
-            <span>WeLink · 健康日记</span>
-          </div>
+          <WelinkBrand
+            label="健康日记"
+            leftText={<>已扫描 {data.scanned_contacts} 个联系人 · 命中 {data.contacts_with_hits} 人</>}
+          />
         </div>
       )}
     </div>

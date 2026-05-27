@@ -17,6 +17,7 @@ import { TrendingUp, Loader2, Share2, Check, RefreshCw } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { prepareForCapture } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
+import { welinkBrandHTML } from './_shared';
 
 interface Opener {
   text: string;
@@ -114,11 +115,11 @@ export const LanguageEvolution: React.FC = () => {
         position: fixed; left: -10000px; top: 0; z-index: -1;
       `;
       wrapper.appendChild(node);
-      const footer = document.createElement('div');
-      footer.style.cssText =
-        'padding:14px 28px; background:#f7f8fa; color:#8a94a6; font-size:11px; text-align:center; border-top:1px solid #eef1f7;';
-      footer.innerHTML = `WeLink · 语言进化史 · welink.click · ${today}`;
-      wrapper.appendChild(footer);
+      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+        label: '语言进化史',
+        date: today,
+        variant: 'light',
+      }));
       document.body.appendChild(wrapper);
       await prepareForCapture(wrapper);
       const canvas = await html2canvas(wrapper, {

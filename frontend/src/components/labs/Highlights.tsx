@@ -13,6 +13,7 @@ import { avatarSrc } from '../../utils/avatar';
 import { prepareForCapture } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
 import { useImageTask } from '../../hooks/useImageTask';
+import { welinkBrandHTML, WelinkBrand } from './_shared';
 
 interface Props {
   contacts: ContactStats[];
@@ -125,9 +126,15 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
       node.style.color = '#1d1d1f';
       wrapper.appendChild(node);
 
+      // 共享品牌区（带 logo）放在富 footer 之前，保持 github / 版权信息独立
+      wrapper.insertAdjacentHTML('beforeend', welinkBrandHTML({
+        label: '高光瞬间 by AI',
+        date: new Date().toLocaleDateString('zh-CN'),
+        variant: 'light',
+      }));
       const footer = document.createElement('div');
       footer.style.cssText =
-        'padding:16px 28px; background:#f8f9fb; border-top: 1px solid #eee; display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#888;';
+        'padding:14px 28px; background:#f8f9fb; border-top: 1px solid #eee; display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#888;';
       footer.innerHTML = `
         <div>
           <div><strong style="color:#555">github.com/runzhliu/welink</strong></div>
@@ -309,10 +316,10 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
               })}
             </div>
 
-            <div className="px-7 py-4 bg-gray-50 dark:bg-white/5 text-[11px] text-gray-500 dark:text-gray-400 flex items-center justify-between border-t border-gray-100 dark:border-white/5">
-              <span>WeLink · 高光瞬间 by AI</span>
-              <span>{new Date().toLocaleDateString('zh-CN')}</span>
-            </div>
+            <WelinkBrand
+              label="高光瞬间 by AI"
+              leftText={<span>{new Date().toLocaleDateString('zh-CN')}</span>}
+            />
           </div>
         </>
       )}

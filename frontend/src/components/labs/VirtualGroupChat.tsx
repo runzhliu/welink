@@ -343,11 +343,14 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
         width: 720px; background: #ffffff; padding: 0; font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
         position: fixed; left: -10000px; top: 0; z-index: -1;
       `;
-      // header
+      // header —— logo + 标题；用 inline-svg 以保证 html2canvas 总能渲染
       const header = document.createElement('div');
       header.style.cssText = `background: linear-gradient(90deg, #09d46a, #06a850); padding: 20px 28px; color: white;`;
       header.innerHTML = `
-        <div style="font-size: 20px; font-weight: 900;">WeLink · AI 虚拟群聊</div>
+        <div style="font-size: 20px; font-weight: 900; display:flex; align-items:center; gap:8px;">
+          <svg width="24" height="24" viewBox="0 0 100 100" style="display:inline-block; background:white; border-radius:6px; padding:2px;"><rect width="100" height="100" rx="22" fill="#07c160"/><g transform="translate(22, 20)"><rect x="2" y="2" width="52" height="42" rx="7" fill="none" stroke="white" stroke-width="5" stroke-linejoin="round"/><line x1="14" y1="17" x2="42" y2="17" stroke="white" stroke-width="4.5" stroke-linecap="round"/><line x1="14" y1="27" x2="34" y2="27" stroke="white" stroke-width="4.5" stroke-linecap="round"/><polyline points="8,44 2,56 16,48" fill="white" stroke="white" stroke-width="1" stroke-linejoin="round"/></g></svg>
+          <span>WeLink · AI 虚拟群聊</span>
+        </div>
         <div style="font-size: 12px; opacity: 0.8; margin-top: 4px;">${topic ? `场景：${topic} · ` : ''}成员 ${members.length} 位 · 共 ${history.length} 条消息</div>
       `;
       wrapper.appendChild(header);
