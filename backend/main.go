@@ -3205,6 +3205,16 @@ func serverMain() {
 			c.JSON(http.StatusOK, getSvc().GetDayMessages(uname, date))
 		})
 
+		// 某联系人有聊天记录的日期列表（升序）—— 微信视图按天浏览跳转用
+		prot.GET("/contacts/active-dates", func(c *gin.Context) {
+			uname := c.Query("username")
+			if uname == "" {
+				c.JSON(400, gin.H{"error": "username required"})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"dates": getSvc().ContactActiveDates(uname)})
+		})
+
 		// 搜索联系人聊天记录
 		prot.GET("/contacts/search", func(c *gin.Context) {
 			uname := c.Query("username")

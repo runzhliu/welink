@@ -96,12 +96,30 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
   const toast = useToast();
   const selfInfo = useSelfInfo();
   const [date, setDate] = useState(() => pickDefaultDate(lastMessageTime));
+  const [activeDates, setActiveDates] = useState<string[]>([]);
+  const [datesLoaded, setDatesLoaded] = useState(false);
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+
+  // 拉该联系人「有记录的日期」列表，默认落到最后有记录那天
+  useEffect(() => {
+    let cancelled = false;
+    setDatesLoaded(false);
+    axios.get<{ dates: string[] }>('/api/contacts/active-dates', { params: { username } })
+      .then(r => {
+        if (cancelled) return;
+        const ds = r.data?.dates ?? [];
+        setActiveDates(ds);
+        if (ds.length > 0) setDate(ds[ds.length - 1]); // 最后有记录的一天
+      })
+      .catch(() => { /* 拿不到就退化成自由选日期 */ })
+      .finally(() => { if (!cancelled) setDatesLoaded(true); });
+    return () => { cancelled = true; };
+  }, [username]);
 
   const fetchDay = async (d: string) => {
     setLoading(true);
@@ -121,8 +139,32 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
 
   useEffect(() => { fetchDay(date); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [date, username]);
 
+  // 前一天 / 后一天：跳到「有记录的相邻日期」，而不是盲目 ±1 个自然日
+  const curIdx = activeDates.indexOf(date);
+  const goPrev = () => {
+    if (activeDates.length === 0) { setDate(shiftDate(date, -1)); return; }
+    if (curIdx > 0) setDate(activeDates[curIdx - 1]);
+    else if (curIdx === -1) {
+      // 当前日期不在列表里：跳到比它早的最近一天
+      const earlier = [...activeDates].reverse().find(d => d < date);
+      if (earlier) setDate(earlier);
+    }
+  };
+  const goNext = () => {
+    if (activeDates.length === 0) { setDate(shiftDate(date, 1)); return; }
+    if (curIdx >= 0 && curIdx < activeDates.length - 1) setDate(activeDates[curIdx + 1]);
+    else if (curIdx === -1) {
+      // 当前日期不在列表里：跳到比它晚的最近一天
+      const later = activeDates.find(d => d > date);
+      if (later) setDate(later);
+    }
+  };
+  const firstDate = activeDates[0];
+  const lastDate = activeDates[activeDates.length - 1];
+  const canPrev = activeDates.length === 0 || (firstDate !== undefined && date > firstDate);
+  const canNext = activeDates.length === 0 || (lastDate !== undefined && date < lastDate);
+
   const today = new Date().toISOString().slice(0, 10);
-  const atToday = date >= today;
 
   const exportPng = async () => {
     if (!cardRef.current || exporting || msgs.length === 0) return;
@@ -149,9 +191,10 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => setDate(shiftDate(date, -1))}
-            className="p-1.5 rounded-lg bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/15 transition-colors"
-            title="前一天"
+            onClick={goPrev}
+            disabled={!canPrev}
+            className="p-1.5 rounded-lg bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/15 disabled:opacity-30 transition-colors"
+            title="上一个有记录的日期"
           >
             <ChevronLeft size={16} />
           </button>
@@ -159,20 +202,25 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
             <input
               type="date"
               value={date}
+              min={firstDate}
               max={today}
               onChange={(e) => e.target.value && setDate(e.target.value)}
               className="text-sm font-semibold text-[#1d1d1f] dark:text-gray-200 bg-gray-100 dark:bg-white/10 rounded-lg pl-2.5 pr-2 py-1.5 outline-none focus:ring-2 focus:ring-[#07c160]/30"
             />
           </div>
           <button
-            onClick={() => setDate(shiftDate(date, 1))}
-            disabled={atToday}
+            onClick={goNext}
+            disabled={!canNext}
             className="p-1.5 rounded-lg bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/15 disabled:opacity-30 transition-colors"
-            title="后一天"
+            title="下一个有记录的日期"
           >
             <ChevronRight size={16} />
           </button>
-          <Calendar size={13} className="text-gray-400 ml-1" />
+          {datesLoaded && activeDates.length > 0 && (
+            <span className="text-[11px] text-gray-400 ml-1 inline-flex items-center gap-1">
+              <Calendar size={12} />共 {activeDates.length} 天有记录
+            </span>
+          )}
         </div>
         {msgs.length > 0 && (
           <button
