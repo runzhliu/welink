@@ -34,6 +34,9 @@ interface LabDef {
   label: string;
   icon: React.ReactNode;
   badge?: string;
+  // 主功能会调 LLM / embedding API（产生外部请求 + 费用 + 等待时间）。
+  // 在 tab 上用「AI」标提示用户，免得点进去才发现要等十几秒。
+  llm?: boolean;
   desc: string;
 }
 
@@ -42,6 +45,7 @@ const LABS: LabDef[] = [
     key: 'highlights',
     label: '高光瞬间',
     icon: <Sparkles size={14} />,
+    llm: true,
     desc: '挑一位联系人，AI 从全部聊天里挑出最有故事感的几段',
   },
   {
@@ -63,6 +67,7 @@ const LABS: LabDef[] = [
     label: '这句话谁说过',
     icon: <Search size={14} />,
     badge: 'NEW',
+    llm: true,
     desc: '输入一句话，跨全库语义反查谁说过最像的话——找回那句"我记得有人说过"',
   },
   {
@@ -77,6 +82,7 @@ const LABS: LabDef[] = [
     label: '人情债',
     icon: <HeartHandshake size={14} />,
     badge: 'NEW',
+    llm: true,
     desc: 'AI 挖出"答应了但没做"的承诺与邀约：下次约饭 / 改天找时间 / 我寄给你 ……看看 TA 欠你 vs 你欠 TA',
   },
   {
@@ -133,6 +139,7 @@ const LABS: LabDef[] = [
     label: '灵魂提问机',
     icon: <HelpCircle size={14} />,
     badge: 'NEW',
+    llm: true,
     desc: 'AI 出 5 道默契测试题，发给好友看 ta 还记得多少',
   },
   {
@@ -147,12 +154,14 @@ const LABS: LabDef[] = [
     label: '平行宇宙',
     icon: <Atom size={14} />,
     badge: 'NEW',
+    llm: true,
     desc: '"如果……" 的虚构对话，AI 用 ta 的风格演一遍',
   },
   {
     key: 'virtual-group',
     label: 'AI 虚拟群聊',
     icon: <Users2 size={14} />,
+    llm: true,
     desc: '把任意联系人拉到一个虚拟群，AI 扮演每个人互相聊天',
   },
 ];
@@ -186,6 +195,16 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
           >
             {lab.icon}
             {lab.label}
+            {lab.llm && (
+              <span
+                title="主功能会调用 LLM / embedding API（产生外部请求与等待时间）"
+                className={`ml-1 px-1 py-0.5 rounded text-[9px] font-black ${
+                  active === lab.key ? 'bg-white/30' : 'bg-purple-500/15 text-purple-600 dark:text-purple-300'
+                }`}
+              >
+                AI
+              </span>
+            )}
             {lab.badge && (
               <span className={`ml-1 px-1 py-0.5 rounded text-[9px] font-black ${
                 active === lab.key ? 'bg-white/30' : 'bg-[#07c160]/15 text-[#07c160]'
