@@ -121,23 +121,27 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
     return () => { cancelled = true; };
   }, [username]);
 
-  const fetchDay = async (d: string) => {
+  // 按天拉消息。带取消守卫：切换联系人/日期时，旧请求的迟到响应不能覆盖新数据
+  // （否则会出现 B 的头部下显示 A 的消息、或慢请求把正确数据冲掉的竞态）。
+  useEffect(() => {
+    let ignore = false;
     setLoading(true);
     setErr('');
-    try {
-      const r = await axios.get<ChatMsg[]>('/api/contacts/messages', { params: { username, date: d } });
-      setMsgs(Array.isArray(r.data) ? r.data : []);
-    } catch (e) {
-      const msg = (e as { response?: { data?: { error?: string } }; message?: string })
-        ?.response?.data?.error || (e as Error).message || '加载失败';
-      setErr(msg);
-      setMsgs([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchDay(date); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [date, username]);
+    axios.get<ChatMsg[]>('/api/contacts/messages', { params: { username, date } })
+      .then(r => {
+        if (ignore) return;
+        setMsgs(Array.isArray(r.data) ? r.data : []);
+      })
+      .catch(e => {
+        if (ignore) return;
+        const msg = (e as { response?: { data?: { error?: string } }; message?: string })
+          ?.response?.data?.error || (e as Error).message || '加载失败';
+        setErr(msg);
+        setMsgs([]);
+      })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
+  }, [date, username]);
 
   // 前一天 / 后一天：跳到「有记录的相邻日期」，而不是盲目 ±1 个自然日
   const curIdx = activeDates.indexOf(date);
