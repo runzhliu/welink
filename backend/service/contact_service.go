@@ -226,6 +226,8 @@ type ContactService struct {
 	monthlyByUserMu    sync.RWMutex
 	latencyByUsername  map[string]LatencyStats // 关系预测用：username -> 回复时延统计
 	latencyByUserMu    sync.RWMutex
+	activeDatesCache   map[string][]string // 微信视图用：username -> 有记录的日期列表（静态库不变，长期缓存）
+	activeDatesMu      sync.RWMutex
 }
 
 // MonthBucket 单月消息桶，用于关系预测的主动占比分析

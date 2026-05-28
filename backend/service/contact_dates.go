@@ -17,7 +17,19 @@ import (
 //
 // 只算真正的对话消息（文本/图片/语音/视频/表情/链接红包）。
 // 扫全表但只回 distinct 日期，结果很小（最多几百条）。
+//
+// 实例级缓存：解密库是静态的，同一 username 的日期列表不会变；切换 profile 会
+// 重建 ContactService，缓存自然失效。避免每次打开「微信视图」都全表扫一遍。
 func (s *ContactService) ContactActiveDates(username string) []string {
+	s.activeDatesMu.RLock()
+	if s.activeDatesCache != nil {
+		if cached, ok := s.activeDatesCache[username]; ok {
+			s.activeDatesMu.RUnlock()
+			return cached
+		}
+	}
+	s.activeDatesMu.RUnlock()
+
 	tableName := db.GetTableName(username)
 
 	seen := make(map[string]struct{}, 512)
@@ -45,5 +57,13 @@ func (s *ContactService) ContactActiveDates(username string) []string {
 		dates = append(dates, d)
 	}
 	sort.Strings(dates)
+
+	s.activeDatesMu.Lock()
+	if s.activeDatesCache == nil {
+		s.activeDatesCache = make(map[string][]string, 64)
+	}
+	s.activeDatesCache[username] = dates
+	s.activeDatesMu.Unlock()
+
 	return dates
 }
