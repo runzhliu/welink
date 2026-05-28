@@ -15,7 +15,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { ChevronLeft, ChevronRight, Calendar, Loader2, Share2, Check, MoreHorizontal, ChevronLeft as Back } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Loader2, Share2, Check, MoreHorizontal, ChevronLeft as Back, User } from 'lucide-react';
 import { avatarSrc } from '../../utils/avatar';
 import { useSelfInfo } from '../../contexts/SelfInfoContext';
 import { captureCardToPng } from '../../utils/exportPng';
@@ -47,6 +47,33 @@ function shiftDate(date: string, deltaDays: number): string {
   d.setDate(d.getDate() + deltaDays);
   return d.toISOString().slice(0, 10);
 }
+
+// "HH:MM" → 当天分钟数；解析失败返回 -1
+function toMinutes(t: string): number {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t);
+  if (!m) return -1;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+// "21:04" → 微信风格 "晚上9:04"（带时段前缀 + 12 小时制）
+function wechatTime(t: string): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t);
+  if (!m) return t;
+  const h = parseInt(m[1], 10);
+  const mm = m[2];
+  let period = '';
+  if (h < 5) period = '凌晨';
+  else if (h < 8) period = '早上';
+  else if (h < 12) period = '上午';
+  else if (h < 13) period = '中午';
+  else if (h < 18) period = '下午';
+  else period = '晚上';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${period}${h12}:${mm}`;
+}
+
+// 真微信只在"会话开头"或"距上一条间隔较大"时插一条居中时间，不是每条都带。
+const TIME_GAP_MIN = 5;
 
 // 媒体类型 → 占位气泡的图标/文案。文本(1)返回 null（正常渲染内容）
 function mediaLabel(type: number, content: string): string | null {
@@ -188,10 +215,25 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
               <>
                 {/* 居中日期分隔 */}
                 <div className="flex justify-center mb-3">
-                  <span className="text-[11px] text-white bg-[#dadada] rounded px-2 py-0.5">{date}</span>
+                  <span className="text-[12px] text-[#a5a5a5]">{date}</span>
                 </div>
-                <div className="space-y-3">
-                  {msgs.map((m, i) => <Bubble key={i} m={m} displayName={displayName} avatarUrl={avatarUrl} myAvatar={myAvatar} />)}
+                <div className="space-y-2.5">
+                  {msgs.map((m, i) => {
+                    // 真微信：开头 + 间隔 ≥ 5 分钟时插一条居中时间
+                    const prevMin = i > 0 ? toMinutes(msgs[i - 1].time) : -999;
+                    const curMin = toMinutes(m.time);
+                    const showTime = i === 0 || (curMin >= 0 && prevMin >= 0 && curMin - prevMin >= TIME_GAP_MIN);
+                    return (
+                      <React.Fragment key={i}>
+                        {showTime && (
+                          <div className="flex justify-center py-1">
+                            <span className="text-[12px] text-[#a5a5a5]">{wechatTime(m.time)}</span>
+                          </div>
+                        )}
+                        <Bubble m={m} displayName={displayName} avatarUrl={avatarUrl} myAvatar={myAvatar} selfName={selfInfo?.nickname} />
+                      </React.Fragment>
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -207,54 +249,59 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
 };
 
 // 单条气泡
-const Bubble: React.FC<{ m: ChatMsg; displayName: string; avatarUrl?: string; myAvatar?: string }> = ({ m, displayName, avatarUrl, myAvatar }) => {
+const Bubble: React.FC<{ m: ChatMsg; displayName: string; avatarUrl?: string; myAvatar?: string; selfName?: string }> = ({ m, displayName, avatarUrl, myAvatar, selfName }) => {
   const media = mediaLabel(m.type, m.content);
   const mine = m.is_mine;
-
   const avatar = mine ? myAvatar : avatarUrl;
-  const fallbackChar = mine ? '我' : (displayName.charAt(0) || '?');
-  const fallbackBg = mine ? 'bg-[#07c160]' : 'bg-[#576b95]';
+  const bubbleColor = mine ? '#95ec69' : '#ffffff';
+
+  // CSS 三角尖角：贴在气泡靠头像那侧、顶部 ~13px 处（微信经典位置）
+  const tailStyle: React.CSSProperties = mine
+    ? { right: -5, top: 13, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: `6px solid ${bubbleColor}` }
+    : { left: -5, top: 13, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderRight: `6px solid ${bubbleColor}` };
 
   return (
-    <div className={`flex items-start gap-2 ${mine ? 'flex-row-reverse' : 'flex-row'}`}>
-      {/* 头像：圆角方块 */}
-      {avatar ? (
-        <img
-          src={avatarSrc(avatar) || ''}
-          alt=""
-          className="w-9 h-9 rounded-[5px] object-cover flex-shrink-0 bg-gray-200"
-          onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
-        />
-      ) : (
-        <div className={`w-9 h-9 rounded-[5px] flex-shrink-0 flex items-center justify-center text-white text-xs font-bold ${fallbackBg}`}>
-          {fallbackChar}
-        </div>
-      )}
+    <div className={`flex items-start gap-2.5 ${mine ? 'flex-row-reverse' : 'flex-row'}`}>
+      {/* 头像：圆角方块；无头像时用中性灰 + 人形图标（不再是绿色"我"方块） */}
+      <Avatar src={avatar} fallbackChar={mine ? (selfName?.charAt(0) || '') : (displayName.charAt(0) || '')} />
 
       {/* 气泡 + 尖角 */}
-      <div className={`relative max-w-[68%] ${mine ? 'mr-0' : 'ml-0'}`}>
+      <div className="relative max-w-[70%]">
         <div
-          className={`relative px-3 py-2 text-[15px] leading-[1.4] break-words whitespace-pre-wrap ${
-            mine ? 'bg-[#95ec69] text-[#181818]' : 'bg-white text-[#181818]'
-          }`}
-          style={{ borderRadius: 6 }}
+          className="relative px-3 py-2 text-[16px] leading-[1.45] break-words whitespace-pre-wrap text-[#181818]"
+          style={{ background: bubbleColor, borderRadius: 5 }}
         >
           {media ? (
             <span className="inline-flex items-center gap-1 text-[#576b95]">
-              <span className="text-base">{mediaIcon(media)}</span>
-              <span className="text-[13px]">[{media}]</span>
+              <span className="text-[15px]">{mediaIcon(media)}</span>
+              <span className="text-[14px]">{media}</span>
             </span>
           ) : (
             m.content
           )}
-          {/* 尖角：用绝对定位的小方块旋转 45° 模拟 */}
-          <span
-            className={`absolute top-3 w-2 h-2 rotate-45 ${mine ? 'bg-[#95ec69] -right-1' : 'bg-white -left-1'}`}
-          />
+          <span className="absolute w-0 h-0" style={tailStyle} />
         </div>
-        {/* 时间：微信里默认不显示每条时间，这里放在气泡下方小灰字便于回溯 */}
-        <div className={`text-[10px] text-[#b2b2b2] mt-0.5 ${mine ? 'text-right' : 'text-left'}`}>{m.time}</div>
       </div>
+    </div>
+  );
+};
+
+// 头像：圆角方块；有图显图，无图显灰底人形（接近微信默认头像观感）
+const Avatar: React.FC<{ src?: string; fallbackChar: string }> = ({ src, fallbackChar }) => {
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
+    return (
+      <img
+        src={avatarSrc(src) || ''}
+        alt=""
+        className="w-10 h-10 rounded-[5px] object-cover flex-shrink-0 bg-[#d8d8d8]"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <div className="w-10 h-10 rounded-[5px] flex-shrink-0 flex items-center justify-center bg-[#c8c8c8] text-white">
+      {fallbackChar ? <span className="text-sm font-semibold">{fallbackChar}</span> : <User size={20} className="text-white/90" />}
     </div>
   );
 };
