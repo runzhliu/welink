@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search, Quote, HeartHandshake, TrendingUp, Globe2, HeartPulse, Flame } from 'lucide-react';
+import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search, Quote, HeartHandshake, TrendingUp, Globe2, HeartPulse, Flame, Zap } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { VirtualGroupChat } from './VirtualGroupChat';
 import { Highlights } from './Highlights';
@@ -22,12 +22,13 @@ import { LanguageEvolution } from './LanguageEvolution';
 import { ChatGeography } from './ChatGeography';
 import { HealthLog } from './HealthLog';
 import { FlirtProbe } from './FlirtProbe';
+import { ReplySpeed } from './ReplySpeed';
 
 interface Props {
   contacts: ContactStats[];
 }
 
-type LabKey = 'highlights' | 'dna' | 'drift' | 'echo' | 'golden-quotes' | 'promise-debts' | 'language-evolution' | 'chat-geography' | 'health-log' | 'flirt-probe' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
+type LabKey = 'highlights' | 'dna' | 'drift' | 'echo' | 'golden-quotes' | 'promise-debts' | 'language-evolution' | 'chat-geography' | 'health-log' | 'flirt-probe' | 'reply-speed' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
 
 interface LabDef {
   key: LabKey;
@@ -112,6 +113,13 @@ const LABS: LabDef[] = [
     icon: <Flame size={14} />,
     badge: 'NEW',
     desc: '扫私聊里的 5 类暧昧痕迹（亲昵称呼 / 想念 / 深夜亲密 / 暧昧动作 / 暧昧表情），看跟谁聊得最有"暧昧浓度"',
+  },
+  {
+    key: 'reply-speed',
+    label: '回复速度榜',
+    icon: <Zap size={14} />,
+    badge: 'NEW',
+    desc: '双向回复延迟中位数：谁秒回你（TA 把你当回事）/ 你秒回谁（你把 TA 当回事）/ 最不对等。纯时间戳，零 LLM',
   },
   {
     key: 'group-roi',
@@ -226,6 +234,7 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
       {active === 'chat-geography' && <ChatGeography />}
       {active === 'health-log' && <HealthLog />}
       {active === 'flirt-probe' && <FlirtProbe />}
+      {active === 'reply-speed' && <ReplySpeed />}
       {active === 'group-roi' && <GroupROI />}
       {active === 'group-wrapped' && <GroupWrapped />}
       {active === 'milestones' && <Milestones contacts={contacts} />}

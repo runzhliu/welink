@@ -3073,6 +3073,9 @@ func serverMain() {
 		// 创意实验室 · 暧昧探测（5 类暧昧信号扫描 + 双向度统计，零 LLM）
 		registerFlirtProbeRoutes(prot, getSvc)
 
+		// 创意实验室 · 回复速度榜（双向回复延迟中位数 + 不对等度，零 LLM）
+		registerReplySpeedRoutes(prot, getSvc)
+
 		// 群聊 AI 年报
 		registerGroupYearReviewRoutes(prot, getSvc)
 
