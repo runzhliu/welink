@@ -403,6 +403,7 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
                           targetTime: msg.time,
                           targetContent: msg.content,
                           isGroup: group.is_group,
+                          avatarUrl: group.is_group ? undefined : (group.small_head_url || undefined),
                         })}
                         title="点击查看当天完整对话"
                       >

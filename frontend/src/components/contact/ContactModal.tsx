@@ -866,6 +866,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                         targetTime: msg.time,
                         targetContent: msg.content,
                         isGroup: false,
+                        avatarUrl: avatarUrl || undefined,
                       })}
                       title="点击查看当天完整对话"
                     >
