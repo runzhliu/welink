@@ -26,6 +26,7 @@ const PodcastModal       = lazy(() => import('./PodcastModal').then(m => ({ defa
 const VNModal            = lazy(() => import('./VNModal').then(m => ({ default: m.VNModal })));
 const ForgeSkillModal    = lazy(() => import('./ForgeSkillModal').then(m => ({ default: m.ForgeSkillModal })));
 const SearchContextModal = lazy(() => import('../search/SearchContextModal').then(m => ({ default: m.SearchContextModal })));
+const WeChatView         = lazy(() => import('./WeChatView').then(m => ({ default: m.WeChatView })));
 
 const TabLoading: React.FC = () => (
   <div className="flex items-center justify-center h-48 text-gray-400">
@@ -46,7 +47,7 @@ interface ContactModalProps {
   initialQuery?: string;
 }
 
-type ModalTab = 'wordcloud' | 'detail' | 'sentiment' | 'search' | 'ai' | 'clone' | 'insights' | 'replay';
+type ModalTab = 'wordcloud' | 'detail' | 'sentiment' | 'search' | 'wechat' | 'ai' | 'clone' | 'insights' | 'replay';
 
 function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
 function shiftDays(n: number) {
@@ -664,7 +665,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         {/* Tabs + 消息范围切换 */}
         <div className="flex items-center justify-between mb-6 dk-border border-b border-gray-100">
           <div className="flex gap-2">
-            {(['wordcloud', 'detail', 'sentiment', 'search', 'replay', 'ai', 'clone', 'insights'] as ModalTab[]).map((t) => (
+            {(['wordcloud', 'detail', 'sentiment', 'search', 'wechat', 'replay', 'ai', 'clone', 'insights'] as ModalTab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => {
@@ -682,7 +683,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
               >
                 {t === 'ai' && <Bot size={13} className="flex-shrink-0" />}
                 {t === 'clone' && <Sparkles size={13} className="flex-shrink-0" />}
-                {t === 'wordcloud' ? '词云分析' : t === 'detail' ? '深度画像' : t === 'sentiment' ? '情感分析' : t === 'search' ? '搜索记录' : t === 'ai' ? 'AI 分析' : t === 'clone' ? 'AI 分身' : t === 'insights' ? 'AI 洞察' : '回放'}
+                {t === 'wordcloud' ? '词云分析' : t === 'detail' ? '深度画像' : t === 'sentiment' ? '情感分析' : t === 'search' ? '搜索记录' : t === 'wechat' ? '微信视图' : t === 'ai' ? 'AI 分析' : t === 'clone' ? 'AI 分身' : t === 'insights' ? 'AI 洞察' : '回放'}
               </button>
             ))}
           </div>
@@ -803,6 +804,15 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
               displayName={displayName}
               avatarUrl={avatarUrl || undefined}
               onClose={() => setTab('wordcloud')}
+            />
+          )}
+
+          {tab === 'wechat' && (
+            <WeChatView
+              username={contact.username}
+              displayName={displayName}
+              avatarUrl={avatarUrl || undefined}
+              lastMessageTime={contact.last_message_time}
             />
           )}
         </Suspense>
