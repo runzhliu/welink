@@ -317,14 +317,16 @@ const Bubble: React.FC<{ m: ChatMsg; displayName: string; avatarUrl?: string; my
       {/* 头像：圆角方块；无头像时用中性灰 + 人形图标（不再是绿色"我"方块） */}
       <Avatar src={avatar} fallbackChar={mine ? (selfName?.charAt(0) || '') : (displayName.charAt(0) || '')} />
 
-      {/* 气泡 + 尖角 */}
+      {/* 气泡 + 尖角。
+          line-height 用紧凑值：html2canvas 截图时把文字按行框顶部对齐，行高过大
+          单行气泡下方会留一截空白（看着"字没在中间"）。1.3 + 对称 py 视觉居中。 */}
       <div className="relative max-w-[70%]">
         <div
-          className="relative px-3 py-2 text-[16px] leading-[1.45] break-words whitespace-pre-wrap text-[#181818]"
-          style={{ background: bubbleColor, borderRadius: 5 }}
+          className="relative px-3 py-2 text-[16px] break-words whitespace-pre-wrap text-[#181818]"
+          style={{ background: bubbleColor, borderRadius: 5, lineHeight: 1.3 }}
         >
           {media ? (
-            <span className="inline-flex items-center gap-1 text-[#576b95]">
+            <span className="inline-flex items-center gap-1 text-[#576b95]" style={{ lineHeight: 1.3 }}>
               <span className="text-[15px]">{mediaIcon(media)}</span>
               <span className="text-[14px]">{media}</span>
             </span>
