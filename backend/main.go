@@ -3076,6 +3076,9 @@ func serverMain() {
 		// 创意实验室 · 回复速度榜（双向回复延迟中位数 + 不对等度，零 LLM）
 		registerReplySpeedRoutes(prot, getSvc)
 
+		// 创意实验室 · 主动指数榜（谁先开口，开场占比，零 LLM）
+		registerInitiativeRoutes(prot, getSvc)
+
 		// 群聊 AI 年报
 		registerGroupYearReviewRoutes(prot, getSvc)
 

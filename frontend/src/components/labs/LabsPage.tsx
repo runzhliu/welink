@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search, Quote, HeartHandshake, TrendingUp, Globe2, HeartPulse, Flame, Zap } from 'lucide-react';
+import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search, Quote, HeartHandshake, TrendingUp, Globe2, HeartPulse, Flame, Zap, Hand } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { VirtualGroupChat } from './VirtualGroupChat';
 import { Highlights } from './Highlights';
@@ -23,12 +23,13 @@ import { ChatGeography } from './ChatGeography';
 import { HealthLog } from './HealthLog';
 import { FlirtProbe } from './FlirtProbe';
 import { ReplySpeed } from './ReplySpeed';
+import { InitiativeRank } from './InitiativeRank';
 
 interface Props {
   contacts: ContactStats[];
 }
 
-type LabKey = 'highlights' | 'dna' | 'drift' | 'echo' | 'golden-quotes' | 'promise-debts' | 'language-evolution' | 'chat-geography' | 'health-log' | 'flirt-probe' | 'reply-speed' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
+type LabKey = 'highlights' | 'dna' | 'drift' | 'echo' | 'golden-quotes' | 'promise-debts' | 'language-evolution' | 'chat-geography' | 'health-log' | 'flirt-probe' | 'reply-speed' | 'initiative' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
 
 interface LabDef {
   key: LabKey;
@@ -120,6 +121,13 @@ const LABS: LabDef[] = [
     icon: <Zap size={14} />,
     badge: 'NEW',
     desc: '双向回复延迟中位数：谁秒回你（TA 把你当回事）/ 你秒回谁（你把 TA 当回事）/ 最不对等。纯时间戳，零 LLM',
+  },
+  {
+    key: 'initiative',
+    label: '主动指数榜',
+    icon: <Hand size={14} />,
+    badge: 'NEW',
+    desc: '谁先开口？统计每段对话的开场方：你主动找的人 / 主动找你的人 / 最不对等。和回复速度榜互补，零 LLM',
   },
   {
     key: 'group-roi',
@@ -235,6 +243,7 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
       {active === 'health-log' && <HealthLog />}
       {active === 'flirt-probe' && <FlirtProbe />}
       {active === 'reply-speed' && <ReplySpeed />}
+      {active === 'initiative' && <InitiativeRank />}
       {active === 'group-roi' && <GroupROI />}
       {active === 'group-wrapped' && <GroupWrapped />}
       {active === 'milestones' && <Milestones contacts={contacts} />}
