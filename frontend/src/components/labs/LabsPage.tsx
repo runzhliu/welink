@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search, Quote, HeartHandshake, TrendingUp, Globe2, HeartPulse, Flame, Zap, Hand } from 'lucide-react';
+import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search, Quote, HeartHandshake, TrendingUp, Globe2, HeartPulse, Flame, Zap, Hand, Waves, LayoutGrid } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { VirtualGroupChat } from './VirtualGroupChat';
 import { Highlights } from './Highlights';
@@ -24,12 +24,14 @@ import { HealthLog } from './HealthLog';
 import { FlirtProbe } from './FlirtProbe';
 import { ReplySpeed } from './ReplySpeed';
 import { InitiativeRank } from './InitiativeRank';
+import { SocialFlow } from './SocialFlow';
+import { TopicMap } from './TopicMap';
 
 interface Props {
   contacts: ContactStats[];
 }
 
-type LabKey = 'highlights' | 'dna' | 'drift' | 'echo' | 'golden-quotes' | 'promise-debts' | 'language-evolution' | 'chat-geography' | 'health-log' | 'flirt-probe' | 'reply-speed' | 'initiative' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
+type LabKey = 'highlights' | 'dna' | 'drift' | 'social-flow' | 'topic-map' | 'echo' | 'golden-quotes' | 'promise-debts' | 'language-evolution' | 'chat-geography' | 'health-log' | 'flirt-probe' | 'reply-speed' | 'initiative' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
 
 interface LabDef {
   key: LabKey;
@@ -61,6 +63,21 @@ const LABS: LabDef[] = [
     label: '断联预警',
     icon: <AlertCircle size={14} />,
     desc: '找出消息频率从高变低、超过 30 天没说话的老朋友',
+  },
+  {
+    key: 'social-flow',
+    label: '社交圈流动榜',
+    icon: <Waves size={14} />,
+    badge: 'NEW',
+    desc: '今年 12 个月 vs 去年同期：谁新晋核心 / 谁悄然淡出 / 谁逆袭回归，看你社交圈这一年的人事变迁。零 LLM',
+  },
+  {
+    key: 'topic-map',
+    label: '话题图谱',
+    icon: <LayoutGrid size={14} />,
+    llm: true,
+    badge: 'NEW',
+    desc: '「我这一年都在聊什么」——本地抽高频词，AI 聚成有名字的主题（考研冲刺 / 装修选材 / 猫猫日常…），还标出每个主题最常和谁聊',
   },
   {
     key: 'echo',
@@ -221,6 +238,8 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
       {active === 'highlights' && <Highlights contacts={contacts} />}
       {active === 'dna' && <ChatDNA />}
       {active === 'drift' && <DriftAlert />}
+      {active === 'social-flow' && <SocialFlow />}
+      {active === 'topic-map' && <TopicMap />}
       {active === 'echo' && <EchoSearch />}
       {active === 'golden-quotes' && <GoldenQuotes />}
       {active === 'promise-debts' && <PromiseDebts contacts={contacts} />}

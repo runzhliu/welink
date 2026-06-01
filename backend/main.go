@@ -3079,6 +3079,12 @@ func serverMain() {
 		// 创意实验室 · 主动指数榜（谁先开口，开场占比，零 LLM）
 		registerInitiativeRoutes(prot, getSvc)
 
+		// 创意实验室 · 社交圈年度流动榜（今年 vs 去年：谁新晋/谁淡出/谁回归，零 LLM）
+		registerSocialFlowRoutes(prot, getSvc)
+
+		// 创意实验室 · 话题图谱（本地抽高频词 → LLM 聚成有名字的主题，AI）
+		registerTopicMapRoutes(prot, getSvc)
+
 		// 群聊 AI 年报
 		registerGroupYearReviewRoutes(prot, getSvc)
 

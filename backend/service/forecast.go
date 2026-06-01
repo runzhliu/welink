@@ -229,6 +229,59 @@ func (s *ContactService) GetRelationshipForecast(topN int, includeAll bool) Fore
 	return resp
 }
 
+// YearWindow 一个联系人在某 12 个月窗口里的消息量与我方占比。
+type YearWindow struct {
+	Total int // 该窗口总条数（我+对方）
+	Mine  int // 我发的条数
+}
+
+// GetYearlyBuckets 返回每个联系人「今年 12 个月」与「去年 12 个月」两个滑动窗口的消息量。
+// 供「社交圈年度流动榜」Lab 使用：对比这一年 vs 上一年，看谁新晋 / 谁淡出 / 谁逆袭回归。
+//
+// 窗口定义（以当前所在月为锚点，滑动而非自然年，避免 1 月时今年样本太少）：
+//   - this: 最近 12 个完整月（含当月）
+//   - last: 第 13~24 个月前
+//
+// 返回 map[username] -> {this, last}，以及锚点月份字符串（"2006-01"，当月）。
+// 只返回两个窗口至少有一个 Total>0 的联系人。
+func (s *ContactService) GetYearlyBuckets() (buckets map[string]struct{ This, Last YearWindow }, anchorMonth string) {
+	s.monthlyByUserMu.RLock()
+	monthlyMap := s.monthlyByUsername
+	s.monthlyByUserMu.RUnlock()
+
+	now := time.Now().In(s.tz)
+	anchorMonth = now.Format("2006-01")
+
+	// 24 个月的 key（0 = 当月，23 = 23 月前）
+	monthKeys := make([]string, 24)
+	for i := 0; i < 24; i++ {
+		monthKeys[i] = now.AddDate(0, -i, 0).Format("2006-01")
+	}
+
+	buckets = make(map[string]struct{ This, Last YearWindow }, len(monthlyMap))
+	for username, bucket := range monthlyMap {
+		if bucket == nil {
+			continue
+		}
+		var this, last YearWindow
+		for i := 0; i < 12; i++ {
+			b := bucket[monthKeys[i]]
+			this.Total += b.Total
+			this.Mine += b.Mine
+		}
+		for i := 12; i < 24; i++ {
+			b := bucket[monthKeys[i]]
+			last.Total += b.Total
+			last.Mine += b.Mine
+		}
+		if this.Total == 0 && last.Total == 0 {
+			continue
+		}
+		buckets[username] = struct{ This, Last YearWindow }{this, last}
+	}
+	return buckets, anchorMonth
+}
+
 func classifyForecast(recent3, prior3, daysSinceLast int) (string, int) {
 	var trendPct int
 	if prior3 > 0 {
