@@ -2753,6 +2753,25 @@ func (s *ContactService) loadGroups() []GroupInfo {
 	cutoff3m := nowSec - 90*86400
 	cutoff6m := nowSec - 180*86400
 
+	// Name2Id（rowid → wxid）对同一个 message DB 是固定的，与具体群无关。
+	// 原实现对每个群 × 每个 DB 都重新扫一遍 Name2Id（415 群 × 10 库 = 4150 次全表扫描，
+	// 每次最多读 ~6700 行），这是 /groups 首次加载超时的主因。
+	// 这里改成在群循环外、每个 DB 只扫一次，群循环里直接复用。
+	id2wxidByDB := make([]map[int64]string, len(s.dbMgr.MessageDBs))
+	for i, mdb := range s.dbMgr.MessageDBs {
+		m := make(map[int64]string, 4096)
+		if nrows, nerr := mdb.Query("SELECT rowid, user_name FROM Name2Id"); nerr == nil {
+			for nrows.Next() {
+				var rid int64
+				var uname string
+				nrows.Scan(&rid, &uname)
+				m[rid] = uname
+			}
+			nrows.Close()
+		}
+		id2wxidByDB[i] = m
+	}
+
 	result := make([]GroupInfo, 0, len(groups))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -2790,16 +2809,8 @@ func (s *ContactService) loadGroups() []GroupInfo {
 			if twGroups != "" {
 				groupMemberQuery = "SELECT real_sender_id, COUNT(*), MAX(create_time) FROM [%s]" + twGroups + " AND real_sender_id > 0 GROUP BY real_sender_id"
 			}
-			for _, mdb := range s.dbMgr.MessageDBs {
-				id2wxid := make(map[int64]string)
-				if nrows, nerr := mdb.Query("SELECT rowid, user_name FROM Name2Id"); nerr == nil {
-					for nrows.Next() {
-						var rid int64; var uname string
-						nrows.Scan(&rid, &uname)
-						id2wxid[rid] = uname
-					}
-					nrows.Close()
-				}
+			for dbIdx, mdb := range s.dbMgr.MessageDBs {
+				id2wxid := id2wxidByDB[dbIdx] // 群循环外已构建好，直接复用（只读，不会被并发修改）
 				mrows, merr := mdb.Query(fmt.Sprintf(groupMemberQuery, tableName))
 				if merr != nil { continue }
 				for mrows.Next() {
