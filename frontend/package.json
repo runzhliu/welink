@@ -13,7 +13,7 @@
     "@types/marked": "^5.0.2",
     "axios": "^1.6.2",
     "html2canvas": "^1.4.1",
-    "lucide-react": "^0.294.0",
+    "lucide-react": "^1.17.0",
     "marked": "^17.0.5",
     "qrcode": "^1.5.4",
     "react": "^18.2.0",
