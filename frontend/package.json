@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tailwindcss/typography": "^0.5.19",
+    "@tailwindcss/typography": "^0.5.20",
     "@types/marked": "^5.0.2",
     "axios": "^1.6.2",
     "html2canvas": "^1.4.1",
