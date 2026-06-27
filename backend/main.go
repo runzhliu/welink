@@ -3077,6 +3077,9 @@ func serverMain() {
 		// 创意实验室 · 主动指数榜（谁先开口，开场占比，零 LLM）
 		registerInitiativeRoutes(prot, getSvc)
 
+		// 创意实验室 · 语音/通话档案（语音条 type 34 + 通话 type 50 聚合，零 LLM）
+		registerVoiceCallRoutes(prot, getSvc)
+
 		// 定时任务（主动总结/挖掘，结果进收件箱）
 		registerScheduledTaskRoutes(prot, getSvc)
 

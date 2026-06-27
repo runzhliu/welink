@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search, Quote, HeartHandshake, TrendingUp, Globe2, HeartPulse, Flame, Zap, Hand, Waves, LayoutGrid } from 'lucide-react';
+import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search, Quote, HeartHandshake, TrendingUp, Globe2, HeartPulse, Flame, Zap, Hand, Waves, LayoutGrid, Phone } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { VirtualGroupChat } from './VirtualGroupChat';
 import { Highlights } from './Highlights';
@@ -24,6 +24,7 @@ import { HealthLog } from './HealthLog';
 import { FlirtProbe } from './FlirtProbe';
 import { ReplySpeed } from './ReplySpeed';
 import { InitiativeRank } from './InitiativeRank';
+import { VoiceCallArchive } from './VoiceCallArchive';
 import { SocialFlow } from './SocialFlow';
 import { TopicMap } from './TopicMap';
 
@@ -31,7 +32,7 @@ interface Props {
   contacts: ContactStats[];
 }
 
-type LabKey = 'highlights' | 'dna' | 'drift' | 'social-flow' | 'topic-map' | 'echo' | 'golden-quotes' | 'promise-debts' | 'language-evolution' | 'chat-geography' | 'health-log' | 'flirt-probe' | 'reply-speed' | 'initiative' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
+type LabKey = 'highlights' | 'dna' | 'drift' | 'social-flow' | 'topic-map' | 'echo' | 'golden-quotes' | 'promise-debts' | 'language-evolution' | 'chat-geography' | 'health-log' | 'flirt-probe' | 'reply-speed' | 'initiative' | 'voice-call' | 'group-roi' | 'group-wrapped' | 'milestones' | 'soul-quiz' | 'relation-graph' | 'parallel' | 'virtual-group';
 
 interface LabDef {
   key: LabKey;
@@ -137,6 +138,13 @@ const LABS: LabDef[] = [
     icon: <Hand size={14} />,
     badge: 'NEW',
     desc: '谁先开口？统计每段对话的开场方：你主动找的人 / 主动找你的人 / 最不对等。和回复速度榜互补，零 LLM',
+  },
+  {
+    key: 'voice-call',
+    label: '语音/通话档案',
+    icon: <Phone size={14} />,
+    badge: 'NEW',
+    desc: '把私聊里被忽略的语音条 + 音视频通话翻出来：和谁煲电话粥最久 / 最长一次通话 / 谁最爱给你发语音。只读时长不读内容，零 LLM',
   },
   {
     key: 'group-roi',
@@ -249,6 +257,7 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
       {active === 'flirt-probe' && <FlirtProbe />}
       {active === 'reply-speed' && <ReplySpeed />}
       {active === 'initiative' && <InitiativeRank />}
+      {active === 'voice-call' && <VoiceCallArchive />}
       {active === 'group-roi' && <GroupROI />}
       {active === 'group-wrapped' && <GroupWrapped />}
       {active === 'milestones' && <Milestones contacts={contacts} />}
