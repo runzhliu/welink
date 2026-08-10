@@ -198,6 +198,9 @@ type ContactService struct {
 	params        AnalysisParams
 	paramsMu      sync.RWMutex
 	tz            *time.Location
+	analysisMu    sync.Mutex // 串行化分析任务的取消、等待与启动
+	analysisWG    sync.WaitGroup
+	closed        bool // 由 analysisMu 保护；关闭后不再接受新的分析任务
 	segmenter     gse.Segmenter
 	segmenterMu   sync.Mutex // 保护 segmenter 不被并发调用（gse 非线程安全）
 	cache         []ContactStatsExtended
@@ -222,7 +225,7 @@ type ContactService struct {
 	groupRelCache             map[string]*RelationshipGraph // 群聊人物关系缓存
 	groupRelCacheOrder        []string
 	groupRelComputing         map[string]bool
-	groupAnalysisGeneration  uint64
+	groupAnalysisGeneration   uint64
 	anniversaryDetected       []DetectedEvent // 纪念日缓存
 	anniversaryMilestones     []FriendMilestone
 	anniversaryCacheDay       string // 缓存日期（当天有效）
@@ -435,11 +438,36 @@ func (s *ContactService) UpdateParams(p AnalysisParams) {
 
 // Reinitialize 用新的时间范围重新索引（前端调用）
 func (s *ContactService) Reinitialize(from, to int64) {
-	// 若已有索引任务在跑，先打断，避免两个 performAnalysis 同时刷新缓存互相覆盖
-	s.cacheMu.Lock()
-	if s.cancelFn != nil {
-		s.cancelFn()
+	s.reinitialize(nil, from, to)
+}
+
+// ReinitializeWithParams 在旧分析任务完全退出后原子地切换参数并重新索引。
+// 这样时区、worker 数等参数不会在旧任务读取过程中被并发改写。
+func (s *ContactService) ReinitializeWithParams(p AnalysisParams, from, to int64) {
+	s.reinitialize(&p, from, to)
+}
+
+func (s *ContactService) reinitialize(newParams *AnalysisParams, from, to int64) {
+	// WaitGroup 的 Add 与 Wait 必须串行；同时保证新旧 performAnalysis 不会重叠。
+	s.analysisMu.Lock()
+	defer s.analysisMu.Unlock()
+	if s.closed {
+		return
 	}
+
+	// 若已有索引任务在跑，先打断并等待它真正退出，避免新旧任务互相覆盖缓存。
+	s.cacheMu.Lock()
+	previousCancel := s.cancelFn
+	s.cacheMu.Unlock()
+	if previousCancel != nil {
+		previousCancel()
+	}
+	s.analysisWG.Wait()
+	if newParams != nil {
+		s.UpdateParams(*newParams)
+	}
+
+	s.cacheMu.Lock()
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancelFn = cancel
 	s.filterFrom = from
@@ -491,7 +519,9 @@ func (s *ContactService) Reinitialize(from, to int64) {
 	s.contactAnalysisGeneration++
 	s.contactAnalysisMu.Unlock()
 
+	s.analysisWG.Add(1)
 	go func() {
+		defer s.analysisWG.Done()
 		// panic 兜底：避免 performAnalysis 崩溃后 isInitialized 永远卡在 false，前端转圈无尽头
 		defer func() {
 			if r := recover(); r != nil {
@@ -522,6 +552,24 @@ func (s *ContactService) Reinitialize(from, to int64) {
 		s.cancelFn = nil
 		s.cacheMu.Unlock()
 	}()
+}
+
+// Close 停止后台分析并等待其退出。调用方应先停止向该 service 分发新请求，
+// 再关闭底层 DBManager。
+func (s *ContactService) Close() {
+	s.analysisMu.Lock()
+	defer s.analysisMu.Unlock()
+	if s.closed {
+		return
+	}
+	s.closed = true
+	s.cacheMu.Lock()
+	cancel := s.cancelFn
+	s.cacheMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	s.analysisWG.Wait()
 }
 
 func (s *ContactService) fullAnalysisTask() {
@@ -560,6 +608,11 @@ func (s *ContactService) timeWhere() string {
 }
 
 func (s *ContactService) performAnalysisCtx(ctx context.Context) {
+	s.paramsMu.RLock()
+	params := s.params
+	tz := s.tz
+	s.paramsMu.RUnlock()
+
 	rows, err := s.dbMgr.ContactDB.Query("SELECT username, nick_name, remark, COALESCE(alias,''), flag, COALESCE(big_head_url,''), COALESCE(small_head_url,'') FROM contact WHERE verify_flag=0")
 	if err != nil {
 		return
@@ -595,10 +648,10 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 	latencyByUser := make(map[string]LatencyStats, len(contacts))           // 关系预测响应时延用
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, s.params.WorkerCount)
+	sem := make(chan struct{}, params.WorkerCount)
 
 	// 进度：同步到 service 字段（/api/status 读）+ 日志
-	log.Printf("[INIT] performAnalysis 开始：%d 个联系人，%d 工作协程", len(contacts), s.params.WorkerCount)
+	log.Printf("[INIT] performAnalysis 开始：%d 个联系人，%d 工作协程", len(contacts), params.WorkerCount)
 	startedAt := time.Now()
 	s.cacheMu.Lock()
 	s.progressTotal = len(contacts)
@@ -616,7 +669,11 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			sem <- struct{}{}
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
 			defer func() { <-sem }()
 			if ctx.Err() != nil { // 进入 worker 后再检查一次
 				return
@@ -653,11 +710,11 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 			localDaily := make(map[string]int)
 			localHourly := [24]int{}
 			monthly := make(map[string]MonthBucket)
-			recentCutoff := time.Now().In(s.tz).AddDate(0, -1, 0)
+			recentCutoff := time.Now().In(tz).AddDate(0, -1, 0)
 			var totalTextLen, textCount int64
 			// 响应时延收集：最近 6 个月内的 (ts, isMine)，稍后排序算中位时延
-			latencyCutoff6 := time.Now().In(s.tz).AddDate(0, -6, 0).Unix()
-			latencyCutoff3 := time.Now().In(s.tz).AddDate(0, -3, 0).Unix()
+			latencyCutoff6 := time.Now().In(tz).AddDate(0, -6, 0).Unix()
+			latencyCutoff3 := time.Now().In(tz).AddDate(0, -3, 0).Unix()
 			type tsKind struct {
 				ts   int64
 				mine bool
@@ -666,9 +723,9 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 
 			for _, mdb := range s.msgRepo.DBsForUsername(c.Username) {
 				var contactRowID int64 = -1
-				mdb.QueryRow(fmt.Sprintf("SELECT rowid FROM Name2Id WHERE user_name = %q", c.Username)).Scan(&contactRowID)
+				mdb.QueryRowContext(ctx, fmt.Sprintf("SELECT rowid FROM Name2Id WHERE user_name = %q", c.Username)).Scan(&contactRowID)
 
-				mRows, err := mdb.Query(fmt.Sprintf("SELECT local_type, create_time, CASE WHEN (local_type & 65535) IN (1,49) THEN message_content END, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s", tableName, timeWhere))
+				mRows, err := mdb.QueryContext(ctx, fmt.Sprintf("SELECT local_type, create_time, CASE WHEN (local_type & 65535) IN (1,49) THEN message_content END, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s", tableName, timeWhere))
 				if err != nil {
 					continue
 				}
@@ -702,9 +759,9 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 						globalLastTs = ts
 					}
 
-					dt := time.Unix(ts, 0).In(s.tz)
+					dt := time.Unix(ts, 0).In(tz)
 					h := dt.Hour()
-					if h >= s.params.LateNightStartHour && h < s.params.LateNightEndHour {
+					if h >= params.LateNightStartHour && h < params.LateNightEndHour {
 						lateNightCnt++
 					}
 					localDaily[dt.Format("2006-01-02")]++
@@ -763,8 +820,8 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 			}
 			mu.Unlock()
 			if ext.TotalMessages > 0 {
-				ext.FirstMessage = s.formatTime(globalFirstTs)
-				ext.LastMessage = s.formatTime(globalLastTs)
+				ext.FirstMessage = formatTimeIn(globalFirstTs, tz)
+				ext.LastMessage = formatTimeIn(globalLastTs, tz)
 				ext.FirstMessageTs = globalFirstTs
 				ext.LastMessageTs = globalLastTs
 				for m, b := range monthly {
@@ -845,6 +902,9 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 		}(i)
 	}
 	wg.Wait()
+	if ctx.Err() != nil {
+		return
+	}
 
 	s.monthlyByUserMu.Lock()
 	s.monthlyByUsername = monthlyByUser
@@ -866,14 +926,14 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 	sort.Slice(lateNightData, func(i, j int) bool { return lateNightData[i].lateNightCount > lateNightData[j].lateNightCount })
 	var lateNightRanking []LateNightEntry
 	for _, e := range lateNightData {
-		if e.totalMessages < s.params.LateNightMinMessages || e.lateNightCount == 0 {
+		if e.totalMessages < params.LateNightMinMessages || e.lateNightCount == 0 {
 			continue
 		}
 		ratio := float64(e.lateNightCount) / float64(e.totalMessages) * 100
 		lateNightRanking = append(lateNightRanking, LateNightEntry{
 			Name: e.name, LateNightCount: e.lateNightCount, TotalMessages: e.totalMessages, Ratio: ratio,
 		})
-		if len(lateNightRanking) >= s.params.LateNightTopN {
+		if len(lateNightRanking) >= params.LateNightTopN {
 			break
 		}
 	}
@@ -2931,6 +2991,8 @@ func (s *ContactService) GetGlobal() GlobalStats {
 // Location 返回当前生效的时区。给 service 外部按"Date+Time 字符串重建 unix 秒"
 // 这种场景用，确保和 ChatMessage 里 Date/Time 的格式化时区一致。
 func (s *ContactService) Location() *time.Location {
+	s.paramsMu.RLock()
+	defer s.paramsMu.RUnlock()
 	if s.tz != nil {
 		return s.tz
 	}
@@ -2984,6 +3046,8 @@ func (s *ContactService) GetStatus() map[string]interface{} {
 // CancelIndexing 请求中止当前正在进行的 performAnalysis；等待 goroutine 退出后返回。
 // 非索引状态下调用是 no-op。
 func (s *ContactService) CancelIndexing() bool {
+	s.analysisMu.Lock()
+	defer s.analysisMu.Unlock()
 	s.cacheMu.Lock()
 	fn := s.cancelFn
 	s.cacheMu.Unlock()
@@ -2991,14 +3055,19 @@ func (s *ContactService) CancelIndexing() bool {
 		return false
 	}
 	fn()
+	s.analysisWG.Wait()
 	return true
 }
 
 func (s *ContactService) formatTime(ts int64) string {
+	return formatTimeIn(ts, s.Location())
+}
+
+func formatTimeIn(ts int64, loc *time.Location) string {
 	if ts <= 0 || ts > 2000000000 {
 		return "-"
 	}
-	return time.Unix(ts, 0).In(s.tz).Format("2006-01-02")
+	return time.Unix(ts, 0).In(loc).Format("2006-01-02")
 }
 
 func isNumeric(s string) bool {
@@ -5219,7 +5288,7 @@ func (s *ContactService) computeGroupRelationships(username string, generation u
 		s.groupDetailMu.Lock()
 		if s.groupAnalysisGeneration == generation {
 			if _, ok := s.groupRelCache[username]; !ok {
-			// panic 或其他原因没写成功 → 放一个空图，让前端拿到"分析失败但已结束"
+				// panic 或其他原因没写成功 → 放一个空图，让前端拿到"分析失败但已结束"
 				storeBounded(s.groupRelCache, &s.groupRelCacheOrder, username, &RelationshipGraph{
 					Nodes: []RelationshipNode{}, Edges: []RelationshipEdge{},
 					Communities: []CommunityInfo{},

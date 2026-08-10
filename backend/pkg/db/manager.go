@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	_ "modernc.org/sqlite"
 )
@@ -82,10 +83,13 @@ type DBManager struct {
 	dataDir    string
 	// ExtraDBs 是额外注册的数据库（如 AI 分析库），key 为文件名，value 为路径
 	ExtraDBs map[string]string
+	extraMu  sync.RWMutex
 }
 
 // RegisterExtraDB 注册一个额外的数据库（如 ai_analysis.db）到管理器，使其可被 SQL 编辑器访问。
 func (mgr *DBManager) RegisterExtraDB(name, path string) {
+	mgr.extraMu.Lock()
+	defer mgr.extraMu.Unlock()
 	if mgr.ExtraDBs == nil {
 		mgr.ExtraDBs = make(map[string]string)
 	}
@@ -101,8 +105,8 @@ type DBInfo struct {
 
 // TableInfo 表信息
 type TableInfo struct {
-	Name    string `json:"name"`
-	RowCount int64  `json:"row_count"`
+	Name     string `json:"name"`
+	RowCount *int64 `json:"row_count"` // 表列表不做全表 COUNT；打开表时由 TableData.Total 返回
 }
 
 // ColumnInfo 列信息
@@ -122,25 +126,33 @@ type TableData struct {
 	Total   int64           `json:"total"`
 }
 
-// getDBByName 根据数据库名获取对应的 sql.DB 连接
-func (mgr *DBManager) getDBByName(dbName string) *sql.DB {
+var noRelease = func() {}
+
+// quoteIdentifier 将动态表名安全地转成 SQLite 双引号标识符。
+func quoteIdentifier(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+// getDBByName 根据数据库名获取连接，并返回对应的释放函数。
+// ContactDB/MessageDBs 由 manager 持有，release 是 no-op；临时打开的 ExtraDB/fallback
+// 必须由调用方关闭，避免数据库浏览器每次点击都泄漏连接池和文件描述符。
+func (mgr *DBManager) getDBByName(dbName string) (*sql.DB, func()) {
 	if dbName == "contact.db" {
-		return mgr.ContactDB
+		return mgr.ContactDB, noRelease
 	}
 	// ExtraDBs（如 ai_analysis.db）
-	if path, ok := mgr.ExtraDBs[dbName]; ok {
-		if _, err := os.Stat(path); err == nil {
-			db, err := sql.Open("sqlite", path)
+	mgr.extraMu.RLock()
+	extraPath, extraOK := mgr.ExtraDBs[dbName]
+	mgr.extraMu.RUnlock()
+	if extraOK {
+		if _, err := os.Stat(extraPath); err == nil {
+			db, err := sql.Open("sqlite", extraPath)
 			if err == nil {
-				return db
+				return db, func() { _ = db.Close() }
 			}
 		}
 	}
 	// 在消息数据库列表中查找（通过路径匹配文件名）
-	dataDir := os.Getenv("DATA_DIR")
-	if dataDir == "" {
-		dataDir = "../decrypted"
-	}
 	for _, mdb := range mgr.MessageDBs {
 		// 通过查询 PRAGMA database_list 获取文件路径
 		rows, err := mdb.Query("PRAGMA database_list")
@@ -155,32 +167,33 @@ func (mgr *DBManager) getDBByName(dbName string) *sql.DB {
 			}
 			if filepath.Base(file) == dbName {
 				rows.Close()
-				return mdb
+				return mdb, noRelease
 			}
 		}
 		rows.Close()
 	}
 	// fallback: 直接打开文件（防止路径遍历：只允许文件名，不含路径分隔符）
 	if strings.ContainsAny(dbName, "/\\") || strings.Contains(dbName, "..") {
-		return nil
+		return nil, noRelease
 	}
-	msgDir := filepath.Join(dataDir, "message")
+	msgDir := filepath.Join(mgr.dataDir, "message")
 	dbPath := filepath.Clean(filepath.Join(msgDir, dbName))
 	if !strings.HasPrefix(dbPath, filepath.Clean(msgDir)+string(filepath.Separator)) {
-		return nil
+		return nil, noRelease
 	}
 	if _, err := os.Stat(dbPath); err == nil {
 		db, err := sql.Open("sqlite", dbPath)
 		if err == nil {
-			return db
+			return db, func() { _ = db.Close() }
 		}
 	}
-	return nil
+	return nil, noRelease
 }
 
 // GetTables 获取指定数据库的所有表
 func (mgr *DBManager) GetTables(dbName string) ([]TableInfo, error) {
-	db := mgr.getDBByName(dbName)
+	db, release := mgr.getDBByName(dbName)
+	defer release()
 	if db == nil {
 		return nil, fmt.Errorf("database %s not found", dbName)
 	}
@@ -197,8 +210,6 @@ func (mgr *DBManager) GetTables(dbName string) ([]TableInfo, error) {
 		if err := rows.Scan(&t.Name); err != nil {
 			continue
 		}
-		// 获取行数（跳过错误）
-		_ = db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM [%s]", t.Name)).Scan(&t.RowCount)
 		tables = append(tables, t)
 	}
 	return tables, nil
@@ -206,12 +217,13 @@ func (mgr *DBManager) GetTables(dbName string) ([]TableInfo, error) {
 
 // GetTableSchema 获取表结构
 func (mgr *DBManager) GetTableSchema(dbName, tableName string) ([]ColumnInfo, error) {
-	db := mgr.getDBByName(dbName)
+	db, release := mgr.getDBByName(dbName)
+	defer release()
 	if db == nil {
 		return nil, fmt.Errorf("database %s not found", dbName)
 	}
 
-	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info([%s])", tableName))
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", quoteIdentifier(tableName)))
 	if err != nil {
 		return nil, err
 	}
@@ -234,17 +246,18 @@ func (mgr *DBManager) GetTableSchema(dbName, tableName string) ([]ColumnInfo, er
 
 // GetTableData 获取表数据（分页）
 func (mgr *DBManager) GetTableData(dbName, tableName string, offset, limit int) (*TableData, error) {
-	db := mgr.getDBByName(dbName)
+	db, release := mgr.getDBByName(dbName)
+	defer release()
 	if db == nil {
 		return nil, fmt.Errorf("database %s not found", dbName)
 	}
 
 	// 获取总行数
 	var total int64
-	_ = db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM [%s]", tableName)).Scan(&total)
+	_ = db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", quoteIdentifier(tableName))).Scan(&total)
 
 	// 获取列信息
-	colRows, err := db.Query(fmt.Sprintf("PRAGMA table_info([%s])", tableName))
+	colRows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", quoteIdentifier(tableName)))
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +276,7 @@ func (mgr *DBManager) GetTableData(dbName, tableName string, offset, limit int) 
 	colRows.Close()
 
 	// 查询数据
-	query := fmt.Sprintf("SELECT * FROM [%s] LIMIT %d OFFSET %d", tableName, limit, offset)
+	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", quoteIdentifier(tableName), limit, offset)
 	dataRows, err := db.Query(query)
 	if err != nil {
 		return nil, err
@@ -381,7 +394,8 @@ func (mgr *DBManager) GetSchemaContext() string {
 
 // ExecQuery 在指定数据库执行只读 SQL（只允许 SELECT）
 func (mgr *DBManager) ExecQuery(dbName, sql string) *QueryResult {
-	db := mgr.getDBByName(dbName)
+	db, release := mgr.getDBByName(dbName)
+	defer release()
 	if db == nil {
 		return &QueryResult{Error: "数据库不存在"}
 	}
@@ -518,7 +532,13 @@ func (mgr *DBManager) GetDBInfos() []DBInfo {
 	}
 
 	// ExtraDBs（如 ai_analysis.db）
+	mgr.extraMu.RLock()
+	extraDBs := make(map[string]string, len(mgr.ExtraDBs))
 	for name, path := range mgr.ExtraDBs {
+		extraDBs[name] = path
+	}
+	mgr.extraMu.RUnlock()
+	for name, path := range extraDBs {
 		var size int64
 		if fi, err := os.Stat(path); err == nil {
 			size = fi.Size()

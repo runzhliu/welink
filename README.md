@@ -48,17 +48,17 @@
 
 | AI 分身 | AI 分析 |
 |:---:|:---:|
-| [![AI 分身](pics/1-AI分身.gif)](pics/1-AI分身.gif) | [![AI 分析](pics/2-AI分析.gif)](pics/2-AI分析.gif) |
+| [![AI 分身](pics/previews/1.webp)](pics/1-AI分身.mp4) | [![AI 分析](pics/previews/2.webp)](pics/2-AI分析.mp4) |
 | **AI 群聊** | **AI 首页** |
-| [![AI 群聊](pics/3-AI群聊.gif)](pics/3-AI群聊.gif) | [![AI 首页](pics/4-AI首页.gif)](pics/4-AI首页.gif) |
+| [![AI 群聊](pics/previews/3.webp)](pics/3-AI群聊.mp4) | [![AI 首页](pics/previews/4.webp)](pics/4-AI首页.mp4) |
 | **快速入门引导** | **好友总览** |
-| [![快速入门引导](pics/5-快速入门引导.gif)](pics/5-快速入门引导.gif) | [![好友总览](pics/6-好友总览.gif)](pics/6-好友总览.gif) |
+| [![快速入门引导](pics/previews/5.webp)](pics/5-快速入门引导.mp4) | [![好友总览](pics/previews/6.webp)](pics/6-好友总览.mp4) |
 | **好友深度画像** | **群聊画像** |
-| [![好友深度画像](pics/7-好友深度画像.gif)](pics/7-好友深度画像.gif) | [![群聊画像](pics/8-群聊画像.gif)](pics/8-群聊画像.gif) |
+| [![好友深度画像](pics/previews/7.webp)](pics/7-好友深度画像.mp4) | [![群聊画像](pics/previews/8.webp)](pics/8-群聊画像.mp4) |
 | **全局搜索** | **时间线** |
-| [![全局搜索](pics/9-全局搜索.gif)](pics/9-全局搜索.gif) | [![时间线](pics/10-时间线.gif)](pics/10-时间线.gif) |
+| [![全局搜索](pics/previews/9.webp)](pics/9-全局搜索.mp4) | [![时间线](pics/previews/10.webp)](pics/10-时间线.mp4) |
 | **时光机** | **纪念日** |
-| [![时光机](pics/11-时光机.gif)](pics/11-时光机.gif) | [![纪念日](pics/12-纪念日.gif)](pics/12-纪念日.gif) |
+| [![时光机](pics/previews/11.webp)](pics/11-时光机.mp4) | [![纪念日](pics/previews/12.webp)](pics/12-纪念日.mp4) |
 
 ---
 

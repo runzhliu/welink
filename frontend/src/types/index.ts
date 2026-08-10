@@ -169,7 +169,7 @@ export interface DBInfo {
 
 export interface TableInfo {
   name: string;
-  row_count: number;
+  row_count: number | null;
 }
 
 export interface ColumnInfo {

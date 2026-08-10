@@ -15,14 +15,79 @@ package main
 //   - httpClientLLMSync — 用于非流式 LLM 调用（一次性返回完整答复）。给个
 //     5 分钟总超时，足够最长的同步生成完成。
 //
-//   - httpClientFast — 用于 embedding、探活、avatar 代理、token 换取等快路径。
+//   - httpClientFast — 用于 embedding、探活、token 换取等快路径。
 //     60s 总超时。
 
 import (
+	"context"
+	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"time"
 )
+
+func isBlockedOutboundIP(ip net.IP) bool {
+	if ip == nil || !ip.IsGlobalUnicast() || ip.IsLoopback() || ip.IsPrivate() ||
+		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		return true
+	}
+	// Shared address space（CGNAT）不是公网目标，也经常承载运营商内部服务。
+	_, cgnat, _ := net.ParseCIDR("100.64.0.0/10")
+	return cgnat.Contains(ip)
+}
+
+// dialPublicContext 先解析目标域名，再直接拨号到校验过的 IP。这样校验和连接使用
+// 同一个解析结果，避免 DNS rebinding 在两次解析之间把公网域名切到内网地址。
+func dialPublicContext(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, fmt.Errorf("invalid outbound address: %w", err)
+	}
+	var ips []net.IP
+	if literal := net.ParseIP(host); literal != nil {
+		ips = []net.IP{literal}
+	} else {
+		ips, err = net.DefaultResolver.LookupIP(ctx, "ip", host)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("outbound host has no IP address")
+	}
+	for _, ip := range ips {
+		if isBlockedOutboundIP(ip) {
+			return nil, fmt.Errorf("outbound address %s is not public", ip)
+		}
+	}
+
+	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+	var lastErr error
+	for _, ip := range ips {
+		conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		if dialErr == nil {
+			return conn, nil
+		}
+		lastErr = dialErr
+	}
+	return nil, lastErr
+}
+
+func checkPublicRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 5 {
+		return fmt.Errorf("too many redirects")
+	}
+	if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+		return fmt.Errorf("redirect scheme %q is not allowed", req.URL.Scheme)
+	}
+	return nil
+}
+
+func isHTTPURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.Hostname() != "" && (u.Scheme == "http" || u.Scheme == "https")
+}
 
 var (
 	// httpClientLLMStream 用于流式 LLM/Bedrock 调用。
@@ -56,7 +121,7 @@ var (
 		},
 	}
 
-	// httpClientFast 用于 embedding 批量、avatar 代理等快路径。60s 总超时。
+	// httpClientFast 用于 embedding 批量、探活等快路径。60s 总超时。
 	httpClientFast = &http.Client{
 		Timeout: 60 * time.Second,
 		Transport: &http.Transport{
@@ -67,6 +132,20 @@ var (
 			TLSHandshakeTimeout: 10 * time.Second,
 			IdleConnTimeout:     90 * time.Second,
 			MaxIdleConnsPerHost: 16,
+		},
+	}
+
+	// httpClientPublic 仅用于用户可控的公网资源代理。它不使用环境代理，并在实际
+	// DialContext 中拒绝环回、私网、链路本地和 CGNAT 地址；每次重定向同样受限。
+	httpClientPublic = &http.Client{
+		Timeout:       60 * time.Second,
+		CheckRedirect: checkPublicRedirect,
+		Transport: &http.Transport{
+			DialContext:           dialPublicContext,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 20 * time.Second,
+			IdleConnTimeout:       60 * time.Second,
+			MaxIdleConnsPerHost:   8,
 		},
 	}
 )

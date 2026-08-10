@@ -986,7 +986,7 @@ const DBRow: React.FC<DBRowProps> = ({ db, formatSize, onSelectTable }) => {
                         <span className="text-sm font-semibold text-[#1d1d1f] dk-text truncate">{t.name}</span>
                       </div>
                       <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                        <span className="text-xs text-gray-400">{t.row_count.toLocaleString()}</span>
+                        <span className="text-xs text-gray-400">{t.row_count == null ? '按需统计' : t.row_count.toLocaleString()}</span>
                         <button
                           onClick={(e) => copy(t.name, `t:${db.name}:${t.name}`, e)}
                           className="p-1 rounded hover:bg-gray-100 dark:hover:bg-white/10 text-gray-300 hover:text-[#07c160] opacity-0 group-hover:opacity-100 transition-all"
@@ -1102,7 +1102,7 @@ const DBSidebar: React.FC<SidebarProps> = ({ databases, formatSize, onSelectTabl
                       >
                         <LayoutList size={10} className={isActive ? 'text-white' : 'text-gray-300'} />
                         <span className="flex-1 truncate">{t.name}</span>
-                        <span className={`text-[10px] font-mono ${isActive ? 'text-green-200' : 'text-gray-400'}`}>{t.row_count.toLocaleString()}</span>
+                        <span className={`text-[10px] font-mono ${isActive ? 'text-green-200' : 'text-gray-400'}`}>{t.row_count == null ? '—' : t.row_count.toLocaleString()}</span>
                       </button>
                     );
                   })}

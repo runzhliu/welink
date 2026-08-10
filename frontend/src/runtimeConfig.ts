@@ -103,6 +103,57 @@ export function apiUrl(path: string): string {
   return trimmed + (path.startsWith('/') ? path : '/' + path);
 }
 
+/**
+ * 统一接管散落在组件里的 fetch('/api/...')：
+ *
+ * - 远程客户端自动改写到 PC 的 serverURL；
+ * - 自动附加配对 Bearer token；
+ * - 保留 Request 与 init 两边已有的 headers。
+ *
+ * axios 有自己的拦截器，但流式 SSE、Blob 下载等场景必须使用 fetch。把适配放在
+ * 这一层可以避免新增功能忘记处理移动端配对，且只影响当前页面同源的 /api 路径。
+ */
+function installAPIFetchAdapter() {
+  const w = window as Window & { __welinkAPIFetchInstalled?: boolean };
+  if (w.__welinkAPIFetchInstalled) return;
+  w.__welinkAPIFetchInstalled = true;
+
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const raw = typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : input.url;
+
+    let path = '';
+    try {
+      const resolved = new URL(raw, window.location.href);
+      if (resolved.origin === window.location.origin && resolved.pathname.startsWith('/api/')) {
+        path = resolved.pathname + resolved.search + resolved.hash;
+      }
+    } catch {
+      // 非法 URL 交还原生 fetch，由它产生标准错误。
+    }
+    if (!path) return nativeFetch(input, init);
+
+    const headers = new Headers(input instanceof Request ? input.headers : undefined);
+    new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+    const token = getToken();
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    const target = apiUrl(path);
+    if (input instanceof Request) {
+      return nativeFetch(new Request(target, input), { ...init, headers });
+    }
+    return nativeFetch(target, { ...init, headers });
+  };
+}
+
+installAPIFetchAdapter();
+
 export function setRuntimeConfig(cfg: Partial<RuntimeConfig>) {
   if (typeof cfg.serverURL === 'string') {
     current.serverURL = cfg.serverURL;

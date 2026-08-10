@@ -374,15 +374,15 @@ func boolToInt(b bool) int {
 // ── 调度器 ────────────────────────────────────────────────────────────────────
 
 var (
-	schedulerOnce sync.Once
-	schedulerSvc  func() *service.ContactService
-	taskRunMu     sync.Mutex // 串行执行，避免并发打 LLM
+	schedulerOnce       sync.Once
+	schedulerAcquireSvc func() (*service.ContactService, func())
+	taskRunMu           sync.Mutex // 串行执行，避免并发打 LLM
 )
 
 // StartTaskScheduler 启动后台调度 goroutine（每分钟一 tick）。幂等。
-func StartTaskScheduler(getSvc func() *service.ContactService) {
+func StartTaskScheduler(acquireSvc func() (*service.ContactService, func())) {
 	schedulerOnce.Do(func() {
-		schedulerSvc = getSvc
+		schedulerAcquireSvc = acquireSvc
 		go func() {
 			// 启动后稍等服务就绪，再做一次"补跑"扫描
 			time.Sleep(20 * time.Second)
@@ -420,12 +420,12 @@ func runDueTasks() {
 func runTaskAndRecord(t *ScheduledTask, manual bool) *TaskRun {
 	taskRunMu.Lock()
 	defer taskRunMu.Unlock()
-	return recordTaskRunLocked(t, manual)
+	return recordTaskRunLocked(t, manual, nil)
 }
 
 // recordTaskRunLocked 假定调用方已持有 taskRunMu。
-func recordTaskRunLocked(t *ScheduledTask, manual bool) *TaskRun {
-	run := executeTask(t)
+func recordTaskRunLocked(t *ScheduledTask, manual bool, svc *service.ContactService) *TaskRun {
+	run := executeTask(t, svc)
 	run.CreatedAt = time.Now().Unix()
 	if id, err := saveTaskRun(run); err == nil {
 		run.ID = id
@@ -443,10 +443,16 @@ func recordTaskRunLocked(t *ScheduledTask, manual bool) *TaskRun {
 }
 
 // executeTask 真正干活：取记录 → 拼 prompt → LLM → 组装 TaskRun（不落库）。
-func executeTask(t *ScheduledTask) *TaskRun {
+func executeTask(t *ScheduledTask, svc *service.ContactService) *TaskRun {
 	run := &TaskRun{TaskID: t.ID, WindowTo: time.Now().Unix()}
 
-	svc := schedulerSvc()
+	if svc == nil && schedulerAcquireSvc != nil {
+		var release func()
+		svc, release = schedulerAcquireSvc()
+		if release != nil {
+			defer release()
+		}
+	}
 	if svc == nil {
 		run.Status = "error"
 		run.Error = "服务未就绪"
@@ -757,7 +763,7 @@ func registerScheduledTaskRoutes(prot *gin.RouterGroup, getSvc func() *service.C
 			c.JSON(http.StatusConflict, gin.H{"error": "有任务正在执行中，请稍后再试"})
 			return
 		}
-		run := recordTaskRunLocked(t, true)
+		run := recordTaskRunLocked(t, true, getSvc())
 		taskRunMu.Unlock()
 		c.JSON(http.StatusOK, run)
 	})

@@ -41,6 +41,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	_ "time/tzdata" // 嵌入时区数据库，确保 App 打包后 LoadLocation 正常工作
 
@@ -126,13 +127,18 @@ func serverMain() {
 	// 服务层：受 svcMu 保护，支持运行时热替换
 	var (
 		svcMu       sync.RWMutex
+		reinitMu    sync.Mutex
 		contactSvc  *service.ContactService
 		dbMgr       *db.DBManager
+		svcPtr      atomic.Pointer[service.ContactService]
+		mgrPtr      atomic.Pointer[db.DBManager]
 		lastInitErr string // 最近一次 reinitSvc 失败的原因（供 /api/app/info 返回）
 	)
 
 	// reinitSvc 用新数据目录替换数据库连接和服务层（线程安全）。
 	reinitSvc := func(dataDir string, params service.AnalysisParams, initFrom, initTo int64) error {
+		reinitMu.Lock()
+		defer reinitMu.Unlock()
 		newMgr, err := db.NewDBManager(dataDir)
 		if err != nil {
 			svcMu.Lock()
@@ -140,13 +146,26 @@ func serverMain() {
 			svcMu.Unlock()
 			return err
 		}
-		newSvc := service.NewContactService(newMgr, params, initFrom, initTo)
+		newMgr.RegisterExtraDB("ai_analysis.db", aiAnalysisDBPath())
+		// 先创建但不启动分析；旧 service 完全退出并关闭数据库后再启动，避免两套
+		// 全量扫描同时争抢 IO。
+		newSvc := service.NewContactService(newMgr, params, 0, 0)
 		svcMu.Lock()
-		if dbMgr != nil {
-			dbMgr.Close()
+		oldSvc := contactSvc
+		oldMgr := dbMgr
+		if oldSvc != nil {
+			oldSvc.Close()
+		}
+		if oldMgr != nil {
+			oldMgr.Close()
+		}
+		if initFrom != 0 || initTo != 0 {
+			newSvc.Reinitialize(initFrom, initTo)
 		}
 		dbMgr = newMgr
 		contactSvc = newSvc
+		mgrPtr.Store(newMgr)
+		svcPtr.Store(newSvc)
 		lastInitErr = ""
 		svcMu.Unlock()
 		return nil
@@ -293,18 +312,23 @@ func serverMain() {
 
 	// 服务层访问助手（线程安全）
 	getSvc := func() *service.ContactService {
-		svcMu.RLock()
-		defer svcMu.RUnlock()
-		return contactSvc
+		return svcPtr.Load()
 	}
 	getMgr := func() *db.DBManager {
+		return mgrPtr.Load()
+	}
+	acquireSvc := func() (*service.ContactService, func()) {
 		svcMu.RLock()
-		defer svcMu.RUnlock()
-		return dbMgr
+		svc := contactSvc
+		if svc == nil {
+			svcMu.RUnlock()
+			return nil, nil
+		}
+		return svc, svcMu.RUnlock
 	}
 
 	// 启动定时任务调度器（每分钟扫到期任务，串行跑；app 重开时补跑错过的）
-	StartTaskScheduler(getSvc)
+	StartTaskScheduler(acquireSvc)
 
 	// 4. 初始化 Gin 路由
 	r := gin.Default()
@@ -317,10 +341,12 @@ func serverMain() {
 	// 跨域设置：仅允许 localhost 来源（开发调试用），生产流量通过 Nginx 反代不需要 CORS
 	r.Use(func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
-		if origin == "http://localhost:3418" || origin == "http://localhost:5173" {
+		if origin == "http://localhost:3418" || origin == "http://localhost:5173" ||
+			origin == "capacitor://localhost" || origin == "ionic://localhost" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
-			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-WeLink-Token")
+			c.Writer.Header().Set("Vary", "Origin")
 		}
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
@@ -1206,12 +1232,11 @@ func serverMain() {
 		// 热加载分析参数并重新索引
 		svcMu.RLock()
 		svc := contactSvc
-		svcMu.RUnlock()
 		if svc != nil {
-			svc.UpdateParams(analysisParamsFromPrefs(effectiveConfig(existing)))
 			// 参数变更后需要重新索引才能让深夜时段、时区等变化生效
-			go svc.Reinitialize(0, 0)
+			svc.ReinitializeWithParams(analysisParamsFromPrefs(effectiveConfig(existing)), 0, 0)
 		}
+		svcMu.RUnlock()
 		c.JSON(http.StatusOK, gin.H{"ok": true, "needs_restart": needsRestart})
 	})
 
@@ -2960,13 +2985,14 @@ func serverMain() {
 	prot := api.Group("/")
 	prot.Use(func(c *gin.Context) {
 		svcMu.RLock()
-		ready := contactSvc != nil
-		svcMu.RUnlock()
-		if !ready {
+		if contactSvc == nil {
+			svcMu.RUnlock()
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "not_configured"})
 			c.Abort()
 			return
 		}
+		// 整个请求持有读锁；热切换的写锁会等待所有旧请求排空后才关闭数据库。
+		defer svcMu.RUnlock()
 		c.Next()
 	})
 
@@ -4154,17 +4180,17 @@ func serverMain() {
 	registerMemoryRoutes(api)
 
 	// 播客相关端点（/api/podcast/*）
-	registerPodcastRoutes(api, getSvc)
+	registerPodcastRoutes(prot, getSvc)
 
 	// 虚拟群聊（任意联系人拉进一个虚拟群，AI 扮演每个人）
-	registerVirtualGroupRoutes(api, getSvc)
+	registerVirtualGroupRoutes(prot, getSvc)
 	registerVirtualGroupStoreRoutes(api)
 
 	// 视觉小说 / 互动小说（联系人 NPC + 章节剧情 + 多结局）
-	registerVNRoutes(api, getSvc)
+	registerVNRoutes(prot, getSvc)
 
 	// 创意实验室 · 平行宇宙对话（流式 SSE）
-	registerParallelChatRoutes(api, getSvc)
+	registerParallelChatRoutes(prot, getSvc)
 
 	// /api/status：未配置时也返回 200，前端 useBackendStatus 靠它判断后端是否可达
 	api.GET("/status", func(c *gin.Context) {
@@ -4181,7 +4207,7 @@ func serverMain() {
 	// 头像代理：将外部头像 URL（微信 CDN）通过后端转发，避免前端 Canvas CORS 污染
 	api.GET("/avatar", func(c *gin.Context) {
 		rawURL := c.Query("url")
-		if rawURL == "" || (!strings.HasPrefix(rawURL, "https://") && !strings.HasPrefix(rawURL, "http://")) {
+		if rawURL == "" || !isHTTPURL(rawURL) {
 			c.Status(http.StatusBadRequest)
 			return
 		}
@@ -4202,39 +4228,64 @@ func serverMain() {
 		homeDir, _ := os.UserHomeDir()
 		cacheDir := filepath.Join(homeDir, ".welink", "avatar_cache")
 		cachePath := filepath.Join(cacheDir, cacheKey)
+		const maxAvatarBytes = 10 << 20
 
 		// Serve from disk cache if available
-		if data, readErr := os.ReadFile(cachePath); readErr == nil {
+		if info, statErr := os.Stat(cachePath); statErr == nil && info.Size() <= maxAvatarBytes {
+			data, readErr := os.ReadFile(cachePath)
+			if readErr != nil {
+				c.Status(http.StatusBadGateway)
+				return
+			}
 			ct := http.DetectContentType(data)
-			c.Header("Cache-Control", "public, max-age=31536000, immutable")
-			c.Data(http.StatusOK, ct, data)
-			return
+			if strings.HasPrefix(ct, "image/") {
+				c.Header("Cache-Control", "public, max-age=31536000, immutable")
+				c.Data(http.StatusOK, ct, data)
+				return
+			}
 		}
 
-		req, _ := http.NewRequest("GET", rawURL, nil) // #nosec G107 — URL 来自受信任的数据库记录
+		req, reqErr := http.NewRequestWithContext(c.Request.Context(), "GET", rawURL, nil) // #nosec G107 -- public-only transport validates the resolved IP
+		if reqErr != nil {
+			c.Status(http.StatusBadRequest)
+			return
+		}
 		req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; WelinkApp/1.0)")
-		resp, err := httpClientFast.Do(req)
-		if err != nil || resp.StatusCode != http.StatusOK {
+		resp, err := httpClientPublic.Do(req)
+		if err != nil {
 			c.Status(http.StatusBadGateway)
 			return
 		}
 		defer resp.Body.Close()
-
-		body, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
+		if resp.StatusCode != http.StatusOK {
 			c.Status(http.StatusBadGateway)
 			return
 		}
 
-		// Persist to disk cache (best-effort, ignore errors)
-		if mkErr := os.MkdirAll(cacheDir, 0o755); mkErr == nil {
-			_ = os.WriteFile(cachePath, body, 0o644)
+		if resp.ContentLength > maxAvatarBytes {
+			c.Status(http.StatusRequestEntityTooLarge)
+			return
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxAvatarBytes+1))
+		if readErr != nil {
+			c.Status(http.StatusBadGateway)
+			return
+		}
+		if len(body) > maxAvatarBytes {
+			c.Status(http.StatusRequestEntityTooLarge)
+			return
+		}
+		ct := http.DetectContentType(body)
+		if !strings.HasPrefix(ct, "image/") {
+			c.Status(http.StatusUnsupportedMediaType)
+			return
 		}
 
-		ct := resp.Header.Get("Content-Type")
-		if ct == "" {
-			ct = http.DetectContentType(body)
+		// Persist to disk cache (best-effort, ignore errors)
+		if mkErr := os.MkdirAll(cacheDir, 0o700); mkErr == nil {
+			_ = os.WriteFile(cachePath, body, 0o600)
 		}
+
 		c.Header("Cache-Control", "public, max-age=31536000, immutable")
 		c.Data(http.StatusOK, ct, body)
 	})
