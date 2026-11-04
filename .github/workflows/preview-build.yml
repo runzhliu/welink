@@ -1,0 +1,141 @@
+name: Build unverified preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '已有版本标签（仅构建该标签的代码）'
+        required: true
+        default: 'v0.4.0'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate existing tag
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.tag.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 校验标签
+        id: tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ "$RELEASE_TAG" != 'v0.4.0' ]]; then
+            echo '这个预览流程仅用于现有 v0.4.0 标签。' >&2
+            exit 1
+          fi
+          commit=$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+  build-dmg:
+    name: macOS DMG
+    needs: validate
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: node scripts/check-lockfile-registry.js frontend/package-lock.json
+      - run: make dmg
+      - name: 生成校验和
+        run: cd dist && shasum -a 256 WeLink.dmg > WeLink.dmg.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-preview
+          path: |
+            dist/WeLink.dmg
+            dist/WeLink.dmg.sha256
+          if-no-files-found: error
+
+  build-exe:
+    name: Windows EXE
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: backend
+        run: go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
+      - run: node scripts/check-lockfile-registry.js frontend/package-lock.json
+      - run: make exe
+      - name: 生成校验和
+        run: cd dist && sha256sum WeLink-windows-amd64.zip > WeLink-windows-amd64.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-preview
+          path: |
+            dist/WeLink-windows-amd64.zip
+            dist/WeLink-windows-amd64.zip.sha256
+          if-no-files-found: error
+
+  publish-preview:
+    name: Publish prerelease
+    needs: [validate, build-dmg, build-exe]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: 校验构建产物
+        run: |
+          cd artifacts
+          sha256sum -c WeLink.dmg.sha256
+          sha256sum -c WeLink-windows-amd64.zip.sha256
+      - name: 创建预发布
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_COMMIT: ${{ needs.validate.outputs.commit }}
+        run: |
+          if [[ "$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")" != "$EXPECTED_COMMIT" ]]; then
+            echo '标签已改变，拒绝发布与标签不一致的构建产物。' >&2
+            exit 1
+          fi
+          cat > "$RUNNER_TEMP/welink-preview-notes.md" <<'EOF'
+          ## v0.4.0 开发预览
+
+          新增 SFT 工作台，支持数据审核、Mac / NVIDIA GPU 训练环境、训练评测、Adapter 导出与试聊，并优化页面交互。
+
+          **硬件与视觉验收尚未完成。** CUDA L20 已用合成数据完成一次训练、评测和试聊冒烟；Mac MLX、CUDA 完整恢复及故障注入等仍待验证。此版本标记为预发布，不代表正式发布验收通过。
+
+          训练数据会发送到所选择的训练环境，模型也可能记住聊天内容。公开 Demo 只展示流程，不支持上传训练数据或连接训练环境。
+
+          详细范围请查看 [SFT 使用说明](https://github.com/runzhliu/welink/blob/v0.4.0/docs/sft.md)和[发布验收清单](https://github.com/runzhliu/welink/blob/v0.4.0/docs/sft-release-checklist.md)。
+          EOF
+          gh release create "$RELEASE_TAG" artifacts/* --verify-tag --prerelease \
+            --title "WeLink ${RELEASE_TAG} 预览" --notes-file "$RUNNER_TEMP/welink-preview-notes.md"
