@@ -294,7 +294,7 @@ export const TimelineViewMode: React.FC<Props> = ({ contacts, onContactClick }) 
                                   }}
                                 />
                               ) : (
-                                <div className="w-full h-full bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white font-black"
+                                <div className="w-full h-full bg-[#087f5b] flex items-center justify-center text-white font-black"
                                   style={{ fontSize: size * 0.36 }}>
                                   {[...name][0]}
                                 </div>

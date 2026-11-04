@@ -12,9 +12,7 @@
  *   - 流式回复气泡加 aria-live，屏幕阅读器能读到「分析中…」
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ChevronLeft, Bot, Send, Loader2, Square, Copy, Check, Share2, Sparkles,
-} from 'lucide-react';
+import { ChevronLeft, MessageSquare, Send, Loader2, Square, Copy, Check, Share2, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { calendarApi } from '../../services/api';
@@ -103,7 +101,7 @@ const DayAssistantBubble: React.FC<{
     <div className="flex flex-col gap-0.5">
       <div className="flex gap-2 group">
         <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white mt-0.5 bg-[#576b95]">
-          <Bot size={12} />
+          <MessageSquare size={12} />
         </div>
         <div className="max-w-[85%] flex flex-col gap-0.5">
           <div className="px-3 py-2 rounded-2xl rounded-bl-sm text-sm leading-relaxed break-words bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-gray-200 prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 dark:prose-invert">
@@ -116,7 +114,7 @@ const DayAssistantBubble: React.FC<{
                 onClick={onOpenSettings}
                 className="not-prose mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#07c160] text-white text-xs font-bold hover:bg-[#06ad56] transition-colors shadow-sm"
               >
-                <Sparkles size={12} /> 去设置
+                <FileText size={12} /> 去设置
               </button>
             )}
             {msg.stats && !msg.streaming && (
@@ -427,7 +425,7 @@ export const DayAIPanel: React.FC<DayAIPanelProps> = ({ date, contacts, groups, 
             </div>
           ) : msg.streaming ? (
             <div key={`s-${i}`} className="flex gap-2">
-              <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center bg-[#576b95] text-white mt-0.5"><Bot size={12} /></div>
+              <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center bg-[#576b95] text-white mt-0.5"><MessageSquare size={12} /></div>
               <div className="px-3 py-2 rounded-2xl rounded-bl-sm text-sm bg-gray-100 dark:bg-white/10 text-gray-400">
                 <span className="flex items-center gap-1.5 text-xs">
                   <Loader2 size={12} className="animate-spin text-[#576b95]" />

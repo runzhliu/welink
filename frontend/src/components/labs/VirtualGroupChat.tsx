@@ -6,9 +6,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Users, MessageSquarePlus, Loader2, Send, Trash2, X, Search, Sparkles, Shuffle, Zap, Square, Share2, Check, Save, History, Plus,
-} from 'lucide-react';
+import { Users, MessageSquarePlus, Loader2, Send, Trash2, X, Search, FileText, Shuffle, Zap, Square, Share2, Check, Save, History, Plus } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import axios from 'axios';
 import type { ContactStats } from '../../types';
@@ -429,8 +427,8 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
       {/* Header */}
       <div className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-4 mb-4">
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center">
-            <Sparkles size={18} className="text-white" />
+          <div className="w-9 h-9 rounded-xl bg-[#087f5b] flex items-center justify-center">
+            <FileText size={18} className="text-white" />
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-black dk-text">
@@ -727,9 +725,9 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
           <button
             onClick={() => requestTurn('auto')}
             disabled={!canStart}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-[#07c160] to-[#10aeff] text-white text-sm font-bold disabled:opacity-40 hover:opacity-90"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#087f5b] text-white text-sm font-bold disabled:opacity-40 hover:opacity-90"
           >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
             {history.length === 0 ? '开启群聊' : '下一轮 AI'}
           </button>
           <button

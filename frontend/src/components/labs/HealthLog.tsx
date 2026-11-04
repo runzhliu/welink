@@ -253,7 +253,7 @@ export const HealthLog: React.FC = () => {
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                           />
                         ) : (
-                          <div className="w-5 h-5 rounded-full bg-gradient-to-br from-[#fa5151] to-[#fb7185] flex items-center justify-center text-[10px] text-white font-bold flex-shrink-0">
+                          <div className="w-5 h-5 rounded-full bg-[#617078] flex items-center justify-center text-[10px] text-white font-bold flex-shrink-0">
                             {c.display_name.charAt(0)}
                           </div>
                         )}

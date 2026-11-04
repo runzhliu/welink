@@ -1,3 +1,5 @@
+import { Select } from '../common/Select';
+import { TimePicker } from '../common/TimePicker';
 /**
  * 定时任务 新建/编辑表单弹窗。
  */
@@ -162,12 +164,12 @@ export const TaskEditModal: React.FC<Props> = ({ task, contacts, groups, onClose
               ))}
             </div>
             {needTarget && (
-              <select className={fieldCls} value={targetId} onChange={e => setTargetId(e.target.value)}>
+              <Select className={fieldCls} value={targetId} onValueChange={nextValue => setTargetId(nextValue)}>
                 <option value="">— 选择{targetKind === 'contact' ? '联系人' : '群'} —</option>
                 {targetKind === 'contact'
                   ? sortedContacts.map(c => <option key={c.username} value={c.username}>{contactName(c)}</option>)
                   : sortedGroups.map(g => <option key={g.username} value={g.username}>{g.name}</option>)}
-              </select>
+              </Select>
             )}
           </div>
 
@@ -184,9 +186,9 @@ export const TaskEditModal: React.FC<Props> = ({ task, contacts, groups, onClose
             </div>
             <div className="flex items-center gap-2">
               {scheduleKind === 'weekly' && (
-                <select className={fieldCls + ' flex-1'} value={weekday} onChange={e => setWeekday(Number(e.target.value))}>
+                <Select className={fieldCls + ' flex-1'} value={weekday} onValueChange={nextValue => setWeekday(Number(nextValue))}>
                   {WEEK.map((w, i) => <option key={i} value={i}>{w}</option>)}
-                </select>
+                </Select>
               )}
               {scheduleKind === 'interval' ? (
                 <div className="flex items-center gap-2">
@@ -196,7 +198,7 @@ export const TaskEditModal: React.FC<Props> = ({ task, contacts, groups, onClose
                   <span className="text-sm text-gray-500">小时</span>
                 </div>
               ) : (
-                <input type="time" className={fieldCls + ' flex-1'} value={timeOfDay} onChange={e => setTimeOfDay(e.target.value)} />
+                <TimePicker aria-label="执行时间"  className={fieldCls + ' flex-1'} value={timeOfDay} onValueChange={nextValue => setTimeOfDay(nextValue)} />
               )}
             </div>
           </div>
@@ -205,7 +207,7 @@ export const TaskEditModal: React.FC<Props> = ({ task, contacts, groups, onClose
         <div className="sticky bottom-0 bg-white/90 dark:bg-[#1c1c1e]/90 backdrop-blur px-5 py-3 border-t border-gray-100 dark:border-white/10 flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">取消</button>
           <button onClick={save} disabled={saving}
-            className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-[#07c160] to-[#10aeff] text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
+            className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-bold bg-[var(--accent)] text-[var(--on-accent)] hover:opacity-90 disabled:opacity-50 transition-opacity">
             {saving && <Loader2 size={14} className="animate-spin" />}
             {task ? '保存' : '创建'}
           </button>

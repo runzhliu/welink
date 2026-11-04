@@ -6,7 +6,7 @@ import React, { useMemo } from 'react';
 import { Moon, Clock, Star } from 'lucide-react';
 import type { ContactStats, GlobalStats } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
-import { avatarSrc } from '../../utils/avatar';
+import { Avatar } from '../common/Avatar';
 
 interface Props {
   globalStats: GlobalStats | null;
@@ -108,7 +108,6 @@ export const LateNightGuard: React.FC<Props> = ({
                 <div className="space-y-2">
                   {top3.map((entry, i) => {
                     const contact = findContact(entry.name);
-                    const avatarUrl = contact?.small_head_url || contact?.big_head_url;
                     const clickable = !!(contact && onContactClick);
                     return (
                       <div
@@ -129,22 +128,7 @@ export const LateNightGuard: React.FC<Props> = ({
                         >
                           {i + 1}
                         </span>
-                        <div className="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden ring-1 ring-gray-200">
-                          {avatarUrl ? (
-                            <img
-                              src={avatarSrc(avatarUrl)}
-                              alt={entry.name}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none';
-                              }}
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-[#1a1a2e] flex items-center justify-center text-white text-xs font-bold">
-                              {entry.name.charAt(0)}
-                            </div>
-                          )}
-                        </div>
+                        <Avatar contact={contact} name={entry.name} className="w-8 h-8 ring-1 ring-[var(--border)]" />
                         <span
                           className={`text-sm font-medium text-gray-800 truncate flex-1${
                             privacyMode ? ' privacy-blur' : ''

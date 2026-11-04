@@ -8,9 +8,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import {
-  Quote, Loader2, Search, Wand2, Share2, Check, MessageCircle, Trophy,
-} from 'lucide-react';
+import { Quote, Loader2, Search, PenLine, Share2, Check, MessageCircle, Trophy } from 'lucide-react';
 import { groupsApi } from '../../services/api';
 import type { GroupInfo } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
@@ -196,7 +194,7 @@ export const GoldenQuotes: React.FC = () => {
             disabled={!picked || loading}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#07c160] hover:bg-[#06a850] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
-            {loading ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <PenLine size={12} />}
             {loading ? '扫描中…' : '生成金句榜'}
           </button>
         </div>

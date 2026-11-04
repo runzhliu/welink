@@ -1,3 +1,4 @@
+import { Select } from '../common/Select';
 /**
  * 群聊 AI 年度回顾 Modal —— Spotify Wrapped 风格
  * 分页展示：年度概览 / 活跃榜 / 金句 / 月度曲线 / 叙事
@@ -5,7 +6,7 @@
 
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { X, Loader2, Calendar, MessageSquare, Users, Crown, Sparkles, Quote, TrendingUp, AlertCircle, Image as ImageIcon } from 'lucide-react';
+import { X, Loader2, Calendar, MessageSquare, Users, Crown, FileText, Quote, TrendingUp, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import type { GroupYearReview } from '../../types';
 import { groupExtraApi } from '../../services/api';
 import { avatarSrc } from '../../utils/avatar';
@@ -214,7 +215,7 @@ export const GroupYearReviewModal: React.FC<Props> = ({ username, fallbackName, 
       const highlight = data.highlight; // 在闭包里固化，TS narrowing 跨 render 箭头函数会丢
       pages.push({
         title: 'AI 年度叙事',
-        icon: <Sparkles size={18} />,
+        icon: <FileText size={18} />,
         render: () => (
           <div className="space-y-4">
             {/* AI 生成的封面图（手动触发） */}
@@ -228,7 +229,7 @@ export const GroupYearReviewModal: React.FC<Props> = ({ username, fallbackName, 
               <div className="absolute top-3 right-3">
                 <TTSButton text={highlight} size={16} title="朗读年度叙事" />
               </div>
-              <Sparkles className="text-[#576b95] mb-3" size={24} />
+              <FileText className="text-[#576b95] mb-3" size={24} />
               <div className="text-base text-[#1d1d1f] dk-text leading-[1.9] whitespace-pre-wrap">
                 {highlight}
               </div>
@@ -298,14 +299,14 @@ export const GroupYearReviewModal: React.FC<Props> = ({ username, fallbackName, 
             </span>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <select
+            <Select
               value={year}
-              onChange={e => setYear(Number(e.target.value))}
+              onValueChange={nextValue => setYear(Number(nextValue))}
               disabled={loading}
               className="text-xs bg-gray-100 dark:bg-white/10 border-0 rounded-lg px-2 py-1"
             >
               {years.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
+            </Select>
             <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
               <X size={18} />
             </button>

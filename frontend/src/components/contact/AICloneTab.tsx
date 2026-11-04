@@ -1,13 +1,15 @@
+import { Select } from '../common/Select';
 /**
  * AI 分身 — 三层记忆 + 行为特征统计
  * 学习阶段通过 SSE 推送多步进度
  */
 
+import { getDefaultModel } from '../settings/ai/types';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, Sparkles, RotateCcw, Users, Brain, BarChart3, MessageSquare, CheckCircle2, Share2, Check, Play, Square, Eraser } from 'lucide-react';
+import { Send, Loader2, FileText, RotateCcw, Users, Archive, BarChart3, MessageSquare, CheckCircle2, Share2, Check, Play, Square, Eraser } from 'lucide-react';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { avatarSrc } from '../../utils/avatar';
-import { contactsApi } from '../../services/api';
+import { contactsApi, sftApi, type SFTDeployment } from '../../services/api';
 import { generateCloneChatImage } from '../../utils/shareImage';
 import { RevealLink } from '../common/RevealLink';
 import { TTSButton } from '../common/TTSButton';
@@ -47,7 +49,7 @@ const COUNT_OPTIONS = [
 const LEARN_STEPS = [
   { key: 'loading', icon: MessageSquare, label: '加载聊天记录' },
   { key: 'analyzing', icon: BarChart3, label: '分析聊天特征' },
-  { key: 'profile', icon: Brain, label: '提炼人物特征' },
+  { key: 'profile', icon: Archive, label: '提炼人物特征' },
   { key: 'building', icon: CheckCircle2, label: '构建 AI 分身' },
 ];
 
@@ -66,8 +68,12 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [llmInfo, setLlmInfo] = useState<{ provider: string; model: string }>({ provider: '', model: '' });
-  const [profiles, setProfiles] = useState<{ id: string; provider: string; model?: string }[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; provider: string; model?: string; base_url?: string }[]>([]);
   const [profileId, setProfileId] = useState('');
+  const [sftDeployments, setSftDeployments] = useState<SFTDeployment[]>([]);
+  const [sftDeploymentId, setSftDeploymentId] = useState('');
+  const [routingMode, setRoutingMode] = useState<'style' | 'auto' | 'hybrid'>('auto');
+  const [ragInfo, setRagInfo] = useState<{ hits: number; retrieved: number } | null>(null);
   const [sharing, setSharing] = useState(false);
   const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string; path?: string } | null>(null);
   // 对话续写
@@ -95,10 +101,11 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
     setRestoring(true);
     fetch(`/api/ai/clone/session/${encodeURIComponent(username)}`)
       .then(r => r.json())
-      .then(async (data: { exists: boolean; session_id?: string; private_count?: number; group_count?: number; has_profile?: boolean; has_recent?: boolean; avg_msg_len?: number; emoji_pct?: number; updated_at?: number }) => {
+      .then(async (data: { exists: boolean; session_id?: string; sft_deployment_id?: string; private_count?: number; group_count?: number; has_profile?: boolean; has_recent?: boolean; avg_msg_len?: number; emoji_pct?: number; updated_at?: number }) => {
         if (cancelled) return;
         if (data.exists && data.session_id) {
           setSessionId(data.session_id);
+          if (data.sft_deployment_id) setSftDeploymentId(data.sft_deployment_id);
           setLearnResult({
             session_id: data.session_id,
             sample_count: (data.private_count ?? 0) + (data.group_count ?? 0),
@@ -130,6 +137,19 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
   }, [username]);
 
   useEffect(() => {
+    let cancelled = false;
+    sftApi.listDeployments('running')
+      .then(items => {
+        if (cancelled) return;
+        const compatible = items.filter(item => item.skill_type === 'contact' && item.target_username === username);
+        setSftDeployments(compatible);
+        setSftDeploymentId(current => compatible.some(item => item.id === current) ? current : (compatible[0]?.id ?? ''));
+      })
+      .catch(() => { if (!cancelled) setSftDeployments([]); });
+    return () => { cancelled = true; };
+  }, [username]);
+
+  useEffect(() => {
     setGroupsLoading(true);
     contactsApi.getCommonGroups(username)
       .then(groups => setCommonGroups(groups || []))
@@ -139,26 +159,21 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
 
   // 获取当前 LLM 配置信息（没填模型名时用 provider 默认模型）
   useEffect(() => {
-    const defaultModels: Record<string, string> = {
-      deepseek: 'deepseek-v4-pro', doubao: 'doubao-seed-2-0-pro-260215',
-      kimi: 'kimi-k2.5', gemini: 'gemini-2.0-flash',
-      glm: 'glm-4-flash', grok: 'grok-3-mini', minimax: 'MiniMax-Text-01',
-      'minimax-cn': 'MiniMax-Text-01', openai: 'gpt-4o-mini', claude: 'claude-haiku-4-5-20251001',
-      ollama: 'llama3',
-    };
-    fetch('/api/preferences').then(r => r.json()).then((d: { llm_profiles?: { id: string; provider: string; model?: string }[]; llm_provider?: string; llm_model?: string }) => {
+    fetch('/api/preferences').then(r => r.json()).then((d: { llm_profiles?: { id: string; provider: string; model?: string; base_url?: string }[]; llm_provider?: string; llm_model?: string; llm_base_url?: string }) => {
       const ps = d.llm_profiles ?? [];
       setProfiles(ps);
       if (ps.length > 0 && !profileId) setProfileId(ps[0].id);
-      let provider = '', model = '';
+      let provider = '', model = '', baseURL = '';
       if (ps.length) {
         provider = ps[0].provider;
         model = ps[0].model || '';
+        baseURL = ps[0].base_url || '';
       } else if (d.llm_provider) {
         provider = d.llm_provider;
         model = d.llm_model || '';
+        baseURL = d.llm_base_url || '';
       }
-      if (!model && provider) model = defaultModels[provider] ?? '';
+      if (!model && provider) model = getDefaultModel(provider, baseURL) || '';
       setLlmInfo({ provider, model });
     }).catch(() => {});
   }, []);
@@ -166,16 +181,9 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
   // 切换 profile 时更新 llmInfo
   useEffect(() => {
     if (!profileId || profiles.length === 0) return;
-    const defaultModels: Record<string, string> = {
-      deepseek: 'deepseek-v4-pro', doubao: 'doubao-seed-2-0-pro-260215',
-      kimi: 'kimi-k2.5', gemini: 'gemini-2.0-flash',
-      glm: 'glm-4-flash', grok: 'grok-3-mini', minimax: 'MiniMax-Text-01',
-      'minimax-cn': 'MiniMax-Text-01', openai: 'gpt-4o-mini', claude: 'claude-haiku-4-5-20251001',
-      ollama: 'llama3',
-    };
     const p = profiles.find(pp => pp.id === profileId);
     if (p) {
-      const model = p.model || defaultModels[p.provider] || '';
+      const model = p.model || getDefaultModel(p.provider, p.base_url) || '';
       setLlmInfo({ provider: p.provider, model });
     }
   }, [profileId, profiles]);
@@ -284,7 +292,10 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: sessionId,
+          username,
           profile_id: profileId,
+          sft_deployment_id: sftDeploymentId,
+          routing_mode: routingMode,
           rounds: continueRounds,
           topic: continueTopic.trim(),
           my_name: '我',
@@ -337,7 +348,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
       setContinueLoading(false);
       continueAbortRef.current = null;
     }
-  }, [continueLoading, sessionId, profileId, continueRounds, continueTopic, scrollToBottom]);
+  }, [continueLoading, sessionId, username, profileId, sftDeploymentId, routingMode, continueRounds, continueTopic, scrollToBottom]);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -349,6 +360,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
     setInput('');
     setLoading(true);
     setError(null);
+    setRagInfo(null);
 
     setMessages([...newMessages, { role: 'assistant', content: '' }]);
 
@@ -361,8 +373,11 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: sessionId,
+          username,
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
           profile_id: profileId,
+          sft_deployment_id: sftDeploymentId,
+          routing_mode: routingMode,
         }),
         signal: abort.signal,
       });
@@ -385,8 +400,9 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           try {
-            const chunk = JSON.parse(line.slice(6)) as { delta?: string; done?: boolean; error?: string };
+            const chunk = JSON.parse(line.slice(6)) as { delta?: string; done?: boolean; error?: string; rag_meta?: { hits: number; retrieved: number } };
             if (chunk.error) throw new Error(chunk.error);
+            if (chunk.rag_meta) setRagInfo(chunk.rag_meta);
             if (chunk.done) break;
             if (chunk.delta) {
               accumulated += chunk.delta;
@@ -443,7 +459,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
           {avatarUrl ? (
             <img loading="lazy" src={avatarSrc(avatarUrl)} alt="" className="w-20 h-20 rounded-full object-cover opacity-60" />
           ) : (
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center text-white text-2xl font-bold opacity-60">
+            <div className="w-20 h-20 rounded-full bg-[#087f5b] flex items-center justify-center text-white text-2xl font-bold opacity-60">
               {displayName[0]}
             </div>
           )}
@@ -494,12 +510,12 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
           {avatarUrl ? (
             <img loading="lazy" src={avatarSrc(avatarUrl)} alt="" className="w-20 h-20 rounded-full object-cover" />
           ) : (
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center text-white text-2xl font-bold">
+            <div className="w-20 h-20 rounded-full bg-[#087f5b] flex items-center justify-center text-white text-2xl font-bold">
               {displayName[0]}
             </div>
           )}
           <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg">
-            <Sparkles size={14} className="text-white" />
+            <FileText size={14} className="text-white" />
           </div>
         </div>
 
@@ -590,7 +606,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
           <label className="flex items-center justify-between cursor-pointer">
             <div>
               <span className="text-xs font-bold text-gray-500 flex items-center gap-1">
-                <Brain size={12} />
+                <Archive size={12} />
                 AI 提炼风格特征
               </span>
               <p className="text-[10px] text-gray-400 mt-0.5">额外调用一次 AI 分析说话风格，关闭则直接用原始消息模仿（更快）</p>
@@ -611,7 +627,7 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
           className="px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl font-bold text-sm shadow-lg hover:shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
         >
           <span className="flex items-center gap-2">
-            <Sparkles size={16} />
+            <FileText size={16} />
             开始学习
           </span>
         </button>
@@ -650,20 +666,43 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
               </span>
             )}
             {profiles.length > 1 ? (
-              <select
+              <Select
                 value={profileId}
-                onChange={e => setProfileId(e.target.value)}
+                onValueChange={nextValue => setProfileId(nextValue)}
                 className="text-[10px] text-purple-500 bg-purple-50 dark:bg-purple-500/10 px-2 py-0.5 rounded-full font-medium border-0 outline-none cursor-pointer"
               >
                 {profiles.map(p => (
                   <option key={p.id} value={p.id}>{p.provider}{p.model ? ` · ${p.model}` : ''}</option>
                 ))}
-              </select>
+              </Select>
             ) : llmInfo.provider ? (
               <span className="text-[10px] text-purple-500 bg-purple-50 dark:bg-purple-500/10 px-2 py-0.5 rounded-full font-medium">
                 {llmInfo.provider}{llmInfo.model ? ` · ${llmInfo.model}` : ''}
               </span>
             ) : null}
+            {sftDeployments.length > 0 && (
+              <select
+                value={sftDeploymentId}
+                onChange={e => setSftDeploymentId(e.target.value)}
+                className="text-[10px] text-blue-600 bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded-full font-medium border-0 outline-none cursor-pointer"
+                title="选择分身推理引擎"
+              >
+                <option value="">画像 Prompt + LLM</option>
+                {sftDeployments.map(item => <option key={item.id} value={item.id}>SFT · {item.served_model}</option>)}
+              </select>
+            )}
+            {sftDeploymentId && (
+              <select
+                value={routingMode}
+                onChange={e => setRoutingMode(e.target.value as typeof routingMode)}
+                className="text-[10px] text-purple-600 bg-purple-50 dark:bg-purple-500/10 px-2 py-0.5 rounded-full font-medium border-0 outline-none cursor-pointer"
+                title="SFT 与历史检索的组合方式"
+              >
+                <option value="style">纯 SFT</option>
+                <option value="auto">自动补事实</option>
+                <option value="hybrid">始终 RAG</option>
+              </select>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
@@ -732,14 +771,19 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
       )}
 
       {/* Messages */}
+      {ragInfo && sftDeploymentId && (
+        <div className="mb-2 text-[10px] text-[#576b95] bg-[#576b95]/5 rounded-lg px-2.5 py-1.5">
+          本次按需检索：命中 {ragInfo.hits} 条，带入 {ragInfo.retrieved} 条历史消息
+        </div>
+      )}
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-300">
             <span className="text-sm">学习完成，发一条消息开始对话吧</span>
             {r && (
               <div className="flex items-center gap-3 text-[10px]">
-                {r.has_profile && <span className="flex items-center gap-1"><Brain size={10} /> 人物档案</span>}
-                {r.has_recent && <span className="flex items-center gap-1"><Sparkles size={10} /> 近期状态</span>}
+                {r.has_profile && <span className="flex items-center gap-1"><Archive size={10} /> 人物档案</span>}
+                {r.has_recent && <span className="flex items-center gap-1"><FileText size={10} /> 近期状态</span>}
                 <span className="flex items-center gap-1"><BarChart3 size={10} /> 均{r.avg_msg_len}字 · {r.emoji_pct}% emoji</span>
               </div>
             )}
@@ -798,10 +842,10 @@ export const AICloneTab: React.FC<Props> = ({ username, displayName, avatarUrl, 
               placeholder="起始话题（选填，如：聊聊最近的工作）"
               className="flex-1 px-3 py-1.5 text-xs bg-gray-50 dark:bg-white/5 rounded-xl outline-none focus:ring-1 focus:ring-[#576b95]/30 dk-text placeholder:text-gray-300"
             />
-            <select value={continueRounds} onChange={e => setContinueRounds(Number(e.target.value))}
+            <Select value={continueRounds} onValueChange={nextValue => setContinueRounds(Number(nextValue))}
               className="text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 dk-input">
               {[5, 10, 15, 20].map(n => <option key={n} value={n}>{n} 轮</option>)}
-            </select>
+            </Select>
             {continueLoading ? (
               <button onClick={() => continueAbortRef.current?.abort()}
                 className="px-3 py-1.5 bg-red-500 text-white rounded-xl text-xs font-bold">

@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, Loader2, Copy, Check, Sparkles, RotateCw, AlertCircle } from 'lucide-react';
+import { X, Loader2, Copy, Check, PenLine, RotateCw, AlertCircle } from 'lucide-react';
 import type { IcebreakerResponse } from '../../types';
 import { forecastApi } from '../../services/api';
 import { TTSButton } from '../common/TTSButton';
@@ -68,7 +68,7 @@ export const IcebreakerModal: React.FC<Props> = ({ username, fallbackDisplayName
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-white/10">
           <div className="flex items-center gap-2 min-w-0">
-            <Sparkles size={16} className="text-[#576b95] flex-shrink-0" />
+            <PenLine size={16} className="text-[#576b95] flex-shrink-0" />
             <span className="text-sm font-bold text-[#1d1d1f] dk-text truncate">
               写给 {displayName} 的开场白
             </span>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bot } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { PROMPT_TEMPLATES } from '../../../utils/promptTemplates';
 
 export const PromptTemplateSection: React.FC = () => {
@@ -40,7 +40,7 @@ export const PromptTemplateSection: React.FC = () => {
   return (
     <section className="mb-8 bg-white rounded-3xl border border-gray-100 p-6 sm:p-8 dk-card dk-border" data-section-id="prompt" data-settings-tags="prompt 模板 提示词 AI 自定义">
       <h2 className="text-lg font-black text-[#1d1d1f] dk-text mb-1 flex items-center gap-2">
-        <Bot size={18} className="text-gray-400" />
+        <FileText size={18} className="text-gray-400" />
         Prompt 模板
       </h2>
       <p className="text-xs text-gray-400 mb-4">自定义各 AI 功能的系统提示词。留空则使用默认值。</p>

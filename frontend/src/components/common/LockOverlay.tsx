@@ -45,7 +45,7 @@ export const LockOverlay: React.FC = () => {
         onSubmit={submit}
         className="w-full max-w-sm mx-4 rounded-3xl bg-white dark:bg-[#1d1d1f] shadow-2xl border border-gray-100 dark:border-white/10 p-8 text-center"
       >
-        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center mx-auto mb-4 shadow-lg">
+        <div className="w-16 h-16 rounded-full bg-[#087f5b] flex items-center justify-center mx-auto mb-4 shadow-lg">
           <Lock size={28} className="text-white" />
         </div>
         <h2 className="text-lg font-bold text-[#1d1d1f] dark:text-white mb-1">WeLink 已锁定</h2>

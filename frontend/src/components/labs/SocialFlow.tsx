@@ -12,7 +12,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { Waves, Loader2, RefreshCw, Share2, Check, AlertCircle, Sparkles, Snowflake, Flame, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
+import { Waves, Loader2, RefreshCw, Share2, Check, AlertCircle, FileText, Snowflake, Flame, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import { captureCardToPng } from '../../utils/exportPng';
 import { avatarSrc } from '../../utils/avatar';
 import { useToast } from '../common/Toast';
@@ -53,7 +53,7 @@ const FLOW_META: Record<string, { label: string; cls: string }> = {
 // 把 change_pct 渲染成带箭头的涨跌（999 当作 NEW）
 function ChangeBadge({ pct, lastYear }: { pct: number; lastYear: number }) {
   if (lastYear === 0) {
-    return <span className="inline-flex items-center gap-0.5 text-[#07c160] font-bold"><Sparkles size={11} />全新</span>;
+    return <span className="inline-flex items-center gap-0.5 text-[#07c160] font-bold"><FileText size={11} />全新</span>;
   }
   if (pct > 0) {
     return <span className="inline-flex items-center gap-0.5 text-[#07c160] font-bold"><ArrowUpRight size={11} />+{pct}%</span>;
@@ -114,7 +114,7 @@ export const SocialFlow: React.FC = () => {
   };
 
   const tabs: { key: Tab; label: string; hint: string; icon: React.ReactNode }[] = [
-    { key: 'newcomers', label: '新晋核心', hint: '今年才走进你生活、突然聊很多的人', icon: <Sparkles size={12} /> },
+    { key: 'newcomers', label: '新晋核心', hint: '今年才走进你生活、突然聊很多的人', icon: <FileText size={12} /> },
     { key: 'faded',     label: '悄然淡出', hint: '去年还常聊、今年骤降的老朋友',     icon: <Snowflake size={12} /> },
     { key: 'revived',   label: '逆袭回归', hint: '冷过一阵、今年又热起来的关系',     icon: <Flame size={12} /> },
     { key: 'all',       label: '全员总览', hint: '今年聊得最多的人 · 含流动标签',     icon: <Waves size={12} /> },
@@ -159,7 +159,7 @@ export const SocialFlow: React.FC = () => {
             <button
               onClick={exportPng}
               disabled={exporting}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-[#07c160] to-[#10aeff] text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#087f5b] text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {exporting ? <Loader2 size={12} className="animate-spin" /> : exported ? <Check size={12} /> : <Share2 size={12} />}
               {exported ? '已下载' : '截图'}
@@ -201,7 +201,7 @@ export const SocialFlow: React.FC = () => {
                 onClick={() => setTab(t.key)}
                 className={`flex-1 inline-flex items-center justify-center gap-1 px-2 py-2 rounded-xl text-xs font-bold transition-colors ${
                   tab === t.key
-                    ? 'bg-gradient-to-r from-[#07c160] to-[#10aeff] text-white'
+                    ? 'bg-[#087f5b] text-white'
                     : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'
                 }`}
               >
@@ -242,7 +242,7 @@ export const SocialFlow: React.FC = () => {
                           <img src={avatarSrc(c.avatar_url) || ''} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center text-xs text-white font-bold flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-[#087f5b] flex items-center justify-center text-xs text-white font-bold flex-shrink-0">
                             {c.display_name.charAt(0)}
                           </div>
                         )}

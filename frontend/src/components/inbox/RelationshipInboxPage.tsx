@@ -6,22 +6,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  AlertCircle,
-  Bell,
-  Cake,
-  CheckCircle2,
-  ChevronRight,
-  Clock,
-  Heart,
-  Inbox,
-  Loader2,
-  MailOpen,
-  MoonStar,
-  RefreshCw,
-  Snowflake,
-  Sparkles,
-} from 'lucide-react';
+import { AlertCircle, Bell, Cake, CheckCircle2, ChevronRight, Clock, Heart, Inbox, Loader2, MailOpen, MoonStar, RefreshCw, Snowflake, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { anniversaryApi, forecastApi, tasksApi } from '../../services/api';
@@ -31,7 +16,7 @@ import type {
   ForecastEntry,
   TaskRun,
 } from '../../types';
-import { avatarSrc } from '../../utils/avatar';
+import { Avatar } from '../common/Avatar';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 
 interface Props {
@@ -237,8 +222,8 @@ export const RelationshipInboxPage: React.FC<Props> = ({
     <div className="max-w-6xl mx-auto space-y-5">
       <header className="rounded-3xl border border-[#07c160]/15 bg-white dark:bg-[#1c1c1e] p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center shadow-sm shrink-0">
-            <Inbox size={28} className="text-white" />
+          <div className="w-12 h-12 rounded-xl dk-subtle text-[var(--text-secondary)] flex items-center justify-center shrink-0">
+            <Inbox size={23} />
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl sm:text-3xl font-black text-[#1d1d1f] dark:text-gray-100">关系收件箱</h1>
@@ -282,6 +267,7 @@ export const RelationshipInboxPage: React.FC<Props> = ({
             <ActionRow
               key={f.username}
               avatar={f.avatar_url}
+              contact={contacts.find(c => c.username === f.username)}
               title={f.display_name}
               subtitle={`${f.days_since_last} 天未联系 · ${f.reason || f.suggestion || '关系趋冷'}`}
               tag={f.status === 'endangered' ? '濒危' : '降温'}
@@ -304,7 +290,8 @@ export const RelationshipInboxPage: React.FC<Props> = ({
             <ActionRow
               key={item.id}
               avatar={item.avatar}
-              fallbackIcon={item.type === 'birthday' ? <Cake size={14} /> : <Heart size={14} />}
+              contact={contacts.find(c => c.username === item.username)}
+              fallbackIcon={item.username ? undefined : <Heart size={14} />}
               title={item.title}
               subtitle={`${daysLabel(item.daysUntil)} · ${item.subtitle}`}
               tag={daysLabel(item.daysUntil)}
@@ -325,6 +312,7 @@ export const RelationshipInboxPage: React.FC<Props> = ({
             <ActionRow
               key={item.username}
               avatar={item.avatar}
+              contact={contacts.find(c => c.username === item.username)}
               title={item.name}
               subtitle={`${item.totalMessages.toLocaleString()} 条历史消息 · ${item.daysSince} 天未聊`}
               tag={`${item.daysSince} 天`}
@@ -380,7 +368,7 @@ export const RelationshipInboxPage: React.FC<Props> = ({
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/50" onClick={() => setOpenRun(null)}>
           <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-white dark:bg-[#1c1c1e] rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 bg-white/90 dark:bg-[#1c1c1e]/90 backdrop-blur px-5 py-3.5 border-b border-gray-100 dark:border-white/10 flex items-center gap-2">
-              <Sparkles size={15} className="text-[#07c160]" />
+              <FileText size={15} className="text-[#07c160]" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-black text-[#1d1d1f] dark:text-gray-100 truncate">{openRun.task_name || `任务 #${openRun.task_id}`}</div>
                 <div className="text-[10px] text-gray-400">{fmtTime(openRun.created_at)} · 分析了 {openRun.msg_count} 条消息</div>
@@ -445,6 +433,7 @@ const tagClass = (tone: 'danger' | 'warn' | 'info' | 'neutral') => {
 
 const ActionRow: React.FC<{
   avatar?: string;
+  contact?: ContactStats;
   fallbackIcon?: React.ReactNode;
   title: string;
   subtitle: string;
@@ -452,18 +441,14 @@ const ActionRow: React.FC<{
   tagTone: 'danger' | 'warn' | 'info' | 'neutral';
   privacyMode: boolean;
   onClick: () => void;
-}> = ({ avatar, fallbackIcon, title, subtitle, tag, tagTone, privacyMode, onClick }) => (
+}> = ({ avatar, contact, fallbackIcon, title, subtitle, tag, tagTone, privacyMode, onClick }) => (
   <button
     onClick={onClick}
     className="w-full flex items-center gap-3 rounded-xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#202023] p-3 text-left hover:border-[#07c160]/40 transition-colors"
   >
-    {avatar ? (
-      <img loading="lazy" src={avatarSrc(avatar)} alt="" className="w-9 h-9 rounded-full object-cover bg-gray-100 shrink-0" />
-    ) : (
-      <div className="w-9 h-9 rounded-full bg-[#07c160]/10 text-[#07c160] flex items-center justify-center shrink-0">
-        {fallbackIcon || <Bell size={14} />}
-      </div>
-    )}
+    {fallbackIcon ? (
+      <div className="w-9 h-9 rounded-full dk-subtle text-[var(--text-secondary)] flex items-center justify-center shrink-0">{fallbackIcon}</div>
+    ) : <Avatar contact={contact} src={avatar} name={title} className="w-9 h-9" />}
     <div className="flex-1 min-w-0">
       <div className="flex items-center gap-1.5">
         <span className={`text-sm font-bold text-[#1d1d1f] dark:text-gray-100 truncate${privacyMode ? ' privacy-blur' : ''}`}>

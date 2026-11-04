@@ -1,10 +1,11 @@
+import { DatePicker } from '../common/DatePicker';
 /**
  * 全局跨联系人/群聊消息搜索
  * 增强版：时间范围筛选、结果排序、统计摘要、即输即搜、空状态建议
  */
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Search, Loader2, ChevronRight, Users, Download, Clock, X, Sparkles, Calendar, ArrowUpDown, BarChart3 } from 'lucide-react';
+import { Search, Loader2, ChevronRight, Users, Download, Clock, X, FileText, Calendar, ArrowUpDown, BarChart3 } from 'lucide-react';
 import type { GlobalSearchGroup, ContactStats } from '../../types';
 import { searchApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
@@ -241,10 +242,10 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
               </button>
             ))}
           </div>
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+          <DatePicker aria-label="开始日期"  value={dateFrom} onValueChange={nextValue => setDateFrom(nextValue)}
             className="text-xs border border-gray-200 rounded-lg px-2 py-1 dk-input" />
           <span className="text-xs text-gray-400">至</span>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+          <DatePicker aria-label="结束日期"  value={dateTo} onValueChange={nextValue => setDateTo(nextValue)}
             className="text-xs border border-gray-200 rounded-lg px-2 py-1 dk-input" />
         </div>
       )}
@@ -272,7 +273,7 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
             </div>
           )}
           <div>
-            <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400 mb-2.5"><Sparkles size={12} /> 试试搜索</div>
+            <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400 mb-2.5"><FileText size={12} /> 试试搜索</div>
             <div className="flex flex-wrap gap-2">
               {HOT_KEYWORDS.map(kw => (
                 <button key={kw} onClick={() => { setQuery(kw); doSearch(kw); }}
@@ -376,7 +377,7 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       ) : (
                         <div className={`w-full h-full flex items-center justify-center text-white text-xs font-black
-                          ${group.is_group ? 'bg-gradient-to-br from-[#576b95] to-[#3d4f77]' : 'bg-gradient-to-br from-[#07c160] to-[#06ad56]'}`}>
+                          ${group.is_group ? 'bg-gradient-to-br from-[#576b95] to-[#3d4f77]' : 'bg-[#087f5b]'}`}>
                           {group.is_group ? <Users size={14} /> : group.display_name.charAt(0)}
                         </div>
                       )}

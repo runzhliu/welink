@@ -10,7 +10,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Search, X } from 'lucide-react';
 import type { ContactStats, GroupInfo } from '../../types';
 import { SECTION_GROUPS, SECTIONS } from './nav';
 
@@ -82,6 +82,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onFontSizeChange,
 }) => {
   const [settingsQuery, setSettingsQuery] = useState('');
+  const [matchCount, setMatchCount] = useState<number | null>(null);
   const settingsRootRef = useRef<HTMLDivElement | null>(null);
 
   // 搜索：扫描所有 [data-settings-tags] section，根据 tags + 文本内容过滤
@@ -90,12 +91,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     if (!root) return;
     const q = settingsQuery.trim().toLowerCase();
     const sections = root.querySelectorAll<HTMLElement>('[data-settings-tags]');
+    let count = 0;
     sections.forEach(s => {
       const tags = (s.dataset.settingsTags || '').toLowerCase();
       // 不光搜 tags，也搜 section 内部的文本（隐私屏蔽里的姓名字段除外）
       const text = tags + ' ' + (s.textContent || '').toLowerCase();
-      s.style.display = !q || text.includes(q) ? '' : 'none';
+      const matches = !q || text.includes(q);
+      s.style.display = matches ? '' : 'none';
+      if (matches) count++;
     });
+    setMatchCount(q ? count : null);
   }, [settingsQuery]);
 
   const visibleSections = SECTIONS.filter(s => !s.appOnly || isAppMode);
@@ -104,7 +109,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const jumpToSection = (sectionId: string) => {
     const el = settingsRootRef.current?.querySelector<HTMLElement>(`[data-section-id="${sectionId}"]`);
     if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setSettingsQuery('');
+    el.style.display = '';
+    el.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   };
 
   // IntersectionObserver 高亮当前 section
@@ -202,9 +209,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   };
 
   return (
-    <div className="lg:flex lg:gap-6" ref={settingsRootRef}>
+    <div className="settings-page settings-layout lg:flex lg:gap-8" ref={settingsRootRef}>
       {/* 左栏导航（lg+ sticky）—— 按 group 分组展示 */}
-      <aside className="hidden lg:block w-48 flex-shrink-0 sticky top-0 self-start pt-2 pb-6 max-h-[calc(100vh-2rem)] overflow-y-auto">
+      <aside className="settings-nav hidden lg:block w-48 shrink-0 sticky top-0 self-start max-h-[calc(100dvh-6rem)] overflow-y-auto">
         <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-2">设置目录</div>
         <nav className="flex flex-col gap-3">
           {SECTION_GROUPS.map(g => {
@@ -217,18 +224,20 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 </div>
                 <div className="flex flex-col gap-0.5">
                   {groupSections.map(s => {
-                    const active = activeSectionId === s.id;
+                    const active = (activeSectionId || visibleSections[0]?.id) === s.id;
+                    const Icon = s.icon;
                     return (
                       <button
                         key={s.id}
                         onClick={() => jumpToSection(s.id)}
+                        aria-current={active ? 'location' : undefined}
                         className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-left transition-colors ${
                           active
                             ? 'bg-[#07c160]/10 text-[#07c160]'
                             : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-700 dk-text'
                         }`}
                       >
-                        <span className={`w-1 h-4 rounded-full transition-colors ${active ? 'bg-[#07c160]' : 'bg-transparent'}`} />
+                        <Icon size={15} strokeWidth={1.8} aria-hidden="true" />
                         {s.title}
                       </button>
                     );
@@ -241,24 +250,26 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       </aside>
 
       {/* 主内容区 */}
-      <div className="max-w-2xl flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
-          <h2 className="text-2xl font-black text-[#1d1d1f] dk-text">设置</h2>
-          <div className="relative flex-1 max-w-xs">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" strokeLinecap="round" />
-            </svg>
+      <div className="settings-content flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-5 mb-8 flex-wrap">
+          <div><h1 className="ui-page-title">设置</h1><p className="ui-caption mt-2">让 WeLink 更适合你的使用习惯。</p></div>
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} aria-hidden="true" />
             <input
+              aria-label="搜索设置项"
+              type="search"
               value={settingsQuery}
               onChange={e => setSettingsQuery(e.target.value)}
-              placeholder="搜索设置项…（例：下载 / 诊断 / LLM）"
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-white/10 rounded-xl bg-[#f8f9fb] dk-input focus:outline-none focus:border-[#07c160]"
+              placeholder="搜索设置项…"
+              className="w-full pl-9 pr-9 py-2.5 text-sm border dk-input"
             />
+            {settingsQuery && <button type="button" aria-label="清空设置搜索" onClick={() => setSettingsQuery('')} className="ui-icon-button absolute right-1 top-1/2 -translate-y-1/2 !h-8 !w-8"><X size={14} /></button>}
           </div>
         </div>
+        {matchCount !== null && <p className="ui-caption mb-5" role="status">{matchCount ? `找到 ${matchCount} 个相关设置分区` : '没有找到相关设置，换个关键词试试。'}</p>}
 
         {/* 小屏兼容：横向快速跳转栏（sticky，lg+ 隐藏） */}
-        <div className="lg:hidden sticky top-0 z-10 bg-white dark:bg-[#1c1c1e] -mx-2 px-2 py-2 mb-6 border-b border-gray-100 dark:border-white/5 overflow-x-auto whitespace-nowrap">
+        <div className="settings-quick-nav lg:hidden sticky top-0 z-10 -mx-2 px-2 py-2 mb-6 border-b border-gray-100 dark:border-white/5 overflow-x-auto whitespace-nowrap">
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-bold text-gray-400 flex-shrink-0">快速跳转</span>
             {visibleSections.map(s => (

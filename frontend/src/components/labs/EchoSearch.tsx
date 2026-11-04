@@ -1,3 +1,4 @@
+import { Select } from '../common/Select';
 /**
  * 这句话谁说过 / Echo Search
  *
@@ -9,9 +10,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
-import {
-  Search, Loader2, ChevronDown, ChevronRight, Users2, MessageSquare, Settings2,
-} from 'lucide-react';
+import { Search, Loader2, ChevronDown, ChevronRight, Users2, MessageSquare, Settings2 } from 'lucide-react';
 import { avatarSrc } from '../../utils/avatar';
 import { useToast } from '../common/Toast';
 
@@ -117,7 +116,7 @@ export const EchoSearch: React.FC = () => {
       {/* 顶部：标题 + 介绍 */}
       <div className="rounded-2xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 p-4">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-[#087f5b] flex items-center justify-center shrink-0">
             <Search size={20} className="text-white" />
           </div>
           <div className="flex-1 min-w-0">
@@ -144,7 +143,7 @@ export const EchoSearch: React.FC = () => {
           <button
             type="submit"
             disabled={loading || !query.trim()}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#07c160] to-[#10aeff] text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="px-5 py-2.5 rounded-xl bg-[#087f5b] text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
             搜索
@@ -198,29 +197,29 @@ export const EchoSearch: React.FC = () => {
               </label>
               <label className="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
                 时间范围
-                <select
+                <Select
                   value={days}
-                  onChange={e => setDays(parseInt(e.target.value))}
+                  onValueChange={nextValue => setDays(parseInt(nextValue))}
                   className="px-1.5 py-1 rounded bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10"
                 >
                   <option value={90}>近 3 个月</option>
                   <option value={365}>近 1 年</option>
                   <option value={1095}>近 3 年</option>
                   <option value={0}>不限</option>
-                </select>
+                </Select>
               </label>
               <label className="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
                 联系人门槛
-                <select
+                <Select
                   value={minMsgs}
-                  onChange={e => setMinMsgs(parseInt(e.target.value))}
+                  onValueChange={nextValue => setMinMsgs(parseInt(nextValue))}
                   className="px-1.5 py-1 rounded bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10"
                 >
                   <option value={20}>≥ 20 条</option>
                   <option value={50}>≥ 50 条</option>
                   <option value={200}>≥ 200 条</option>
                   <option value={1}>不限</option>
-                </select>
+                </Select>
               </label>
             </div>
           </div>
@@ -285,7 +284,7 @@ export const EchoSearch: React.FC = () => {
                       className="w-9 h-9 rounded-lg object-cover shrink-0 bg-gray-100 dark:bg-white/10"
                     />
                   ) : (
-                    <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center text-white text-sm font-bold shrink-0">
+                    <div className="w-9 h-9 rounded-lg bg-[#087f5b] flex items-center justify-center text-white text-sm font-bold shrink-0">
                       {g.is_group ? <Users2 size={16} /> : g.display_name.charAt(0)}
                     </div>
                   )}
@@ -308,7 +307,7 @@ export const EchoSearch: React.FC = () => {
                   {/* 相似度条（按 top_sim） */}
                   <div className="hidden sm:block w-20 h-1.5 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden shrink-0">
                     <div
-                      className="h-full bg-gradient-to-r from-[#07c160] to-[#10aeff]"
+                      className="h-full bg-[#087f5b]"
                       style={{ width: `${Math.min(100, g.top_sim * 100)}%` }}
                     />
                   </div>

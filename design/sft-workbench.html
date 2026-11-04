@@ -1,0 +1,183 @@
+<style>
+#welink-sft-design { --wl-page:light-dark(#f6f7f8,#14181b); --wl-card:light-dark(#fff,#1c2226); --wl-subtle:light-dark(#f0f2f3,#252d32); --wl-line:light-dark(#e1e6e8,#333e45); --wl-text:light-dark(#20282c,#e8edef); --wl-muted:light-dark(#616e75,#a8b5bd); --wl-brand:light-dark(#087f5b,#83dfb1); --wl-soft:light-dark(#e4f3eb,#203c2c); --wl-on:light-dark(#fff,#102b1d); --wl-radius:16px; font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif; color:var(--wl-text); }
+#welink-sft-design * { box-sizing:border-box; }
+#welink-sft-design [hidden] { display:none!important; }
+#welink-sft-design button,#welink-sft-design input { font:inherit; }
+#welink-sft-design button { cursor:inherit; }
+#welink-sft-design button:disabled { opacity:.45; cursor:not-allowed; }
+#welink-sft-design .wl-shell { display:grid;grid-template-columns:156px minmax(0,1fr);background:var(--wl-page);border:1px solid var(--wl-line);border-radius:20px;overflow:hidden;min-height:760px; }
+#welink-sft-design .wl-sidebar { background:var(--wl-card);padding:24px 14px;border-right:1px solid var(--wl-line); }
+#welink-sft-design .wl-logo { font-weight:650;font-size:19px;margin:0 8px 26px;letter-spacing:-.5px; }
+#welink-sft-design .wl-group { color:var(--wl-muted);font-size:11px;letter-spacing:.1em;margin:22px 10px 8px; }
+#welink-sft-design .wl-nav-item { display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;margin-block:3px; }
+#welink-sft-design .wl-nav-item svg {width:16px;height:16px;}
+#welink-sft-design .wl-nav-item.is-current {background:var(--wl-soft);color:var(--wl-brand);font-weight:600;}
+#welink-sft-design .wl-main {padding:28px;min-width:0;}
+#welink-sft-design .wl-top {display:flex;align-items:flex-start;gap:14px;justify-content:space-between;flex-wrap:wrap;}
+#welink-sft-design h2 {font-size:25px;line-height:1.25;letter-spacing:-.7px;font-weight:650;margin:4px 0 8px;}
+#welink-sft-design h3 {font-size:15px;font-weight:600;margin:0 0 12px;}
+#welink-sft-design p {margin:0;}
+#welink-sft-design .wl-small {font-size:12px;color:var(--wl-muted);}
+#welink-sft-design .wl-row {display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+#welink-sft-design .wl-between {justify-content:space-between;}
+#welink-sft-design .wl-button {display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:7px 12px;border:1px solid var(--wl-line);border-radius:9px;background:var(--wl-card);color:var(--wl-text);}
+#welink-sft-design .wl-button svg {width:15px;height:15px;}
+#welink-sft-design .wl-primary {background:var(--wl-brand);border-color:var(--wl-brand);color:var(--wl-on);}
+#welink-sft-design .wl-button[aria-pressed=true]:not(.wl-primary) {background:var(--wl-soft);border-color:var(--wl-brand);color:var(--wl-brand);}
+#welink-sft-design .wl-panel {background:var(--wl-card);border:1px solid var(--wl-line);border-radius:var(--wl-radius);padding:20px;margin-top:18px;min-width:0;}
+#welink-sft-design .wl-tabs {display:flex;gap:24px;margin-top:24px;border-bottom:1px solid var(--wl-line);}
+#welink-sft-design .wl-tab {background:transparent;border:0;border-bottom:2px solid transparent;padding:10px 0;color:var(--wl-muted);}
+#welink-sft-design .wl-tab[aria-selected=true] {border-bottom-color:var(--wl-brand);color:var(--wl-text);font-weight:600;}
+#welink-sft-design .wl-status {font-size:12px;color:var(--wl-brand);background:var(--wl-soft);padding:3px 8px;border-radius:6px;white-space:nowrap;}
+#welink-sft-design .wl-profile {display:flex;gap:10px;align-items:center;margin-top:14px;}
+#welink-sft-design .wl-avatar {display:inline-flex;width:34px;height:34px;flex-shrink:0;border-radius:50%;align-items:center;justify-content:center;background:var(--wl-subtle);color:var(--wl-muted);font-weight:500;}
+#welink-sft-design .wl-summary {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:20px 0 0;}
+#welink-sft-design .wl-summary>div {border-left:2px solid var(--wl-line);padding-left:12px;min-width:0;}
+#welink-sft-design .wl-summary strong {font-size:18px;font-weight:600;display:block;font-variant-numeric:tabular-nums;}
+#welink-sft-design .wl-list-row {display:flex;align-items:center;gap:12px;border-top:1px solid var(--wl-line);padding:13px 0;flex-wrap:wrap;}
+#welink-sft-design .wl-grow {flex:1;min-width:130px;}
+#welink-sft-design .wl-list-row:last-child {padding-bottom:0;}
+#welink-sft-design .wl-chat {background:var(--wl-subtle);padding:14px;border-radius:12px;margin-top:14px;}
+#welink-sft-design .wl-bubble {display:table;background:var(--wl-card);padding:8px 12px;border-radius:10px;max-width:90%;margin-bottom:8px;}
+#welink-sft-design .wl-bubble.mine {background:var(--wl-soft);margin-left:auto;margin-bottom:0;}
+#welink-sft-design .wl-note {padding:10px 12px;background:var(--wl-subtle);border-radius:9px;color:var(--wl-muted);font-size:12px;margin-top:14px;}
+#welink-sft-design .wl-environments {display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+#welink-sft-design .wl-choice {text-align:left;border:1px solid var(--wl-line);border-radius:12px;padding:14px;background:var(--wl-card);color:var(--wl-text);min-width:0;}
+#welink-sft-design .wl-choice[aria-pressed=true] {border-color:var(--wl-brand);box-shadow:inset 0 0 0 1px var(--wl-brand);}
+#welink-sft-design .wl-choice strong {font-weight:600;display:block;}
+#welink-sft-design .wl-track {height:6px;background:var(--wl-subtle);border-radius:4px;overflow:hidden;margin:14px 0;}
+#welink-sft-design .wl-track>span {display:block;height:100%;background:var(--wl-brand);}
+#welink-sft-design .wl-chart {width:100%;height:180px;display:block;margin-top:10px;}
+#welink-sft-design .wl-chart text {font:11px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;fill:var(--wl-muted);}
+#welink-sft-design .wl-answers {display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+#welink-sft-design .wl-answer {border:1px solid var(--wl-line);padding:16px;border-radius:12px;display:flex;flex-direction:column;gap:16px;min-width:0;}
+#welink-sft-design .wl-answer p {flex:1;}
+#welink-sft-design .wl-stage {min-height:760px;}
+#welink-sft-design .wl-steps {display:flex;gap:8px;flex-wrap:wrap;margin:24px 0 18px;}
+#welink-sft-design .wl-step {padding:7px 10px;border:0;border-radius:8px;color:var(--wl-muted);background:var(--wl-subtle);}
+#welink-sft-design .wl-step[aria-current=step] {color:var(--wl-brand);background:var(--wl-soft);}
+#welink-sft-design .wl-field {display:block;margin-top:14px;}
+#welink-sft-design .wl-field input {display:block;width:100%;margin-top:6px;padding:9px 11px;background:var(--wl-card);border:1px solid var(--wl-line);border-radius:9px;color:var(--wl-text);min-width:0;}
+#welink-sft-design .wl-footer {display:flex;justify-content:space-between;gap:12px;margin-top:20px;}
+#welink-sft-design .wl-live {min-height:22px;font-size:12px;color:var(--wl-brand);margin-top:14px;}
+#welink-sft-design[data-density=compact] .wl-panel {padding:15px;}
+#welink-sft-design[data-density=compact] .wl-list-row {padding:9px 0;}
+@media(max-width:700px){#welink-sft-design .wl-shell {grid-template-columns:1fr;}#welink-sft-design .wl-sidebar{display:none;}#welink-sft-design .wl-main{padding:20px;}#welink-sft-design .wl-tabs{gap:20px;}#welink-sft-design .wl-stage{min-height:880px;}}
+@media(max-width:430px){#welink-sft-design .wl-main{padding:16px;}#welink-sft-design .wl-summary{grid-template-columns:1fr;gap:10px;}#welink-sft-design .wl-summary strong{display:inline;font-size:16px;margin-right:8px;}#welink-sft-design .wl-environments,#welink-sft-design .wl-answers{grid-template-columns:1fr;}#welink-sft-design .wl-button{min-height:42px;}#welink-sft-design .wl-stage{min-height:1120px;}}
+</style>
+<div id="welink-sft-design" aria-label="WeLink SFT 工作台交互设计">
+  <div class="viz-carousel" aria-label="SFT 工作台布局" data-previous-label="上一方案" data-next-label="下一方案">
+    <section data-variant="项目工作台" aria-label="项目工作台布局" class="wl-stage">
+      <div class="wl-shell">
+        <aside class="wl-sidebar"><div class="wl-logo">WeLink</div><div class="wl-group">概览</div><div class="wl-nav-item"><i data-lucide="house" aria-hidden="true"></i>首页</div><div class="wl-nav-item"><i data-lucide="chart-no-axes-column" aria-hidden="true"></i>洞察</div><div class="wl-group">关系与记录</div><div class="wl-nav-item"><i data-lucide="message-circle" aria-hidden="true"></i>私聊</div><div class="wl-nav-item"><i data-lucide="messages-square" aria-hidden="true"></i>群聊</div><div class="wl-group">AI 工作台</div><div class="wl-nav-item"><i data-lucide="files" aria-hidden="true"></i>Skills</div><div class="wl-nav-item is-current"><i data-lucide="sliders-horizontal" aria-hidden="true"></i>模型训练</div><div class="wl-nav-item"><i data-lucide="archive" aria-hidden="true"></i>记忆库</div></aside>
+        <main class="wl-main">
+          <div class="wl-top"><div><div class="wl-small">模型训练 / 项目概览</div><h2>SFT 工作台</h2><p class="wl-small">我的沟通风格</p></div><span class="wl-status">交互草图 · 示例数据</span></div>
+          <div class="wl-row wl-between" style="margin-top:14px"><div class="wl-profile"><span class="wl-avatar" role="img" aria-label="示例账号头像占位">我</span><div><div>主号</div><div class="wl-small">私聊 · 只训练我发出的回复</div></div></div><button class="wl-button cursor-interaction" data-action="environment"><i data-lucide="settings-2" aria-hidden="true"></i>环境管理</button></div>
+          <div class="wl-note" data-environment-detail hidden>本机 Mac：MLX 已就绪。远程训练机 A：单卡 CUDA worker 已连接。两者使用相同的数据版本，分别检查模型兼容性。</div>
+          <div class="wl-summary"><div><strong data-version-label>数据 v3</strong><span class="wl-small"><span data-clean-count>8,420</span> 条清洗样本</span></div><div><strong data-run-label>待训练</strong><span class="wl-small">预检通过后开始</span></div><div><strong data-default-label>原模型配置</strong><span class="wl-small">训练结果不会自动替换</span></div></div>
+          <div class="wl-tabs" role="tablist" aria-label="训练项目功能"><button class="wl-tab cursor-interaction" role="tab" id="wl-data-tab" aria-controls="wl-data-panel" aria-selected="true" data-tab="data">数据集</button><button class="wl-tab cursor-interaction" role="tab" id="wl-train-tab" aria-controls="wl-train-panel" aria-selected="false" data-tab="train">训练</button><button class="wl-tab cursor-interaction" role="tab" id="wl-eval-tab" aria-controls="wl-eval-panel" aria-selected="false" data-tab="eval">评测</button><button class="wl-tab cursor-interaction" role="tab" id="wl-model-tab" aria-controls="wl-model-panel" aria-selected="false" data-tab="model">模型</button></div>
+          <section id="wl-data-panel" role="tabpanel" aria-labelledby="wl-data-tab" data-panel="data">
+            <div class="wl-panel"><div class="wl-row wl-between"><h3 data-dataset-title>数据版本 v3</h3><span class="wl-small">2026-01 至 2026-10</span></div><div class="wl-row wl-between"><p>完整会话分组 · 已脱敏 · 已去重</p><button class="wl-button cursor-interaction" data-action="review">审核样本</button></div><div class="wl-list-row"><div class="wl-grow">训练集</div><span data-train-count>6,736 条</span><span class="wl-small">80%</span></div><div class="wl-list-row"><div class="wl-grow">验证集</div><span>842 条</span><span class="wl-small">10%</span></div><div class="wl-list-row"><div class="wl-grow">测试集</div><span>842 条</span><span class="wl-small">10%</span></div><div class="wl-note">同一会话与近重复样本不会跨集合。测试集不参与训练和检查点选择。</div></div>
+            <div class="wl-panel" data-review-panel hidden><div class="wl-row wl-between"><h3>样本预览</h3><span class="wl-small" data-review-status>待审核</span></div><div class="wl-profile"><span class="wl-avatar" role="img" aria-label="示例联系人头像占位">林</span><div>示例联系人 · 林然<div class="wl-small">只有最后一次本人回复作为训练目标</div></div></div><div class="wl-chat"><div class="wl-bubble">晚上几点到？</div><div class="wl-bubble mine">差不多七点，到楼下跟你说</div></div><div class="wl-row" style="margin-top:14px"><button class="wl-button cursor-interaction" data-action="keep">保留样本</button><button class="wl-button cursor-interaction" data-action="exclude">排除样本</button><button class="wl-button wl-primary cursor-interaction" data-action="freeze">冻结新版本</button></div></div>
+            <div class="wl-row wl-between" style="margin-top:18px"><span class="wl-small">当前版本只读，审核修改会生成新版本。</span><button class="wl-button wl-primary cursor-interaction" data-go="train">用此版本训练<i data-lucide="arrow-right" aria-hidden="true"></i></button></div>
+          </section>
+          <section id="wl-train-panel" role="tabpanel" aria-labelledby="wl-train-tab" data-panel="train" hidden>
+            <div class="wl-panel"><h3>选择训练环境</h3><div class="wl-environments"><button class="wl-choice cursor-interaction" data-engine="mac" aria-pressed="true"><strong>本机 Mac</strong><span class="wl-small">MLX · Apple Silicon</span></button><button class="wl-choice cursor-interaction" data-engine="cuda" aria-pressed="false"><strong>GPU 训练机 A</strong><span class="wl-small">LLaMA-Factory · 单卡 CUDA</span></button></div><div class="wl-note" data-engine-note>数据在本机处理，启动前检查可用统一内存与磁盘。</div><div class="wl-row wl-between" style="margin-top:16px"><span class="wl-small">已验证的中文小模型 · LoRA · 最后回复监督</span><button class="wl-button wl-primary cursor-interaction" data-action="create-run">创建示例任务</button></div></div>
+            <div class="wl-panel"><div class="wl-row wl-between"><h3>风格模型 #12</h3><span class="wl-status" data-detail-status>示例训练中</span></div><div class="wl-row wl-between"><span>640 / 1,600 optimizer steps</span><span class="wl-small">示例剩余 18–26 分钟</span></div><div class="wl-track" role="progressbar" aria-label="示例训练进度" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100"><span style="width:40%"></span></div><svg class="wl-chart" viewBox="0 0 560 175" role="img" aria-label="示例曲线：前 640 步训练损失从 2.5 下降到 1.82，验证损失下降到 1.94"><line x1="45" y1="12" x2="45" y2="138" stroke="var(--wl-line)"/><line x1="45" y1="138" x2="540" y2="138" stroke="var(--wl-line)"/><text x="0" y="20">loss</text><text x="12" y="45">2.5</text><text x="12" y="105">2.0</text><text x="44" y="160">0</text><text x="266" y="160">320</text><text x="515" y="160">640 步</text><path d="M45 30L110 53L175 78L240 90L305 106L370 113L435 123L530 128" fill="none" stroke="var(--wl-brand)" stroke-width="2"/><path d="M45 36L110 60L175 79L240 88L305 96L370 104L435 109L530 111" fill="none" stroke="var(--wl-muted)" stroke-width="2" stroke-dasharray="5 4"/><text x="325" y="25">实线：训练 · 虚线：验证</text></svg><div class="wl-row wl-between"><span class="wl-small">已保存检查点：step 600</span><button class="wl-button cursor-interaction" data-action="stop">保存并停止</button></div></div>
+          </section>
+          <section id="wl-eval-panel" role="tabpanel" aria-labelledby="wl-eval-tab" data-panel="eval" hidden>
+            <div class="wl-panel"><div class="wl-row wl-between"><h3>基础 / 微调模型盲测</h3><span class="wl-small">固定测试集 · 示例 1 / 50</span></div><div class="wl-note" style="margin-top:0;margin-bottom:16px">对方：晚上几点到？</div><div class="wl-answers"><article class="wl-answer"><div class="wl-small" data-answer-a>回答 A</div><p>好的，我会在七点左右到达楼下，届时通知你。</p><button class="wl-button cursor-interaction" data-vote="a">A 更像我</button></article><article class="wl-answer"><div class="wl-small" data-answer-b>回答 B</div><p>七点左右，到楼下跟你说。</p><button class="wl-button cursor-interaction" data-vote="b">B 更像我</button></article></div><div class="wl-row" style="margin-top:14px"><button class="wl-button cursor-interaction" data-vote="tie">平局</button><span class="wl-small">先投票，再揭晓版本，减少预期影响。</span></div><div class="wl-live" data-vote-result aria-live="polite"></div></div><div class="wl-row wl-between" style="margin-top:18px"><span class="wl-small">人评之外，另看重复、空回复、holdout loss 和原文复现。</span><button class="wl-button cursor-interaction" data-go="model">查看模型版本<i data-lucide="arrow-right" aria-hidden="true"></i></button></div>
+          </section>
+          <section id="wl-model-panel" role="tabpanel" aria-labelledby="wl-model-tab" data-panel="model" hidden>
+            <div class="wl-panel"><div class="wl-row wl-between"><h3>我的风格 · 版本 #11</h3><span class="wl-status" data-model-status>示例待接入</span></div><div class="wl-list-row"><span class="wl-grow">训练来源</span><span class="wl-small">数据 v3 · 配方 v1 · 模板已固定</span></div><div class="wl-list-row"><span class="wl-grow">产物</span><span class="wl-small">Adapter + 配置 + 校验清单</span></div><div class="wl-list-row"><span class="wl-grow">接入方式</span><span class="wl-small" data-serving>本机 MLX 服务</span></div><div class="wl-note">接入前检查基础模型、模板和运行内存。创建独立模型配置，原默认项保持可回滚。</div><div class="wl-row" style="margin-top:16px"><button class="wl-button wl-primary cursor-interaction" data-action="connect">连接到 WeLink（示例）</button><button class="wl-button cursor-interaction" data-action="set-default" disabled>设为默认</button><button class="wl-button cursor-interaction" data-action="rollback" hidden>回滚原配置</button></div></div><div class="wl-panel"><h3>转换能力</h3><p class="wl-small">GGUF / Ollama 只在引擎与模型兼容性校验通过后启用。MLX adapter 不直接承诺跨框架通用。</p></div>
+          </section>
+          <div class="wl-live" data-live aria-live="polite"></div>
+        </main>
+      </div>
+    </section>
+    <section data-variant="分步准备" aria-label="分步准备布局" class="wl-stage" hidden>
+      <div class="wl-shell" style="grid-template-columns:1fr"><main class="wl-main">
+        <div class="wl-top"><div><div class="wl-small">模型训练 / 新建任务</div><h2>训练我的沟通风格</h2><p class="wl-small">准备好数据，再选择执行环境。</p></div><span class="wl-status">交互草图 · 示例数据</span></div>
+        <div class="wl-steps" aria-label="训练准备步骤"><button class="wl-step cursor-interaction" data-step="0" aria-current="step">1 · 数据</button><button class="wl-step cursor-interaction" data-step="1">2 · 审核</button><button class="wl-step cursor-interaction" data-step="2">3 · 环境</button><button class="wl-step cursor-interaction" data-step="3">4 · 确认</button></div>
+        <section class="wl-panel" data-wizard="0"><h3>选择数据版本</h3><div class="wl-profile"><span class="wl-avatar" role="img" aria-label="账号头像占位">我</span><div>主号 · 我的私聊<div class="wl-small">只训练最后一轮本人回复</div></div></div><div class="wl-list-row" style="margin-top:14px"><div class="wl-grow"><strong>数据版本 v3</strong><div class="wl-small">2026-01 至 2026-10 · 清洗 / 审核已完成</div></div><span>8,420 条</span></div><div class="wl-note">使用冻结版本，之后切换账号或重新索引不会改变这次训练数据。</div><label class="wl-field">任务名称<input value="我的风格 · 标准训练" aria-label="示例任务名称"></label></section>
+        <section class="wl-panel" data-wizard="1" hidden><h3>确认训练与评测数据</h3><div class="wl-summary"><div><strong>6,736</strong><span class="wl-small">训练样本</span></div><div><strong>842</strong><span class="wl-small">验证样本</span></div><div><strong>842</strong><span class="wl-small">测试样本</span></div></div><div class="wl-chat"><div class="wl-bubble">晚上几点到？</div><div class="wl-bubble mine">差不多七点，到楼下跟你说</div></div><div class="wl-note">会话分组、近重复聚类与源消息校验，防止三个集合互相泄漏。</div></section>
+        <section class="wl-panel" data-wizard="2" hidden><h3>选择运行环境</h3><div class="wl-environments"><button class="wl-choice cursor-interaction" data-engine="mac" aria-pressed="true"><strong>本机 Mac</strong><span class="wl-small">MLX · 数据不离开本机</span></button><button class="wl-choice cursor-interaction" data-engine="cuda" aria-pressed="false"><strong>GPU 训练机 A</strong><span class="wl-small">向已配对 worker 传输冻结数据</span></button></div><div class="wl-note" data-engine-note>数据在本机处理，启动前检查可用统一内存与磁盘。</div><div class="wl-list-row"><span class="wl-grow">基础模型</span><span class="wl-small">选择环境已验证的小模型</span></div><div class="wl-list-row"><span class="wl-grow">训练配方</span><span class="wl-small">标准 · LoRA · 1 epoch</span></div><div class="wl-list-row"><span class="wl-grow">开始前</span><span class="wl-small">真实短预检，验证内存与 token 标签</span></div></section>
+        <section class="wl-panel" data-wizard="3" hidden><h3>确认任务</h3><div class="wl-list-row"><span class="wl-grow">训练环境</span><span data-engine-title>本机 Mac / MLX</span></div><div class="wl-list-row"><span class="wl-grow">数据版本</span><span>v3 · 冻结版本</span></div><div class="wl-list-row"><span class="wl-grow">训练上限</span><span>1 epoch · 最长 2 小时</span></div><div class="wl-list-row"><span class="wl-grow">停止与恢复</span><span class="wl-small" data-resume-note>保存后可从 adapter 权重继续</span></div><div class="wl-note">本页是设计草图，不会下载模型、传输聊天数据或执行训练。</div></section>
+        <div class="wl-footer"><button class="wl-button cursor-interaction" data-action="previous" disabled>上一步</button><button class="wl-button wl-primary cursor-interaction" data-action="next">继续</button></div><div class="wl-live" data-wizard-live aria-live="polite"></div>
+      </main></div>
+    </section>
+  </div>
+</div>
+<script>
+(() => {
+  const root = document.getElementById('welink-sft-design');
+  const saved = window.openai?.widgetState;
+  const previous = saved?.modelContent ?? saved ?? {};
+  const savedUI = saved?.privateContent ?? {};
+  const state = { tab:['data','train','eval','model'].includes(previous.tab)?previous.tab:'data', engine:previous.engine==='cuda'?'cuda':'mac', step:[0,1,2,3].includes(savedUI.step)?savedUI.step:0, connected:false, isDefault:false, reviewed:null, frozen:false };
+  const styling = { density:'标准', radius:16 };
+  const all = selector => [...root.querySelectorAll(selector)];
+  const showMessage = message => {root.querySelector('[data-live]').textContent=message;};
+  const save = () => {window.openai?.setWidgetState?.({modelContent:{tab:state.tab,engine:state.engine},privateContent:{step:state.step}})?.catch(()=>{});};
+  function render() {
+    all('[data-tab]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.tab===state.tab)));
+    all('[data-panel]').forEach(panel=>panel.hidden=panel.dataset.panel!==state.tab);
+    all('[data-engine]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.engine===state.engine)));
+    all('[data-engine-note]').forEach(node=>node.textContent=state.engine==='mac'?'数据在本机处理，启动前检查可用统一内存与磁盘。':'只向已配对训练机传输本次冻结数据，启动前检查指定 GPU 与磁盘。');
+    root.querySelector('[data-serving]').textContent=state.engine==='mac'?'本机 MLX 服务':'GPU worker 私有推理服务';
+    root.querySelector('[data-engine-title]').textContent=state.engine==='mac'?'本机 Mac / MLX':'训练机 A / LLaMA-Factory';
+    root.querySelector('[data-resume-note]').textContent=state.engine==='mac'?'保存后可从 adapter 权重继续':'完整状态检查点校验后可断点恢复';
+    all('[data-step]').forEach(button=>{if(Number(button.dataset.step)===state.step)button.setAttribute('aria-current','step');else button.removeAttribute('aria-current');});
+    all('[data-wizard]').forEach(panel=>panel.hidden=Number(panel.dataset.wizard)!==state.step);
+    root.querySelector('[data-action=previous]').disabled=state.step===0;
+    root.querySelector('[data-action=next]').textContent=state.step===3?'创建示例任务':'继续';
+    root.style.setProperty('--wl-radius',styling.radius+'px');root.dataset.density=styling.density==='紧凑'?'compact':'standard';
+  }
+  root.addEventListener('click',event=>{
+    const button=event.target.closest('button');if(!button||!root.contains(button))return;
+    if(button.dataset.tab){state.tab=button.dataset.tab;showMessage('');}
+    if(button.dataset.go){state.tab=button.dataset.go;showMessage('');}
+    if(button.dataset.engine)state.engine=button.dataset.engine;
+    if(button.dataset.step!==undefined)state.step=Number(button.dataset.step);
+    if(button.dataset.vote){root.querySelector('[data-answer-a]').textContent='回答 A · 基础模型';root.querySelector('[data-answer-b]').textContent='回答 B · 微调模型';root.querySelector('[data-vote-result]').textContent=button.dataset.vote==='tie'?'本次选择：平局（示例）':'本次选择：'+button.dataset.vote.toUpperCase()+' 更像我（示例）';}
+    switch(button.dataset.action){
+      case 'environment':{const panel=root.querySelector('[data-environment-detail]');panel.hidden=!panel.hidden;break;}
+      case 'review':root.querySelector('[data-review-panel]').hidden=false;break;
+      case 'keep':case 'exclude':state.reviewed=button.dataset.action;root.querySelector('[data-review-status]').textContent=state.reviewed==='keep'?'已保留 · 草稿修改':'已排除 · 草稿修改';break;
+      case 'freeze':state.frozen=true;root.querySelector('[data-version-label]').textContent='数据 v4';root.querySelector('[data-dataset-title]').textContent='数据版本 v4';root.querySelector('[data-train-count]').textContent=state.reviewed==='exclude'?'6,735 条':'6,736 条';root.querySelector('[data-clean-count]').textContent=state.reviewed==='exclude'?'8,419':'8,420';showMessage('示例 v4 已冻结；历史任务仍引用 v3。');break;
+      case 'create-run':root.querySelector('[data-run-label]').textContent='示例已排队';showMessage('已创建示例队列项；此草图不执行训练。');break;
+      case 'stop':root.querySelector('[data-detail-status]').textContent='示例已停止';button.textContent='从权重继续（示例）';showMessage('示例保存于 step 640；继续训练会创建新的执行记录。');button.dataset.action='continue';break;
+      case 'continue':root.querySelector('[data-detail-status]').textContent='示例继续训练';button.textContent='保存并停止';button.dataset.action='stop';showMessage('这是权重继续训练，不代表恢复完整优化器状态。');break;
+      case 'connect':state.connected=true;root.querySelector('[data-model-status]').textContent='示例已接入';root.querySelector('[data-action=set-default]').disabled=false;showMessage('示例：独立模型配置已创建，原默认项未改变。');break;
+      case 'set-default':state.isDefault=true;root.querySelector('[data-default-label]').textContent='风格模型 #11';root.querySelector('[data-action=rollback]').hidden=false;showMessage('示例：已设为默认，可随时回滚。');break;
+      case 'rollback':state.isDefault=false;root.querySelector('[data-default-label]').textContent='原模型配置';button.hidden=true;showMessage('示例：已回滚原默认模型配置。');break;
+      case 'previous':state.step=Math.max(0,state.step-1);break;
+      case 'next':if(state.step<3)state.step++;else root.querySelector('[data-wizard-live]').textContent='示例任务已创建；实际功能需完成方案中的 worker 与训练后端开发。';break;
+    }
+    render();save();
+  });
+  root.querySelector('[role=tablist]').addEventListener('keydown',event=>{if(!['ArrowRight','ArrowLeft'].includes(event.key))return;const tabs=all('[data-tab]');const index=tabs.findIndex(tab=>tab.dataset.tab===state.tab);const next=tabs[(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length];state.tab=next.dataset.tab;event.preventDefault();render();next.focus();save();});
+  window.addEventListener('openai:set_globals',event=>{const stored=event.detail?.globals?.widgetState;const value=stored?.modelContent??stored;if(!value)return;if(['data','train','eval','model'].includes(value.tab))state.tab=value.tab;if(['mac','cuda'].includes(value.engine))state.engine=value.engine;render();});
+  const chart=root.querySelector('.wl-chart');
+  const ns='http://www.w3.org/2000/svg';
+  function drawChart(){
+    const width=chart.getBoundingClientRect().width;if(width<200)return;
+    chart.setAttribute('viewBox','0 0 '+width+' 180');chart.replaceChildren();
+    const left=40,right=width-50,top=20,bottom=140;
+    const x=index=>left+(right-left)*index/7;
+    const y=value=>bottom-(value-1.7)/.9*(bottom-top);
+    const add=(tag,attrs,text)=>{const node=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([key,value])=>node.setAttribute(key,String(value)));if(text)node.textContent=text;chart.append(node);};
+    add('line',{x1:left,y1:top,x2:left,y2:bottom,stroke:'var(--wl-line)'});
+    add('line',{x1:left,y1:bottom,x2:right,y2:bottom,stroke:'var(--wl-line)'});
+    add('text',{x:3,y:13},'loss');
+    [2.5,2.0].forEach(value=>add('text',{x:5,y:y(value)+4},String(value.toFixed(1))));
+    [[0,'0'],[3.5,'320'],[7,'640 步']].forEach(([index,label])=>add('text',{x:x(index),y:163,'text-anchor':index===0?'start':index===7?'end':'middle'},label));
+    const series=[{values:[2.5,2.34,2.17,2.08,1.96,1.91,1.85,1.82],color:'var(--wl-brand)',name:'训练'},{values:[2.46,2.29,2.15,2.09,2.04,1.99,1.96,1.94],color:'var(--wl-muted)',name:'验证'}];
+    series.forEach((line,index)=>{add('path',{d:line.values.map((value,i)=>(i?'L':'M')+x(i)+' '+y(value)).join(''),fill:'none',stroke:line.color,'stroke-width':2,...(index?{'stroke-dasharray':'5 4'}:{})});add('text',{x:right+8,y:y(line.values[7])+4},line.name);});
+  }
+  new ResizeObserver(drawChart).observe(chart);
+  root.addEventListener('click',()=>requestAnimationFrame(drawChart));
+  render();drawChart();
+  if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:render});tweak.addSelect(styling,'density',{label:'信息密度',options:['标准','紧凑']});tweak.addSlider(styling,'radius',{label:'卡片圆角',min:8,max:20,unit:'px'});}
+})();
+</script>

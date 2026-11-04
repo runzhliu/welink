@@ -1,3 +1,4 @@
+import { DatePicker } from '../common/DatePicker';
 /**
  * VNModal — 视觉小说 / 互动小说全屏 Modal
  *
@@ -8,7 +9,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, BookOpen, Loader2, Sparkles, Heart, Skull, Star, Trophy, EyeOff, RotateCcw, ChevronRight, Trash2 } from 'lucide-react';
+import { X, BookOpen, Loader2, FileText, Heart, Skull, Star, Trophy, EyeOff, RotateCcw, ChevronRight, Trash2 } from 'lucide-react';
 import { vnApi } from '../../services/api';
 import type { VNChapterDTO, VNStateDTO, VNStoryDTO, VNStartResponse, VNEndingDTO } from '../../services/api';
 import { useVNStream } from '../../hooks/useVNStream';
@@ -338,7 +339,7 @@ const LobbyView: React.FC<{
       {/* 介绍 */}
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#a78bfa]/10 text-[#a78bfa] text-xs font-bold">
-          <Sparkles size={12} />
+          <FileText size={12} />
           实验中
         </div>
         <h2 className="text-xl font-black text-[#1d1d1f] dk-text">和 {displayName} 写一段故事</h2>
@@ -385,10 +386,10 @@ const LobbyView: React.FC<{
         )}
         {mode === 'memory' && (
           <div className="mt-3 space-y-2">
-            <input
-              type="date"
+            <DatePicker aria-label="选择日期"
+
               value={memoryDate}
-              onChange={e => setMemoryDate(e.target.value)}
+              onValueChange={nextValue => setMemoryDate(nextValue)}
               className="w-full text-sm border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#a78bfa] bg-[#f8f9fb] dk-input"
             />
             <p className="text-[11px] text-gray-400">
@@ -420,7 +421,7 @@ const LobbyView: React.FC<{
         disabled={(mode === 'quest' && !quest.trim()) || (mode === 'memory' && !memoryDate)}
         className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-[#a78bfa] to-[#fb7185] text-white text-sm font-bold rounded-xl shadow-sm hover:shadow-md disabled:opacity-50"
       >
-        <Sparkles size={14} /> 开启新剧情
+        <FileText size={14} /> 开启新剧情
       </button>
 
       {/* 存档 */}
@@ -554,7 +555,7 @@ const PlayingView: React.FC<{
                 >
                   {coverLoadingIdx === currentChapter.chapter_idx
                     ? <Loader2 size={10} className="animate-spin" />
-                    : <Sparkles size={10} />}
+                    : <FileText size={10} />}
                   {coverLoadingIdx === currentChapter.chapter_idx ? '出图中…' : '✨ 生封面'}
                 </button>
               )}

@@ -4,10 +4,10 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Sparkles, AlertCircle, Snowflake, Activity, TrendingUp, Loader2, Wand2, EyeOff, Clock } from 'lucide-react';
+import { LineChart, AlertCircle, Snowflake, Activity, TrendingUp, Loader2, PenLine, EyeOff, Clock } from 'lucide-react';
 import type { ContactStats, ForecastEntry, ForecastStatus, ForecastResponse } from '../../types';
 import { forecastApi } from '../../services/api';
-import { avatarSrc } from '../../utils/avatar';
+import { Avatar } from '../common/Avatar';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { IcebreakerModal } from './IcebreakerModal';
 import { ForecastChartModal } from './ForecastChartModal';
@@ -146,7 +146,7 @@ export const RelationshipForecastSection: React.FC<Props> = ({ contacts, onConta
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
-        <Sparkles size={18} className="text-[#576b95]" />
+        <LineChart size={18} className="text-[#576b95]" />
         <h3 className="text-xl font-bold text-[#1d1d1f] dk-text">关系动态预测</h3>
         <span className="text-xs text-gray-400">基于过去 12 个月节奏，覆盖 {data.total_scored} 位活跃联系人</span>
       </div>
@@ -190,19 +190,7 @@ export const RelationshipForecastSection: React.FC<Props> = ({ contacts, onConta
                 onClick={() => handleClick(item)}
                 className="flex items-center gap-3 px-5 py-3.5 cursor-pointer hover:bg-[#f8f9fb] dark:hover:bg-white/5 transition-colors"
               >
-                {item.avatar_url ? (
-                  <img
-                    loading="lazy"
-                    src={avatarSrc(item.avatar_url)}
-                    alt=""
-                    className="w-9 h-9 rounded-full object-cover flex-shrink-0"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                ) : (
-                  <div className={`w-9 h-9 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center flex-shrink-0 ${meta.color}`}>
-                    {meta.icon}
-                  </div>
-                )}
+                <Avatar contact={contacts.find(c => c.username === item.username)} src={item.avatar_url} name={item.display_name} className="w-9 h-9" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={`text-sm font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>
@@ -226,7 +214,7 @@ export const RelationshipForecastSection: React.FC<Props> = ({ contacts, onConta
                       onClick={(e) => { e.stopPropagation(); setIcebreakerFor(item); }}
                       className="flex items-center gap-1 text-[11px] text-[#576b95] mt-1 hover:text-[#3d5a8f] hover:underline underline-offset-2 transition-colors"
                     >
-                      <Wand2 size={10} />
+                      <PenLine size={10} />
                       <span className="truncate">写开场白 · {item.suggestion}</span>
                     </button>
                   ) : item.suggestion ? (

@@ -211,7 +211,7 @@ export const LLMSection: React.FC = () => {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-1.5 px-5 py-2.5 bg-[#07c160] text-white text-sm font-bold rounded-xl hover:bg-[#06ad56] disabled:opacity-50 transition-colors"
+            className="ui-button ui-button-primary"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
             保存所有配置

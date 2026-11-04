@@ -1,7 +1,9 @@
+import { Select } from '../../common/Select';
 import React from 'react';
 import { X, Loader2, AlertCircle, Check, LogIn, LogOut, ExternalLink } from 'lucide-react';
+import { Switch } from '../../common/Switch';
 import { openProviderUrl } from '../constants';
-import { PROVIDERS, type LLMProfile, type ProviderValue } from './types';
+import { PROVIDERS, getDefaultModel, getDefaultBaseURL, type LLMProfile, type ProviderValue } from './types';
 
 export const ProfileCard: React.FC<{
   profile: LLMProfile;
@@ -24,12 +26,24 @@ export const ProfileCard: React.FC<{
          onGeminiClientIDChange, onGeminiClientSecretChange, onGeminiAuth, onGeminiRevoke,
          geminiAuthBusy, onChange, onDelete, onSaveAndTest, testing, testMsg }) => {
   const provInfo = PROVIDERS.find(p => p.value === profile.provider) ?? PROVIDERS[0];
+  const defaultModel = getDefaultModel(profile.provider, profile.base_url);
+  const model = profile.model || defaultModel;
+  const defaultBaseURL = getDefaultBaseURL(profile.provider, profile.model);
+  const isMiniMaxFlash = (profile.provider === 'minimax' || profile.provider === 'minimax-cn') && model === 'MiniMax-M3.1-Flash';
 
   const set = (field: keyof LLMProfile, val: string) =>
     onChange({ ...profile, [field]: val });
 
+  if (profile.sft_deployment_id) return <div className="model-profile space-y-4">
+    <div className="flex items-center gap-2"><span className="text-xs text-[var(--text-muted)]">SFT 模型</span><input aria-label={`配置 ${index + 1} 的名称`} value={profile.name} onChange={e => set('name', e.target.value)} className="flex-1 min-w-0 text-sm font-semibold bg-transparent focus:outline-none" />{total > 1 && <button type="button" onClick={onDelete} className="ui-icon-button" title="移除此配置"><X size={14} /></button>}</div>
+    <p className="text-xs text-[var(--text-secondary)] leading-relaxed">由 SFT 工作台管理基础模型、推理服务与独立凭据。请在工作台检查状态、设为默认或回滚；切换数据账号后，原账号的训练模型不会接收新账号的消息。</p>
+    <p className="text-[11px] text-[var(--text-muted)] break-all font-mono">{profile.model}</p>
+    <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => { window.location.hash = '#/sft'; }} className="ui-button ui-button-secondary">管理训练模型</button><button type="button" disabled={testing} onClick={() => onSaveAndTest(profile.id)} className="ui-button ui-button-secondary">{testing && <Loader2 size={12} className="animate-spin" />}测试连接</button></div>
+    {testMsg && <p role="status" className={`text-xs ${testMsg.ok ? 'text-[var(--accent-text)]' : 'text-red-500'}`}>{testMsg.text}</p>}
+  </div>;
+
   return (
-    <div className="rounded-xl border border-gray-100 dark:border-white/10 bg-[#fafafa] dark:bg-white/5 p-4 space-y-3">
+    <div className="model-profile space-y-4">
       {/* 卡片标题行 */}
       <div className="flex items-center gap-2">
         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">配置 {index + 1}</span>
@@ -38,6 +52,7 @@ export const ProfileCard: React.FC<{
           value={profile.name}
           onChange={e => set('name', e.target.value)}
           placeholder={`配置 ${index + 1}`}
+          aria-label={`配置 ${index + 1} 的名称`}
           className="flex-1 text-sm font-semibold border-0 bg-transparent focus:outline-none text-[#1d1d1f] dark:text-gray-200 placeholder-gray-300"
         />
         {total > 1 && (
@@ -49,11 +64,12 @@ export const ProfileCard: React.FC<{
 
       {/* Provider */}
       <div>
-        <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wide">AI 提供商</label>
-        <select
+        <label htmlFor={`provider-${profile.id}`} className="block text-xs font-medium mb-1.5">AI 提供商</label>
+        <Select
+          id={`provider-${profile.id}`}
           value={profile.provider}
-          onChange={e => {
-            const newProvider = e.target.value as ProviderValue;
+          onValueChange={nextValue => {
+            const newProvider = nextValue as ProviderValue;
             const oldProvider = profile.provider;
             const oldProviderNames: string[] = PROVIDERS.map(p => p.value as string);
             const shouldAutoRename = !profile.name || oldProviderNames.includes(profile.name);
@@ -66,18 +82,26 @@ export const ProfileCard: React.FC<{
               api_key: providerChanged ? '' : profile.api_key,
               base_url: '',
               model: '',
+              reasoning_effort: '',
+              no_think: false,
               ...(shouldAutoRename ? { name: newProvider } : {}),
             });
           }}
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white dk-input"
         >
           {PROVIDERS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-        </select>
+        </Select>
       </div>
+
+      {profile.provider === 'bedrock' && (
+        <p className="text-[11px] text-gray-400 leading-relaxed">
+          默认使用 Mantle Messages API（Opus 5.5）。旧模型可填写 bedrock-runtime 区域地址及原 Model ID。
+        </p>
+      )}
 
       {/* API Key */}
       <div>
-        <label className="flex items-center gap-2 text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wide">
+        <label htmlFor={`key-${profile.id}`} className="flex items-center gap-2 text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wide">
           <span>
             {profile.provider === 'vertex' ? 'Service Account JSON' : 'API Key'}
             {profile.provider === 'ollama' && <span className="ml-1 font-normal normal-case text-gray-400">（本地无需填写）</span>}
@@ -114,6 +138,7 @@ export const ProfileCard: React.FC<{
         </label>
         {profile.provider === 'vertex' ? (
           <textarea
+            id={`key-${profile.id}`}
             value={profile.api_key ?? ''}
             onChange={e => set('api_key', e.target.value)}
             placeholder='粘贴完整的 Service Account JSON，含 private_key 和 client_email'
@@ -123,6 +148,7 @@ export const ProfileCard: React.FC<{
         ) : (
         <input
           type="password"
+          id={`key-${profile.id}`}
           value={profile.api_key === '__HAS_KEY__' ? '' : (profile.api_key ?? '')}
           onChange={e => set('api_key', e.target.value)}
           placeholder={
@@ -142,7 +168,7 @@ export const ProfileCard: React.FC<{
       {profile.provider === 'vertex' && (
         <div className="rounded-lg border border-green-100 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10 p-3 text-[10px] text-green-700 dark:text-green-400 leading-relaxed">
           <strong>Base URL 格式</strong>：<code className="bg-white/60 dark:bg-black/20 px-1 rounded">{'https://{region}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{region}/endpoints/openapi'}</code>
-          <br />例如：<code className="bg-white/60 dark:bg-black/20 px-1 rounded">https://us-central1-aiplatform.googleapis.com/v1beta1/projects/my-project-123/locations/us-central1/endpoints/openapi</code>
+          <br />Gemini 3.8 Flash 使用 global：<code className="bg-white/60 dark:bg-black/20 px-1 rounded">https://aiplatform.googleapis.com/v1beta1/projects/my-project-123/locations/global/endpoints/openapi</code>
         </div>
       )}
 
@@ -188,8 +214,8 @@ export const ProfileCard: React.FC<{
           Base URL <span className="font-normal normal-case">（留空使用默认）</span>
         </label>
         <div className="flex items-center gap-2">
-          <input type="text" value={profile.base_url ?? ''} onChange={e => set('base_url', e.target.value)}
-            placeholder={provInfo.defaultURL ? `默认：${provInfo.defaultURL}` : '请输入 Base URL'}
+          <input aria-label="Base URL" type="text" value={profile.base_url ?? ''} onChange={e => set('base_url', e.target.value)}
+            placeholder={defaultBaseURL ? `默认：${defaultBaseURL}` : '请输入 Base URL'}
             className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white font-mono dk-input" />
           {profile.provider === 'ollama' && (
             <button onClick={() => set('base_url', 'http://host.docker.internal:11434/v1')}
@@ -203,10 +229,10 @@ export const ProfileCard: React.FC<{
       {/* Model */}
       <div>
         <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wide">
-          模型 <span className="font-normal normal-case">（留空使用默认）</span>
+          模型 <span className="font-normal normal-case">{defaultModel ? '（留空使用默认）' : '（必填）'}</span>
         </label>
-        <input type="text" value={profile.model ?? ''} onChange={e => set('model', e.target.value)}
-          placeholder={provInfo.defaultModel ? `默认：${provInfo.defaultModel}` : '请输入模型名'}
+        <input aria-label="模型名称" type="text" value={profile.model ?? ''} onChange={e => set('model', e.target.value)}
+          placeholder={defaultModel ? `默认：${defaultModel}` : profile.provider === 'azure' ? '请输入 Azure 部署名称' : '请输入模型名'}
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white font-mono dk-input" />
       </div>
 
@@ -216,7 +242,7 @@ export const ProfileCard: React.FC<{
           <AlertCircle size={13} className="flex-shrink-0 mt-0.5 text-amber-500" />
           <div>
             <strong>MiniMax-M2 系列是思考模型</strong>，会输出推理过程，响应较慢且 token 消耗大。
-            如不需要深度推理，建议使用 <button type="button" onClick={() => onChange({ ...profile, model: 'MiniMax-M3' })} className="text-[#07c160] font-bold underline">MiniMax-M3</button>。
+            可升级到 <button type="button" onClick={() => onChange({ ...profile, model: provInfo.defaultModel })} className="text-[#07c160] font-bold underline">{provInfo.defaultModel}</button>，并选择较低思考强度。
           </div>
         </div>
       )}
@@ -228,44 +254,42 @@ export const ProfileCard: React.FC<{
             <span className="text-sm text-[#1d1d1f] dark:text-gray-200">开启 /no_think</span>
             <p className="text-[11px] text-gray-400 mt-0.5">适用于 Qwen3 等思考型模型，跳过推理阶段，避免超时</p>
           </div>
-          <button
-            type="button"
-            onClick={() => onChange({ ...profile, no_think: !profile.no_think })}
-            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${profile.no_think ? 'bg-[#07c160]' : 'bg-gray-200 dark:bg-white/20'}`}
-          >
-            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${profile.no_think ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
-          </button>
+          <Switch checked={!!profile.no_think} onChange={value => onChange({ ...profile, no_think: value })} label="Ollama 跳过思考" />
         </div>
       )}
 
-      {/* 深度思考档位（Claude Sonnet 4+ / Opus 4+ 以及 OpenAI o-series 有效） */}
-      {(profile.provider === 'claude' || profile.provider === 'openai') && (
+      {/* 留空交给模型默认行为；新模型可能始终启用思考。 */}
+      {(profile.provider === 'claude' || profile.provider === 'openai' || isMiniMaxFlash || (profile.provider === 'bedrock' && (profile.base_url || defaultBaseURL).includes('/anthropic'))) && (
         <div className="flex items-center justify-between py-1 gap-3">
           <div className="flex-1 min-w-0">
             <span className="text-sm text-[#1d1d1f] dark:text-gray-200">深度思考</span>
             <p className="text-[11px] text-gray-400 mt-0.5">
-              {profile.provider === 'claude'
-                ? 'Claude Extended Thinking（Sonnet 4+ / Opus 4+）— 档位对应 2K / 8K / 16K budget_tokens'
-                : 'OpenAI reasoning_effort — 适用 o1 / o3 / gpt-5-reasoning 等模型'}
+              {profile.provider === 'claude' || profile.provider === 'bedrock'
+                ? '新版 Claude 使用自适应思考；旧模型使用预算档位。Opus 5.5 的思考始终开启。'
+                : isMiniMaxFlash ? 'MiniMax M3.1 Flash 始终开启思考，可调节推理强度。'
+                : 'OpenAI reasoning_effort；GPT-6 默认启用推理，可选择低档降低耗时。'}
             </p>
           </div>
-          <select
+          <Select
+            aria-label="深度思考强度"
             value={profile.reasoning_effort || ''}
-            onChange={(e) => onChange({ ...profile, reasoning_effort: e.target.value as LLMProfile['reasoning_effort'] })}
+            onValueChange={(nextValue) => onChange({ ...profile, reasoning_effort: nextValue as LLMProfile['reasoning_effort'] })}
             className="px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-[#1d1d1f] dark:text-white outline-none focus:border-[#07c160]"
           >
-            <option value="">关闭</option>
+            <option value="">模型默认</option>
             <option value="low">低</option>
             <option value="medium">中</option>
             <option value="high">高</option>
-          </select>
+            {(profile.provider === 'openai' || isMiniMaxFlash) && <option value="xhigh">极高</option>}
+            {(profile.provider === 'openai' || isMiniMaxFlash) && <option value="max">最高</option>}
+          </Select>
         </div>
       )}
 
       {/* 测试连接 */}
       <div className="flex items-center gap-2 pt-1">
         <button onClick={() => onSaveAndTest(profile.id)} disabled={testing}
-          className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 text-xs font-bold rounded-lg hover:border-[#07c160] hover:text-[#07c160] disabled:opacity-50 transition-colors">
+          className="ui-button ui-button-secondary">
           {testing ? <Loader2 size={12} className="animate-spin" /> : <AlertCircle size={12} />}
           测试连接
         </button>

@@ -6,9 +6,7 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import {
-  HelpCircle, Loader2, Search, Wand2, RefreshCw, Share2, Check, Eye, Trophy,
-} from 'lucide-react';
+import { HelpCircle, Loader2, Search, PenLine, RefreshCw, Share2, Check, Eye, Trophy } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
 import { captureCardToPng } from '../../utils/exportPng';
@@ -162,7 +160,7 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
             disabled={!picked || loading}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#07c160] hover:bg-[#06a850] disabled:opacity-50"
           >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : data ? <RefreshCw size={14} /> : <Wand2 size={14} />}
+            {loading ? <Loader2 size={14} className="animate-spin" /> : data ? <RefreshCw size={14} /> : <PenLine size={14} />}
             {loading ? '出题中…' : data ? '重新出题' : '生成 5 题'}
           </button>
         </div>

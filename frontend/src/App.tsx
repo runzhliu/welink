@@ -42,6 +42,7 @@ const SearchView         = lazy(() => import('./components/search/SearchView').t
 const ChatCalendarPage   = lazy(() => import('./components/calendar/ChatCalendarPage').then(m => ({ default: m.ChatCalendarPage })));
 const AnniversaryPage    = lazy(() => import('./components/anniversary/AnniversaryPage').then(m => ({ default: m.AnniversaryPage })));
 const SkillsView         = lazy(() => import('./components/skills/SkillsView').then(m => ({ default: m.SkillsView })));
+const SFTPage            = lazy(() => import('./components/sft/SFTPage'));
 const LabsPage           = lazy(() => import('./components/labs/LabsPage').then(m => ({ default: m.LabsPage })));
 const GalleryPage        = lazy(() => import('./components/gallery/GalleryPage').then(m => ({ default: m.GalleryPage })));
 const MemoryLibraryPage  = lazy(() => import('./components/memory/MemoryLibraryPage').then(m => ({ default: m.MemoryLibraryPage })));
@@ -89,7 +90,7 @@ function AppInner() {
 
   // State — 从 URL hash 恢复当前 tab + 联系人/群聊弹窗
   // hash 格式：#/stats  #/stats/contact/wxid_abc  #/groups/group/xxx@chatroom
-  const VALID_TABS: TabType[] = ['dashboard', 'inbox', 'digest', 'stats', 'contacts', 'db', 'groups', 'search', 'calendar', 'anniversary', 'urls', 'skills', 'labs', 'gallery', 'export', 'memory', 'tasks', 'settings'];
+  const VALID_TABS: TabType[] = ['dashboard', 'inbox', 'digest', 'stats', 'contacts', 'db', 'groups', 'search', 'calendar', 'anniversary', 'urls', 'skills', 'sft', 'labs', 'gallery', 'export', 'memory', 'tasks', 'settings'];
 
   const parseHash = (): { tab: TabType; contactId?: string; groupId?: string } => {
     const raw = window.location.hash.replace('#/', '').replace('#', '');
@@ -521,12 +522,12 @@ function AppInner() {
   return (
     <SelfInfoProvider value={appInfo?.self_info ?? null}>
     <PrivacyModeContext.Provider value={{ privacyMode, setPrivacyMode }}>
-    <div className="flex h-screen dk-page bg-[#f8f9fb] dk-text text-[#1d1d1f] font-sans overflow-hidden">
+    <div className="app-shell flex dk-page dk-text font-sans overflow-hidden">
       {/* Sidebar */}
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} dark={dark} onToggleDark={toggleDark} badges={{ inbox: taskUnread, tasks: taskUnread }} />
 
       {/* Main Content */}
-      <main className={`flex-1 overflow-y-auto dk-page ${activeTab === 'dashboard' ? 'pb-16 sm:pb-0' : 'p-4 sm:p-10 pb-20 sm:pb-10'}`}>
+      <main id="main-content" className={`app-main flex-1 overflow-y-auto dk-page ${activeTab === 'dashboard' ? 'pb-24 sm:pb-0' : 'app-page'}`}>
         <Suspense fallback={<ChunkLoading />}>
         {activeTab === 'dashboard' ? (
           <AIHomePage
@@ -574,6 +575,8 @@ function AppInner() {
           <AnniversaryPage contacts={contacts} onContactClick={handleContactClick} />
         ) : activeTab === 'skills' ? (
           <SkillsView />
+        ) : activeTab === 'sft' ? (
+          <SFTPage contacts={contacts} />
         ) : activeTab === 'labs' ? (
           <LabsPage contacts={contacts} />
         ) : activeTab === 'gallery' ? (

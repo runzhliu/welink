@@ -4,12 +4,12 @@
 
 import React, { useMemo, useState } from 'react';
 import { useSyncExternalStore } from 'react';
-import { MessageCircle, Clock, TrendingUp, Users, ChevronUp, ChevronDown, Bot, Loader2, CheckCircle2, Gift, SlidersHorizontal } from 'lucide-react';
+import { MessageCircle, Clock, TrendingUp, Users, ChevronUp, ChevronDown, MessageSquare, Loader2, CheckCircle2, Gift, SlidersHorizontal } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { subscribeAnalysis, getAnalysisSnapshot } from '../../stores/llmAnalysisStore';
 import { RelativeTime } from '../common/RelativeTime';
-import { avatarSrc } from '../../utils/avatar';
+import { Avatar } from '../common/Avatar';
 import { EmptyState } from '../common/EmptyState';
 
 interface ContactTableProps {
@@ -63,7 +63,7 @@ export const AIAnalysisBadge: React.FC<{ username: string; isGroup?: boolean }> 
 
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#e7f8f0] text-[#07c160] border border-[#c3efdc]">
-      <Bot size={9} />
+      <MessageSquare size={9} />
       AI 已完成
     </span>
   );
@@ -214,13 +214,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                 )}
                 <td className="px-3 py-3.5 text-sm">
                   <div className="flex items-center gap-3">
-                    {(contact.small_head_url || contact.big_head_url) ? (
-                      <img loading="lazy" src={avatarSrc(contact.small_head_url || contact.big_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
-                    ) : (
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
-                        {(contact.remark || contact.nickname || contact.username).charAt(0)}
-                      </div>
-                    )}
+                    <Avatar contact={contact} name={contact.remark || contact.nickname || contact.username} className="w-9 h-9" />
                     <div>
                       <div className={`font-bold text-[#1d1d1f] dk-text${privacyMode ? ' privacy-blur' : ''}`}>{contact.remark || contact.nickname || contact.username}</div>
                       {contact.remark && contact.nickname && (
@@ -303,13 +297,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
             className="dk-row-hover flex items-center justify-between px-4 py-4 active:bg-[#f8f9fb] dark:active:bg-white/5 cursor-pointer"
           >
             <div className="flex items-center gap-3 min-w-0">
-              {(contact.small_head_url || contact.big_head_url) ? (
-                <img loading="lazy" src={avatarSrc(contact.small_head_url || contact.big_head_url)} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
-              ) : (
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
-                  {(contact.remark || contact.nickname || contact.username).charAt(0)}
-                </div>
-              )}
+              <Avatar contact={contact} name={contact.remark || contact.nickname || contact.username} className="w-10 h-10" />
               <div className="min-w-0">
                 <div className={`font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>{contact.remark || contact.nickname || contact.username}</div>
                 <div className="text-xs text-gray-400 mt-0.5">

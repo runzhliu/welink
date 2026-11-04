@@ -15,11 +15,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import {
-  Hourglass, MessageSquare, ChevronLeft, ChevronRight, X, Users, MessagesSquare,
-  Bot, Sparkles, CalendarDays, CalendarRange, LayoutGrid, GitCommitHorizontal,
-  type LucideIcon,
-} from 'lucide-react';
+import { Hourglass, MessageSquare, ChevronLeft, ChevronRight, X, Users, MessagesSquare, FileText, CalendarDays, CalendarRange, LayoutGrid, GitCommitHorizontal, type LucideIcon } from 'lucide-react';
 import { calendarApi } from '../../services/api';
 import type { CalendarDayEntry, ContactStats, ChatMessage, GroupChatMessage } from '../../types';
 import { Section } from '../common/Section';
@@ -97,7 +93,7 @@ const MessagesView: React.FC<MessagesViewProps> = ({ date, entry, onBack }) => {
             <img loading="lazy" src={avatarSrc(entry.small_head_url)} alt="" className="w-7 h-7 rounded-lg object-cover flex-shrink-0"
               onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           ) : (
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-xs font-black flex-shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-[#087f5b] flex items-center justify-center text-white text-xs font-black flex-shrink-0">
               {entry.display_name.charAt(0)}
             </div>
           )}
@@ -166,7 +162,7 @@ const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, on
         <img loading="lazy" src={avatarSrc(entry.small_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0"
           onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
       ) : (
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
+        <div className="w-9 h-9 rounded-xl bg-[#087f5b] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
           {entry.display_name.charAt(0)}
         </div>
       )}
@@ -201,7 +197,7 @@ const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, on
               className="p-2 rounded-xl text-gray-400 hover:text-[#07c160] hover:bg-[#e7f8f0] dark:hover:bg-[#07c160]/10 transition-colors"
               title="AI 分析"
             >
-              <Bot size={16} />
+              <MessageSquare size={16} />
             </button>
           )}
           <button
@@ -426,7 +422,7 @@ export const ChatCalendarPage: React.FC<Props> = ({ contacts, onContactClick, on
             border border-[#07c160]/20 rounded-2xl px-5 py-3">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-9 h-9 rounded-xl bg-[#07c160] flex items-center justify-center flex-shrink-0">
-                <Sparkles size={16} className="text-white" />
+                <FileText size={16} className="text-white" />
               </div>
               <div className="text-sm font-bold text-[#1d1d1f] dk-text">
                 {memories.length === 1

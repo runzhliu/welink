@@ -3,12 +3,14 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { Sparkles, Download, Trash2, Loader2, Package, User, Users, Bot, AlertCircle, Clock, Search, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { Package, Download, Trash2, Loader2, User, Users, MessageSquare, AlertCircle, Clock, Search, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { skillsApi, type SkillRecord } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { RevealLink } from '../common/RevealLink';
 import { RelativeTime } from '../common/RelativeTime';
 import { EmptyState } from '../common/EmptyState';
+import { SFTTrainingPanel } from './SFTTrainingPanel';
+import { SFTDeploymentPanel } from './SFTDeploymentPanel';
 
 type SortKey = 'target_name' | 'skill_type' | 'format' | 'created_at' | 'file_size' | 'status';
 type SortDir = 'asc' | 'desc';
@@ -22,11 +24,12 @@ const FORMAT_LABELS: Record<string, { icon: string; name: string }> = {
   'opencode':      { icon: '💡', name: 'OpenCode Agent' },
   'cursor':        { icon: '✏️', name: 'Cursor Rule' },
   'generic':       { icon: '📄', name: '通用 Markdown' },
+  'lora-jsonl':    { icon: '🧪', name: 'SFT / LoRA 数据集' },
 };
 
 const TYPE_LABELS: Record<string, { icon: React.ReactNode; name: string; color: string }> = {
   'contact':       { icon: <User size={12} />,   name: '联系人',   color: 'bg-[#07c160]/10 text-[#07c160]' },
-  'self':          { icon: <Bot size={12} />,    name: '自画像',   color: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300' },
+  'self':          { icon: <MessageSquare size={12} />,    name: '自画像',   color: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300' },
   'group':         { icon: <Users size={12} />,  name: '群聊智囊', color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300' },
   'group-member':  { icon: <Users size={12} />,  name: '群成员',   color: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-300' },
 };
@@ -224,12 +227,15 @@ export const SkillsView: React.FC = () => {
     <div className="max-w-5xl">
       {/* 标题 */}
       <div className="mb-6">
-        <h1 className="dk-text text-3xl sm:text-5xl font-black tracking-tight text-[#1d1d1f] mb-1 flex items-center gap-3">
-          <Sparkles size={32} className="text-[#07c160]" />
+        <h1 className="ui-page-title mb-1 flex items-center gap-3">
+          <Package size={24} className="text-[var(--text-secondary)]" />
           Skills
         </h1>
-        <p className="text-gray-400 text-sm">查看所有已炼化的 Skill 包，支持重新下载和删除</p>
+        <p className="text-gray-400 text-sm">管理 Skill 包、SFT 数据集和本地微调任务</p>
       </div>
+
+      <SFTTrainingPanel datasets={skills} privacyMode={privacyMode} />
+      <SFTDeploymentPanel privacyMode={privacyMode} />
 
       {/* 搜索 + 筛选 */}
       {!loading && skills.length > 0 && (
@@ -318,7 +324,7 @@ export const SkillsView: React.FC = () => {
         <EmptyState
           icon={<Package size={24} />}
           title="还没有炼化过 Skill"
-          description="Skill 把聊天记录的人物风格打包成 Claude Code / Codex / Cursor 等工具能用的文件。在联系人、群聊或洞察页点紫色 Sparkles 图标开始炼化。"
+          description="Skill 把聊天记录的人物风格打包成 Claude Code / Codex / Cursor 等工具能用的文件。在联系人、群聊或洞察页选择生成 Skill。"
         />
       )}
 

@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, User, Clock, MessageSquare, Calendar, Zap, Users, Sparkles } from 'lucide-react';
+import { Loader2, User, Clock, MessageSquare, Calendar, Zap, Users, FileText } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { SelfPortrait, ContactStats, GlobalStats } from '../../types';
 import { contactsApi } from '../../services/api';
@@ -183,14 +183,14 @@ export const SelfPortraitCard: React.FC<Props> = ({ blockedDisplayNames, contact
           <User size={18} className="text-[#07c160]" />
           <h3 className="text-lg font-black text-[#1d1d1f] dk-text">个人自画像</h3>
         </div>
-        <button
+        <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => { window.location.hash = '#/sft'; }} className="ui-button ui-button-secondary !text-[11px] !min-h-8">训练我的模型</button><button
           onClick={() => setForgeOpen(true)}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#8b5cf6]/10 text-[#8b5cf6] hover:bg-[#8b5cf6]/20 transition-colors"
+          className="ui-button ui-button-secondary !text-[11px] !min-h-8"
           title="把自己的写作风格炼化为 Skill"
         >
-          <Sparkles size={11} />
+          <FileText size={11} />
           炼化我的 Skill
-        </button>
+        </button></div>
       </div>
       <div className="flex items-center gap-1 mb-4 -mx-1">
         <TabBtn id="overview" label="概览" />

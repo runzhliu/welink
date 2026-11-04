@@ -85,13 +85,15 @@ const KIND_STYLES: Record<ToastKind, { icon: React.ReactNode; bg: string; border
 const ToastContainer: React.FC<{ items: ToastItem[]; onDismiss: (id: number) => void }> = ({ items, onDismiss }) => {
   if (items.length === 0) return null;
   return (
-    <div className="fixed top-4 right-4 z-[300] flex flex-col gap-2 max-w-sm pointer-events-none">
+    <div className="fixed top-4 left-4 sm:left-auto right-4 z-[300] flex flex-col gap-2 sm:w-96 pointer-events-none">
       {items.map(t => {
         const s = KIND_STYLES[t.kind];
         return (
           <div
             key={t.id}
-            className={`pointer-events-auto flex items-start gap-2.5 px-4 py-3 rounded-xl shadow-lg border ${s.bg} ${s.border} animate-slide-in-right`}
+            role={t.kind === 'error' ? 'alert' : 'status'}
+            aria-atomic="true"
+            className={`ui-toast pointer-events-auto flex items-start gap-2.5 px-4 py-3 rounded-2xl border ${s.border} animate-slide-in-right`}
           >
             {s.icon}
             <div className={`flex-1 min-w-0 text-sm ${s.text}`}>
@@ -105,7 +107,7 @@ const ToastContainer: React.FC<{ items: ToastItem[]; onDismiss: (id: number) => 
                 </button>
               )}
             </div>
-            <button onClick={() => onDismiss(t.id)} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
+            <button type="button" aria-label="关闭通知" onClick={() => onDismiss(t.id)} className="ui-icon-button !w-6 !h-6">
               <X size={14} />
             </button>
           </div>

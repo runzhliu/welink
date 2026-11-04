@@ -1,14 +1,10 @@
+import { Select } from '../common/Select';
 /**
  * 数据库管理视图组件 - 支持查看表结构和表数据
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import {
-  Database, HardDrive, Table, FileText, AlertCircle,
-  ChevronRight, ChevronDown, Loader2, ArrowLeft, ArrowRight,
-  Hash, LayoutList, Search, Terminal, Play, Copy, Check,
-  BookOpen, History, Star, BarChart3, X, Download
-} from 'lucide-react';
+import { Database, HardDrive, Table, FileText, AlertCircle, ChevronRight, ChevronDown, Loader2, ArrowLeft, ArrowRight, Hash, LayoutList, Search, Terminal, Play, Copy, Check, BookOpen, History, Star, BarChart3, X, Download } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, LineChart, Line } from 'recharts';
 import { databaseApi } from '../../services/api';
 import type { DBInfo, TableInfo, ColumnInfo, TableData, QueryResult } from '../../types';
@@ -160,21 +156,21 @@ const NLQueryPanel: React.FC = () => {
 
   return (
     <div className="dk-card bg-white rounded-3xl dk-border border border-gray-100 overflow-hidden">
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 dark:border-white/5 bg-gradient-to-r from-[#07c160]/5 to-[#10aeff]/5 dk-subtle flex-wrap">
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 dark:border-white/5 dk-subtle flex-wrap">
         <span className="text-lg">🪄</span>
         <h3 className="font-black text-[#1d1d1f] dk-text text-base">自然语言查数据</h3>
         <span className="text-xs text-gray-400">用中文问，AI 自动写 SQL 并执行</span>
         <div className="ml-auto flex items-center gap-2">
           {profiles.length > 1 && (
-            <select
+            <Select
               value={profileId}
-              onChange={e => setProfileId(e.target.value)}
+              onValueChange={nextValue => setProfileId(nextValue)}
               className="text-xs border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1 dk-input focus:outline-none focus:border-[#07c160]"
             >
               {profiles.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-            </select>
+            </Select>
           )}
           {activeProfile && (
             <span className="text-[10px] text-gray-400 font-mono">
@@ -683,16 +679,16 @@ const SQLEditor: React.FC<SQLEditorProps> = ({ databases }) => {
           </button>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <select
+          <Select
             value={selectedDb}
-            onChange={(e) => setSelectedDb(e.target.value)}
+            onValueChange={(nextValue) => setSelectedDb(nextValue)}
             className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white dk-input"
           >
             <option value="">选择数据库</option>
             {databases.map((db) => (
               <option key={db.name} value={db.name}>{db.name}</option>
             ))}
-          </select>
+          </Select>
           <button
             onClick={handleRun}
             disabled={!selectedDb || !sql.trim() || loading}

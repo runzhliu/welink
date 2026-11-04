@@ -10,7 +10,7 @@ import { TrendingDown, CheckCircle2, Ghost, Moon } from 'lucide-react';
 import axios from 'axios';
 import type { ContactStats } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
-import { avatarSrc } from '../../utils/avatar';
+import { Avatar } from '../common/Avatar';
 import { RelativeTime } from '../common/RelativeTime';
 
 interface Props {
@@ -120,7 +120,6 @@ export const DriftingApart: React.FC<Props> = ({ contacts, onContactClick }) => 
           <div className="space-y-3">
             {drifting.map(({ contact, dropRatio }) => {
               const displayName = contact.remark || contact.nickname || contact.username;
-              const url = avatarSrc(contact.small_head_url || contact.big_head_url);
               const dropPct = Math.round(dropRatio * 100);
               return (
                 <div
@@ -128,9 +127,7 @@ export const DriftingApart: React.FC<Props> = ({ contacts, onContactClick }) => 
                   className={`flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors ${onContactClick ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5' : ''}`}
                   onClick={() => onContactClick?.(contact)}
                 >
-                  <div className="w-9 h-9 rounded-xl flex-shrink-0 overflow-hidden bg-gray-100">
-                    {url && <img src={url} alt="" className="w-full h-full object-cover" />}
-                  </div>
+                  <Avatar contact={contact} name={displayName} className="w-9 h-9" />
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-semibold dk-text text-[#1d1d1f] truncate${privacyMode ? ' privacy-blur' : ''}`}>{displayName}</p>
                     <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
@@ -166,9 +163,7 @@ export const DriftingApart: React.FC<Props> = ({ contacts, onContactClick }) => 
                   onClick={() => c && onContactClick?.(c)}
                   className="w-full flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-white/5 rounded-xl px-2 py-1.5"
                 >
-                  <div className="w-9 h-9 rounded-xl flex-shrink-0 overflow-hidden bg-gray-100">
-                    {e.avatar && <img src={avatarSrc(e.avatar)} alt="" className="w-full h-full object-cover" />}
-                  </div>
+                  <Avatar contact={c} src={e.avatar} name={e.name} className="w-9 h-9" />
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-semibold dk-text text-[#1d1d1f] truncate${privacyMode ? ' privacy-blur' : ''}`}>{e.name}</p>
                     <p className="text-[10px] text-gray-400">
@@ -195,9 +190,7 @@ export const DriftingApart: React.FC<Props> = ({ contacts, onContactClick }) => 
                   onClick={() => onContactClick?.(c)}
                   className="w-full flex items-center gap-2 text-left hover:bg-gray-50 dark:hover:bg-white/5 rounded-xl px-2 py-1.5"
                 >
-                  <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-gray-100">
-                    {c.small_head_url && <img src={avatarSrc(c.small_head_url)} className="w-full h-full object-cover" alt="" />}
-                  </div>
+                  <Avatar contact={c} name={displayName} className="w-8 h-8" />
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>{displayName}</p>
                     <p className="text-xs text-gray-400">

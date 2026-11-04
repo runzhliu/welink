@@ -266,7 +266,7 @@ export const WordCloudCanvas: React.FC<Props> = ({ data, loading = false, classN
               <span className="text-xl font-black text-[#1d1d1f] dk-text leading-tight">{pinned.word}</span>
             </div>
             <div className="flex items-baseline gap-1 ml-auto">
-              <span className="text-3xl font-black bg-gradient-to-br from-[#07c160] to-[#06ad56] bg-clip-text text-transparent tabular-nums">
+              <span className="text-3xl font-black bg-[#087f5b] bg-clip-text text-transparent tabular-nums">
                 {pinned.count.toLocaleString()}
               </span>
               <span className="text-xs text-gray-400 font-semibold">次</span>

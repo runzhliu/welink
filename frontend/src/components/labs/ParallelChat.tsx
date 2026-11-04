@@ -5,9 +5,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Sparkles, Loader2, Search, Wand2, Square, Share2, Check, RefreshCw,
-} from 'lucide-react';
+import { FileText, Loader2, Search, PenLine, Square, Share2, Check, RefreshCw } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
 import { captureCardToPng } from '../../utils/exportPng';
@@ -194,7 +192,7 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
       {/* 设置区 */}
       <div className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-4 mb-4">
         <div className="flex items-center gap-2 mb-3">
-          <Sparkles size={16} className="text-[#07c160]" />
+          <FileText size={16} className="text-[#07c160]" />
           <div className="text-sm font-bold text-[#1d1d1f] dark:text-gray-100">平行宇宙对话</div>
         </div>
         <div className="text-xs text-gray-500 dark:text-gray-400 mb-3">
@@ -266,7 +264,7 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
               disabled={!picked || !scenario.trim() || loading}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#07c160] hover:bg-[#06a850] disabled:opacity-50"
             >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : history.length > 0 ? <RefreshCw size={14} /> : <Wand2 size={14} />}
+              {loading ? <Loader2 size={14} className="animate-spin" /> : history.length > 0 ? <RefreshCw size={14} /> : <PenLine size={14} />}
               {loading ? '生成中…' : history.length > 0 ? '重新演一遍' : '开始演绎'}
             </button>
           </div>

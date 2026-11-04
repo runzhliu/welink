@@ -1,3 +1,4 @@
+import { Select } from '../common/Select';
 /**
  * GalleryPage — AI 画廊
  *
@@ -9,7 +10,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
-import { Image as ImageIcon, Search, Star, X, Trash2, RefreshCw, Loader2, Download, Sparkles } from 'lucide-react';
+import { Image as ImageIcon, Search, Star, X, Trash2, RefreshCw, Loader2, Download, ImagePlus } from 'lucide-react';
 import { useImageTask } from '../../hooks/useImageTask';
 import { contactsApi, groupsApi } from '../../services/api';
 import { avatarSrc } from '../../utils/avatar';
@@ -167,13 +168,13 @@ export const GalleryPage: React.FC = () => {
             className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-white/10 rounded-xl focus:outline-none focus:border-[#a78bfa] bg-[#f8f9fb] dk-input"
           />
         </div>
-        <select
+        <Select
           value={scene}
-          onChange={e => setScene(e.target.value)}
+          onValueChange={nextValue => setScene(nextValue)}
           className="text-sm border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 focus:outline-none focus:border-[#a78bfa] bg-white dk-input"
         >
           {SCENE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        </Select>
         <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-600 dark:text-gray-300">
           <input type="checkbox" checked={starredOnly} onChange={e => setStarredOnly(e.target.checked)} className="w-4 h-4 accent-[#fb923c]" />
           仅收藏
@@ -343,8 +344,8 @@ const ImageDetailModal: React.FC<{
             )}
           </div>
           <div className="flex items-center gap-2 px-5 py-3 border-t border-gray-100 dark:border-white/10">
-            <button onClick={onRegen} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-[#a78bfa] to-[#fb7185] text-white text-sm font-bold rounded-xl shadow-sm hover:shadow-md">
-              <Sparkles size={14} /> 基于此重生成
+            <button onClick={onRegen} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[var(--accent)] text-[var(--on-accent)] text-sm font-bold rounded-xl shadow-sm hover:shadow-md">
+              <ImagePlus size={14} /> 基于此重生成
             </button>
             <a href={img.url} download={`${img.hash.slice(0, 8)}.png`} className="px-3 py-2 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 text-sm font-bold rounded-xl hover:border-[#07c160] hover:text-[#07c160]">
               <Download size={14} />
@@ -425,12 +426,12 @@ const RegenerateModal: React.FC<{
             </div>
             <div>
               <div className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wide">尺寸</div>
-              <select value={size} onChange={e => setSize(e.target.value)} disabled={busy}
+              <Select value={size} onValueChange={nextValue => setSize(nextValue)} disabled={busy}
                 className="w-full text-sm border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 focus:outline-none focus:border-[#a78bfa] bg-white dk-input">
                 <option value="1024x1024">1024×1024 方形</option>
                 <option value="1024x1792">1024×1792 竖版</option>
                 <option value="1792x1024">1792×1024 横版</option>
-              </select>
+              </Select>
             </div>
 
             {busy && (
@@ -438,7 +439,7 @@ const RegenerateModal: React.FC<{
                 <div className="flex items-center gap-2">
                   <Loader2 size={14} className="animate-spin text-[#a78bfa]" />
                   <div className="flex-1 h-1.5 rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-[#a78bfa] to-[#fb7185] transition-[width] duration-500" style={{ width: `${Math.max(task.progress, 5)}%` }} />
+                    <div className="h-full bg-[var(--accent)] transition-[width] duration-500" style={{ width: `${Math.max(task.progress, 5)}%` }} />
                   </div>
                   <span className="text-[10px] text-gray-400 font-mono tabular-nums">{task.progress}%</span>
                 </div>
@@ -456,9 +457,9 @@ const RegenerateModal: React.FC<{
             <button
               onClick={() => { if (finished) task.reset(); start(); }}
               disabled={busy || !prompt.trim()}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-[#a78bfa] to-[#fb7185] text-white text-sm font-bold rounded-xl shadow-sm hover:shadow-md disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[var(--accent)] text-[var(--on-accent)] text-sm font-bold rounded-xl shadow-sm hover:shadow-md disabled:opacity-50"
             >
-              <Sparkles size={14} /> {finished ? '再来一张' : '开始生成'}
+              <ImagePlus size={14} /> {finished ? '再来一张' : '开始生成'}
             </button>
           </div>
         </div>

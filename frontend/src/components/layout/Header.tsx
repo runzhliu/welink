@@ -45,15 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
               placeholder="搜索联系人..."
               value={searchValue}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="
-                dk-input pl-11 pr-4 py-3 w-full sm:w-72
-                bg-white border border-gray-200
-                rounded-2xl
-                text-sm font-medium
-                placeholder:text-gray-400
-                focus:outline-none focus:ring-2 focus:ring-[#07c160]/20 focus:border-[#07c160]
-                transition-all duration-200
-              "
+              className="dk-input pl-11 pr-4 py-2.5 w-full sm:w-72 border text-sm"
             />
           </div>
         )}

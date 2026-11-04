@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Switch } from '../../common/Switch';
 import { BarChart2 } from 'lucide-react';
 import {
   MEMBER_RANK_LIMIT_KEY, MEMBER_NAME_WIDTH_KEY,
@@ -26,23 +27,17 @@ export const DisplaySection: React.FC<{
       </div>
       <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-5 dk-card dk-border">
         {onToggleDark && (
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-[#1d1d1f] dk-text">暗色模式</p>
               <p className="text-xs text-gray-400 mt-0.5">切换界面深色 / 浅色主题</p>
             </div>
-            <button
-              type="button"
-              onClick={onToggleDark}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${dark ? 'bg-[#07c160]' : 'bg-gray-200 dark:bg-white/20'}`}
-            >
-              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${dark ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
-            </button>
+            <Switch checked={dark} onChange={() => onToggleDark()} label="暗色模式" />
           </div>
         )}
         {/* 字号调节 */}
         {onFontSizeChange && (
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-[#1d1d1f] dk-text">字号大小</p>
               <p className="text-xs text-gray-400 mt-0.5">调整全局文字大小（默认 16px）</p>
@@ -51,6 +46,7 @@ export const DisplaySection: React.FC<{
               <span className="text-xs text-gray-400 w-6 text-right">{fontSize}</span>
               <input
                 type="range"
+                aria-label="全局字号大小"
                 min={12}
                 max={22}
                 step={1}
@@ -75,13 +71,14 @@ export const DisplaySection: React.FC<{
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-[#1d1d1f] dk-text">群聊发言排行显示人数</p>
             <p className="text-xs text-gray-400 mt-0.5">默认展示 Top N，最多支持 500（实时生效）</p>
           </div>
           <input
             type="number"
+            aria-label="群聊发言排行显示人数"
             min={1}
             max={500}
             value={rankLimit}
@@ -93,13 +90,14 @@ export const DisplaySection: React.FC<{
             className="w-20 text-sm border border-gray-200 rounded-xl px-3 py-1.5 text-center focus:outline-none focus:border-[#07c160] dk-input"
           />
         </div>
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-[#1d1d1f] dk-text">发言排行名字列宽度</p>
             <p className="text-xs text-gray-400 mt-0.5">单位 px，也可在排行图表中直接拖拽调整（实时生效）</p>
           </div>
           <input
             type="number"
+            aria-label="发言排行名字列宽度"
             min={60}
             max={400}
             value={nameWidth}

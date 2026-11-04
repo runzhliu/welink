@@ -12,10 +12,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
-import {
-  BookOpen, Heart, Skull, Star, Trophy, EyeOff, RotateCcw, Loader2,
-  Sparkles, Check, ArrowLeft, ArrowRight, Download, Lock,
-} from 'lucide-react';
+import { BookOpen, Heart, Skull, Star, Trophy, EyeOff, RotateCcw, Loader2, FileText, Check, ArrowLeft, ArrowRight, Download, Lock } from 'lucide-react';
 import type { VNChapterDTO, VNStoryDTO, VNEndingDTO } from '../../services/api';
 import { vnApi, forecastApi } from '../../services/api';
 import { prepareForCapture } from '../../utils/exportPng';
@@ -69,7 +66,7 @@ export const VNEndingPage: React.FC<Props> = ({ ending, story, chapters, display
 
   // 4 页定义
   const pages: { title: string; icon: React.ReactNode; render: () => React.ReactNode }[] = [
-    { title: '结局', icon: <Sparkles size={14} />, render: () => <Page1Title ending={ending} story={story} displayName={displayName} cardRef={cardRef} /> },
+    { title: '结局', icon: <FileText size={14} />, render: () => <Page1Title ending={ending} story={story} displayName={displayName} cardRef={cardRef} /> },
     { title: '转折', icon: <RotateCcw size={14} />, render: () => <Page2Turning ending={ending} chapters={chapters} onRewind={onRewind} /> },
     { title: '对比', icon: <Heart size={14} />, render: () => <Page3Compare vnAffinity={story.state.affinity} realAffinity={realAffinity} realStatus={realStatus} /> },
     { title: '徽章', icon: <Trophy size={14} />, render: () => <Page4Badges unlocked={unlocked} currentType={ending.type} /> },
@@ -181,7 +178,7 @@ export const VNEndingPage: React.FC<Props> = ({ ending, story, chapters, display
           onClick={onRestart}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-[#a78bfa] to-[#fb7185] text-white hover:shadow-md"
         >
-          <Sparkles size={12} /> 再开一档
+          <FileText size={12} /> 再开一档
         </button>
       </div>
     </div>

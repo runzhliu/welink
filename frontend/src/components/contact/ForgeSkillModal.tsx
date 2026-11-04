@@ -1,9 +1,10 @@
+import { Select } from '../common/Select';
 /**
  * Skill 炼化弹窗 — 把聊天记录导出为 Claude Code / Codex / OpenCode / Cursor 等工具的 Skill
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Loader2, Download, Sparkles, Info } from 'lucide-react';
+import { X, Loader2, Download, Package, Info } from 'lucide-react';
 import { forgeSkill, skillsApi, groupsApi } from '../../services/api';
 import type { MemberStat } from '../../types';
 import { RevealLink } from '../common/RevealLink';
@@ -28,14 +29,14 @@ interface LLMProfileItem {
 type FormatKey = 'claude-skill' | 'claude-agent' | 'codex' | 'opencode' | 'cursor' | 'generic' | 'lora-jsonl';
 type GroupTargetKind = 'whole' | 'member';
 
-const FORMATS: Array<{ key: FormatKey; name: string; description: string; icon: string; selfOnly?: boolean }> = [
+const FORMATS: Array<{ key: FormatKey; name: string; description: string; icon: string; sftTargetsOnly?: boolean }> = [
   { key: 'claude-skill', name: 'Claude Code Skill', description: '目录式，含 SKILL.md frontmatter，放到 ~/.claude/skills/', icon: '📁' },
   { key: 'claude-agent', name: 'Claude Code Subagent', description: '单文件 .md，放到 ~/.claude/agents/，可通过 @agent 调用', icon: '🤖' },
   { key: 'codex', name: 'OpenAI Codex AGENTS.md', description: '项目根 AGENTS.md，Codex CLI 自动读取', icon: '🧠' },
   { key: 'opencode', name: 'OpenCode Agent', description: '.opencode/agent/<name>.md，支持 subagent 模式', icon: '💡' },
   { key: 'cursor', name: 'Cursor Rule', description: '.cursor/rules/<name>.mdc，支持 glob 自动应用', icon: '✏️' },
   { key: 'generic', name: '通用 Markdown', description: '工具无关，可粘贴到任何 AI 对话或手动转换', icon: '📄' },
-  { key: 'lora-jsonl', name: 'LoRA 训练集 (高级)', description: '导出 Alpaca jsonl + 训练食谱，自己拿去 Unsloth 微调本地模型。仅本地，不调 LLM', icon: '🧪', selfOnly: true },
+  { key: 'lora-jsonl', name: 'SFT / LoRA 训练集', description: '导出 ms-swift messages 数据集、时间切分和训练脚本。纯本地，不调用 LLM', icon: '🧪', sftTargetsOnly: true },
 ];
 
 // 消息条数预设：默认 500 平衡质量和成本
@@ -80,12 +81,15 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
     }).catch(() => {});
   }, [open, skillType, username]);
 
-  // lora-jsonl 仅 self 类型可用：切到非 self 类型时回退默认
+  // SFT 数据集仅支持 self / contact；群聊目标暂不开放。
   useEffect(() => {
-    if (format === 'lora-jsonl' && skillType !== 'self') {
+    if (format === 'lora-jsonl' && skillType !== 'self' && skillType !== 'contact') {
       setFormat('claude-skill');
     }
-  }, [skillType, format]);
+    if (format === 'lora-jsonl' && msgLimit < 500) {
+      setMsgLimit(500);
+    }
+  }, [skillType, format, msgLimit]);
 
   useEffect(() => {
     if (open) {
@@ -132,7 +136,7 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
         if (rec.status === 'pending') {
           setStatusText('已提交，等待执行…');
         } else if (rec.status === 'running') {
-          setStatusText('正在调用 AI 分析聊天记录…');
+          setStatusText(format === 'lora-jsonl' ? '正在构建本地 SFT 数据集…' : '正在调用 AI 分析聊天记录…');
         } else if (rec.status === 'success') {
           if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
           setStatusText(null);
@@ -240,14 +244,14 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
       >
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-black text-[#1d1d1f] dk-text flex items-center gap-2">
-            <Sparkles size={20} className="text-[#07c160]" />
+            <Package size={20} className="text-[#07c160]" />
             炼化为 Skill
           </h2>
           <div className="flex items-center gap-2">
             {profiles.length > 0 && (
-              <select
+              <Select
                 value={profileId}
-                onChange={e => setProfileId(e.target.value)}
+                onValueChange={nextValue => setProfileId(nextValue)}
                 disabled={loading}
                 className="text-[11px] text-[#576b95] bg-[#576b95]/10 px-2.5 py-1 rounded-full font-semibold border-0 outline-none cursor-pointer max-w-[180px] truncate"
                 title="切换 AI 模型"
@@ -257,7 +261,7 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
                     {p.provider}{p.model ? ` · ${p.model}` : ''}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
             <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
               <X size={18} className="text-gray-400" />
@@ -397,9 +401,11 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
 
         {/* 消息条数选择 */}
         <div className="mb-5">
-          <div className="text-xs font-bold text-gray-500 dk-text mb-2">分析的消息数</div>
+          <div className="text-xs font-bold text-gray-500 dk-text mb-2">
+            {format === 'lora-jsonl' ? '最多训练样本数' : '分析的消息数'}
+          </div>
           <div className="flex flex-wrap gap-1.5 mb-2">
-            {MSG_LIMIT_OPTIONS.map(n => (
+            {MSG_LIMIT_OPTIONS.filter(n => format !== 'lora-jsonl' || n >= 500).map(n => (
               <button
                 key={n}
                 onClick={() => setMsgLimit(n)}
@@ -410,27 +416,35 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
                     : 'bg-gray-100 dark:bg-white/10 text-gray-500 hover:bg-gray-200 dark:hover:bg-white/20'
                 }`}
               >
-                最近 {n} 条
+                {format === 'lora-jsonl' ? `${n} 条` : `最近 ${n} 条`}
               </button>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400">
-            {msgLimit <= 300 && '轻量：约 10 秒，适合快速预览，可能不够"味道"'}
-            {msgLimit > 300 && msgLimit <= 1000 && '均衡（推荐）：约 20-30 秒，能抓到主要特征'}
-            {msgLimit > 1000 && msgLimit <= 2000 && '深度：约 30-40 秒，特征更丰富完整'}
-            {msgLimit > 2000 && msgLimit <= 5000 && '高精：约 40-60 秒，约 20-30k token，适合有大量聊天记录的深度炼化'}
-            {msgLimit > 5000 && '极致：约 60-90 秒，约 30-50k token，最高保真度，需要 128k 上下文的模型'}
-          </p>
-          <p className="text-[10px] text-gray-300 mt-1">
-            上限 5 万字（约 30-50k token），超出后会从选中范围内均匀降采样。大多数现代模型（Claude 3.5+/GPT-4o/DeepSeek 等）都能稳定处理。
-          </p>
+          {format === 'lora-jsonl' ? (
+            <p className="text-[10px] text-gray-400">
+              从当前选择的数据时间范围内均匀采样，按会话切分并去重；实际数量可能因脱敏过滤和有效回复不足而减少。
+            </p>
+          ) : (
+            <>
+              <p className="text-[10px] text-gray-400">
+                {msgLimit <= 300 && '轻量：约 10 秒，适合快速预览，可能不够"味道"'}
+                {msgLimit > 300 && msgLimit <= 1000 && '均衡（推荐）：约 20-30 秒，能抓到主要特征'}
+                {msgLimit > 1000 && msgLimit <= 2000 && '深度：约 30-40 秒，特征更丰富完整'}
+                {msgLimit > 2000 && msgLimit <= 5000 && '高精：约 40-60 秒，约 20-30k token，适合有大量聊天记录的深度炼化'}
+                {msgLimit > 5000 && '极致：约 60-90 秒，约 30-50k token，最高保真度，需要 128k 上下文的模型'}
+              </p>
+              <p className="text-[10px] text-gray-300 mt-1">
+                上限 5 万字（约 30-50k token），超出后会从选中范围内均匀降采样。大多数现代模型（Claude 3.5+/GPT-4o/DeepSeek 等）都能稳定处理。
+              </p>
+            </>
+          )}
         </div>
 
         {/* 格式选择 */}
         <div className="mb-5">
           <div className="text-xs font-bold text-gray-500 dk-text mb-2">输出格式</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {FORMATS.filter(f => !f.selfOnly || skillType === 'self').map(f => (
+            {FORMATS.filter(f => !f.sftTargetsOnly || skillType === 'self' || skillType === 'contact').map(f => (
               <button
                 key={f.key}
                 onClick={() => setFormat(f.key)}
@@ -451,12 +465,13 @@ export const ForgeSkillModal: React.FC<Props> = ({ open, onClose, skillType, use
           </div>
           {format === 'lora-jsonl' && (
             <div className="mt-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-[11px] text-amber-800 dark:text-amber-200 leading-relaxed">
-              <div className="font-bold mb-1">⚠️ 高级模式 · 请先了解</div>
+              <div className="font-bold mb-1">⚠️ 本地训练数据 · 请先了解</div>
               <ul className="space-y-1 list-disc pl-4">
-                <li>导出的 zip 含 <code className="px-1 bg-amber-100 dark:bg-amber-500/20 rounded">data.jsonl</code> + 训练食谱，<b>需要至少 500 条配对样本</b>才能导出</li>
+                <li>支持训练“我的口吻”或当前联系人分身；<b>至少需要 500 条有效回复样本</b></li>
+                <li>导出 ms-swift messages JSONL，并按会话隔离、按时间划分训练/验证/测试集</li>
                 <li>不会调用 LLM、不消耗 token，纯本地数据处理</li>
-                <li>训练需要自备 GPU（推荐 16G 显存以上）和 Unsloth/LLaMA-Factory 等工具</li>
-                <li><b>训练产物（GGUF 模型）含你的真实风格，请勿公开分享</b></li>
+                <li>训练需要自行安装 ms-swift 并准备 GPU；默认脚本以 Qwen3 4B LoRA 为起点</li>
+                <li><b>JSONL 和 LoRA adapter 都可能记住私人内容，请勿公开分享</b></li>
               </ul>
             </div>
           )}

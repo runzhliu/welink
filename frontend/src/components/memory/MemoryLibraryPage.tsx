@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Brain, Pin, PinOff, Pencil, Trash2, Search, Loader2, Check, X as XIcon, Plus } from 'lucide-react';
+import { Archive, Pin, PinOff, Pencil, Trash2, Search, Loader2, Check, X as XIcon, Plus } from 'lucide-react';
 import axios from 'axios';
 import type { ContactStats, GroupInfo } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
@@ -199,8 +199,8 @@ export const MemoryLibraryPage: React.FC<Props> = ({ contacts, groups }) => {
   return (
     <div className="p-4 sm:p-10 pb-20">
       <header className="mb-6 flex items-center gap-3 flex-wrap">
-        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center shadow-md">
-          <Brain size={22} className="text-white" />
+        <div className="w-10 h-10 rounded-xl dk-subtle text-[var(--text-secondary)] flex items-center justify-center">
+          <Archive size={22} />
         </div>
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-black tracking-tight dk-text">记忆库</h1>
@@ -295,7 +295,7 @@ export const MemoryLibraryPage: React.FC<Props> = ({ contacts, groups }) => {
             </div>
           ) : facts.length === 0 ? (
             <div className="bg-white dark:bg-[#1d1d1f] rounded-2xl border border-gray-100 dark:border-white/10 p-12 text-center">
-              <Brain size={36} className="text-gray-300 dark:text-white/20 mx-auto mb-3" />
+              <Archive size={36} className="text-gray-300 dark:text-white/20 mx-auto mb-3" />
               <p className="text-sm text-gray-500">
                 {q ? '没有匹配的记忆' : activeContact ? '这个联系人还没有提炼的记忆' : '还没有记忆。到联系人详情页开启「记忆提炼」功能即可'}
               </p>

@@ -8,10 +8,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import {
-  Sparkles, Loader2, Search, Wand2, Share2, Check, Crown, Clock, AtSign, Quote,
-  Sunrise, Moon, Image as ImageIcon, Mic, Video, FileText, Smile, Hash,
-} from 'lucide-react';
+import { FileText, Loader2, Search, PenLine, Share2, Check, Crown, Clock, AtSign, Quote, Sunrise, Moon, Image as ImageIcon, Mic, Video, Smile, Hash } from 'lucide-react';
 import { groupsApi } from '../../services/api';
 import type { GroupInfo } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
@@ -160,7 +157,7 @@ export const GroupWrapped: React.FC = () => {
       {/* 选群 */}
       <div className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-4 mb-4">
         <div className="flex items-center gap-2 mb-3">
-          <Sparkles size={16} className="text-[#07c160]" />
+          <FileText size={16} className="text-[#07c160]" />
           <div className="text-sm font-bold text-[#1d1d1f] dark:text-gray-100">挑一个群，浓缩成一张 Wrapped 卡</div>
         </div>
         <div className="text-xs text-gray-500 dark:text-gray-400 mb-3">
@@ -219,7 +216,7 @@ export const GroupWrapped: React.FC = () => {
             disabled={!picked || loading}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#07c160] hover:bg-[#06a850] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <PenLine size={14} />}
             {loading ? '生成中…' : data ? '重新生成' : '生成 Wrapped'}
           </button>
         </div>
@@ -248,7 +245,7 @@ export const GroupWrapped: React.FC = () => {
 
           <div ref={cardRef} className="rounded-2xl overflow-hidden bg-[#0b0b14] text-white">
             {/* Hero */}
-            <div className="px-7 py-8 bg-gradient-to-br from-[#07c160] to-[#10aeff]">
+            <div className="px-7 py-8 bg-[#087f5b]">
               <div className="text-xs uppercase tracking-[0.2em] text-white/80 font-bold mb-2">
                 GROUP WRAPPED · 群聊年度卡
               </div>
@@ -301,7 +298,7 @@ export const GroupWrapped: React.FC = () => {
             {/* 角色卡：最常被 @ / 早鸟 / 夜猫子 / 最长一句话 */}
             {(data.most_mentioned || data.early_bird || data.night_owl || data.longest_message) && (
               <div className="px-7 py-5 border-t border-white/5 space-y-3">
-                <SectionTitle icon={<Sparkles size={14} className="text-[#07c160]" />}>角色之最</SectionTitle>
+                <SectionTitle icon={<FileText size={14} className="text-[#07c160]" />}>角色之最</SectionTitle>
                 {data.most_mentioned && (
                   <BadgeCard
                     icon={<AtSign size={14} className="text-[#07c160]" />}

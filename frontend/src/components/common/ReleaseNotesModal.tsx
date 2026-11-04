@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { X, Sparkles, ExternalLink } from 'lucide-react';
+import { X, FileText, ExternalLink } from 'lucide-react';
 import { useEscape } from '../../hooks/useEscape';
 
 interface Props {
@@ -55,7 +55,7 @@ export const ReleaseNotesModal: React.FC<Props> = ({ open, onClose, currentVersi
       >
         <div className="flex items-start gap-3 px-6 py-4 border-b border-gray-100 dark:border-white/10">
           <div className="w-10 h-10 rounded-xl bg-[#07c160]/10 flex items-center justify-center flex-shrink-0">
-            <Sparkles size={20} className="text-[#07c160]" />
+            <FileText size={20} className="text-[#07c160]" />
           </div>
           <div className="flex-1">
             <h3 className="text-base font-bold text-[#1d1d1f] dk-text">WeLink {latestVersion} 已发布</h3>

@@ -23,15 +23,17 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 RUN printf 'server {\n\
     listen 80;\n\
     resolver 127.0.0.11 valid=5s;\n\
+    client_max_body_size 64m;\n\
     location / {\n\
         root /usr/share/nginx/html;\n\
         index index.html;\n\
         try_files $uri $uri/ /index.html;\n\
     }\n\
-    location ~* ^/api/ai/(analyze|rag|day-rag) {\n\
+    location ~* ^/api/(ai/(analyze|rag|day-rag)|sft) {\n\
         set $backend http://backend:8080;\n\
         proxy_pass $backend;\n\
         proxy_http_version     1.1;\n\
+        proxy_set_header       X-Forwarded-Proto $scheme;\n\
         proxy_set_header       Connection "";\n\
         proxy_buffering        off;\n\
         proxy_cache            off;\n\

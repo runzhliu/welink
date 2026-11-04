@@ -7,7 +7,7 @@ import { X, MessageCircle, Clock, Gift, Zap, Moon, Type } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Legend } from 'recharts';
 import type { ContactStats } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
-import { avatarSrc } from '../../utils/avatar';
+import { Avatar } from '../common/Avatar';
 
 interface Props {
   contacts: ContactStats[];
@@ -121,17 +121,7 @@ export const ComparePanel: React.FC<Props> = ({ contacts, onClose }) => {
             {contacts.map((c, i) => (
               <div key={c.username} className="flex items-center gap-2 px-3 py-2 rounded-xl"
                 style={{ backgroundColor: `${COLORS[i % COLORS.length]}15` }}>
-                <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
-                  {(c.small_head_url || c.big_head_url) ? (
-                    <img loading="lazy" src={avatarSrc(c.small_head_url || c.big_head_url)} alt="" className="w-full h-full object-cover"
-                      onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white text-xs font-bold"
-                      style={{ backgroundColor: COLORS[i % COLORS.length] }}>
-                      {displayName(c).charAt(0)}
-                    </div>
-                  )}
-                </div>
+                <Avatar contact={c} name={displayName(c)} className="w-8 h-8" />
                 <div>
                   <span className={`text-sm font-bold${privacyMode ? ' privacy-blur' : ''}`}
                     style={{ color: COLORS[i % COLORS.length] }}>

@@ -1,7 +1,32 @@
+import { ComboBox } from '../../common/ComboBox';
+import { selectOptions } from '../../common/Select';
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Loader2, AlertCircle, Copy, ExternalLink } from 'lucide-react';
+import { AudioLines, Loader2, AlertCircle, Copy, ExternalLink } from 'lucide-react';
 import axios from 'axios';
 import { openProviderUrl } from '../constants';
+
+const TTS_MODEL_OPTIONS = selectOptions(<>
+              <option value="tts-1" />
+              <option value="tts-1-hd" />
+              <option value="FunAudioLLM/CosyVoice2-0.5B" />
+            </>);
+const TTS_VOICE_OPTIONS = selectOptions(<>
+              <option value="alloy">OpenAI · 中性</option>
+              <option value="echo">OpenAI · 男</option>
+              <option value="onyx">OpenAI · 低沉男</option>
+              <option value="fable">OpenAI · 英式</option>
+              <option value="nova">OpenAI · 女</option>
+              <option value="shimmer">OpenAI · 温柔女</option>
+              <option value="FunAudioLLM/CosyVoice2-0.5B:alex">CosyVoice · alex</option>
+              <option value="FunAudioLLM/CosyVoice2-0.5B:anna">CosyVoice · anna</option>
+              <option value="FunAudioLLM/CosyVoice2-0.5B:bella">CosyVoice · bella</option>
+              <option value="FunAudioLLM/CosyVoice2-0.5B:benjamin">CosyVoice · benjamin</option>
+              <option value="zh-CN-YunxiNeural">Edge · 云希（男）</option>
+              <option value="zh-CN-XiaoyiNeural">Edge · 晓伊（女）</option>
+              <option value="zh-CN-XiaoxiaoNeural">Edge · 晓晓（女）</option>
+              <option value="zh-CN-YunyangNeural">Edge · 云扬（男）</option>
+            </>);
+
 
 // 都兼容 OpenAI /audio/speech 协议；keyUrl 为 '' 表示自建/免费（本地）无需注册
 interface TtsPreset {
@@ -138,7 +163,7 @@ export const TtsSection: React.FC = () => {
   return (
     <section className="mb-8" data-section-id="tts" data-settings-tags="播客 podcast tts 语音 朗读 openai voice 主持人 硅基流动 siliconflow edge-tts">
       <div className="flex items-center gap-2 mb-3">
-        <Sparkles size={18} className="text-pink-500" />
+        <AudioLines size={18} className="text-gray-400" />
         <h3 className="text-base font-bold text-[#1d1d1f] dk-text">朗读 TTS 配置（播客 + AI 分析朗读）</h3>
       </div>
       <p className="text-sm text-gray-400 mb-4">一处配置，两处用：<strong>「🎙 播客」</strong>合成双主持人对话 + 所有 AI 回答旁的<strong>「🔊 朗读」</strong>按钮（洞察卡 / 对话分析 / 分身 / 破冰 / 跨联系人问答 / 群年报）。兼容 OpenAI <code className="text-[11px]">/audio/speech</code> 协议的任何服务</p>
@@ -254,59 +279,40 @@ export const TtsSection: React.FC = () => {
           </div>
           <div>
             <label className="text-xs text-gray-500 font-semibold block mb-1">模型</label>
-            <input
+            <ComboBox
               type="text"
               value={ttsConfig.model}
-              onChange={(e) => setTtsConfig(c => ({ ...c, model: e.target.value }))}
+              onValueChange={(value) => setTtsConfig(c => ({ ...c, model: value }))}
               placeholder="tts-1 / FunAudioLLM/CosyVoice2-0.5B / ..."
-              list="tts-model-suggestions"
+              options={TTS_MODEL_OPTIONS}
               className="w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm dk-text outline-none focus:border-[#07c160]"
             />
-            <datalist id="tts-model-suggestions">
-              <option value="tts-1" />
-              <option value="tts-1-hd" />
-              <option value="FunAudioLLM/CosyVoice2-0.5B" />
-            </datalist>
+
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-gray-500 font-semibold block mb-1">主持人 A 声音</label>
-              <input
+              <ComboBox
                 type="text"
                 value={ttsConfig.voice_a}
-                onChange={(e) => setTtsConfig(c => ({ ...c, voice_a: e.target.value }))}
+                onValueChange={(value) => setTtsConfig(c => ({ ...c, voice_a: value }))}
                 placeholder="alloy"
-                list="tts-voice-suggestions"
+                options={TTS_VOICE_OPTIONS}
                 className="w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm dk-text outline-none focus:border-[#07c160]"
               />
             </div>
             <div>
               <label className="text-xs text-gray-500 font-semibold block mb-1">主持人 B 声音</label>
-              <input
+              <ComboBox
                 type="text"
                 value={ttsConfig.voice_b}
-                onChange={(e) => setTtsConfig(c => ({ ...c, voice_b: e.target.value }))}
+                onValueChange={(value) => setTtsConfig(c => ({ ...c, voice_b: value }))}
                 placeholder="nova"
-                list="tts-voice-suggestions"
+                options={TTS_VOICE_OPTIONS}
                 className="w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm dk-text outline-none focus:border-[#07c160]"
               />
             </div>
-            <datalist id="tts-voice-suggestions">
-              <option value="alloy">OpenAI · 中性</option>
-              <option value="echo">OpenAI · 男</option>
-              <option value="onyx">OpenAI · 低沉男</option>
-              <option value="fable">OpenAI · 英式</option>
-              <option value="nova">OpenAI · 女</option>
-              <option value="shimmer">OpenAI · 温柔女</option>
-              <option value="FunAudioLLM/CosyVoice2-0.5B:alex">CosyVoice · alex</option>
-              <option value="FunAudioLLM/CosyVoice2-0.5B:anna">CosyVoice · anna</option>
-              <option value="FunAudioLLM/CosyVoice2-0.5B:bella">CosyVoice · bella</option>
-              <option value="FunAudioLLM/CosyVoice2-0.5B:benjamin">CosyVoice · benjamin</option>
-              <option value="zh-CN-YunxiNeural">Edge · 云希（男）</option>
-              <option value="zh-CN-XiaoyiNeural">Edge · 晓伊（女）</option>
-              <option value="zh-CN-XiaoxiaoNeural">Edge · 晓晓（女）</option>
-              <option value="zh-CN-YunyangNeural">Edge · 云扬（男）</option>
-            </datalist>
+
           </div>
         </div>
         <div className="flex items-center gap-2 pt-2 flex-wrap">

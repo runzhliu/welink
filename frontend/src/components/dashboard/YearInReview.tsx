@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { X, ChevronLeft, ChevronRight, Share2, Loader2, Check, Calendar, MessageCircle, Moon, Users, Sparkles, Heart } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Share2, Loader2, Check, Calendar, MessageCircle, Moon, Users, FileText, Heart } from 'lucide-react';
 import type { ContactStats, GlobalStats } from '../../types';
 import { statsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
@@ -234,7 +234,7 @@ export const YearInReview: React.FC<Props> = ({ contacts, globalStats, onClose }
       const monthNum = parseInt(y.peakMonth.slice(5));
       result.push({
         title: '最活跃的月份',
-        icon: <Sparkles size={20} />,
+        icon: <FileText size={20} />,
         bg: 'from-[#ff9500] to-[#e08500]',
         content: (
           <div className="flex flex-col items-center gap-4 text-white">
@@ -601,7 +601,7 @@ export const YearInReview: React.FC<Props> = ({ contacts, globalStats, onClose }
 
         {/* 卡片 */}
         {yearLoading || !card ? (
-          <div className="bg-gradient-to-br from-[#07c160] to-[#06ad56] rounded-3xl p-8 min-h-[420px] flex flex-col items-center justify-center shadow-2xl">
+          <div className="bg-[#087f5b] rounded-3xl p-8 min-h-[420px] flex flex-col items-center justify-center shadow-2xl">
             <Loader2 size={32} className="animate-spin text-white/60 mb-3" />
             <div className="text-white/60 text-sm">正在统计 {selectedYear} 年数据…</div>
             <div className="text-white/40 text-xs mt-1">消息量越大，统计时间越长</div>

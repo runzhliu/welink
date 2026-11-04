@@ -8,16 +8,13 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Sparkles, Snowflake, AlertCircle, Wand2, EyeOff, X, Clock, ChevronRight,
-  Cake, Heart, PartyPopper, Target, ArrowRight, TrendingDown, TrendingUp,
-} from 'lucide-react';
+import { Bell, Snowflake, AlertCircle, PenLine, EyeOff, X, Clock, ChevronRight, Cake, Heart, PartyPopper, Target, ArrowRight, TrendingDown, TrendingUp } from 'lucide-react';
 import type {
   ContactStats, AnniversaryResponse,
   ForecastEntry, ForecastResponse, ForecastStatus,
 } from '../../types';
 import { forecastApi, anniversaryApi } from '../../services/api';
-import { avatarSrc } from '../../utils/avatar';
+import { Avatar } from '../common/Avatar';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { IcebreakerModal } from './IcebreakerModal';
 import {
@@ -48,10 +45,6 @@ const todayKey = (): string => {
 };
 
 // ─── forecast（建议主动联系）──────────────────────────────────────────────
-const forecastStatusIcon = (status: ForecastEntry['status']) => {
-  if (status === 'endangered') return <AlertCircle size={12} className="text-[#fa5151]" />;
-  return <Snowflake size={12} className="text-[#10aeff]" />;
-};
 
 const forecastBadge = (status: ForecastEntry['status']): { label: string; cls: string } => {
   if (status === 'endangered') return { label: '濒危', cls: 'bg-[#fa5151]/10 text-[#fa5151]' };
@@ -306,11 +299,11 @@ export const TodayPanel: React.FC<Props> = ({ contacts, onContactClick, onNaviga
       <button
         onClick={toggleCollapsed}
         title={`展开今日动态（${totalCount}）`}
-        className={`hidden md:flex fixed right-0 top-24 z-30 flex-col items-center gap-1.5 px-2 py-3 rounded-l-xl border border-r-0 border-[#576b95]/20 dark:border-white/10 bg-gradient-to-b from-[#f5f7fb] to-[#fff7e6] dark:from-[#576b95]/15 dark:to-[#fa5151]/10 shadow-lg shadow-black/5 dark:shadow-black/30 hover:pr-3 transition-all duration-200 ease-out group ${
+        className={`hidden md:flex fixed right-0 top-24 z-30 flex-col items-center gap-1.5 px-2 py-3 rounded-l-xl border border-r-0 border-[#576b95]/20 dark:border-white/10 dk-card shadow-lg shadow-black/5 dark:shadow-black/30 hover:pr-3 transition-all duration-200 ease-out group ${
           mounted ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0'
         }`}
       >
-        <Sparkles size={14} className="text-[#576b95]" />
+        <Bell size={14} className="text-[#576b95]" />
         <span className={`text-[11px] font-black ${hasHot ? 'text-[#fa5151]' : 'text-[#576b95]'}`}>
           {totalCount}
         </span>
@@ -326,7 +319,7 @@ export const TodayPanel: React.FC<Props> = ({ contacts, onContactClick, onNaviga
         mounted ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0'
       }`}
     >
-      <div className="rounded-2xl border border-[#576b95]/20 dark:border-white/10 bg-gradient-to-br from-[#f5f7fb] to-[#fff7e6] dark:from-[#576b95]/15 dark:to-[#fa5151]/10 overflow-hidden shadow-xl shadow-black/5 dark:shadow-black/30">
+      <div className="rounded-2xl border border-[#576b95]/20 dark:border-white/10 dk-card overflow-hidden shadow-xl shadow-black/5 dark:shadow-black/30">
         {/* Header */}
         <div className="px-3 pt-3 pb-0 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 min-w-0 overflow-x-auto">
@@ -384,19 +377,7 @@ export const TodayPanel: React.FC<Props> = ({ contacts, onContactClick, onNaviga
                     onClick={() => handleForecastClick(item)}
                     className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-white/70 dark:hover:bg-white/10 transition-colors group"
                   >
-                    {item.avatar_url ? (
-                      <img
-                        loading="lazy"
-                        src={avatarSrc(item.avatar_url)}
-                        alt=""
-                        className="w-9 h-9 rounded-full object-cover flex-shrink-0"
-                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    ) : (
-                      <div className="w-9 h-9 rounded-full bg-white dark:bg-white/10 flex items-center justify-center flex-shrink-0 shadow-sm">
-                        {forecastStatusIcon(item.status)}
-                      </div>
-                    )}
+                    <Avatar contact={contacts.find(c => c.username === item.username)} src={item.avatar_url} name={item.display_name} className="w-9 h-9" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className={`text-sm font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>
@@ -423,7 +404,7 @@ export const TodayPanel: React.FC<Props> = ({ contacts, onContactClick, onNaviga
                           onClick={e => { e.stopPropagation(); setIcebreakerFor(item); }}
                           className="flex items-center gap-1 text-[11px] text-[#576b95] mt-1 hover:text-[#3d5a8f] hover:underline underline-offset-2 transition-colors"
                         >
-                          <Wand2 size={10} />
+                          <PenLine size={10} />
                           <span className="truncate">写开场白 · {item.suggestion}</span>
                         </button>
                       )}
@@ -452,19 +433,9 @@ export const TodayPanel: React.FC<Props> = ({ contacts, onContactClick, onNaviga
                     onClick={interactive ? () => handleAnnivClick(item) : undefined}
                     className={`flex items-center gap-3 px-3 py-2 rounded-xl ${interactive ? 'cursor-pointer hover:bg-white/70 dark:hover:bg-white/10' : ''} transition-colors`}
                   >
-                    {item.kind !== 'custom' && item.avatar ? (
-                      <img
-                        loading="lazy"
-                        src={avatarSrc(item.avatar)}
-                        alt=""
-                        className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-white dark:bg-white/10 flex items-center justify-center flex-shrink-0 shadow-sm">
-                        {annivIcon(item.kind)}
-                      </div>
-                    )}
+                    {item.kind !== 'custom' ? (
+                      <Avatar contact={contacts.find(c => c.username === item.username)} src={item.avatar} name={item.title} className="w-8 h-8" />
+                    ) : <div className="w-8 h-8 rounded-full dk-subtle flex items-center justify-center shrink-0">{annivIcon(item.kind)}</div>}
                     <div className="flex-1 min-w-0">
                       <div className={`text-sm font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>
                         {item.title}

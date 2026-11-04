@@ -5,10 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Clock, Plus, Play, Trash2, Pencil, Loader2, Inbox,
-  AlertCircle, CalendarClock, Power, Sparkles,
-} from 'lucide-react';
+import { Clock, Plus, Play, Trash2, Pencil, Loader2, Inbox, AlertCircle, CalendarClock, Power, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ScheduledTask, TaskRun, ContactStats, GroupInfo } from '../../types';
@@ -123,7 +120,7 @@ export const SchedulerPage: React.FC<Props> = ({ contacts, groups }) => {
     <div className="min-h-full max-w-5xl mx-auto">
       {/* 头部 */}
       <div className="flex items-center gap-2 mb-2">
-        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center shadow-sm">
+        <div className="w-10 h-10 rounded-2xl bg-[#087f5b] flex items-center justify-center shadow-sm">
           <CalendarClock size={20} className="text-white" />
         </div>
         <div className="flex-1">
@@ -132,7 +129,7 @@ export const SchedulerPage: React.FC<Props> = ({ contacts, groups }) => {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold bg-gradient-to-r from-[#07c160] to-[#10aeff] text-white hover:opacity-90 transition-opacity"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold bg-[#087f5b] text-white hover:opacity-90 transition-opacity"
         >
           <Plus size={15} /> 新建任务
         </button>
@@ -269,7 +266,7 @@ export const SchedulerPage: React.FC<Props> = ({ contacts, groups }) => {
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/50" onClick={() => setOpenRun(null)}>
           <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-white dark:bg-[#1c1c1e] rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 bg-white/90 dark:bg-[#1c1c1e]/90 backdrop-blur px-5 py-3.5 border-b border-gray-100 dark:border-white/10 flex items-center gap-2">
-              <Sparkles size={15} className="text-[#07c160]" />
+              <FileText size={15} className="text-[#07c160]" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-black text-[#1d1d1f] dark:text-gray-100 truncate">{openRun.task_name}</div>
                 <div className="text-[10px] text-gray-400">{fmtTime(openRun.created_at)} · 分析了 {openRun.msg_count} 条消息</div>

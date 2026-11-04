@@ -1,3 +1,4 @@
+import { Select } from '../../common/Select';
 import React, { useState, useEffect } from 'react';
 import { Loader2, AlertCircle, Check } from 'lucide-react';
 import axios from 'axios';
@@ -103,15 +104,15 @@ export const EmbeddingSection: React.FC = () => {
         {/* Provider */}
         <div>
           <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Embedding 提供商</label>
-          <select
+          <Select
             value={provider}
-            onChange={e => setProvider(e.target.value as EmbeddingProviderValue)}
+            onValueChange={nextValue => setProvider(nextValue as EmbeddingProviderValue)}
             className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#07c160] bg-[#f8f9fb] dk-input"
           >
             {EMBEDDING_PROVIDERS.map(p => (
               <option key={p.value} value={p.value}>{p.label}</option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {/* API Key（Ollama 不需要） */}

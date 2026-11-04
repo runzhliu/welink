@@ -1,9 +1,11 @@
+import { DatePicker } from '../common/DatePicker';
+import { Select } from '../common/Select';
 /**
  * 群聊画像视图
  */
 
 import React, { lazy, Suspense, useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Users, MessageSquare, MessageCircle, Clock, ChevronRight, ChevronUp, ChevronDown, Loader2, X, BarChart2, EyeOff, Search, Download, Bot, TrendingUp, Flame, Calendar, Crown, Maximize2, Minimize2, Sparkles, Heart, BookOpen, Zap } from 'lucide-react';
+import { Users, MessageSquare, MessageCircle, Clock, ChevronRight, ChevronUp, ChevronDown, Loader2, X, BarChart2, EyeOff, Search, Download, TrendingUp, Flame, Calendar, Crown, Maximize2, Minimize2, FileText, Heart, BookOpen, Zap } from 'lucide-react';
 import type { GroupInfo, GroupDetail, ContactStats, GroupChatMessage } from '../../types';
 import type { SearchContextTarget } from '../search/SearchContextModal';
 import { groupsApi } from '../../services/api';
@@ -314,12 +316,12 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                     >{p.label}</button>
                   ))}
                 </div>
-                <input
-                  type="date" value={exportFrom} onChange={e => setExportFrom(e.target.value)}
+                <DatePicker aria-label="开始日期"
+                   value={exportFrom} onValueChange={nextValue => setExportFrom(nextValue)}
                   className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160] dk-input dk-border"
                 />
-                <input
-                  type="date" value={exportTo} onChange={e => setExportTo(e.target.value)}
+                <DatePicker aria-label="结束日期"
+                   value={exportTo} onValueChange={nextValue => setExportTo(nextValue)}
                   className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160] dk-input dk-border"
                 />
                 <div className="flex gap-1 mt-1">
@@ -341,7 +343,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             className="p-2 rounded-xl text-gray-300 hover:text-[#8b5cf6] hover:bg-[#8b5cf6]/10 transition-colors duration-200"
             title="炼化群为 Skill（导出给 Claude Code / Codex / Cursor 等工具使用）"
           >
-            <Sparkles size={20} strokeWidth={2} />
+            <FileText size={20} strokeWidth={2} />
           </button>
           <button
             type="button"
@@ -413,7 +415,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                 tab === t ? 'text-[#07c160] border-[#07c160]' : 'text-gray-400 border-transparent hover:text-gray-600 dark:hover:text-gray-200'
               }`}
             >
-              {t === 'ai' && <Bot size={13} className="flex-shrink-0" />}
+              {t === 'ai' && <MessageSquare size={13} className="flex-shrink-0" />}
               {t === 'sim' && <Users size={13} className="flex-shrink-0" />}
               {t === 'portrait' ? '群聊画像' : t === 'relationships' ? '人物关系' : t === 'search' ? '搜索记录' : t === 'replay' ? '回放' : t === 'sim' ? 'AI 群聊' : 'AI 分析'}
               {t === 'ai' && <AIAnalysisBadge username={group.username} isGroup={true} />}
@@ -473,16 +475,16 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
                   className="w-full pl-9 pr-4 py-2.5 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-[#07c160] transition-colors bg-gray-50 dk-subtle dk-border"
                 />
               </div>
-              <select
+              <Select
                 value={searchSpeaker}
-                onChange={(e) => setSearchSpeaker(e.target.value)}
+                onValueChange={(nextValue) => setSearchSpeaker(nextValue)}
                 className="px-3 py-2.5 rounded-2xl border border-gray-200 text-sm bg-gray-50 dk-subtle dk-border focus:outline-none focus:border-[#07c160] transition-colors min-w-[120px]"
               >
                 <option value="">全部成员</option>
                 {(detail?.member_rank ?? []).map((m) => (
                   <option key={m.speaker} value={m.speaker}>{m.speaker}</option>
                 ))}
-              </select>
+              </Select>
               <button
                 type="submit"
                 disabled={!searchQuery.trim() || searchLoading}

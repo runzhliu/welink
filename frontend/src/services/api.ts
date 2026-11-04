@@ -218,6 +218,141 @@ export const skillsApi = {
   downloadUrl: (id: string) => `/api/skills/${id}/download`,
 };
 
+export type SFTTrainingStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';
+
+export interface SFTGPUInfo {
+  vendor: string;
+  index?: string;
+  name: string;
+  memory_total_mb?: number;
+  driver_version?: string;
+}
+
+export interface SFTEnvironment {
+  os: string;
+  arch: string;
+  ms_swift_installed: boolean;
+  ms_swift_path?: string;
+  ms_swift_version?: string;
+  python_path?: string;
+  python_version?: string;
+  torch_version?: string;
+  cuda_available: boolean;
+  gpus: SFTGPUInfo[];
+  warnings: string[];
+}
+
+export interface SFTTrainingJob {
+  id: string;
+  skill_id: string;
+  dataset_name: string;
+  status: SFTTrainingStatus;
+  model: string;
+  epochs: number;
+  learning_rate: number;
+  lora_rank: number;
+  max_length: number;
+  batch_size: number;
+  gradient_accumulation: number;
+  dtype: 'bfloat16' | 'float16' | 'float32';
+  output_dir?: string;
+  log_path?: string;
+  adapter_path?: string;
+  pid?: number;
+  error_msg?: string;
+  created_at: number;
+  started_at?: number;
+  finished_at?: number;
+  updated_at: number;
+}
+
+export interface SubmitSFTTrainingRequest {
+  skill_id: string;
+  model?: string;
+  epochs?: number;
+  learning_rate?: number;
+  lora_rank?: number;
+  max_length?: number;
+  batch_size?: number;
+  gradient_accumulation?: number;
+  dtype?: 'bfloat16' | 'float16' | 'float32';
+}
+
+export interface SFTLogChunk {
+  content: string;
+  next_offset: number;
+  truncated: boolean;
+  eof: boolean;
+}
+
+export type SFTDeploymentStatus = 'starting' | 'running' | 'stopped' | 'failed';
+
+export interface SFTDeployment {
+  id: string;
+  training_job_id: string;
+  skill_type: string;
+  target_username?: string;
+  target_name: string;
+  status: SFTDeploymentStatus;
+  adapter_path: string;
+  base_model: string;
+  served_model: string;
+  backend: 'transformers' | 'vllm';
+  host: string;
+  port: number;
+  gpu: number;
+  pid?: number;
+  log_path?: string;
+  error_msg?: string;
+  created_at: number;
+  started_at?: number;
+  stopped_at?: number;
+  updated_at: number;
+}
+
+export interface StartSFTDeploymentRequest {
+  training_job_id: string;
+  backend?: 'transformers' | 'vllm';
+  port?: number;
+  gpu?: number;
+  served_model?: string;
+}
+
+export interface SFTEvaluationSample {
+  prompt: string;
+  expected: string;
+  generated: string;
+  bigram_f1: number;
+  length_ratio: number;
+  error?: string;
+}
+
+export interface SFTEvaluationResult {
+  deployment_id: string;
+  samples: SFTEvaluationSample[];
+  average_bigram_f1: number;
+  average_length_ratio: number;
+  evaluated_at: number;
+  note: string;
+}
+
+export const sftApi = {
+  environment: () => api.get<void, SFTEnvironment>('/sft-local/environment', { timeout: 20000 }),
+  listJobs: (limit = 50) => api.get<void, { jobs: SFTTrainingJob[] }>('/sft-local/jobs', { params: { limit } }).then(d => d.jobs ?? []),
+  createJob: (request: SubmitSFTTrainingRequest) => api.post<void, SFTTrainingJob>('/sft-local/jobs', request),
+  getJob: (id: string) => api.get<void, SFTTrainingJob>(`/sft-local/jobs/${id}`),
+  getLog: (id: string, offset = 0) => api.get<void, SFTLogChunk>(`/sft-local/jobs/${id}/log`, { params: { offset } }),
+  cancelJob: (id: string) => api.post<void, { ok: boolean }>(`/sft-local/jobs/${id}/cancel`),
+  deleteJob: (id: string) => api.delete<void, { ok: boolean }>(`/sft-local/jobs/${id}`),
+  listDeployments: (status = '', limit = 50) => api.get<void, { deployments: SFTDeployment[] }>('/sft-local/deployments', { params: { status, limit } }).then(d => d.deployments ?? []),
+  createDeployment: (request: StartSFTDeploymentRequest) => api.post<void, SFTDeployment>('/sft-local/deployments', request),
+  getDeployment: (id: string) => api.get<void, SFTDeployment>(`/sft-local/deployments/${id}`),
+  getDeploymentLog: (id: string, offset = 0) => api.get<void, SFTLogChunk>(`/sft-local/deployments/${id}/log`, { params: { offset } }),
+  stopDeployment: (id: string) => api.post<void, { ok: boolean }>(`/sft-local/deployments/${id}/stop`),
+  deleteDeployment: (id: string) => api.delete<void, { ok: boolean }>(`/sft-local/deployments/${id}`),
+  evaluateDeployment: (id: string, limit = 5) => api.post<void, SFTEvaluationResult>(`/sft-local/deployments/${id}/evaluate`, { limit }, { timeout: 15 * 60 * 1000 }),
+};
+
 export const searchApi = {
   global: (q: string, type: 'contact' | 'group' | 'all') =>
     api.get<void, GlobalSearchGroup[]>('/search', { params: { q, type } }),

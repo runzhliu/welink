@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Bot } from 'lucide-react';
+import { LineChart } from 'lucide-react';
 import axios from 'axios';
 
 type UsageStats = {
@@ -30,7 +30,7 @@ export const UsageSection: React.FC = () => {
   return (
     <section className="mb-8" data-section-id="usage" data-settings-tags="LLM 用量 token 字符 统计 usage">
       <div className="flex items-center gap-2 mb-3">
-        <Bot size={18} className="text-[#07c160]" />
+        <LineChart size={18} className="text-[#07c160]" />
         <h3 className="text-base font-bold text-[#1d1d1f] dk-text">LLM 用量</h3>
         <button
           onClick={loadUsage}

@@ -1,3 +1,4 @@
+import { Avatar } from '../common/Avatar';
 /**
  * 共同社交圈 — 选两个联系人，找共同群和共同好友
  */
@@ -147,7 +148,7 @@ export const CommonCirclePanel: React.FC<Props> = ({ contacts, onClose }) => {
         ) : (
           <div className="space-y-5">
             {/* 汇总 */}
-            <div className="bg-gradient-to-r from-[#8b5cf610] to-[#07c16010] rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3">
+            <div className="dk-subtle rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3">
               <span className="text-sm font-bold text-[#1d1d1f] dk-text">
                 <span className={privacyMode ? 'privacy-blur' : ''}>{data.user1_name}</span>
                 <span className="text-gray-400 mx-1">&</span>
@@ -174,7 +175,7 @@ export const CommonCirclePanel: React.FC<Props> = ({ contacts, onClose }) => {
                       }${privacyMode ? ' privacy-blur' : ''}`}
                       title={f.is_my_contact ? '你的好友' : '非好友'}
                     >
-                      {f.is_my_contact && <UserCheck size={10} />}
+                      <Avatar contact={contacts.find(c => c.username === f.username)} src={f.avatar} name={f.name} className="w-5 h-5 !text-[10px]" />
                       {f.name}
                       {f.group_count > 1 && <span className="text-[9px] opacity-70 ml-0.5">×{f.group_count}</span>}
                     </span>

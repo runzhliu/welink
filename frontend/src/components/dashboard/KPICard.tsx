@@ -19,7 +19,7 @@ interface KPICardProps {
 
 const colorClasses = {
   green: {
-    bg: 'bg-gradient-to-br from-[#07c160] to-[#06ad56]',
+    bg: 'bg-[#087f5b]',
     text: 'text-[#07c160]',
     light: 'bg-[#e7f8f0]',
     shadow: 'shadow-green-100/50',
@@ -61,11 +61,10 @@ export const KPICard: React.FC<KPICardProps> = ({
   const colors = colorClasses[color];
 
   return (
-    <div className="dk-card bg-white dk-border p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-gray-100 hover:shadow-lg transition-all duration-300 group">
-      <div className="flex items-start justify-between mb-4 sm:mb-6">
-        <div className={`w-10 h-10 sm:w-14 sm:h-14 ${colors.bg} rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg ${colors.shadow} group-hover:scale-110 transition-transform duration-300`}>
-          <Icon size={20} className="text-white sm:hidden" strokeWidth={2.5} />
-          <Icon size={28} className="text-white hidden sm:block" strokeWidth={2.5} />
+    <div className="ui-card ui-kpi transition-colors">
+      <div className="flex items-start justify-between mb-5">
+        <div className={`ui-kpi-icon ${colors.text}`}>
+          <Icon size={20} strokeWidth={1.8} aria-hidden="true" />
         </div>
 
         {trend && (
@@ -79,14 +78,14 @@ export const KPICard: React.FC<KPICardProps> = ({
       </div>
 
       <div>
-        <p className="dk-text-muted text-gray-500 text-xs sm:text-sm font-semibold mb-1 sm:mb-2 tracking-wide uppercase">
+        <p className="ui-caption mb-2">
           {title}
         </p>
-        <h3 className="dk-text text-2xl sm:text-4xl font-black tracking-tight text-[#1d1d1f] mb-1">
+        <h3 className="ui-kpi-value mb-1">
           {value}
         </h3>
         {subtitle && (
-          <p className="text-gray-400 text-xs font-medium hidden sm:block">
+          <p className="ui-caption mt-2">
             {subtitle}
           </p>
         )}

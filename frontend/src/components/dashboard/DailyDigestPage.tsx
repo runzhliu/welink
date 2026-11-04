@@ -6,9 +6,9 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Sunrise, MoonStar, Cake, Snowflake, AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
+import { Newspaper, MoonStar, Cake, Snowflake, AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
 import axios from 'axios';
-import { avatarSrc } from '../../utils/avatar';
+import { Avatar } from '../common/Avatar';
 import { forecastApi } from '../../services/api';
 import type { ContactStats, ForecastEntry } from '../../types';
 
@@ -24,6 +24,7 @@ interface DigestUpcomingAnniv {
   type: string;
   username: string;
   display_name: string;
+  avatar?: string;
   date: string;
   days_until: number;
 }
@@ -111,10 +112,10 @@ export const DailyDigestPage: React.FC<Props> = ({ contacts, onContactClick }) =
   return (
     <div className="max-w-5xl mx-auto space-y-5">
       {/* Header */}
-      <header className="relative rounded-3xl border border-amber-100 dark:border-amber-400/20 bg-gradient-to-br from-amber-50 via-rose-50/60 to-purple-50/60 dark:from-amber-500/10 dark:via-rose-500/10 dark:to-purple-500/10 overflow-hidden p-6">
+      <header className="ui-card overflow-hidden p-5 sm:p-6">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shrink-0">
-            <Sunrise size={28} className="text-white" />
+          <div className="w-12 h-12 rounded-xl dk-subtle flex items-center justify-center shrink-0">
+            <Newspaper size={23} className="text-[var(--text-secondary)]" />
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-black text-[#1d1d1f] dark:text-gray-100">今日简报</h1>
@@ -132,10 +133,10 @@ export const DailyDigestPage: React.FC<Props> = ({ contacts, onContactClick }) =
         </div>
         {/* Meta 摘要 */}
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <MetaCard label="建议主动联系" value={forecasts.length} color="#fa5151" />
-          <MetaCard label="昨日有互动" value={digest.active_contact_count} color="#07c160" />
-          <MetaCard label="沉睡老朋友" value={digest.sleeping_count} color="#576b95" />
-          <MetaCard label="3 天内纪念日" value={digest.upcoming_anniversaries.length} color="#ff9500" />
+          <MetaCard label="建议主动联系" value={forecasts.length} />
+          <MetaCard label="昨日有互动" value={digest.active_contact_count} />
+          <MetaCard label="沉睡老朋友" value={digest.sleeping_count} />
+          <MetaCard label="3 天内纪念日" value={digest.upcoming_anniversaries.length} />
         </div>
       </header>
 
@@ -154,7 +155,7 @@ export const DailyDigestPage: React.FC<Props> = ({ contacts, onContactClick }) =
               onClick={() => clickContact(f.username)}
               className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-white/5 cursor-pointer"
             >
-              <img loading="lazy" src={avatarSrc(f.avatar_url || '')} alt="" className="w-8 h-8 rounded-full object-cover bg-gray-100" />
+              <Avatar contact={contacts.find(c => c.username === f.username)} src={f.avatar_url} name={f.display_name} className="w-8 h-8" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm dk-text truncate">{f.display_name}</span>
@@ -185,7 +186,7 @@ export const DailyDigestPage: React.FC<Props> = ({ contacts, onContactClick }) =
               onClick={() => clickContact(c.username)}
               className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-white/5 cursor-pointer"
             >
-              <img loading="lazy" src={avatarSrc(c.avatar || '')} alt="" className="w-8 h-8 rounded-full object-cover bg-gray-100" />
+              <Avatar contact={contacts.find(contact => contact.username === c.username)} src={c.avatar} name={c.name} className="w-8 h-8" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm dk-text truncate">{c.name}</div>
                 <div className="text-[11px] text-gray-400 truncate mt-0.5">
@@ -209,9 +210,7 @@ export const DailyDigestPage: React.FC<Props> = ({ contacts, onContactClick }) =
               onClick={() => clickContact(a.username)}
               className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-white/5 cursor-pointer"
             >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center text-white text-[11px] font-bold shrink-0">
-                {a.days_until}
-              </div>
+              <Avatar contact={contacts.find(c => c.username === a.username)} src={a.avatar} name={a.display_name} className="w-8 h-8" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm dk-text truncate">{a.display_name}</div>
                 <div className="text-[11px] text-gray-400 mt-0.5">
@@ -228,9 +227,9 @@ export const DailyDigestPage: React.FC<Props> = ({ contacts, onContactClick }) =
 
 // ─── 子组件 ────────────────────────────────────────────────────────────────
 
-const MetaCard: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
-  <div className="rounded-2xl bg-white/70 dark:bg-black/20 border border-amber-100/40 dark:border-white/5 px-3 py-2.5">
-    <div className="text-2xl font-black tabular-nums" style={{ color }}>{value}</div>
+const MetaCard: React.FC<{ label: string; value: number }> = ({ label, value }) => (
+  <div className="rounded-xl dk-subtle px-3 py-2.5">
+    <div className="text-2xl font-semibold tabular-nums dk-text">{value}</div>
     <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">{label}</div>
   </div>
 );

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 import { LLMSection } from './LLMSection';
 import { EmbeddingSection } from './EmbeddingSection';
 import { MemorySection } from './MemorySection';
@@ -20,7 +20,7 @@ export const AIConfigGroup: React.FC = () => {
   return (
     <section className="mb-8" data-section-id="ai-config" data-settings-tags="AI 模型 LLM embedding memory image 分析 配置 向量 记忆 生图 deepseek openai claude">
       <div className="flex items-center gap-2 mb-3">
-        <Bot size={18} className="text-[#07c160]" />
+        <SlidersHorizontal size={18} className="text-[#07c160]" />
         <h3 className="text-base font-bold text-[#1d1d1f] dk-text">AI 配置</h3>
       </div>
       <p className="text-sm text-gray-400 mb-4">
@@ -28,16 +28,14 @@ export const AIConfigGroup: React.FC = () => {
       </p>
 
       {/* Tab 导航 */}
-      <div className="flex gap-1 mb-4 bg-gray-100 dark:bg-white/5 rounded-xl p-1">
+      <div className="ui-segmented mb-5 overflow-x-auto" role="group" aria-label="AI 配置类别">
         {tabs.map(t => (
           <button
+            type="button"
             key={t.key}
+            aria-pressed={tab === t.key}
             onClick={() => setTab(t.key)}
-            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${
-              tab === t.key
-                ? 'bg-white dark:bg-white/10 text-[#07c160] shadow-sm'
-                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-            }`}
+            className="flex-1 whitespace-nowrap"
           >
             {t.label}
           </button>

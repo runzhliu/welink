@@ -9,7 +9,7 @@
 
 import React, { useRef, useState } from 'react';
 import axios from 'axios';
-import { LayoutGrid, Loader2, RefreshCw, Share2, Check, AlertCircle, Sparkles } from 'lucide-react';
+import { LayoutGrid, Loader2, RefreshCw, Share2, Check, AlertCircle, FileText } from 'lucide-react';
 import { captureCardToPng } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
 import { WelinkBrand } from './_shared';
@@ -109,7 +109,7 @@ export const TopicMap: React.FC = () => {
             <button
               onClick={exportPng}
               disabled={exporting}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-[#07c160] to-[#10aeff] text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#087f5b] text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {exporting ? <Loader2 size={12} className="animate-spin" /> : exported ? <Check size={12} /> : <Share2 size={12} />}
               {exported ? '已下载' : '截图'}
@@ -131,7 +131,7 @@ export const TopicMap: React.FC = () => {
       {/* 未开始：引导按钮 */}
       {!started && (
         <div className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-10 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center mx-auto mb-4 shadow-sm">
+          <div className="w-14 h-14 rounded-2xl bg-[#087f5b] flex items-center justify-center mx-auto mb-4 shadow-sm">
             <LayoutGrid size={26} className="text-white" />
           </div>
           <h3 className="text-base font-black text-[#1d1d1f] dark:text-gray-100 mb-1">我的话题宇宙</h3>
@@ -140,9 +140,9 @@ export const TopicMap: React.FC = () => {
           </p>
           <button
             onClick={() => generate(false)}
-            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-[#07c160] to-[#10aeff] text-white hover:opacity-90 transition-opacity"
+            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-bold bg-[#087f5b] text-white hover:opacity-90 transition-opacity"
           >
-            <Sparkles size={15} />
+            <FileText size={15} />
             生成话题图谱
           </button>
         </div>

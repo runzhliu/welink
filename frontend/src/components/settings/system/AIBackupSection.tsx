@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Bot, Database, FolderOpen, Loader2 } from 'lucide-react';
+import { Archive, Database, FolderOpen, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import { appApi } from '../../../services/appApi';
 
@@ -50,7 +50,7 @@ export const AIBackupSection: React.FC<{
   return (
     <section className="mb-8" data-section-id="backup" data-settings-tags="AI 备份 恢复 backup restore skills 记忆 memories 对话历史 ai_analysis">
       <div className="flex items-center gap-2 mb-3">
-        <Bot size={18} className="text-[#07c160]" />
+        <Archive size={18} className="text-[#07c160]" />
         <h3 className="text-base font-bold text-[#1d1d1f] dk-text">AI 数据备份</h3>
       </div>
       <p className="text-sm text-gray-400 mb-4">Skills、聊天历史、记忆都在 ai_analysis.db；建议定期导出</p>

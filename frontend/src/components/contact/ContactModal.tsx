@@ -1,10 +1,11 @@
+import { DatePicker } from '../common/DatePicker';
 /**
  * 联系人详情弹窗组件
  */
 
 import React, { lazy, Suspense, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import axios from 'axios';
-import { X, Users, EyeOff, Search, Loader2, Download, Bot, Flag, MessageCircle, Calendar, Clock, Trophy, Flame, Sparkles, Maximize2, Minimize2, Mic, Image as ImageIcon, RotateCcw, BookOpen } from 'lucide-react';
+import { X, Users, EyeOff, Search, Loader2, Download, MessageSquare, Flag, MessageCircle, Calendar, Clock, Trophy, Flame, FileText, Maximize2, Minimize2, Mic, Image as ImageIcon, RotateCcw, BookOpen } from 'lucide-react';
 import type { ContactStats, ContactDetail, SentimentResult, GroupInfo, ChatMessage } from '../../types';
 import type { SearchContextTarget } from '../search/SearchContextModal';
 import { contactsApi } from '../../services/api';
@@ -345,12 +346,12 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                     >{p.label}</button>
                   ))}
                 </div>
-                <input
-                  type="date" value={exportFrom} onChange={e => setExportFrom(e.target.value)}
+                <DatePicker aria-label="开始日期"
+                   value={exportFrom} onValueChange={nextValue => setExportFrom(nextValue)}
                   className="dk-input w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160]"
                 />
-                <input
-                  type="date" value={exportTo} onChange={e => setExportTo(e.target.value)}
+                <DatePicker aria-label="结束日期"
+                   value={exportTo} onValueChange={nextValue => setExportTo(nextValue)}
                   className="dk-input w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#07c160]"
                 />
                 <div className="flex gap-1 mt-1">
@@ -381,7 +382,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
             className="p-2 rounded-xl text-gray-300 hover:text-[#8b5cf6] hover:bg-[#8b5cf6]/10 transition-colors duration-200"
             title="炼化为 Skill（导出给 Claude Code / Codex / Cursor 等工具使用）"
           >
-            <Sparkles size={20} strokeWidth={2} />
+            <FileText size={20} strokeWidth={2} />
           </button>
           <button
             type="button"
@@ -454,7 +455,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                 />
               </button>
             ) : (
-              <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-2xl sm:text-3xl font-black shadow-md">
+              <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-[#087f5b] flex items-center justify-center text-white text-2xl sm:text-3xl font-black shadow-md">
                 {displayName.charAt(0)}
               </div>
             )}
@@ -739,8 +740,8 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
                     : 'text-gray-400 border-transparent hover:text-gray-600'
                 }`}
               >
-                {t === 'ai' && <Bot size={13} className="flex-shrink-0" />}
-                {t === 'clone' && <Sparkles size={13} className="flex-shrink-0" />}
+                {t === 'ai' && <MessageSquare size={13} className="flex-shrink-0" />}
+                {t === 'clone' && <FileText size={13} className="flex-shrink-0" />}
                 {t === 'wordcloud' ? '词云分析' : t === 'detail' ? '深度画像' : t === 'sentiment' ? '情感分析' : t === 'search' ? '搜索记录' : t === 'wechat' ? '微信视图' : t === 'ai' ? 'AI 分析' : t === 'clone' ? 'AI 分身' : t === 'insights' ? 'AI 洞察' : '回放'}
               </button>
             ))}

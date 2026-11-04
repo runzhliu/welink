@@ -14,9 +14,9 @@ interface Props {
 
 export const EmptyState: React.FC<Props> = ({ icon, title, description, action, secondary }) => {
   return (
-    <div className="ui-card flex flex-col items-center justify-center border-dashed py-12 px-6 text-center">
+    <div className="ui-card flex flex-col items-center justify-center py-14 px-6 text-center">
       {icon && (
-        <div className="w-14 h-14 rounded-2xl bg-[#07c160]/10 flex items-center justify-center mb-4 text-[#07c160]">
+        <div className="w-12 h-12 rounded-2xl dk-subtle flex items-center justify-center mb-5 text-[#07c160]">
           {icon}
         </div>
       )}
@@ -27,7 +27,7 @@ export const EmptyState: React.FC<Props> = ({ icon, title, description, action, 
           <button
             type="button"
             onClick={action.onClick}
-            className="ui-control px-4 bg-[#07c160] text-white text-sm font-semibold hover:bg-[#06ad56] transition-colors"
+            className="ui-button ui-button-primary"
           >
             {action.label}
           </button>
@@ -36,7 +36,7 @@ export const EmptyState: React.FC<Props> = ({ icon, title, description, action, 
           <button
             type="button"
             onClick={secondary.onClick}
-            className="ui-control px-4 bg-white dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 text-sm font-semibold hover:bg-gray-50 dark:hover:bg-white/15 transition-colors"
+            className="ui-button ui-button-secondary"
           >
             {secondary.label}
           </button>

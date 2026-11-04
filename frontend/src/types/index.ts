@@ -202,7 +202,7 @@ export interface BackendStatus {
   last_error?: string;
 }
 
-export type TabType = 'dashboard' | 'inbox' | 'digest' | 'stats' | 'contacts' | 'db' | 'groups' | 'search' | 'calendar' | 'anniversary' | 'urls' | 'skills' | 'labs' | 'gallery' | 'memory' | 'tasks' | 'export' | 'settings';
+export type TabType = 'dashboard' | 'inbox' | 'digest' | 'stats' | 'contacts' | 'db' | 'groups' | 'search' | 'calendar' | 'anniversary' | 'urls' | 'skills' | 'sft' | 'labs' | 'gallery' | 'memory' | 'tasks' | 'export' | 'settings';
 
 // 定时任务（主动总结/挖掘）
 export type TaskType = 'summary' | 'todo' | 'watch' | 'mood' | 'custom';

@@ -7,9 +7,7 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import {
-  HeartHandshake, Loader2, Search, Wand2, Share2, Check, ArrowRight, ArrowLeft, Users,
-} from 'lucide-react';
+import { HeartHandshake, Loader2, Search, PenLine, Share2, Check, ArrowRight, ArrowLeft, Users } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
 import { captureCardToPng } from '../../utils/exportPng';
@@ -212,7 +210,7 @@ export const PromiseDebts: React.FC<Props> = ({ contacts }) => {
             disabled={!picked || loading}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#07c160] hover:bg-[#06a850] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
-            {loading ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <PenLine size={12} />}
             {loading ? '挖掘中…' : '挖掘人情债'}
           </button>
         </div>

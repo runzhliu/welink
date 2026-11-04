@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Sparkles, EyeOff } from 'lucide-react';
+import { Activity, EyeOff } from 'lucide-react';
 import { TagList } from '../shared';
 import type { ContactStats } from '../../../types';
 
@@ -42,7 +42,7 @@ export const ForecastIgnoreSection: React.FC<{
   return (
     <section className="mb-8" data-section-id="forecast" data-settings-tags="关系预测 forecast 忽略 不再推荐 冷却">
       <div className="flex items-center gap-2 mb-3">
-        <Sparkles size={18} className="text-[#07c160]" />
+        <Activity size={18} className="text-[#07c160]" />
         <h3 className="text-base font-bold text-[#1d1d1f] dk-text">关系预测 · 忽略名单</h3>
       </div>
       <p className="text-sm text-gray-400 mb-4">

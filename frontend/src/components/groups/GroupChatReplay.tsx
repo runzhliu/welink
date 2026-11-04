@@ -1,9 +1,10 @@
+import { DatePicker } from '../common/DatePicker';
 /**
  * 群聊回放播放器 — 按真实时间间隔回放群聊记录（参考私聊 ChatReplay）
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, SkipForward, Clock, Gauge, Maximize2, Minimize2, Sparkles } from 'lucide-react';
+import { Play, Pause, SkipForward, Clock, Gauge, Maximize2, Minimize2, FileText } from 'lucide-react';
 import type { GroupChatMessage } from '../../types';
 import { groupsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
@@ -213,10 +214,10 @@ export const GroupChatReplay: React.FC<Props> = ({ username, groupName }) => {
           </div>
 
           <div className="flex items-center gap-2">
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            <DatePicker aria-label="开始日期"  value={dateFrom} onValueChange={nextValue => setDateFrom(nextValue)}
               className="border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs dk-input" />
             <span className="text-gray-400 text-xs">~</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            <DatePicker aria-label="结束日期"  value={dateTo} onValueChange={nextValue => setDateTo(nextValue)}
               className="border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs dk-input" />
             <button
               onClick={() => loadMessages(true)}
@@ -315,7 +316,7 @@ export const GroupChatReplay: React.FC<Props> = ({ username, groupName }) => {
                   }`}
                   title="智能节奏：冷场直接跳过，发言密集时自动放慢到能读完"
                 >
-                  <Sparkles size={9} />
+                  <FileText size={9} />
                   智能
                 </button>
                 <Gauge size={11} className="text-gray-300 ml-1" />

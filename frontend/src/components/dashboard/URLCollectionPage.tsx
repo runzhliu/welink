@@ -1,3 +1,4 @@
+import { DatePicker } from '../common/DatePicker';
 /**
  * URL 收藏夹 — 所有聊天中发过/收过的链接
  */
@@ -283,10 +284,10 @@ export const URLCollectionPage: React.FC<Props> = ({ blockedUsers = [], blockedD
                 </button>
               ))}
             </div>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            <DatePicker aria-label="开始日期"  value={dateFrom} onValueChange={nextValue => setDateFrom(nextValue)}
               className="text-[11px] border border-gray-200 rounded-lg px-2 py-1 dk-input" />
             <span className="text-gray-300">~</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            <DatePicker aria-label="结束日期"  value={dateTo} onValueChange={nextValue => setDateTo(nextValue)}
               className="text-[11px] border border-gray-200 rounded-lg px-2 py-1 dk-input" />
           </div>
 

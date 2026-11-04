@@ -9,9 +9,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Compass, Loader2, Share2, Check, Sparkles, BellOff, LogOut, Search,
-} from 'lucide-react';
+import { Compass, Loader2, Share2, Check, FileText, BellOff, LogOut, Search } from 'lucide-react';
 import { groupsApi } from '../../services/api';
 import type { GroupInfo } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
@@ -159,7 +157,7 @@ function score(g: GroupInfo): Scored {
 type FilterTab = 'all' | 'keep' | 'mute' | 'leave';
 
 const TIER_META: Record<Tier, { label: string; sub: string; color: string; bg: string; icon: React.ReactNode }> = {
-  keep:  { label: '值得多看', sub: '高频且你还在参与', color: '#07c160', bg: 'bg-[#e7f8f0] text-[#07c160]', icon: <Sparkles size={11} /> },
+  keep:  { label: '值得多看', sub: '高频且你还在参与', color: '#07c160', bg: 'bg-[#e7f8f0] text-[#07c160]', icon: <FileText size={11} /> },
   mute:  { label: '可以静音', sub: '吵但和你关系不大', color: '#ff9500', bg: 'bg-orange-50 text-[#ff9500]', icon: <BellOff size={11} /> },
   leave: { label: '可以放手', sub: '已经没什么动静了',   color: '#8a94a6', bg: 'bg-[#eef1f7] text-[#576b95]', icon: <LogOut size={11} /> },
 };
@@ -382,7 +380,7 @@ const Bar: React.FC<{ label: string; v: number }> = ({ label, v }) => {
     <div className="flex items-center gap-1">
       <span className="text-[9px] text-gray-400 w-3">{label}</span>
       <div className="w-12 h-1 rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden">
-        <div className="h-full bg-gradient-to-r from-[#07c160] to-[#10aeff]" style={{ width: `${pct}%` }} />
+        <div className="h-full bg-[#087f5b]" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );

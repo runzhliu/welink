@@ -1,14 +1,16 @@
+import { Select } from '../common/Select';
 /**
  * AI 首页 — 以「直接问我」为核心的纯净首页，对话直接在页面内生成
  */
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Bot, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, Share2, Users, Plus, ChevronDown, ChevronRight, BrainCircuit, Globe, Sparkles } from 'lucide-react';
+import { MessageSquare, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, ArrowUpRight, Share2, Users, Plus, ChevronDown, ChevronRight, ListTree, Globe, Settings } from 'lucide-react';
 import { CrossContactQA } from './CrossContactQA';
 import { ConversationHistory } from './ConversationHistory';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateShareImage } from '../../utils/shareImage';
+import { Avatar } from '../common/Avatar';
 import { RevealLink } from '../common/RevealLink';
 import { avatarSrc } from '../../utils/avatar';
 import type { ContactStats, TimeRange, ChatMessage, GroupInfo, GroupChatMessage } from '../../types';
@@ -113,13 +115,13 @@ const SubjectPicker: React.FC<{
     setTimeout(() => searchRef.current?.focus(), 30);
   };
 
-  const showDropdown = open && (filteredContacts.length > 0 || filteredGroups.length > 0 || query.length === 0);
+  const showDropdown = open;
 
   return (
     <div ref={ref} className="relative">
       <div className="flex items-center gap-2 flex-wrap min-h-[28px]">
         {/* 标签 */}
-        <span className="text-[11px] font-bold text-gray-300 flex-shrink-0 select-none">分析对象</span>
+        <span className="home-composer-label shrink-0 select-none">分析对象</span>
 
         {/* 已选 chips */}
         {selected.map(item => {
@@ -129,14 +131,14 @@ const SubjectPicker: React.FC<{
           return (
             <div key={id} className="flex items-center gap-1 pl-1 pr-1 py-0.5 bg-[#f0faf4] dark:bg-[#07c160]/15 border border-[#07c160]/25 rounded-full">
               {avatar
-                ? <img loading="lazy" src={avatarSrc(avatar)} className="w-5 h-5 rounded-full object-cover flex-shrink-0" alt={name} />
+                ? <Avatar src={avatar} name={name} className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
                 : item.kind === 'group'
                   ? <div className="w-5 h-5 rounded-full bg-[#576b95]/15 flex items-center justify-center flex-shrink-0"><Users size={10} className="text-[#576b95]" /></div>
                   : <div className="w-5 h-5 rounded-full bg-[#07c160] flex items-center justify-center text-white text-[9px] font-black flex-shrink-0">{name[0]}</div>
               }
               <span className={`text-xs font-semibold text-[#07c160] max-w-[72px] truncate${privacyMode ? ' privacy-blur' : ''}`}>{name}</span>
               {!disabled && (
-                <button onClick={() => onRemove(id)} className="text-[#07c160]/40 hover:text-[#07c160] transition-colors p-0.5 ml-0.5">
+                <button aria-label={`移除${name}`} onClick={() => onRemove(id)} className="text-[#07c160]/40 hover:text-[#07c160] transition-colors p-0.5 ml-0.5">
                   <X size={9} />
                 </button>
               )}
@@ -153,16 +155,19 @@ const SubjectPicker: React.FC<{
                 ref={searchRef}
                 className="text-xs bg-transparent outline-none placeholder-gray-300 dark:placeholder-gray-500 dark:text-gray-200 w-28"
                 placeholder="搜索联系人或群聊…"
+                aria-label="搜索联系人或群聊"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery(''); } }}
               />
-              <button onClick={() => { setOpen(false); setQuery(''); }} className="text-gray-300 hover:text-gray-500 dark:hover:text-gray-300 transition-colors">
+              <button type="button" aria-label="关闭联系人搜索" onClick={() => { setOpen(false); setQuery(''); }} className="text-gray-300 hover:text-gray-500 dark:hover:text-gray-300 transition-colors">
                 <X size={10} />
               </button>
             </div>
           ) : (
             <button
               onClick={openSearch}
+              aria-expanded={open}
               className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-gray-300 dark:border-gray-600 text-[11px] font-semibold text-gray-400 dark:text-gray-500 hover:border-[#07c160] hover:text-[#07c160] hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 transition-colors"
             >
               <Plus size={11} />
@@ -191,10 +196,10 @@ const SubjectPicker: React.FC<{
                   <button
                     key={c.username}
                     className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#f0faf4] dark:hover:bg-white/5 transition-colors text-left"
-                    onMouseDown={e => { e.preventDefault(); onAdd({ kind: 'contact', data: c }); setQuery(''); setOpen(false); }}
+                    onClick={() => { onAdd({ kind: 'contact', data: c }); setQuery(''); setOpen(false); }}
                   >
                     {avatar
-                      ? <img loading="lazy" src={avatarSrc(avatar)} className="w-7 h-7 rounded-full object-cover flex-shrink-0" alt={name} />
+                      ? <Avatar src={avatar} name={name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
                       : <div className="w-7 h-7 rounded-full bg-[#07c160]/20 flex items-center justify-center text-[#07c160] text-sm font-black flex-shrink-0">{name[0]}</div>
                     }
                     <div className="flex-1 min-w-0">
@@ -216,10 +221,10 @@ const SubjectPicker: React.FC<{
                   <button
                     key={g.username}
                     className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#f0faf4] dark:hover:bg-white/5 transition-colors text-left"
-                    onMouseDown={e => { e.preventDefault(); onAdd({ kind: 'group', data: g }); setQuery(''); setOpen(false); }}
+                    onClick={() => { onAdd({ kind: 'group', data: g }); setQuery(''); setOpen(false); }}
                   >
                     {avatar
-                      ? <img loading="lazy" src={avatarSrc(avatar)} className="w-7 h-7 rounded-full object-cover flex-shrink-0" alt={name} />
+                      ? <Avatar src={avatar} name={name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
                       : <div className="w-7 h-7 rounded-full bg-[#576b95]/20 flex items-center justify-center flex-shrink-0"><Users size={14} className="text-[#576b95]" /></div>
                     }
                     <div className="flex-1 min-w-0">
@@ -328,7 +333,7 @@ const MessageBubble: React.FC<{
     <div className="flex flex-col gap-1">
       <div className="flex gap-2 flex-row group">
         <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-[#576b95] text-white mt-0.5">
-          <Bot size={13} />
+          <MessageSquare size={13} />
         </div>
         <div className="flex flex-col gap-1 max-w-[80%]">
           <div className="px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed bg-[#f0f0f0] dark:bg-white/10 text-[#1d1d1f] dark:text-gray-100 prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-hr:my-2">
@@ -338,7 +343,7 @@ const MessageBubble: React.FC<{
                   onClick={() => setThinkingOpen(v => !v)}
                   className="flex items-center gap-1.5 text-[11px] text-[#576b95] hover:text-[#576b95]/80 transition-colors"
                 >
-                  <BrainCircuit size={12} />
+                  <ListTree size={12} />
                   <span>{msg.streaming && !msg.content ? '正在思考…' : '思考过程'}</span>
                   {thinkingOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
                 </button>
@@ -363,7 +368,7 @@ const MessageBubble: React.FC<{
                 onClick={onOpenSettings}
                 className="not-prose mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#07c160] text-white text-xs font-bold hover:bg-[#06ad56] transition-colors shadow-sm"
               >
-                <Sparkles size={12} /> 去设置
+                <Settings size={12} /> 去设置
               </button>
             )}
             {msg.stats && !msg.streaming && (
@@ -624,6 +629,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
     const id = itemId(item);
     setSelectedItems(prev => prev.some(s => itemId(s) === id) ? prev : [...prev, item]);
     markOnboarded(); // 选过对象就不再是新用户
+    requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
   const handleRemoveItem = (id: string) => {
@@ -869,8 +875,8 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   // ── 输入卡片（复用于两种布局）─────────────────────────────────────────────
 
   const inputCard = (
-    <div className="w-full max-w-xl mx-auto">
-      <div className={`bg-white dark:bg-[#1c1c1e] rounded-3xl border-2 shadow-sm transition-colors ${noSelectionHint ? 'border-amber-300 dark:border-amber-500/60' : 'border-gray-100 dark:border-white/10 focus-within:border-[#07c160]/40 dark:focus-within:border-[#07c160]/50'}`}>
+    <div className="w-full max-w-2xl mx-auto">
+      <div className={`home-composer ${noSelectionHint ? 'needs-subject' : ''}`}>
         {/* 分析对象选择区 */}
         <div className="px-4 pt-3.5 pb-2.5">
           <SubjectPicker
@@ -882,11 +888,12 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
             disabled={loading}
           />
         </div>
-        <div className="mx-4 border-t border-dashed border-gray-100 dark:border-white/10" />
+        <div className="mx-4 border-t dk-border" />
         {/* 问题输入区 */}
         <div className="px-4 pt-2.5 pb-2">
           <textarea
             ref={textareaRef}
+            aria-label="输入分析问题"
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -906,9 +913,9 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         <div className="px-3 pb-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 min-h-[28px]">
             {profiles.length > 1 ? (
-              <select
+              <Select
                 value={selectedProfileId}
-                onChange={e => setSelectedProfileId(e.target.value)}
+                onValueChange={nextValue => setSelectedProfileId(nextValue)}
                 className="text-[10px] text-[#576b95] bg-[#576b95]/10 px-2 py-0.5 rounded-full font-semibold border-0 outline-none cursor-pointer dark:bg-[#576b95]/20"
               >
                 {profiles.map(p => (
@@ -916,7 +923,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
                     {`${PROVIDER_LABELS[p.provider] ?? p.provider}${p.model ? ` · ${p.model}` : ''}`}
                   </option>
                 ))}
-              </select>
+              </Select>
             ) : selectedProfile && (
               <span className="text-[10px] text-gray-300 font-medium">
                 {PROVIDER_LABELS[selectedProfile.provider] ?? selectedProfile.provider}
@@ -927,6 +934,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
           {loading ? (
             <button
               onClick={handleStop}
+              aria-label="停止生成"
               className="flex-shrink-0 w-9 h-9 bg-red-400 hover:bg-red-500 text-white rounded-xl flex items-center justify-center transition-colors"
               title="停止"
             >
@@ -935,6 +943,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
           ) : (
             <button
               onClick={() => handleSend()}
+              aria-label="发送问题"
               disabled={!input.trim()}
               className="flex-shrink-0 w-9 h-9 bg-[#07c160] hover:bg-[#06ad56] disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl flex items-center justify-center transition-colors"
             >
@@ -952,7 +961,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
           消息量：{homeMsgLimit === null ? '全部' : `最近 ${homeMsgLimit} 条`} · 高级 {showAdvanced ? '▴' : '▾'}
         </button>
         {showAdvanced && (
-          <div className="mt-2 mx-auto max-w-xl">
+          <div className="mt-2 mx-auto max-w-2xl">
             <div className="flex items-center justify-center gap-1.5 flex-wrap">
               <span className="text-[10px] text-gray-300">消息量:</span>
               {([100, 500, 1000] as const).map(n => (
@@ -1091,16 +1100,14 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   // ── 空白（首次）模式 ────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-full flex flex-col items-center justify-center px-4 py-16">
+    <div className="home-landing min-h-full flex flex-col items-center px-5">
 
 
       {/* Hero */}
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 shadow-lg shadow-green-100 overflow-hidden">
-          <img loading="lazy" src="/favicon.svg" alt="WeLink" className="w-full h-full" />
-        </div>
-        <h1 className="text-3xl font-black text-[#1d1d1f] dark:text-gray-100 tracking-tight">WeLink</h1>
-        <p className="text-gray-400 mt-1.5 text-sm font-medium">想了解哪段关系？直接问我</p>
+      <div className="home-hero text-center max-w-2xl">
+        <div className="home-eyebrow">你的聊天记忆助手</div>
+        <h1>从聊天记录里，读懂关系。</h1>
+        <p className="mt-3 text-sm leading-relaxed">选一位联系人或一个群聊，让记录告诉你更多。</p>
         <div className="mt-2 flex items-center justify-center gap-2 text-xs text-gray-400">
           <span className="font-semibold text-[#07c160]">{timeRange.label}</span>
           <button
@@ -1114,20 +1121,19 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
       </div>
 
       {/* 模式切换 */}
-      <div className="flex items-center gap-2 mb-6">
+      <div className="ui-segmented mb-6" role="group" aria-label="问答模式">
         <button
+          type="button"
           onClick={() => setMode('contact')}
-          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-            mode === 'contact' ? 'bg-[#07c160] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-500 hover:bg-gray-200'
-          }`}
+          aria-pressed={mode === 'contact'}
         >
           联系人/群聊分析
         </button>
         <button
+          type="button"
           onClick={() => setMode('cross')}
-          className={`flex items-center gap-1 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-            mode === 'cross' ? 'bg-[#576b95] text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-500 hover:bg-gray-200'
-          }`}
+          aria-pressed={mode === 'cross'}
+          className="flex items-center gap-1.5"
         >
           <Globe size={12} />
           跨联系人问答
@@ -1135,7 +1141,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
       </div>
 
       {mode === 'cross' ? (
-        <div className="w-full max-w-xl mx-auto" style={{ minHeight: 400 }}>
+        <div className="w-full max-w-2xl mx-auto" style={{ minHeight: 400 }}>
           <CrossContactQA
             onOpenSettings={onOpenSettings}
             onContactClick={uname => {
@@ -1156,14 +1162,14 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         currentKey={conversationKey}
         onSelect={loadConversation}
         onNew={startNewConversation}
-        className="w-full max-w-xl mx-auto mb-4"
+        className="w-full max-w-2xl mx-auto mb-4"
       />
 
       {/* 新用户引导条：仅在首次访问 + 无选中对象时显示，标记首条用户动作后消失 */}
       {!onboarded && selectedItems.length === 0 && (
-        <div className="w-full max-w-xl mx-auto mb-3 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#fff9e6] to-[#fff3cc] dark:from-[#ff9500]/10 dark:to-[#ff9500]/15 border border-[#ff9500]/25 flex items-center justify-between gap-2 welink-onboard-pulse">
-          <span className="text-xs font-bold text-[#ff9500] flex items-center gap-1.5">
-            👋 第一次来？先选一个联系人 / 群聊，再在下方输入问题
+        <div className="home-onboarding w-full max-w-2xl mx-auto mb-3 px-4 py-3 rounded-xl flex items-center justify-between gap-3">
+          <span className="text-xs font-medium flex items-center gap-1.5">
+            从一段对话开始：选择联系人或群聊，再写下你想了解的问题。
           </span>
           <button
             onClick={markOnboarded}
@@ -1178,31 +1184,29 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
       <AIConfigNotice
         visible={profiles.length === 0}
         onOpenSettings={onOpenSettings}
-        className="w-full max-w-xl mb-4"
+        className="w-full max-w-2xl mb-4"
       />
 
       {/* 输入卡片 */}
       {inputCard}
 
       {/* 智能建议 + 通用快捷提问 */}
-      <div className="mt-6 max-w-xl w-full flex flex-col items-center gap-3">
+      <div className="mt-6 max-w-2xl w-full flex flex-col items-center gap-3">
         {/* 智能建议（基于用户 Top 联系人，最多 4 条） */}
         {smartSuggestions.length > 0 && (
           <div className="w-full">
             <div className="text-[10px] font-bold text-[#576b95] uppercase tracking-widest mb-2 text-center flex items-center justify-center gap-1.5">
-              <Sparkles size={11} /> 推荐第一个问题
+              可以从这些问题开始
             </div>
-            <div className="flex flex-wrap gap-2 justify-center">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {smartSuggestions.slice(0, 4).map((s, i) => (
                 <button
                   key={i}
                   onClick={() => applySmartSuggestion(s)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors
-                    bg-gradient-to-r from-[#576b95]/8 to-[#07c160]/8 border-[#576b95]/25 text-[#576b95]
-                    hover:border-[#576b95] hover:bg-[#576b95]/12${privacyMode ? ' privacy-blur' : ''}`}
+                  className={`home-suggestion${privacyMode ? ' privacy-blur' : ''}`}
                   title="点击自动选中对象 + 填入问题"
                 >
-                  <span>{s.label}</span>
+                  <span>{s.label}</span><ArrowUpRight size={15} aria-hidden="true" />
                 </button>
               ))}
             </div>
@@ -1219,7 +1223,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
                 onClick={() => handleChip(p.prompt)}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-[#07c160] hover:text-[#07c160] hover:bg-[#f0faf4] dark:hover:bg-[#07c160]/10 transition-colors"
               >
-                <Bot size={11} />
+                <MessageSquare size={11} />
                 {p.label}
               </button>
             ))}
@@ -1237,9 +1241,9 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
 
       {/* 最近聊天（联系人 + 群聊混合） */}
       {recentItems.length > 0 && (
-        <div className="w-full max-w-xl mt-8">
-          <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-3 text-center">最近聊天</p>
-          <div className="flex gap-3 overflow-x-auto pb-1 justify-center flex-wrap">
+        <div className="w-full max-w-2xl mt-8">
+          <p className="text-xs font-medium text-gray-400 mb-3 text-center">最近聊天</p>
+          <div className="flex gap-2 overflow-x-auto pb-1 justify-center flex-wrap">
             {recentItems.map(item => {
               const name = itemName(item);
               const avatar = itemAvatar(item);
@@ -1263,19 +1267,14 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
                   }`}
                 >
                   <div className="relative">
-                    {avatar
-                      ? <img loading="lazy" src={avatarSrc(avatar)} className="w-10 h-10 rounded-full object-cover" alt={name} />
-                      : item.kind === 'group'
-                        ? <div className="w-10 h-10 rounded-full bg-[#576b95]/15 flex items-center justify-center"><Users size={18} className="text-[#576b95]" /></div>
-                        : <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-sm font-black">{name[0]}</div>
-                    }
+                    <Avatar src={avatar ? avatarSrc(avatar) : undefined} name={name} />
                     {isSelected && (
                       <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#07c160] flex items-center justify-center">
                         <Check size={10} className="text-white" />
                       </div>
                     )}
                   </div>
-                  <span className={`text-[10px] font-semibold text-gray-500 dark:text-gray-400 max-w-[52px] truncate${privacyMode ? ' privacy-blur' : ''}`}>{name}</span>
+                  <span className={`text-xs font-medium text-gray-500 dark:text-gray-400 max-w-[60px] truncate${privacyMode ? ' privacy-blur' : ''}`}>{name}</span>
                 </button>
               );
             })}

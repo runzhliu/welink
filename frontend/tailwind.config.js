@@ -7,6 +7,10 @@ export default {
   ],
   theme: {
     extend: {
+      fontWeight: { black: '700' },
+      fontFamily: {
+        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'sans-serif'],
+      },
       colors: {
         wechat: '#07c160',
       },

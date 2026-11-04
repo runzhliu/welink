@@ -1,3 +1,4 @@
+import { DatePicker } from '../common/DatePicker';
 /**
  * 纪念日 & 提醒页面
  */
@@ -7,7 +8,7 @@ import { Heart, Cake, Target, Plus, X, Loader2, Calendar, Trash2, RotateCw } fro
 import type { ContactStats, DetectedEvent, FriendMilestone, CustomAnniversary, AnniversaryResponse } from '../../types';
 import { anniversaryApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
-import { avatarSrc } from '../../utils/avatar';
+import { Avatar } from '../common/Avatar';
 
 interface Props {
   contacts: ContactStats[];
@@ -219,14 +220,7 @@ export const AnniversaryPage: React.FC<Props> = ({ contacts, onContactClick }) =
                 <span className={`flex-shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold min-w-[52px] text-center ${daysColor(item.daysUntil)}`}>
                   {daysLabel(item.daysUntil)}
                 </span>
-                {item.avatar ? (
-                  <img loading="lazy" src={avatarSrc(item.avatar)} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#ff9500] to-[#fa5151] flex items-center justify-center text-white flex-shrink-0">
-                    {typeIcon(item.type)}
-                  </div>
-                )}
+                {item.username ? (<Avatar contact={contacts.find(c => c.username === item.username)} src={item.avatar} name={item.title} className="w-8 h-8" />) : (<div className="w-8 h-8 rounded-full dk-subtle flex items-center justify-center shrink-0 text-[var(--text-secondary)]">{typeIcon(item.type)}</div>)}
                 <div className="flex-1 min-w-0">
                   <div className={`text-sm font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>
                     {item.title}
@@ -262,14 +256,7 @@ export const AnniversaryPage: React.FC<Props> = ({ contacts, onContactClick }) =
                   className="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-[#f8f9fb] dark:hover:bg-white/5 transition-colors"
                   onClick={() => handleContactClick(e.username)}
                 >
-                  {e.avatar_url ? (
-                    <img loading="lazy" src={avatarSrc(e.avatar_url)} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-pink-50 flex items-center justify-center flex-shrink-0">
-                      <Cake size={14} className="text-[#fa5151]" />
-                    </div>
-                  )}
+                  <Avatar contact={contacts.find(c => c.username === e.username)} src={e.avatar_url} name={e.display_name} className="w-8 h-8" />
                   <div className="flex-1 min-w-0">
                     <div className={`text-sm font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>
                       {e.display_name}
@@ -312,14 +299,7 @@ export const AnniversaryPage: React.FC<Props> = ({ contacts, onContactClick }) =
                     onClick={() => handleContactClick(m.username)}
                   >
                     <div className="flex items-center gap-3">
-                      {m.avatar_url ? (
-                        <img loading="lazy" src={avatarSrc(m.avatar_url)} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
-                          <Target size={14} className="text-[#10aeff]" />
-                        </div>
-                      )}
+                      <Avatar contact={contacts.find(c => c.username === m.username)} src={m.avatar_url} name={m.display_name} className="w-8 h-8" />
                       <div className="flex-1 min-w-0">
                         <div className={`text-sm font-bold text-[#1d1d1f] dk-text truncate${privacyMode ? ' privacy-blur' : ''}`}>
                           {m.display_name}
@@ -423,10 +403,10 @@ export const AnniversaryPage: React.FC<Props> = ({ contacts, onContactClick }) =
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1.5">日期</label>
-                <input
-                  type="date"
+                <DatePicker aria-label="选择日期"
+
                   value={newDate}
-                  onChange={e => setNewDate(e.target.value)}
+                  onValueChange={nextValue => setNewDate(nextValue)}
                   className="dk-input w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#07c160]"
                 />
               </div>

@@ -1,3 +1,5 @@
+import { ComboBox } from '../../common/ComboBox';
+import { Select } from '../../common/Select';
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertCircle, Check, ExternalLink } from 'lucide-react';
 import axios from 'axios';
@@ -61,10 +63,10 @@ const ImageProfileCard: React.FC<{
       {/* Provider */}
       <div>
         <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wide">生图提供商</label>
-        <select
+        <Select
           value={profile.provider}
-          onChange={e => {
-            const newProvider = e.target.value;
+          onValueChange={nextValue => {
+            const newProvider = nextValue;
             const oldProvider = profile.provider;
             const oldProviderNames = providers.map(p => p.value);
             const shouldAutoRename = !profile.name || oldProviderNames.includes(profile.name);
@@ -81,7 +83,7 @@ const ImageProfileCard: React.FC<{
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white dk-input"
         >
           {providers.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-        </select>
+        </Select>
       </div>
 
       {/* API Key */}
@@ -117,20 +119,15 @@ const ImageProfileCard: React.FC<{
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white font-mono dk-input" />
       </div>
 
-      {/* Model：有 models 推荐列表用 datalist + 输入框 */}
+      {/* Model：推荐模型和自定义模型共用自动补全组件 */}
       <div>
         <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wide">
           模型 <span className="font-normal normal-case">（留空使用默认 {meta?.default_model || ''}）</span>
         </label>
-        <input type="text" value={profile.model ?? ''} onChange={e => set('model', e.target.value)}
-          list={`image-models-${profile.id}`}
+        <ComboBox aria-label="图像模型" value={profile.model ?? ''} onValueChange={value => set('model', value)}
+          options={meta?.models ?? []}
           placeholder={meta?.default_model ? `默认：${meta.default_model}` : '请输入模型名'}
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white font-mono dk-input" />
-        {meta?.models && meta.models.length > 0 && (
-          <datalist id={`image-models-${profile.id}`}>
-            {meta.models.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </datalist>
-        )}
         {meta?.price_hint && (
           <p className="text-[10px] text-gray-400 mt-1">{meta.price_hint}</p>
         )}

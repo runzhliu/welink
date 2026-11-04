@@ -1,3 +1,5 @@
+import { Select } from '../common/Select';
+import { DatePicker } from '../common/DatePicker';
 /**
  * 导出中心 — 向导式流程：
  *   Step 1 · 选内容（2×2 内容卡，选中后展开内联筛选）
@@ -6,10 +8,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Download, FileText, MessagesSquare, Bot, Brain,
-  Eye, Loader2, ExternalLink, Check, X, HardDrive, Cloud,
-} from 'lucide-react';
+import { Download, FileText, MessagesSquare, MessageSquare, Archive, Eye, Loader2, ExternalLink, Check, X, HardDrive, Cloud } from 'lucide-react';
 import { Header } from '../layout/Header';
 import {
   exportApi,
@@ -236,14 +235,14 @@ export const ExportCenterPage: React.FC<ExportCenterPageProps> = ({ contacts, gr
               onToggle={(v) => setSel((s) => ({ ...s, yearReview: v }))}
             >
               <FilterRow label="年份">
-                <select
+                <Select
                   value={sel.yearReviewYear}
-                  onChange={(e) => setSel((s) => ({ ...s, yearReviewYear: Number(e.target.value) }))}
+                  onValueChange={(nextValue) => setSel((s) => ({ ...s, yearReviewYear: Number(nextValue) }))}
                   className="text-sm bg-white dark:bg-white/10 border dk-border rounded-lg px-2 py-1"
                 >
                   <option value={0}>全部年份</option>
                   {yearOptions.map((y) => (<option key={y} value={y}>{y}</option>))}
-                </select>
+                </Select>
               </FilterRow>
             </ContentCard>
 
@@ -256,17 +255,17 @@ export const ExportCenterPage: React.FC<ExportCenterPageProps> = ({ contacts, gr
             >
               <div className="space-y-2">
                 <FilterRow label="类型">
-                  <select
+                  <Select
                     value={sel.conversationIsGroup ? 'group' : 'contact'}
-                    onChange={(e) => setSel((s) => ({ ...s, conversationIsGroup: e.target.value === 'group', conversationTarget: '' }))}
+                    onValueChange={(nextValue) => setSel((s) => ({ ...s, conversationIsGroup: nextValue === 'group', conversationTarget: '' }))}
                     className="text-sm bg-white dark:bg-white/10 border dk-border rounded-lg px-2 py-1"
                   >
                     <option value="contact">联系人</option>
                     <option value="group">群聊</option>
-                  </select>
-                  <select
+                  </Select>
+                  <Select
                     value={sel.conversationTarget}
-                    onChange={(e) => setSel((s) => ({ ...s, conversationTarget: e.target.value }))}
+                    onValueChange={(nextValue) => setSel((s) => ({ ...s, conversationTarget: nextValue }))}
                     className="text-sm bg-white dark:bg-white/10 border dk-border rounded-lg px-2 py-1 min-w-[160px] flex-1"
                   >
                     <option value="">选择对象...</option>
@@ -275,15 +274,15 @@ export const ExportCenterPage: React.FC<ExportCenterPageProps> = ({ contacts, gr
                         {(('remark' in c ? c.remark : '') || ('nickname' in c ? c.nickname : '') || ('name' in c ? c.name : '') || c.username)} ({c.total_messages})
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </FilterRow>
                 <FilterRow label="时间">
-                  <input type="date" value={sel.conversationFrom}
-                    onChange={(e) => setSel((s) => ({ ...s, conversationFrom: e.target.value }))}
+                  <DatePicker aria-label="开始日期"  value={sel.conversationFrom}
+                    onValueChange={(nextValue) => setSel((s) => ({ ...s, conversationFrom: nextValue }))}
                     className="text-sm bg-white dark:bg-white/10 border dk-border rounded-lg px-2 py-1" />
                   <span className="text-xs text-gray-400">至</span>
-                  <input type="date" value={sel.conversationTo}
-                    onChange={(e) => setSel((s) => ({ ...s, conversationTo: e.target.value }))}
+                  <DatePicker aria-label="结束日期"  value={sel.conversationTo}
+                    onValueChange={(nextValue) => setSel((s) => ({ ...s, conversationTo: nextValue }))}
                     className="text-sm bg-white dark:bg-white/10 border dk-border rounded-lg px-2 py-1" />
                 </FilterRow>
                 <p className="text-[11px] text-gray-400">留空 = 全部时间 · 单次最多 50000 条</p>
@@ -291,16 +290,16 @@ export const ExportCenterPage: React.FC<ExportCenterPageProps> = ({ contacts, gr
             </ContentCard>
 
             <ContentCard
-              icon={<Bot size={20} />}
+              icon={<MessageSquare size={20} />}
               title="AI 对话历史"
               desc="和 AI 聊过的分析记录"
               checked={sel.aiHistory}
               onToggle={(v) => setSel((s) => ({ ...s, aiHistory: v }))}
             >
               <FilterRow label="来源">
-                <select
+                <Select
                   value={sel.aiHistoryKey}
-                  onChange={(e) => setSel((s) => ({ ...s, aiHistoryKey: e.target.value }))}
+                  onValueChange={(nextValue) => setSel((s) => ({ ...s, aiHistoryKey: nextValue }))}
                   className="text-sm bg-white dark:bg-white/10 border dk-border rounded-lg px-2 py-1 flex-1"
                 >
                   <option value="">选择...</option>
@@ -311,29 +310,29 @@ export const ExportCenterPage: React.FC<ExportCenterPageProps> = ({ contacts, gr
                     <option key={g.username} value={`group:${g.username}`}>[群] {g.name || g.username}</option>
                   ))}
                   <option value="ai-home:cross_qa">AI 首页 · 跨联系人问答</option>
-                </select>
+                </Select>
               </FilterRow>
             </ContentCard>
 
             <ContentCard
-              icon={<Brain size={20} />}
+              icon={<Archive size={20} />}
               title="记忆图谱"
               desc="AI 提炼的事实库"
               checked={sel.memory}
               onToggle={(v) => setSel((s) => ({ ...s, memory: v }))}
             >
               <FilterRow label="对象">
-                <select
+                <Select
                   value={sel.memoryIsGroup ? 'group' : 'contact'}
-                  onChange={(e) => setSel((s) => ({ ...s, memoryIsGroup: e.target.value === 'group', memoryUsername: '' }))}
+                  onValueChange={(nextValue) => setSel((s) => ({ ...s, memoryIsGroup: nextValue === 'group', memoryUsername: '' }))}
                   className="text-sm bg-white dark:bg-white/10 border dk-border rounded-lg px-2 py-1"
                 >
                   <option value="contact">联系人</option>
                   <option value="group">群聊</option>
-                </select>
-                <select
+                </Select>
+                <Select
                   value={sel.memoryUsername}
-                  onChange={(e) => setSel((s) => ({ ...s, memoryUsername: e.target.value }))}
+                  onValueChange={(nextValue) => setSel((s) => ({ ...s, memoryUsername: nextValue }))}
                   className="text-sm bg-white dark:bg-white/10 border dk-border rounded-lg px-2 py-1 flex-1"
                 >
                   <option value="">选择...</option>
@@ -342,7 +341,7 @@ export const ExportCenterPage: React.FC<ExportCenterPageProps> = ({ contacts, gr
                       {(('remark' in c ? c.remark : '') || ('nickname' in c ? c.nickname : '') || ('name' in c ? c.name : '') || c.username)}
                     </option>
                   ))}
-                </select>
+                </Select>
               </FilterRow>
               <p className="text-[11px] text-gray-400 mt-1">需先在 AI 页「构建记忆」才有内容</p>
             </ContentCard>

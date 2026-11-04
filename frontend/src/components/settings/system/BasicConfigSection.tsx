@@ -1,3 +1,4 @@
+import { Select } from '../../common/Select';
 import React, { useState, useEffect } from 'react';
 import { Settings, Cpu, Clock, Loader2, CheckCircle2, AlertCircle, Save } from 'lucide-react';
 import axios from 'axios';
@@ -101,30 +102,30 @@ export const BasicConfigSection: React.FC = () => {
                 <p className="text-sm font-semibold text-[#1d1d1f] dk-text">运行模式</p>
                 <p className="text-xs text-gray-400 mt-0.5">release 模式隐藏 Gin 调试日志</p>
               </div>
-              <select
+              <Select
                 value={cfgGinMode}
-                onChange={(e) => setCfgGinMode(e.target.value)}
+                onValueChange={(nextValue) => setCfgGinMode(nextValue)}
                 className="w-28 text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] dk-input bg-white dark:bg-transparent"
               >
                 <option value="debug">debug</option>
                 <option value="release">release</option>
-              </select>
+              </Select>
             </div>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-[#1d1d1f] dk-text">日志等级</p>
                 <p className="text-xs text-gray-400 mt-0.5">控制日志输出详细程度</p>
               </div>
-              <select
+              <Select
                 value={cfgLogLevel}
-                onChange={(e) => setCfgLogLevel(e.target.value)}
+                onValueChange={(nextValue) => setCfgLogLevel(nextValue)}
                 className="w-28 text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] dk-input bg-white dark:bg-transparent"
               >
                 <option value="debug">debug</option>
                 <option value="info">info</option>
                 <option value="warn">warn</option>
                 <option value="error">error</option>
-              </select>
+              </Select>
             </div>
           </div>
 
@@ -140,9 +141,9 @@ export const BasicConfigSection: React.FC = () => {
                 <p className="text-sm font-semibold text-[#1d1d1f] dk-text">时区</p>
                 <p className="text-xs text-gray-400 mt-0.5">用于消息时间的时区转换</p>
               </div>
-              <select
+              <Select
                 value={cfgTimezone}
-                onChange={(e) => setCfgTimezone(e.target.value)}
+                onValueChange={(nextValue) => setCfgTimezone(nextValue)}
                 className="w-48 text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] dk-input bg-white dark:bg-gray-800"
               >
                 {[
@@ -152,7 +153,7 @@ export const BasicConfigSection: React.FC = () => {
                   'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
                   'America/Sao_Paulo', 'Australia/Sydney', 'Pacific/Auckland', 'UTC',
                 ].map(tz => <option key={tz} value={tz}>{tz}</option>)}
-              </select>
+              </Select>
             </div>
             <div className="flex items-center justify-between gap-4">
               <div>

@@ -7,9 +7,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import {
-  AlertCircle, Loader2, Share2, Check, Clock, Heart, History, Zap, Crown,
-} from 'lucide-react';
+import { AlertCircle, Loader2, Share2, Check, Clock, Heart, History, Zap, Crown } from 'lucide-react';
 import { avatarSrc } from '../../utils/avatar';
 import { captureCardToPng } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';

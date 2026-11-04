@@ -6,7 +6,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { Sparkles, Loader2, Search, Share2, Check, Wand2, RefreshCw, Image as ImageIcon, X } from 'lucide-react';
+import { FileText, Loader2, Search, Share2, Check, PenLine, RefreshCw, Image as ImageIcon, X } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
 import { captureCardToPng } from '../../utils/exportPng';
@@ -155,7 +155,7 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
       {/* 选联系人区 */}
       <div className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-4 mb-4">
         <div className="flex items-center gap-2 mb-3">
-          <Sparkles size={16} className="text-[#07c160]" />
+          <FileText size={16} className="text-[#07c160]" />
           <div className="text-sm font-bold text-[#1d1d1f] dark:text-gray-100">
             选一位联系人，看看你们的故事
           </div>
@@ -214,7 +214,7 @@ export const Highlights: React.FC<Props> = ({ contacts }) => {
             disabled={!picked || loading}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#07c160] hover:bg-[#06a850] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : data ? <RefreshCw size={14} /> : <Wand2 size={14} />}
+            {loading ? <Loader2 size={14} className="animate-spin" /> : data ? <RefreshCw size={14} /> : <PenLine size={14} />}
             {loading ? '生成中…' : data ? '重新生成' : '生成高光'}
           </button>
         </div>

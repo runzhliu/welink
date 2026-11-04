@@ -1,3 +1,4 @@
+import { DatePicker } from './DatePicker';
 /**
  * 欢迎页 — 使用指南 + 时间范围选择
  */
@@ -228,10 +229,10 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
                   <div className="mt-2 px-4 py-3 bg-[#f8f9fb] dk-subtle rounded-2xl border border-[#07c16030] space-y-3">
                     <div className="flex items-center gap-3">
                       <label className="text-xs font-bold text-gray-500 dark:text-gray-400 w-10 flex-shrink-0">开始</label>
-                      <input
-                        type="date"
+                      <DatePicker aria-label="开始日期"
+
                         value={customFrom}
-                        onChange={(e) => setCustomFrom(e.target.value)}
+                        onValueChange={(nextValue) => setCustomFrom(nextValue)}
                         max={customTo || today}
                         className="flex-1 text-sm border border-gray-200 dk-border rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white dk-input"
                       />
@@ -239,10 +240,10 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
                     </div>
                     <div className="flex items-center gap-3">
                       <label className="text-xs font-bold text-gray-500 dark:text-gray-400 w-10 flex-shrink-0">结束</label>
-                      <input
-                        type="date"
+                      <DatePicker aria-label="结束日期"
+
                         value={customTo}
-                        onChange={(e) => setCustomTo(e.target.value)}
+                        onValueChange={(nextValue) => setCustomTo(nextValue)}
                         min={customFrom || undefined}
                         max={today}
                         className="flex-1 text-sm border border-gray-200 dk-border rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white dk-input"

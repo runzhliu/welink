@@ -1,4 +1,5 @@
 import React from 'react';
+import { Switch } from '../../common/Switch';
 import { EyeOff } from 'lucide-react';
 
 export const RecordingSection: React.FC<{
@@ -16,12 +17,7 @@ export const RecordingSection: React.FC<{
         <p className="text-sm font-semibold text-[#1d1d1f] dk-text">模糊姓名与词云</p>
         <p className="text-xs text-gray-400 mt-0.5">页面刷新后仍保持此设置</p>
       </div>
-      <button
-        onClick={() => onTogglePrivacyMode?.(!privacyMode)}
-        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${privacyMode ? 'bg-[#07c160]' : 'bg-gray-200 dark:bg-white/15'}`}
-      >
-        <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${privacyMode ? 'translate-x-6' : 'translate-x-1'}`} />
-      </button>
+      <Switch checked={privacyMode} onChange={value => onTogglePrivacyMode?.(value)} label="模糊姓名与词云" />
     </div>
   </section>
 );

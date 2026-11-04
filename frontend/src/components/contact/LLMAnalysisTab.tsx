@@ -1,9 +1,12 @@
+import { DatePicker } from '../common/DatePicker';
+import { Select } from '../common/Select';
 /**
  * AI 分析 Tab — 支持私聊和群聊，可选时间范围，附 token 估算与提示
  */
 
+import { getDefaultModel, getProviderLabel, getModelContextWindow } from '../settings/ai/types';
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Bot, Send, RotateCcw, Loader2, AlertTriangle, Info, Copy, Check, CalendarDays, SlidersHorizontal, Square, Database, Search, Share2, ChevronDown, ChevronRight, BrainCircuit, Trash2 } from 'lucide-react';
+import { MessageSquare, Send, RotateCcw, Loader2, AlertTriangle, Info, Copy, Check, CalendarDays, SlidersHorizontal, Square, Database, Search, Share2, ChevronDown, ChevronRight, ListTree, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { generateShareImage } from '../../utils/shareImage';
@@ -64,6 +67,7 @@ function estimateTokens(msgCount: number): number {
 // 各模型上下文窗口（token），保守估计留 20% 给回答
 const MODEL_CONTEXTS: Record<string, number> = {
   deepseek:  Math.round(64000  * 0.8),
+  doubao:    Math.round(256000 * 0.8),
   kimi:      Math.round(128000 * 0.8),
   gemini:    Math.round(1000000* 0.8),
   glm:       Math.round(128000 * 0.8),
@@ -74,20 +78,11 @@ const MODEL_CONTEXTS: Record<string, number> = {
   custom:    Math.round(8000   * 0.8),
 };
 
-function getProviderLimit(provider: string): number {
+function getProviderLimit(provider: string, model: string): number {
+  const contextWindow = getModelContextWindow(provider, model);
+  if (contextWindow) return Math.round(contextWindow * 0.8);
   return MODEL_CONTEXTS[provider] ?? 6400;
 }
-
-const PROVIDER_LABELS: Record<string, string> = {
-  deepseek: 'DeepSeek', kimi: 'Kimi', gemini: 'Gemini', glm: 'GLM',
-  grok: 'Grok', openai: 'OpenAI', claude: 'Claude', ollama: 'Ollama', custom: '自定义',
-};
-const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
-  deepseek: 'deepseek-v4-pro', doubao: 'doubao-seed-2-0-pro-260215',
-  kimi: 'kimi-k2.6', gemini: 'gemini-3.5-flash',
-  glm: 'glm-5.1', grok: 'grok-4.3', openai: 'gpt-5.5',
-  claude: 'claude-opus-4-8', ollama: 'llama3.3',
-};
 
 type TokenLevel = 'ok' | 'warn' | 'danger' | 'over';
 
@@ -278,7 +273,7 @@ const AssistantMessage: React.FC<{
     <div className="flex flex-col gap-1">
       <div className="flex gap-2 flex-row group">
         <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-[#576b95] text-white text-[10px] font-black mt-0.5">
-          <Bot size={13} />
+          <MessageSquare size={13} />
         </div>
         <div className="flex flex-col gap-1 max-w-[80%]">
           <div className="px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed bg-[#f0f0f0] dark:bg-white/10 text-[#1d1d1f] dark:text-gray-100 prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-hr:my-2">
@@ -288,7 +283,7 @@ const AssistantMessage: React.FC<{
                   onClick={() => setThinkingOpen(v => !v)}
                   className="flex items-center gap-1.5 text-[11px] text-[#576b95] hover:text-[#576b95]/80 transition-colors"
                 >
-                  <BrainCircuit size={12} />
+                  <ListTree size={12} />
                   <span>{msg.streaming && !msg.content ? '正在思考…' : '思考过程'}</span>
                   {thinkingOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
                 </button>
@@ -397,18 +392,18 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
   const [rangeTo,   setRangeTo]   = useState(today);
 
   // Provider profiles（从 preferences 加载，支持多配置切换）
-  interface ProfileItem { id: string; name: string; provider: string; model?: string; }
+  interface ProfileItem { id: string; name: string; provider: string; model?: string; base_url?: string; }
   const [profiles, setProfilesState] = useState<ProfileItem[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState('');
   useEffect(() => {
     fetch('/api/preferences')
       .then(r => r.json())
-      .then((d: { llm_profiles?: ProfileItem[]; llm_provider?: string; llm_model?: string }) => {
+      .then((d: { llm_profiles?: ProfileItem[]; llm_provider?: string; llm_model?: string; llm_base_url?: string }) => {
         if (d.llm_profiles && d.llm_profiles.length > 0) {
           setProfilesState(d.llm_profiles);
           setSelectedProfileId(d.llm_profiles[0].id);
         } else if (d.llm_provider) {
-          const p = { id: '__default__', name: d.llm_provider, provider: d.llm_provider, model: d.llm_model ?? '' };
+          const p = { id: '__default__', name: d.llm_provider, provider: d.llm_provider, model: d.llm_model ?? '', base_url: d.llm_base_url };
           setProfilesState([p]);
           setSelectedProfileId('__default__');
         }
@@ -417,7 +412,7 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
   }, []);
   const selectedProfile = profiles.find(p => p.id === selectedProfileId) ?? profiles[0];
   const provider = selectedProfile?.provider ?? 'deepseek';
-  const llmModel = selectedProfile?.model ?? '';
+  const llmModel = selectedProfile?.model || getDefaultModel(provider, selectedProfile?.base_url);
 
   // 日历热力图数据
   const [heatmap, setHeatmap] = useState<Record<string, number>>({});
@@ -437,7 +432,7 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
   const linesRef    = useRef<string[] | null>(null);
   const loadAbortRef = useRef<AbortController | null>(null);
 
-  const limit = getProviderLimit(provider);
+  const limit = getProviderLimit(provider, llmModel);
   const estTokens = realMsgCount !== null ? estimateTokens(realMsgCount) : null;
   const level: TokenLevel = estTokens !== null ? tokenLevel(estTokens, limit) : 'ok';
   // 每段使用约 40% 的模型上下文（留余量给摘要输出），每条消息约 15 token
@@ -1537,17 +1532,17 @@ ${effectiveCtx}
             </div>
             {msgLimit === null && (
             <div className="flex items-center gap-2">
-              <input
-                type="date"
+              <DatePicker aria-label="开始日期"
+
                 value={rangeFrom}
-                onChange={e => handleRangeChange(e.target.value, rangeTo)}
+                onValueChange={nextValue => handleRangeChange(nextValue, rangeTo)}
                 className="dk-input flex-1 text-xs border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white"
               />
               <span className="text-gray-300 text-xs">至</span>
-              <input
-                type="date"
+              <DatePicker aria-label="结束日期"
+
                 value={rangeTo}
-                onChange={e => handleRangeChange(rangeFrom, e.target.value)}
+                onValueChange={nextValue => handleRangeChange(rangeFrom, nextValue)}
                 className="dk-input flex-1 text-xs border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#07c160] bg-white"
               />
             </div>
@@ -1744,31 +1739,31 @@ ${effectiveCtx}
             onClick={onOpenSettings}
             className="flex items-center gap-1.5 self-start px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-[10px] text-amber-600 hover:bg-amber-100 transition-colors"
           >
-            <Bot size={9} className="flex-shrink-0" />
+            <MessageSquare size={9} className="flex-shrink-0" />
             <span className="font-semibold">未配置 AI 模型</span>
             <span className="underline">去设置</span>
           </button>
         ) : profiles.length <= 1 ? (
           <div className="flex items-center gap-1 self-start px-2 py-0.5 rounded-full bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 text-[10px] text-gray-400">
-            <Bot size={9} className="flex-shrink-0" />
-            <span className="font-semibold text-gray-500 dark:text-gray-300">{PROVIDER_LABELS[provider] ?? provider}</span>
+            <MessageSquare size={9} className="flex-shrink-0" />
+            <span className="font-semibold text-gray-500 dark:text-gray-300">{getProviderLabel(provider) ?? provider}</span>
             <span className="text-gray-300">·</span>
-            <span className="font-mono">{llmModel || PROVIDER_DEFAULT_MODELS[provider] || provider}</span>
+            <span className="font-mono">{llmModel || provider}</span>
           </div>
         ) : (
           <div className="flex items-center gap-1">
-            <Bot size={9} className="text-gray-400 flex-shrink-0" />
-            <select
+            <MessageSquare size={9} className="text-gray-400 flex-shrink-0" />
+            <Select
               value={selectedProfileId}
-              onChange={e => setSelectedProfileId(e.target.value)}
+              onValueChange={nextValue => setSelectedProfileId(nextValue)}
               className="text-[10px] text-[#576b95] bg-[#576b95]/10 px-2 py-0.5 rounded-full font-semibold border-0 outline-none cursor-pointer dark:bg-[#576b95]/20"
             >
               {profiles.map(p => (
                 <option key={p.id} value={p.id}>
-                  {`${PROVIDER_LABELS[p.provider] ?? p.provider}${p.model ? ` · ${p.model}` : ''}`}
+                  {`${getProviderLabel(p.provider) ?? p.provider}${p.model ? ` · ${p.model}` : ''}`}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
         <div className="flex items-end gap-2">

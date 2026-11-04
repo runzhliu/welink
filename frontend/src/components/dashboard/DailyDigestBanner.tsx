@@ -6,11 +6,9 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import {
-  Sunrise, MoonStar, Cake, X, ChevronDown, ChevronUp, Snowflake, AlertCircle,
-} from 'lucide-react';
+import { Newspaper, MoonStar, Cake, X, ChevronDown, ChevronUp, Snowflake, AlertCircle } from 'lucide-react';
 import axios from 'axios';
-import { avatarSrc } from '../../utils/avatar';
+import { Avatar } from '../common/Avatar';
 import { forecastApi } from '../../services/api';
 import type { ContactStats, ForecastEntry } from '../../types';
 
@@ -32,6 +30,7 @@ interface DigestUpcomingAnniv {
   type: string;
   username: string;
   display_name: string;
+  avatar?: string;
   date: string;
   days_until: number;
 }
@@ -112,10 +111,10 @@ export const DailyDigestBanner: React.FC<Props> = ({ contacts, onContactClick })
   })();
 
   return (
-    <div className="relative mx-auto mt-4 mb-3 w-full max-w-4xl rounded-3xl border border-amber-100 dark:border-amber-400/20 bg-gradient-to-br from-amber-50/60 via-rose-50/40 to-purple-50/40 dark:from-amber-500/5 dark:via-rose-500/5 dark:to-purple-500/5 shadow-sm overflow-hidden">
-      <div className="flex items-center gap-2.5 px-5 py-3 border-b border-amber-100/60 dark:border-amber-400/10">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-sm shrink-0">
-          <Sunrise size={16} className="text-white" />
+    <div className="ui-card relative mx-auto mt-4 mb-3 w-full max-w-4xl overflow-hidden">
+      <div className="flex items-center gap-2.5 px-5 py-3 border-b dk-border">
+        <div className="w-8 h-8 rounded-lg dk-subtle flex items-center justify-center shrink-0">
+          <Newspaper size={16} className="text-[var(--text-secondary)]" />
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-black text-[#1d1d1f] dark:text-gray-100">今日社交简报</h3>
@@ -159,7 +158,7 @@ export const DailyDigestBanner: React.FC<Props> = ({ contacts, onContactClick })
                     onClick={() => clickContact(f.username)}
                     className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-amber-50 dark:hover:bg-white/5 cursor-pointer"
                   >
-                    <img loading="lazy" src={avatarSrc(f.avatar_url || '')} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-100" />
+                    <Avatar contact={contacts.find(c => c.username === f.username)} src={f.avatar_url} name={f.display_name} className="w-6 h-6" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs dk-text truncate">{f.display_name}</span>
@@ -190,7 +189,7 @@ export const DailyDigestBanner: React.FC<Props> = ({ contacts, onContactClick })
                     onClick={() => clickContact(c.username)}
                     className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-amber-50 dark:hover:bg-white/5 cursor-pointer"
                   >
-                    <img loading="lazy" src={avatarSrc(c.avatar || '')} alt="" className="w-6 h-6 rounded-full object-cover bg-gray-100" />
+                    <Avatar contact={contacts.find(contact => contact.username === c.username)} src={c.avatar} name={c.name} className="w-6 h-6" />
                     <div className="flex-1 min-w-0">
                       <div className="text-xs dk-text truncate">{c.name}</div>
                       <div className="text-[10px] text-gray-400 truncate">
@@ -217,9 +216,7 @@ export const DailyDigestBanner: React.FC<Props> = ({ contacts, onContactClick })
                     onClick={() => clickContact(a.username)}
                     className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-amber-50 dark:hover:bg-white/5 cursor-pointer"
                   >
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
-                      {a.days_until}
-                    </div>
+                    <Avatar contact={contacts.find(c => c.username === a.username)} src={a.avatar} name={a.display_name} className="w-6 h-6" />
                     <div className="flex-1 min-w-0">
                       <div className="text-xs dk-text truncate">{a.display_name}</div>
                       <div className="text-[10px] text-gray-400">

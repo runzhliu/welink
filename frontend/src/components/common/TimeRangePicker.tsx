@@ -54,12 +54,14 @@ export const TimeRangePicker: React.FC<Props> = ({ value, onChange }) => {
         const active = value.label === range.label;
         return (
           <button
+            type="button"
+            aria-pressed={active}
             key={p.label}
             onClick={() => { onChange(range); setShowCustom(false); }}
-            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+            className={`ui-filter-chip ${
               active
-                ? 'bg-[#07c160] text-white shadow-sm'
-                : 'bg-gray-100 dark:bg-white/10 text-gray-500 dk-text hover:bg-gray-200 dark:hover:bg-white/20'
+                ? 'is-active'
+                : ''
             }`}
           >
             {p.label}
@@ -67,11 +69,13 @@ export const TimeRangePicker: React.FC<Props> = ({ value, onChange }) => {
         );
       })}
       <button
+        type="button"
+        aria-expanded={showCustom}
         onClick={() => setShowCustom((v) => !v)}
-        className={`px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition-all ${
+        className={`ui-filter-chip flex items-center gap-1.5 ${
           showCustom || (!PRESETS.some(p => presetToRange(p.months).label === value.label))
-            ? 'bg-[#07c160] text-white shadow-sm'
-            : 'bg-gray-100 dark:bg-white/10 text-gray-500 dk-text hover:bg-gray-200 dark:hover:bg-white/20'
+            ? 'is-active'
+            : ''
         }`}
       >
         <Calendar size={11} />
@@ -81,6 +85,7 @@ export const TimeRangePicker: React.FC<Props> = ({ value, onChange }) => {
         <div className="flex items-center gap-2 bg-white dk-card dk-border border border-gray-200 rounded-2xl px-3 py-2 shadow-lg">
           <input
             type="number"
+            aria-label="自定义年份"
             value={customYear}
             onChange={(e) => setCustomYear(e.target.value)}
             className="w-16 text-sm text-center border border-gray-200 rounded-lg px-1 py-0.5 focus:outline-none focus:border-[#07c160] dk-input"
@@ -91,6 +96,7 @@ export const TimeRangePicker: React.FC<Props> = ({ value, onChange }) => {
           <span className="text-gray-400 text-sm">年</span>
           <input
             type="number"
+            aria-label="自定义月份"
             value={customMonth}
             onChange={(e) => setCustomMonth(e.target.value)}
             className="w-12 text-sm text-center border border-gray-200 rounded-lg px-1 py-0.5 focus:outline-none focus:border-[#07c160] dk-input"
@@ -101,7 +107,7 @@ export const TimeRangePicker: React.FC<Props> = ({ value, onChange }) => {
           <span className="text-gray-400 text-sm">月</span>
           <button
             onClick={applyCustomMonth}
-            className="px-3 py-1 bg-[#07c160] text-white text-xs font-bold rounded-lg"
+            className="ui-button ui-button-primary !min-h-9 !px-3 !text-xs"
           >
             确定
           </button>

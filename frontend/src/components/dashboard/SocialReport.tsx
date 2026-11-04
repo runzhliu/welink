@@ -225,7 +225,7 @@ export default function SocialReport({ contacts, globalStats, healthStatus }: Pr
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-[#07c160] to-[#06ad56] flex items-center justify-center text-white text-xs font-bold">
+                  <div className="w-full h-full bg-[#087f5b] flex items-center justify-center text-white text-xs font-bold">
                     {contactName(topContact).charAt(0)}
                   </div>
                 )}

@@ -66,7 +66,7 @@ export const GroupMemberModal: React.FC<Props> = ({ groupUsername, groupName, me
           {data?.avatar_url ? (
             <img src={avatarSrc(data.avatar_url)} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
+            <div className="w-10 h-10 rounded-full bg-[#087f5b] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
               <span className={privacyMode ? 'privacy-blur' : ''}>{(data?.speaker || memberName).charAt(0)}</span>
             </div>
           )}

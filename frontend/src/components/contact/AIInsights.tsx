@@ -1,10 +1,12 @@
+import { DatePicker } from '../common/DatePicker';
+import { Select } from '../common/Select';
 /**
  * AI 洞察 — 关系报告 / 风格画像卡 / AI 日记 / 关系剧本
  * 使用低 token 摘要数据（统计特征 + 采样消息）生成 AI 分析
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { FileText, User, BookOpen, Loader2, Share2, Check, Sparkles, Film } from 'lucide-react';
+import { FileText, User, BookOpen, Loader2, Share2, Check, Film } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
@@ -285,23 +287,23 @@ export const AIInsights: React.FC<Props> = ({ username, displayName, avatarUrl, 
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {type === 'diary' && (
-            <input
-              type="date"
+            <DatePicker aria-label="选择日期"
+
               value={diaryDate}
-              onChange={e => setDiaryDate(e.target.value)}
+              onValueChange={nextValue => setDiaryDate(nextValue)}
               className="text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1 dk-input"
             />
           )}
           {profiles.length > 1 && (
-            <select
+            <Select
               value={profileId}
-              onChange={e => setProfileId(e.target.value)}
+              onValueChange={nextValue => setProfileId(nextValue)}
               className="text-[10px] text-[#576b95] bg-[#576b95]/10 px-2 py-1 rounded-full font-semibold border-0 outline-none cursor-pointer"
             >
               {profiles.map(p => (
                 <option key={p.id} value={p.id}>{p.provider}{p.model ? ` · ${p.model}` : ''}</option>
               ))}
-            </select>
+            </Select>
           )}
         </div>
       </div>
@@ -335,9 +337,9 @@ export const AIInsights: React.FC<Props> = ({ username, displayName, avatarUrl, 
         <button
           onClick={() => { setResult(''); setTimeout(generate, 50); }}
           disabled={!summary || summaryLoading || !profileId}
-          className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#07c160] to-[#10aeff] text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:hover:scale-100"
+          className="flex items-center gap-2 px-6 py-2.5 bg-[#087f5b] text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:hover:scale-100"
         >
-          <Sparkles size={16} />
+          <FileText size={16} />
           {result ? '重新生成' : '生成'}{INSIGHT_TABS.find(t => t.key === type)?.label}
         </button>
       )}

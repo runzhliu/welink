@@ -1,9 +1,11 @@
+import { Select } from '../common/Select';
 /**
  * AI 群聊模拟 — 配置面板 + 按成员发言比例和风格模拟群聊对话
  */
 
+import { getDefaultModel } from '../settings/ai/types';
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Play, Send, Loader2, Square, Users, Trash2, Sparkles, MessageSquare, Settings2, RotateCcw } from 'lucide-react';
+import { Play, Send, Loader2, Square, Users, Trash2, FileText, MessageSquare, Settings2, RotateCcw } from 'lucide-react';
 import type { GroupInfo } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { groupsApi } from '../../services/api';
@@ -67,7 +69,7 @@ export const GroupSimChat: React.FC<Props> = ({ group, onOpenSettings }) => {
   const [topic, setTopic] = useState('');
   const [mood, setMood] = useState('');
   const [profileId, setProfileId] = useState('');
-  const [profiles, setProfiles] = useState<{ id: string; provider: string; model?: string }[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; provider: string; model?: string; base_url?: string }[]>([]);
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
   const [membersLoading, setMembersLoading] = useState(false);
@@ -276,7 +278,7 @@ export const GroupSimChat: React.FC<Props> = ({ group, onOpenSettings }) => {
     return (
       <div className="flex flex-col items-center gap-6 py-6">
         <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center">
+          <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-[#087f5b] flex items-center justify-center">
             <Users size={28} className="text-white" />
           </div>
           <h3 className="text-lg font-black dk-text">AI 群聊模拟</h3>
@@ -406,15 +408,15 @@ export const GroupSimChat: React.FC<Props> = ({ group, onOpenSettings }) => {
         {profiles.length > 0 && (
           <div className="w-full max-w-md">
             <label className="text-xs font-bold text-gray-500 mb-2 block">AI 模型</label>
-            <select
+            <Select
               value={profileId}
-              onChange={e => setProfileId(e.target.value)}
+              onValueChange={nextValue => setProfileId(nextValue)}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-[#07c160]/30 dk-text dk-input"
             >
               {profiles.map(p => (
                 <option key={p.id} value={p.id}>{p.provider}{p.model ? ` · ${p.model}` : ''}</option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
 
@@ -422,10 +424,10 @@ export const GroupSimChat: React.FC<Props> = ({ group, onOpenSettings }) => {
         <button
           onClick={() => { setStarted(true); setTimeout(() => runSimulation(), 50); }}
           disabled={selectedMembers.size < 2 || !profileId}
-          className="px-8 py-3 bg-gradient-to-r from-[#07c160] to-[#10aeff] text-white rounded-2xl font-bold text-sm shadow-lg hover:shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:hover:scale-100"
+          className="px-8 py-3 bg-[#087f5b] text-white rounded-2xl font-bold text-sm shadow-lg hover:shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:hover:scale-100"
         >
           <span className="flex items-center gap-2">
-            <Sparkles size={16} />
+            <FileText size={16} />
             开始模拟
           </span>
         </button>
@@ -450,15 +452,8 @@ export const GroupSimChat: React.FC<Props> = ({ group, onOpenSettings }) => {
           {topic && <><span className="text-gray-200">·</span><span>话题: {topic.length > 15 ? topic.slice(0, 15) + '…' : topic}</span></>}
           {mood && <><span className="text-gray-200">·</span><span>{MOOD_OPTIONS.find(m => m.value === mood)?.label}</span></>}
           {profileId && profiles.length > 0 && (() => {
-            const defaultModels: Record<string, string> = {
-              deepseek: 'deepseek-v4-pro', doubao: 'doubao-seed-2-0-pro-260215',
-              kimi: 'kimi-k2.5', gemini: 'gemini-2.0-flash',
-              glm: 'glm-4-flash', grok: 'grok-3-mini', minimax: 'MiniMax-Text-01',
-              'minimax-cn': 'MiniMax-Text-01', openai: 'gpt-4o-mini', claude: 'claude-haiku-4-5-20251001',
-              ollama: 'llama3',
-            };
             const p = profiles.find(pp => pp.id === profileId);
-            const modelName = p?.model || (p ? defaultModels[p.provider] : '') || '';
+            const modelName = p?.model || (p ? getDefaultModel(p.provider, p.base_url) : '') || '';
             return p ? (
               <span className="text-[10px] text-[#07c160] bg-[#e7f8f0] dark:bg-[#07c160]/10 px-2 py-0.5 rounded-full font-medium">
                 {p.provider}{modelName ? ` · ${modelName}` : ''}

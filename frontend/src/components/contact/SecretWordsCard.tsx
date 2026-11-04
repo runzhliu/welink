@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { FileText, Loader2 } from 'lucide-react';
 import axios from 'axios';
 
 interface SecretWord { word: string; count: number; df: number; score: number }
@@ -44,7 +44,7 @@ export const SecretWordsCard: React.FC<Props> = ({ username, className = '' }) =
   return (
     <div className={`dk-subtle dk-border bg-[#f8f9fb] border border-gray-100 p-5 rounded-[28px] ${className}`}>
       <div className="flex items-center gap-1.5 mb-2">
-        <Sparkles size={12} className="text-[#8b5cf6]" />
+        <FileText size={12} className="text-[#8b5cf6]" />
         <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">秘语雷达 · TF-IDF</p>
       </div>
       <p className="text-[10px] text-gray-400 mb-3">跟 TA 聊得比和其他人都多的词（昵称 / 梗 / 专属话题）</p>

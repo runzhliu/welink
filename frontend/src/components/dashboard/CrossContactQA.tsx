@@ -1,10 +1,11 @@
+import { Select } from '../common/Select';
 /**
  * 跨联系人 AI 问答 — Agent 模式：LLM 解析意图 → 自动搜索/查询 → LLM 汇总回答
  * 支持问题如："谁跟我聊过旅行""去年国庆和谁聊天了""哪些朋友经常提到加班"
  */
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { Globe, Send, Loader2, Trash2, Bot, Search, Calendar, RotateCcw, Share2, Check, Copy } from 'lucide-react';
+import { Globe, Send, Loader2, Trash2, MessageSquare, Search, Calendar, RotateCcw, Share2, Check, Copy } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { searchApi, calendarApi } from '../../services/api';
@@ -340,8 +341,8 @@ export const CrossContactQA: React.FC<Props> = ({ onOpenSettings, onContactClick
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#576b95] to-[#10aeff] flex items-center justify-center">
-            <Globe size={16} className="text-white" />
+          <div className="w-8 h-8 rounded-lg dk-subtle text-[var(--text-secondary)] flex items-center justify-center">
+            <Globe size={16} />
           </div>
           <div>
             <h3 className="text-sm font-bold dk-text">跨联系人问答</h3>
@@ -350,15 +351,15 @@ export const CrossContactQA: React.FC<Props> = ({ onOpenSettings, onContactClick
         </div>
         <div className="flex items-center gap-2">
           {profiles.length > 1 && (
-            <select
+            <Select
               value={profileId}
-              onChange={e => setProfileId(e.target.value)}
+              onValueChange={nextValue => setProfileId(nextValue)}
               className="text-[10px] text-[#576b95] bg-[#576b95]/10 px-2 py-0.5 rounded-full font-semibold border-0 outline-none cursor-pointer"
             >
               {profiles.map(p => (
                 <option key={p.id} value={p.id}>{p.provider}{p.model ? ` · ${p.model}` : ''}</option>
               ))}
-            </select>
+            </Select>
           )}
           {messages.length > 0 && (
             <button onClick={startNew} className="text-gray-400 hover:text-red-400 p-1 transition-colors" title="清空对话">
@@ -404,7 +405,7 @@ export const CrossContactQA: React.FC<Props> = ({ onOpenSettings, onContactClick
               <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs ${
                 msg.searching ? 'bg-[#ff9500]' : 'bg-[#576b95]'
               }`}>
-                {msg.searching ? (msg.tool === 'search' ? <Search size={12} /> : msg.tool === 'calendar' ? <Calendar size={12} /> : <Bot size={12} />) : <Bot size={12} />}
+                {msg.searching ? (msg.tool === 'search' ? <Search size={12} /> : msg.tool === 'calendar' ? <Calendar size={12} /> : <MessageSquare size={12} />) : <MessageSquare size={12} />}
               </div>
             )}
             <div className={`max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>

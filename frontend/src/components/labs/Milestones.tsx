@@ -8,10 +8,7 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import {
-  Compass, Loader2, Search, Wand2, Share2, Check, RefreshCw,
-  MessageCircle, BookOpen, Moon, TrendingUp, CloudOff, Hand, Flame, Cake,
-} from 'lucide-react';
+import { Compass, Loader2, Search, PenLine, Share2, Check, RefreshCw, MessageCircle, BookOpen, Moon, TrendingUp, CloudOff, Hand, Flame, Cake } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
 import { captureCardToPng } from '../../utils/exportPng';
@@ -330,7 +327,7 @@ export const Milestones: React.FC<Props> = ({ contacts }) => {
             disabled={!picked || loading}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#07c160] hover:bg-[#06a850] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : data ? <RefreshCw size={14} /> : <Wand2 size={14} />}
+            {loading ? <Loader2 size={14} className="animate-spin" /> : data ? <RefreshCw size={14} /> : <PenLine size={14} />}
             {loading ? '生成中…' : data ? '重新挖' : '开始考古'}
           </button>
         </div>
@@ -359,7 +356,7 @@ export const Milestones: React.FC<Props> = ({ contacts }) => {
 
           <div ref={cardRef} className="rounded-2xl overflow-hidden bg-[#0b0b14] text-white">
             {/* Hero */}
-            <div className="px-7 py-7 bg-gradient-to-br from-[#07c160] to-[#10aeff]">
+            <div className="px-7 py-7 bg-[#087f5b]">
               <div className="text-xs uppercase tracking-[0.2em] text-white/80 font-bold mb-2">
                 MILESTONES · 关系考古
               </div>

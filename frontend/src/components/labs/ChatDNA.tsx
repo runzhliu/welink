@@ -6,9 +6,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import {
-  Sparkles, Loader2, Share2, Check, Crown, Clock, Moon, MessageSquare, Zap, Smile, Quote,
-} from 'lucide-react';
+import { FileText, Loader2, Share2, Check, Crown, Clock, Moon, MessageSquare, Zap, Smile, Quote } from 'lucide-react';
 import { avatarSrc } from '../../utils/avatar';
 import { captureCardToPng } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
@@ -119,7 +117,7 @@ export const ChatDNA: React.FC = () => {
       <div className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-4 mb-4 flex items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Sparkles size={16} className="text-[#07c160]" />
+            <FileText size={16} className="text-[#07c160]" />
             <div className="text-sm font-bold text-[#1d1d1f] dark:text-gray-100">我的聊天 DNA</div>
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -176,7 +174,7 @@ export const ChatDNA: React.FC = () => {
             <Stat icon={<Clock size={14} />} label="最爱聊天的时段" value={`${data.busiest_hour}:00`} sub={`${(data.busiest_hour_pct * 100).toFixed(0)}% 的消息发生在这个小时`} />
             <Stat icon={<Moon size={14} />} label="深夜含量" value={`${(data.late_night_pct * 100).toFixed(0)}%`} sub="00:00-05:00 的消息占比" />
             <Stat icon={<MessageSquare size={14} />} label="我说了多少" value={fmtNum(data.my_messages)} sub={`Ta 们回了 ${fmtNum(data.their_messages)} 条`} />
-            <Stat icon={<Sparkles size={14} />} label="平均每天" value={data.days_active ? fmtNum(Math.round(data.total_messages / data.days_active)) : '—'} sub="条聊天" />
+            <Stat icon={<FileText size={14} />} label="平均每天" value={data.days_active ? fmtNum(Math.round(data.total_messages / data.days_active)) : '—'} sub="条聊天" />
           </div>
 
           {/* Top 联系人 */}

@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { FlaskConical, Users2, Sparkles, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search, Quote, HeartHandshake, TrendingUp, Globe2, HeartPulse, Flame, Zap, Hand, Waves, LayoutGrid, Phone } from 'lucide-react';
+import { FlaskConical, Users2, FileText, Dna, HelpCircle, Network, Atom, AlertCircle, Gift, Compass, Gauge, Search, Quote, HeartHandshake, TrendingUp, Globe2, HeartPulse, Flame, Zap, Hand, Waves, LayoutGrid, Phone } from 'lucide-react';
 import type { ContactStats } from '../../types';
 import { VirtualGroupChat } from './VirtualGroupChat';
 import { Highlights } from './Highlights';
@@ -49,7 +49,7 @@ const LABS: LabDef[] = [
   {
     key: 'highlights',
     label: '高光瞬间',
-    icon: <Sparkles size={14} />,
+    icon: <FileText size={14} />,
     llm: true,
     desc: '挑一位联系人，AI 从全部聊天里挑出最有故事感的几段',
   },
@@ -199,8 +199,8 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
   return (
     <div className="min-h-full">
       <div className="flex items-center gap-2 mb-5">
-        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#07c160] to-[#10aeff] flex items-center justify-center shadow-sm">
-          <FlaskConical size={20} className="text-white" />
+        <div className="w-10 h-10 rounded-xl dk-subtle text-[var(--text-secondary)] flex items-center justify-center">
+          <FlaskConical size={20} />
         </div>
         <div>
           <h1 className="text-xl font-black text-[#1d1d1f] dark:text-gray-100">创意实验室</h1>
@@ -216,7 +216,7 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
             onClick={() => setActive(lab.key)}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
               active === lab.key
-                ? 'bg-gradient-to-r from-[#07c160] to-[#10aeff] text-white'
+                ? 'bg-[var(--accent-soft)] text-[var(--accent-text)]'
                 : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'
             }`}
           >
@@ -226,7 +226,7 @@ export const LabsPage: React.FC<Props> = ({ contacts }) => {
               <span
                 title="主功能会调用 LLM / embedding API（产生外部请求与等待时间）"
                 className={`ml-1 px-1 py-0.5 rounded text-[9px] font-black ${
-                  active === lab.key ? 'bg-white/30' : 'bg-purple-500/15 text-purple-600 dark:text-purple-300'
+                  active === lab.key ? 'bg-black/5 dark:bg-white/5' : 'dk-subtle text-[var(--text-secondary)]'
                 }`}
               >
                 AI

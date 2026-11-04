@@ -7,7 +7,7 @@ import { Snowflake } from 'lucide-react';
 import type { CoolingEntry, ContactStats } from '../../types';
 import { contactsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
-import { avatarSrc } from '../../utils/avatar';
+import { Avatar } from '../common/Avatar';
 
 interface Props {
   isInitialized: boolean;
@@ -50,7 +50,6 @@ export const CoolingRanking: React.FC<Props> = ({ isInitialized, contacts, onCon
       <div className="space-y-4">
         {ranking.map((entry, i) => {
           const contact = findContact(entry.username);
-          const avatarUrl = entry.small_head_url;
           const dropPct = Math.round(entry.drop_ratio * 100);
           const barWidth = Math.min(100, Math.round((entry.recent_monthly / entry.peak_monthly) * 100));
 
@@ -66,16 +65,7 @@ export const CoolingRanking: React.FC<Props> = ({ isInitialized, contacts, onCon
               }`}>{i + 1}</span>
 
               {/* 头像 */}
-              <div className="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden ring-1 ring-gray-100">
-                {avatarUrl ? (
-                  <img loading="lazy" src={avatarSrc(avatarUrl)} alt={entry.display_name} className="w-full h-full object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                ) : (
-                  <div className="w-full h-full bg-[#576b95] flex items-center justify-center text-white text-[10px] font-black">
-                    {entry.display_name.charAt(0)}
-                  </div>
-                )}
-              </div>
+              <Avatar contact={contact} src={entry.small_head_url} name={entry.display_name} className="w-8 h-8 ring-1 ring-[var(--border)]" />
 
               {/* 名字 */}
               <span className={`text-sm font-semibold dk-text text-[#1d1d1f] w-16 sm:w-20 truncate flex-shrink-0 group-hover:text-[#07c160] transition-colors${privacyMode ? ' privacy-blur' : ''}`}>

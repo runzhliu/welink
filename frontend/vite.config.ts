@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { visualizer } from 'rollup-plugin-visualizer'
 
 const analyze = process.env.ANALYZE === '1'
+const backendTarget = process.env.API_PROXY_TARGET || 'http://127.0.0.1:8080'
 
 export default defineConfig({
   plugins: [
@@ -48,7 +49,8 @@ export default defineConfig({
   server: {
     port: 3418,
     proxy: {
-      '/api': 'http://localhost:8080'
+      '/api': backendTarget,
+      '/swagger': backendTarget,
     }
   }
 })

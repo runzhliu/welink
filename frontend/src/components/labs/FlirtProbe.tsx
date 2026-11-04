@@ -185,7 +185,7 @@ export const FlirtProbe: React.FC = () => {
             <button
               onClick={exportPng}
               disabled={exporting}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-pink-500 to-rose-500 text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#087f5b] text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {exporting ? <Loader2 size={12} className="animate-spin" /> : exported ? <Check size={12} /> : <Share2 size={12} />}
               {exported ? '已下载' : '截图'}
@@ -284,7 +284,7 @@ export const FlirtProbe: React.FC = () => {
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                           />
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center text-xs text-white font-bold flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-[#617078] flex items-center justify-center text-xs text-white font-bold flex-shrink-0">
                             {c.display_name.charAt(0)}
                           </div>
                         )}

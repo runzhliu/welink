@@ -1,3 +1,4 @@
+import { Avatar } from './Avatar';
 /**
  * Cmd+K 命令面板 — 全局快速跳转
  *
@@ -11,7 +12,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Hash, User, Users, Bot, Settings, Sparkles, Database, Download, RefreshCw, Moon, Sun, X, Clock, Lock } from 'lucide-react';
+import { Search, Hash, User, Users, MessageSquare, Settings, FileText, Database, Download, RefreshCw, Moon, Sun, X, Clock, Lock } from 'lucide-react';
 import axios from 'axios';
 import type { ContactStats, GroupInfo, TabType } from '../../types';
 import { appApi } from '../../services/appApi';
@@ -74,6 +75,7 @@ const TAB_ITEMS: { tab: TabType; label: string; keywords: string[] }[] = [
   { tab: 'anniversary', label: '纪念日',       keywords: ['anniversary', '纪念日'] },
   { tab: 'urls',        label: '链接收藏',     keywords: ['urls', '链接'] },
   { tab: 'skills',      label: 'Skills',      keywords: ['skills'] },
+  { tab: 'sft',         label: '模型训练',     keywords: ['sft', 'lora', '训练', '微调', '模型'] },
   { tab: 'labs',        label: '创意实验室',   keywords: ['labs', '实验', '创意', 'virtual', 'group', '虚拟群聊'] },
   { tab: 'stats',       label: '有趣发现',    keywords: ['fun', '有趣', '趣味', 'mbti', '话痨'] },
   { tab: 'db',          label: '数据库',       keywords: ['db', '数据库'] },
@@ -158,7 +160,7 @@ export const CommandPalette: React.FC<Props> = ({
           id: 'recent:' + r.id,
           title: r.title,
           subtitle: '最近 · ' + (r.subtitle || ''),
-          icon: <Clock size={14} className="text-gray-400" />,
+          icon: r.kind === 'contact' ? <Avatar contact={contacts.find(c => c.username === r.payload)} name={r.title} className="w-7 h-7" /> : <Clock size={14} className="text-gray-400" />,
           onSelect: () => {
             if (r.kind === 'contact') {
               const c = contacts.find(cc => cc.username === r.payload);
@@ -181,7 +183,7 @@ export const CommandPalette: React.FC<Props> = ({
           id: 'contact:' + c.username,
           title: c.remark || c.nickname || c.username,
           subtitle: `联系人 · ${c.total_messages ?? 0} 条消息`,
-          icon: <User size={14} className="text-[#07c160]" />,
+          icon: <Avatar contact={c} name={c.remark || c.nickname || c.username} className="w-7 h-7" />,
           onSelect: () => openContact(c),
         });
       }
@@ -218,7 +220,7 @@ export const CommandPalette: React.FC<Props> = ({
         id: 'ai:' + h.key,
         title,
         subtitle: h.snippets[0] || h.preview,
-        icon: <Bot size={14} className="text-[#576b95]" />,
+        icon: <MessageSquare size={14} className="text-[#576b95]" />,
         onSelect: () => {
           // 精准跳转：有联系人就打开联系人弹窗，key 里有 date 的暂时跳 calendar tab
           if (kind === 'contact') {
@@ -252,7 +254,7 @@ export const CommandPalette: React.FC<Props> = ({
     const actions: { label: string; keys: string[]; icon: React.ReactNode; fn: () => void | Promise<void> }[] = [
       { label: '打开设置', keys: ['settings', '设置'], icon: <Settings size={14} className="text-gray-400" />,
         fn: () => onTabChange('settings') },
-      { label: '运行诊断', keys: ['diagnostics', '诊断'], icon: <Sparkles size={14} className="text-[#07c160]" />,
+      { label: '运行诊断', keys: ['diagnostics', '诊断'], icon: <FileText size={14} className="text-[#07c160]" />,
         fn: () => {
           onTabChange('settings');
           // 跳到 settings 后，滚到诊断 section + 自动触发

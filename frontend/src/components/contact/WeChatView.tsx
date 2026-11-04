@@ -1,3 +1,4 @@
+import { DatePicker } from '../common/DatePicker';
 /**
  * WeChatView —— 1:1 复刻微信手机端私聊界面的只读视图。
  *
@@ -203,12 +204,12 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
             <ChevronLeft size={16} />
           </button>
           <div className="relative">
-            <input
-              type="date"
+            <DatePicker aria-label="选择日期"
+
               value={date}
               min={firstDate}
               max={today}
-              onChange={(e) => e.target.value && setDate(e.target.value)}
+              onValueChange={(nextValue) => nextValue && setDate(nextValue)}
               className="text-sm font-semibold text-[#1d1d1f] dark:text-gray-200 bg-gray-100 dark:bg-white/10 rounded-lg pl-2.5 pr-2 py-1.5 outline-none focus:ring-2 focus:ring-[#07c160]/30"
             />
           </div>

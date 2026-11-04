@@ -382,7 +382,7 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
                     <span className="w-20 text-xs text-gray-500 dk-text flex-shrink-0">{label}</span>
                     <div className="flex-1 h-5 bg-gray-50 dark:bg-white/5 rounded-full overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#07c160] to-[#10aeff] transition-all duration-500"
+                        className="h-full rounded-full bg-[#087f5b] transition-all duration-500"
                         style={{ width: `${Math.max(width, cnt > 0 ? 3 : 0)}%` }}
                       />
                     </div>

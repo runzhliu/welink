@@ -1,3 +1,4 @@
+import { Select } from '../../common/Select';
 import React, { useState } from 'react';
 import { Lock, Unlock, CheckCircle2, Loader2 } from 'lucide-react';
 import { useLock, type AutoLockMinutes } from '../../../contexts/LockContext';
@@ -98,10 +99,10 @@ export const LockSection: React.FC = () => {
               <div className="pt-4 border-t border-gray-100 dk-border space-y-3">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <label className="text-sm text-gray-700 dk-text">闲置多久后自动锁屏</label>
-                  <select
+                  <Select
                     value={lockCtx.autoLockMinutes}
-                    onChange={async (e) => {
-                      const v = Number(e.target.value) as AutoLockMinutes;
+                    onValueChange={async (nextValue) => {
+                      const v = Number(nextValue) as AutoLockMinutes;
                       await lockCtx.updateSettings(v, lockCtx.lockOnStartup);
                     }}
                     className="px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-[#1d1d1f] dark:text-white outline-none focus:border-[#07c160]"
@@ -110,7 +111,7 @@ export const LockSection: React.FC = () => {
                     <option value={30}>30 分钟</option>
                     <option value={60}>1 小时（默认）</option>
                     <option value={120}>2 小时</option>
-                  </select>
+                  </Select>
                 </div>
                 <label className="flex items-start gap-2 text-sm text-gray-700 dk-text cursor-pointer select-none">
                   <input
