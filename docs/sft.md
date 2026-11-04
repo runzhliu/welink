@@ -1,0 +1,162 @@
+# SFT 工作台：训练、评测与试用
+
+4.0 开发预览新增 **SFT 工作台**。它把聊天上下文作为输入、你的回复作为训练目标，通过 LoRA 微调基础模型，让输出更贴近你的表达习惯。工作台还提供训练状态、评测、Adapter 导出和试聊。
+
+::: warning 开发预览
+4.0 尚未通过完整发布验收，已发布版本和在线 Demo 不一定包含本功能。CUDA L20 已使用合成数据跑通一次训练、评测与流式试聊；Mac MLX、完整恢复等场景仍待验证。详见 [发布验收清单](./sft-release-checklist.md)。
+:::
+
+SFT 学习的是表达方式，并不保证准确记住历史事实。需要回答具体事件或近期变化时，仍可结合聊天检索（RAG）；使用前应比较基础模型和微调模型的实际表现。
+
+## 从数据到模型
+
+入口为侧边栏 **AI 工作台 → 模型训练**。顶部流程图展示各环节状态，并可点击跳转。
+
+1. **准备数据**：新建项目后，选择指定联系人或全部可用私聊及时间范围；也可以导入 JSONL。生成的是草稿，不会立即训练或修改原始聊天。
+2. **审核与冻结**：查看样本和基础脱敏结果，编辑或排除不希望使用的内容，再冻结为只读版本。冻结时按来源和会话分组，生成训练、验证、测试集。
+3. **连接训练环境**：在「环境管理」配对本机 Apple Silicon / MLX，或 Linux / NVIDIA GPU 上的 LLaMA-Factory Worker。Worker 仅接收所授权项目的任务。
+4. **预检并训练**：选择数据、Worker、基础模型和固定 revision；预检会校验环境、分词与监督标签，并运行两次真实优化器更新。通过后再确认提交训练，可查看状态、loss 和检查点。
+5. **评测、导出与试聊**：用冻结测试集比较基础与微调模型，结合 A/B 盲评判断效果；下载 Adapter 或启动推理服务，接入 WeLink 模型配置后试聊。设为默认与回滚需要显式操作。
+
+短训验证至少需要 **训练 / 验证 / 测试 100 / 10 / 10 条**，标准训练至少需要 **500 / 50 / 50 条**，并需要足够的独立会话；最终有效样本数还会受到过滤和分词长度限制。
+
+## 连接远程 GPU 容器
+
+在工作台打开「环境管理」，选择 **远程 Linux / NVIDIA GPU 容器**，按页面步骤在训练容器中安装 Worker、填写该容器能够访问的 WeLink 控制端地址、生成一次性配对码并启动 Worker。训练环境需要 Python 3.12、可用的 NVIDIA GPU 和兼容驱动，还需要能访问依赖源和基础模型。
+
+容器中的 `127.0.0.1` 指向容器自身。远程连接请使用正确配置的 HTTPS 代理，或通过 SSH 等安全隧道将 WeLink 后端映射到训练容器的回环地址。例如，在训练环境运行：
+
+```bash
+ssh -N -L 18080:127.0.0.1:8088 <WeLink主机SSH地址>
+```
+
+其中 `8088` 需替换成 WeLink 主机上实际可访问的后端端口；隧道保持运行时，在工作台填写 `http://127.0.0.1:18080`，再按照生成的命令在训练环境配对。HTTPS 代理需直接转发 `/api/sft-worker/` 并正确配置可信代理 IP。完整安装、代理和恢复说明见 [开发仓库中的 Worker 使用说明](https://github.com/runzhliu/welink-test/blob/main/workers/sft/README.md)。
+
+**数据去向**：工作台草稿、冻结数据和产物保存在 WeLink 控制端；预检、训练和评测会把所需样本发送到所选 Worker，训练环境也会保存日志、缓存和产物。使用云端 AI 时，相关请求内容同样会发送到所选服务。自动脱敏不能覆盖所有隐私信息，数据集和 Adapter 都可能记住聊天原文。
+
+如果希望临时测试后清除训练数据，应自行为控制端和训练环境配置临时存储，并在测试后删除相应 Pod 或容器。Kubernetes `emptyDir` 会在容器重启后保留，直到 Pod 被删除才清除；模型缓存也应放入该临时存储。请按实际部署核对备份和日志位置。
+
+## 旧版 Skills：ms-swift 数据集与训练
+
+原有 Skills 页面仍支持将聊天记录整理成 ms-swift 可直接训练的 `messages` JSONL，并管理同一后端环境内的训练和部署。以下是这一旧版流程，与上面的独立 SFT 工作台及其 Worker 分开管理。
+
+### 旧版适用目标
+
+| 目标 | user 角色 | assistant 训练目标 | 用途 |
+|---|---|---|---|
+| 我的口吻（Self） | 联系人的消息 | 我发出的回复 | 写作、回复草稿、个人数字分身 |
+| 联系人分身（Contact） | 我发出的消息 | 指定联系人的回复 | 在 AI 分身中模拟该联系人的表达风格 |
+
+SFT 适合学习句长、断句、语气词、emoji 和常见反应方式，不适合可靠保存“某天发生了什么”之类的事实。事实和近期状态仍应通过 WeLink 的记忆或轻量 RAG 提供。
+
+### 旧版数据集导出
+
+在自画像或联系人页面打开 Skill 炼化，选择 **SFT / LoRA 训练集**。至少需要 500 条有效目标回复；可以设置最多导出 500～10000 条训练样本。
+
+构建器会：
+
+1. 只读取文本消息并确定 user / assistant 角色。
+2. 合并同一方连续发送的短消息。
+3. 以 10 分钟无消息作为会话边界。
+4. 给每个目标回复附带同一会话内最多 8 个上下文轮次。
+5. 对完全重复样本去重，并在当前选择的数据时间范围内均匀采样。
+6. 保证同一会话只进入一个 split，再按时间顺序划分约 80% / 10% / 10%。
+
+Self 数据会在不同联系人之间轮询取样，避免单个高频联系人淹没其他交流场景；较小的联系人样本耗尽后，较大的样本池会继续补足目标数量。
+
+手机号、邮箱、身份证、银行卡号和 wxid 会被替换，URL 和长编码内容会变成占位符。规则脱敏无法识别所有人名、地址、公司和私人事件，训练前必须抽查导出的 JSONL。
+
+### 在 Skills 页面管理训练
+
+Skills 页面提供本地训练面板，可以：
+
+- 检测 ms-swift、Python、PyTorch、CUDA 和 NVIDIA GPU。
+- 从已经成功导出的 SFT 数据集中选择一个开始训练。
+- 调整基础模型、epoch、learning rate、LoRA rank、上下文长度、batch size、梯度累积和 dtype。
+- 查看排队/训练/完成状态与增量日志，中途停止训练。
+- 训练完成后定位最新的 adapter checkpoint。
+
+先在**运行 WeLink 后端的同一个环境**安装 ms-swift：
+
+```bash
+pip install -U ms-swift
+```
+
+macOS 自带的 `/usr/bin/swift` 是 Apple Swift 编译器，不是 ModelScope ms-swift。若命令名冲突，将实际 CLI 的绝对路径传给 WeLink 后端：
+
+```bash
+WELINK_SWIFT_BIN=/path/to/venv/bin/swift ./welink-backend
+```
+
+训练任务默认串行，避免多个任务同时抢占同一块 GPU。状态保存在 `ai_analysis.db`，数据副本、日志和 checkpoint 位于 `preferences.json` 同级的 `sft-training/<job-id>/`。删除任务会同时删除该目录，无法恢复。
+
+训练管理接口只允许从本机界面访问。WeLink 不执行数据集 zip 内的脚本，只解包固定白名单文件，并直接以参数数组启动 ms-swift，避免被篡改的训练包注入命令。
+
+> 默认 Docker 后端镜像不包含 CUDA、PyTorch 或 ms-swift。要在 Docker 内训练，需要自行构建 GPU 训练镜像并挂载 GPU；更简单的方式是在 GPU 机器上原生运行后端。宿主机安装的 `swift` 不能直接被普通容器调用。
+
+### 使用旧版导出脚本训练
+
+解压后安装与你的 CUDA、PyTorch 环境兼容的 ms-swift，然后执行：
+
+```bash
+bash train.sh
+```
+
+默认使用 `Qwen/Qwen3-4B-Instruct-2507`、LoRA rank 16、两轮训练。可以覆盖模型和输出目录：
+
+```bash
+MODEL=Qwen/Qwen3-4B-Instruct-2507 \
+OUTPUT_DIR=outputs/welink-personal \
+bash train.sh
+```
+
+默认值只是安全起点。正式使用前应根据显存、样本量、验证集 loss、回复重复率和人工盲测调整参数，不要仅凭训练 loss 选择模型。
+
+### 在 Skills 页面部署并评估
+
+训练成功后，Skills 页的 **Adapter 部署与评估** 面板可以直接启动官方 `swift deploy`：
+
+- 固定监听 `127.0.0.1`，不会把未鉴权的推理端点暴露到局域网。
+- 可选兼容性更好的 `transformers`，或需要额外安装依赖、吞吐更高的 `vllm`。
+- 可配置端口、GPU 编号和服务模型名。
+- 等待 `/v1/models` 健康检查通过后才把状态标记为“服务中”。
+- 支持增量日志、停止进程和删除部署记录；删除部署不会删除训练任务或 Adapter。
+
+部署后打开对应联系人的 **AI 分身**，可以选择这个 SFT 模型以及三种路由：
+
+| 模式 | 行为 |
+|---|---|
+| 纯 SFT | 不检索历史，完全依靠模型学到的表达风格 |
+| 自动补事实 | 默认；闲聊不检索，仅在问题包含时间、地点、人物、约定等事实信号时检索 |
+| 始终 RAG | 每轮都检索本地历史索引，适合连续追问具体事件 |
+
+SFT 分身的 RAG 只使用本机 FTS 索引，不调用外部 Embedding 或查询改写服务，避免本地对话在未提示的情况下外发。Adapter 与联系人 username 强绑定，后端会拒绝将一个联系人的模型用于另一个联系人。
+
+点击部署记录上的试管按钮，会从训练时保留的 `test.jsonl` 取最多 5 条样本进行生成，展示字符二元组 F1、回复长度比和逐条对照。这个分数只适合同一数据集、同一基础模型不同 checkpoint 的纵向比较，不代表语义正确或“人格还原度”；发布前仍应人工盲测。
+
+部署状态位于 `ai_analysis.db`，日志位于 `preferences.json` 同级的 `sft-deployments/<deployment-id>/`。WeLink 重启后旧进程状态会标记为已停止，需要用户重新启动，防止数据库误报服务在线。
+
+ms-swift 官方也推荐使用 `swift deploy --adapters <checkpoint>` 部署 LoRA；Adapter 目录里的 `args.json` 会提供训练参数。参见 [ms-swift 微调后部署文档](https://github.com/modelscope/ms-swift/blob/main/docs/source/Instruction/Pre-training-and-Fine-tuning.md)。
+
+### 使用旧版导出脚本部署
+
+训练完成后，将 checkpoint 路径传给：
+
+```bash
+bash deploy.sh outputs/welink-personal/<run>/checkpoint-<step>
+```
+
+脚本会在 `127.0.0.1:8000` 启动 OpenAI 兼容接口。如果不使用内置部署管理，也可以手动在 WeLink 新建自定义 LLM Profile：
+
+- Base URL：`http://127.0.0.1:8000/v1`
+- Model：`welink-personal`
+- API Key：本地服务不校验时可填写任意非空占位值
+
+Docker 部署的 WeLink 应将 Base URL 改成 `http://host.docker.internal:8000/v1`。
+
+### 旧版隐私与安全
+
+- JSONL、LoRA adapter、合并后的模型都可能记住训练原文。
+- 不要把包含他人聊天内容的训练产物上传到公开模型仓库。
+- 不要把联系人分身用于冒充真人、欺骗或代表真人作决定。
+- WeLink 中删除训练任务会清理该任务的数据副本、checkpoint 和日志；模型下载缓存需按 ms-swift/ModelScope 的缓存位置另行清理。

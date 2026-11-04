@@ -44,7 +44,7 @@ welink/
 
 | 服务 | 镜像 | 作用 | 对外端口 |
 |---|---|---|---|
-| `backend` | `ghcr.io/runzhliu/welink/backend:main` | Go 后端 API，监听 `:8080` | `127.0.0.1:8080`（仅本机，前端容器内部走 Docker 网络访问） |
+| `backend` | `ghcr.io/runzhliu/welink/backend:main` | Go 后端 API，监听 `:8080` | `127.0.0.1:8088`（仅本机，前端容器内部走 Docker 网络访问） |
 | `frontend` | `ghcr.io/runzhliu/welink/frontend:main` | Nginx + 静态页 + 反代到 backend | `0.0.0.0:3418 → 80` |
 
 前端容器内置 Nginx 会把 `/api/*` 请求反代到 `backend:8080`。浏览器只访问 `3418`，后端不暴露给公网。
@@ -90,7 +90,7 @@ docker compose up -d  # 重启
 | `PREFERENCES_PATH` | `/app/prefs/preferences.json`（compose 默认） | 配置文件绝对路径，用于持久化 LLM key / 屏蔽名单 / 自定义 prompt 等 |
 | `DEMO_MODE` | — | 填 `true` 启 Demo 模式，自动生成阿森纳球员示例数据 |
 | `DEMO_DISABLE_AI` | — | Demo 模式下额外禁用 AI（省 token） |
-| `WELINK_LISTEN_LAN` | `1`（Dockerfile 默认） | 填 `1` 时监听 `0.0.0.0`，否则仅 `127.0.0.1`。容器内必须 `1` 才能接收端口映射流量；宿主机层面通过 compose 的 `127.0.0.1:8080:8080` 限制暴露范围。 |
+| `WELINK_LISTEN_LAN` | `1`（Dockerfile 默认） | 填 `1` 时监听 `0.0.0.0`，否则仅 `127.0.0.1`。容器内必须 `1` 才能接收端口映射流量；宿主机层面通过 compose 的 `127.0.0.1:8088:8080` 限制暴露范围。 |
 | `WELINK_PUBLIC_URL` | — | 反代场景下显式指定公网 base URL（如 `https://welink.example.com`），用于构造 Google Drive / OneDrive OAuth 回调地址。**不设置时默认用 `http://127.0.0.1:<PORT>`**，反代部署时不设就会拿不到 token。不再读取 `X-Forwarded-*` 请求头以避免伪造。 |
 
 在 Compose 文件里覆盖：
@@ -279,6 +279,36 @@ backend:
     options:
       max-size: "10m"
       max-file: "3"
+```
+
+### 官网 Google AdSense
+
+官网镜像支持 Google AdSense Auto Ads。默认不启用；只有构建时传入 publisher id / client id，才会注入 AdSense 脚本并生成 `/ads.txt`。
+
+```bash
+ADSENSE_PUBLISHER_ID=pub-xxxxxxxxxxxxxxxx make server-push
+```
+
+如果你从 AdSense 后台拿到的是完整 client id，也可以这样构建：
+
+```bash
+ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx make server-push
+```
+
+如果要启用页面内广告块，再额外传广告位：
+
+```bash
+ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx ADSENSE_AD_SLOT=xxxxxxxxxx make server-push
+```
+
+构建后按正常生产流程更新：
+
+```bash
+ssh root@<server>
+cd /opt/welink
+git pull
+docker compose -f server-compose.yml pull website
+docker compose -f server-compose.yml up -d website
 ```
 
 ### 官网 / Demo 访问统计（GoAccess）

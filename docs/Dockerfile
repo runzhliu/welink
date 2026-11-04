@@ -1,6 +1,12 @@
 FROM node:20-alpine AS builder
 
 ARG VERSION=dev
+ARG ADSENSE_CLIENT=
+ARG ADSENSE_PUBLISHER_ID=
+ARG ADSENSE_AD_SLOT=
+ENV ADSENSE_CLIENT=$ADSENSE_CLIENT
+ENV ADSENSE_PUBLISHER_ID=$ADSENSE_PUBLISHER_ID
+ENV ADSENSE_AD_SLOT=$ADSENSE_AD_SLOT
 
 # VitePress 的 lastUpdated 会 spawn git；即使 build context 不含 .git，
 # git 二进制不存在会直接抛 ENOENT 终止构建。装上即可让 VitePress 优雅降级。
@@ -12,6 +18,14 @@ COPY package.json ./
 # 强制走官方源避坑（同前端 Dockerfile）。
 RUN npm install --registry=https://registry.npmjs.org/
 COPY . .
+
+RUN if [ -n "$ADSENSE_PUBLISHER_ID" ]; then \
+      echo "google.com, ${ADSENSE_PUBLISHER_ID}, DIRECT, f08c47fec0942fa0" > public/ads.txt; \
+    elif [ -n "$ADSENSE_CLIENT" ]; then \
+      echo "google.com, ${ADSENSE_CLIENT#ca-}, DIRECT, f08c47fec0942fa0" > public/ads.txt; \
+    else \
+      rm -f public/ads.txt; \
+    fi
 
 # 将版本号注入到文档中（替换占位符 {{VERSION}}）
 RUN sed -i "s/{{VERSION}}/${VERSION}/g" install.md

@@ -2,6 +2,11 @@ services:
   website:
     build:
       context: .
+      args:
+        VERSION: ${VERSION:-dev}
+        ADSENSE_CLIENT: ${ADSENSE_CLIENT:-}
+        ADSENSE_PUBLISHER_ID: ${ADSENSE_PUBLISHER_ID:-}
+        ADSENSE_AD_SLOT: ${ADSENSE_AD_SLOT:-}
     image: ghcr.io/runzhliu/welink/website:main
     container_name: welink-website
     ports:

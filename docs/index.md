@@ -4,7 +4,7 @@ layout: home
 hero:
   name: WeLink
   text: AI 驱动的微信聊天数据分析平台
-  tagline: 选择聊天记录直接提问，让 AI 读懂每一段关系
+  tagline: 从聊天记录发现关系，也让模型学习你的表达方式
   image:
     src: /logo.svg
     alt: WeLink
@@ -15,11 +15,24 @@ hero:
     - theme: alt
       text: 📦 下载安装
       link: /install
+    - theme: alt
+      text: 🧪 了解 SFT 工作台
+      link: /sft
     - theme: sponsor
       text: GitHub ⭐
       link: https://github.com/runzhliu/welink
 
 features:
+  - icon: 🧪
+    title: SFT 工作台 · 4.0 开发预览
+    details: 从私聊准备数据，在 Mac 或 NVIDIA GPU 环境训练 LoRA，比较效果、导出并接入 WeLink。
+    link: /sft
+    linkText: 探索训练流程
+  - icon: 🧭
+    title: 更清晰的操作体验
+    details: 训练流程与远程 GPU 配对有分步引导；统一搜索选择、日期时间和弹窗，改善移动端与键盘操作。
+    link: /sft
+    linkText: 查看使用指南
   - icon: 🪞
     title: AI 分身（核心功能）
     details: 让 AI 学习任何联系人的聊天风格，模拟和 TA 对话。追忆远方的亲人、重逢失联的老友——TA 会用 TA 的方式回应你。
@@ -55,8 +68,8 @@ features:
     title: 25+ LLM 提供商
     details: DeepSeek、豆包、Kimi、OpenAI、Claude、Gemini、Ollama、Vertex AI、Bedrock、OpenRouter、SiliconFlow、Azure 等原生支持。
   - icon: 🔒
-    title: 完全本地，数据不出机
-    details: 所有分析均在本机完成，不上传任何服务器。支持 Ollama 离线运行。
+    title: 本地优先，部署自主选择
+    details: 聊天数据库由你管理；可使用本地模型。配置云端 AI 或远程训练时，相关内容会发送到所选服务。
   - icon: ⏳
     title: 时光机 + 年度回顾
     details: 全历史日历热力图 + Spotify Wrapped 风格的年度社交总结，可分享。
@@ -69,8 +82,24 @@ features:
   <a href="https://github.com/runzhliu/welink/releases"><img src="https://img.shields.io/github/v/release/runzhliu/welink?include_prereleases&color=07c160" alt="Latest release" /></a>
   <a href="https://github.com/runzhliu/welink/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-brightgreen" alt="License" /></a>
   <img src="https://img.shields.io/badge/platform-macOS%20·%20Windows%20·%20Docker-lightgrey" alt="Platform" />
-  <img src="https://img.shields.io/badge/data-100%25%20local-brightgreen" alt="100% local" />
+  <img src="https://img.shields.io/badge/data-local%20first-brightgreen" alt="Local first" />
 </div>
+
+<section class="welink-sft-spotlight" aria-labelledby="welink-sft-title">
+  <div class="welink-sft-intro">
+    <span class="welink-sft-badge">4.0 · 开发预览</span>
+    <h2 id="welink-sft-title">让模型学会你的表达方式</h2>
+    <p>从自己愿意使用的聊天记录出发，准备样本、微调小模型、比较效果，再接入 WeLink 试聊。训练过程和产物由你选择的环境管理。</p>
+    <a class="welink-sft-link" href="/sft">了解 SFT 工作台 <span aria-hidden="true">→</span></a>
+  </div>
+  <div class="welink-sft-journey" aria-label="SFT 训练流程">
+    <div><span>01</span><strong>准备与审核</strong><small>选择范围 · 冻结数据</small></div>
+    <div><span>02</span><strong>连接训练机</strong><small>Apple Silicon · NVIDIA GPU</small></div>
+    <div><span>03</span><strong>预检与训练</strong><small>LoRA · 任务与指标</small></div>
+    <div><span>04</span><strong>对比与试用</strong><small>盲评 · 导出 · 接入</small></div>
+  </div>
+  <p class="welink-sft-footnote">4.0 尚在验收中，已发布版本和在线 Demo 不一定包含。训练数据会发送到你选择的训练机；模型也可能记住聊天内容，请谨慎保存与分享。</p>
+</section>
 
 <div class="welink-stats">
   <div class="welink-stat-card">
@@ -90,8 +119,8 @@ features:
   </div>
   <div class="welink-stat-card">
     <div class="stat-icon" style="color:#fa5151;">🔒</div>
-    <div class="num" style="color:#fa5151;"><span class="welink-countup" data-to="100" data-dur="1800" data-suffix="%">0</span></div>
-    <div class="lbl">本地运行</div>
+    <div class="num" style="color:#fa5151;font-size:25px;">本地优先</div>
+    <div class="lbl">部署方式自主选择</div>
   </div>
 </div>
 
@@ -102,8 +131,8 @@ features:
     <div class="pillar-icon">
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
     </div>
-    <div class="pillar-title">数据不出机</div>
-    <div class="pillar-body">分析、索引、向量化全都跑在你本机。Ollama 离线模式下连 API Key 都不用填，AGPL-3.0 全开源可审计。</div>
+    <div class="pillar-title">本地优先，由你选择</div>
+    <div class="pillar-body">聊天数据库与索引由你管理，可选择本地模型。使用远程训练机或云端服务时，相关数据会发送到你选择的环境。</div>
   </div>
   <div class="pillar">
     <div class="pillar-icon">
@@ -243,7 +272,7 @@ docker compose up
 <div class="welink-marquee" aria-hidden="true">
   <div class="welink-marquee-track">
     <span>本地优先</span>
-    <span>数据不出机</span>
+    <span>SFT 工作台 · 4.0 预览</span>
     <span>AI 分身</span>
     <span>AI 虚拟群聊</span>
     <span>互动小说</span>
@@ -259,7 +288,7 @@ docker compose up
     <span>MCP × Claude Code</span>
     <!-- 复制一份保证无缝循环 -->
     <span>本地优先</span>
-    <span>数据不出机</span>
+    <span>SFT 工作台 · 4.0 预览</span>
     <span>AI 分身</span>
     <span>AI 虚拟群聊</span>
     <span>互动小说</span>

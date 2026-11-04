@@ -2,6 +2,7 @@ import DefaultTheme from 'vitepress/theme'
 import { onMounted, watch, nextTick, h } from 'vue'
 import { useRoute } from 'vitepress'
 import mediumZoom from 'medium-zoom'
+import AdsenseAd from './AdsenseAd.vue'
 import GiscusComments from './GiscusComments.vue'
 import './custom.css'
 
@@ -131,7 +132,8 @@ export default {
   extends: DefaultTheme,
   Layout() {
     return h(DefaultTheme.Layout, null, {
-      'doc-after': () => h(GiscusComments),
+      'doc-after': () => [h(AdsenseAd), h(GiscusComments)],
+      'home-features-after': () => h(AdsenseAd),
     })
   },
   setup() {

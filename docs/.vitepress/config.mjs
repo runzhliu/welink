@@ -25,9 +25,56 @@ const version = getVersion()
 const SITE_URL = 'https://welink.click'
 const OG_IMAGE = `${SITE_URL}/logo.svg`
 
+function getAdsenseClient() {
+  const raw = (process.env.ADSENSE_CLIENT || process.env.ADSENSE_PUBLISHER_ID || '').trim()
+  if (!raw) return ''
+
+  const publisherId = raw.replace(/^ca-/, '')
+  if (!/^pub-\d+$/.test(publisherId)) {
+    console.warn(`Invalid AdSense publisher id: ${raw}`)
+    return ''
+  }
+  return `ca-${publisherId}`
+}
+
+const adsenseClient = getAdsenseClient()
+const adsenseAdSlot = (process.env.ADSENSE_AD_SLOT || '').trim()
+
+const head = [
+  ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
+  // ─── SEO & Open Graph ─────────────────────────────────────────
+  ['meta', { name: 'author', content: 'WeLink contributors' }],
+  ['meta', { name: 'keywords', content: '微信聊天分析, SFT, LoRA, 模型微调, AI 分身, 关系预测, MCP Server, 本地 AI, 微信数据, welink' }],
+  ['meta', { name: 'theme-color', content: '#07c160' }],
+  // Open Graph
+  ['meta', { property: 'og:type', content: 'website' }],
+  ['meta', { property: 'og:site_name', content: 'WeLink' }],
+  ['meta', { property: 'og:title', content: 'WeLink · AI 驱动的微信聊天数据分析平台' }],
+  ['meta', { property: 'og:description', content: '本地优先的聊天分析与 AI 分身，探索 SFT 工作台：准备数据、微调、评测与模型试用。' }],
+  ['meta', { property: 'og:url', content: SITE_URL }],
+  ['meta', { property: 'og:image', content: OG_IMAGE }],
+  ['meta', { property: 'og:locale', content: 'zh_CN' }],
+  // Twitter Card
+  ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+  ['meta', { name: 'twitter:title', content: 'WeLink · AI 驱动的微信聊天数据分析平台' }],
+  ['meta', { name: 'twitter:description', content: '本地优先 · SFT 工作台 / AI 分身 / 关系预测 / MCP 集成' }],
+  ['meta', { name: 'twitter:image', content: OG_IMAGE }],
+]
+
+if (adsenseClient) {
+  head.push([
+    'script',
+    {
+      async: true,
+      src: `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClient}`,
+      crossorigin: 'anonymous',
+    },
+  ])
+}
+
 export default defineConfig({
   title: 'WeLink',
-  description: 'AI 驱动的微信聊天数据分析平台 · 本地优先 · AI 分身 / 关系预测 / 跨联系人问答',
+  description: '本地优先的微信聊天分析平台 · SFT 工作台 / AI 分身 / 关系预测 / 跨联系人问答',
   lang: 'zh-CN',
 
   ignoreDeadLinks: [/^http:\/\/localhost/],
@@ -44,26 +91,14 @@ export default defineConfig({
     },
   },
 
-  head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
-    // ─── SEO & Open Graph ─────────────────────────────────────────
-    ['meta', { name: 'author', content: 'WeLink contributors' }],
-    ['meta', { name: 'keywords', content: '微信聊天分析, AI 分身, 关系预测, MCP Server, 本地 AI, 微信数据, wechat decrypt, welink' }],
-    ['meta', { name: 'theme-color', content: '#07c160' }],
-    // Open Graph
-    ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:site_name', content: 'WeLink' }],
-    ['meta', { property: 'og:title', content: 'WeLink · AI 驱动的微信聊天数据分析平台' }],
-    ['meta', { property: 'og:description', content: '选择聊天记录直接提问，让 AI 读懂每一段关系。本地优先 · AI 分身 · 关系预测 · MCP Server 集成' }],
-    ['meta', { property: 'og:url', content: SITE_URL }],
-    ['meta', { property: 'og:image', content: OG_IMAGE }],
-    ['meta', { property: 'og:locale', content: 'zh_CN' }],
-    // Twitter Card
-    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:title', content: 'WeLink · AI 驱动的微信聊天数据分析平台' }],
-    ['meta', { name: 'twitter:description', content: '本地优先 · AI 分身 / 关系预测 / 跨联系人问答 / MCP × Claude Code' }],
-    ['meta', { name: 'twitter:image', content: OG_IMAGE }],
-  ],
+  head,
+
+  vite: {
+    define: {
+      __ADSENSE_CLIENT__: JSON.stringify(adsenseClient),
+      __ADSENSE_AD_SLOT__: JSON.stringify(adsenseAdSlot),
+    },
+  },
 
   themeConfig: {
     logo: '/logo.svg',
@@ -72,6 +107,7 @@ export default defineConfig({
     nav: [
       { text: '首页', link: '/' },
       { text: '全部功能', link: '/features' },
+      { text: 'SFT 工作台', link: '/sft' },
       { text: '下载安装', link: '/install' },
       { text: 'MCP Server', link: '/mcp-server' },
       { text: 'API 接口', link: '/api' },
@@ -114,6 +150,7 @@ export default defineConfig({
           { text: 'AI 分析功能', link: '/ai-analysis' },
           { text: 'AI 播客', link: '/podcast' },
           { text: 'Skill 炼化', link: '/skill-forge' },
+          { text: 'SFT 工作台与 LoRA 微调', link: '/sft' },
           { text: 'Ollama 本地 AI 配置', link: '/ollama-setup' },
           { text: 'MCP Server', link: '/mcp-server' },
           { text: 'MCP 客户端接入', link: '/mcp-clients' },
@@ -140,7 +177,7 @@ export default defineConfig({
     ],
 
     footer: {
-      message: `WeLink · AGPL-3.0 · 所有数据仅在本地处理，不上传任何服务器 · v${version}`,
+      message: `WeLink · AGPL-3.0 · 本地优先，数据去向取决于所选服务 · v${version}`,
       copyright: '© 2025 WeLink contributors · <a href="https://github.com/runzhliu/welink">GitHub</a> · <a href="https://github.com/runzhliu/welink/issues">反馈问题</a> · <a href="https://demo.welink.click">在线 Demo</a>',
     },
 

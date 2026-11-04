@@ -17,6 +17,21 @@
   border-radius: 4px;
 }
 
+.welink-ad {
+  max-width: 760px;
+  margin: 40px auto 24px;
+  padding: 12px 0;
+}
+
+.welink-ad-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--vp-c-text-3);
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
+}
+
 /* WeLink 主题色：微信绿 #07c160 */
 
 :root {
@@ -31,6 +46,45 @@
   --vp-c-brand-2: #07c160;
   --vp-c-brand-3: #06ad56;
   --vp-c-brand-soft: rgba(7, 193, 96, 0.16);
+}
+
+/* 4.0 SFT 工作台介绍 */
+.welink-sft-spotlight {
+  margin: 36px 0 40px;
+  padding: 28px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 20px;
+  background: var(--vp-c-bg-soft);
+}
+.welink-sft-badge {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+.welink-sft-spotlight .welink-sft-intro h2 {
+  margin: 12px 0 8px;
+  padding: 0;
+  border: 0;
+  font-size: 26px;
+}
+.welink-sft-intro p { max-width: 68ch; color: var(--vp-c-text-2); line-height: 1.75; }
+.welink-sft-link { display: inline-flex; gap: 6px; margin-top: 14px; font-weight: 700; }
+.welink-sft-journey { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 24px; }
+.welink-sft-journey > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 15px; border: 1px solid var(--vp-c-divider); border-radius: 12px; background: var(--vp-c-bg); }
+.welink-sft-journey span { color: var(--vp-c-brand-1); font-size: 12px; font-weight: 700; }
+.welink-sft-journey strong { font-size: 14px; }
+.welink-sft-journey small, .welink-sft-spotlight .welink-sft-footnote { color: var(--vp-c-text-2); font-size: 12px; line-height: 1.6; }
+.welink-sft-spotlight .welink-sft-footnote { margin: 16px 0 0; }
+@media (max-width: 768px) {
+  .welink-sft-spotlight { padding: 20px; }
+  .welink-sft-journey { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .welink-sft-journey { grid-template-columns: 1fr; }
 }
 
 /* 下载按钮链接 */

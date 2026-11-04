@@ -24,7 +24,7 @@
   </a>
   <img src="https://img.shields.io/badge/platform-macOS%2012%2B-lightgrey?logo=apple" alt="Platform macOS" />
   <img src="https://img.shields.io/badge/platform-Windows%2010%2B-lightgrey?logo=windows" alt="Platform Windows" />
-  <img src="https://img.shields.io/badge/data-local%20only-brightgreen" alt="Local Only" />
+  <img src="https://img.shields.io/badge/data-local%20first-brightgreen" alt="Local First" />
   <br/><br/>
   <a href="https://welink.click"><strong>官方文档</strong></a> &nbsp;·&nbsp;
   <a href="https://demo.welink.click"><strong>在线 Demo</strong></a>
@@ -38,7 +38,25 @@
 >
 > 「我今年和哪些朋友聊得越来越少了？」
 
-所有数据留在本地，不上传任何服务器。
+WeLink 采用本地优先设计：聊天数据库由你自行部署和管理。使用云端 AI、远程训练机或云端导出时，相关内容会发送到你选择的服务；使用前请确认数据范围与隐私设置。
+
+---
+
+## 4.0 开发预览：让模型学会你的表达方式
+
+新的 **SFT 工作台**将聊天记录整理、模型微调和试用连接起来。选择你愿意使用的私聊，审核数据后，在自己的 Mac 或 NVIDIA GPU 环境中训练 LoRA Adapter，再通过评测和试聊了解效果。
+
+**准备数据 → 连接训练环境 → 模型预检与训练 → 对比评测 → 导出或接入 WeLink**
+
+- **更容易上手**：工作台展示流程、当前状态和建议下一步；数据准备、GPU 容器连接与配对有分步提示。
+- **界面体验更新**：统一搜索选择、日期时间和弹窗交互，改进移动端布局与键盘操作。
+- **数据可检查**：按联系人和时间选择私聊，或导入 JSONL；先审核草稿，再冻结训练、验证和测试版本。
+- **训练环境自主选择**：支持 Apple Silicon 上的 MLX 和 Linux / NVIDIA GPU 上的 LLaMA-Factory Worker；可连接可信远程训练环境。
+- **有依据地试用**：查看训练指标，对比基础与微调模型并进行人工盲评；导出 Adapter、启动推理、接入 WeLink，按需设为默认或回滚。
+
+SFT 侧重学习表达习惯，不保证记住或准确回答具体事实；涉及历史细节时仍可结合聊天检索。训练集和模型可能记住聊天内容：远程预检或训练会将选定样本发送到所选训练机，导出与分享前请确认隐私范围。
+
+> **开发预览**：4.0 尚未通过完整发布验收，已发布版本和在线 Demo 不一定包含这些功能。CUDA L20 已用合成数据完成一次训练、评测和流式试聊验证；Mac MLX 与完整恢复等场景仍待验收。详见 [SFT 工作台指南](docs/sft.md) 和 [发布验收清单](docs/sft-release-checklist.md)。
 
 ---
 
@@ -302,16 +320,16 @@ LLM 批量阅读聊天记录，自动提炼关键事实（人名、事件、情�
 | 提供商 | 说明 |
 |--------|------|
 | DeepSeek | 默认 `deepseek-v4-pro`，国产高性价比首选 |
-| 豆包（火山方舟） | 字节 Doubao 系列，OpenAI 兼容；默认 `doubao-seed-2-0-pro-260215` |
+| 豆包（火山方舟） | 字节 Doubao 系列，OpenAI 兼容；默认 `doubao-seed-2-1-pro-260915` |
 | Kimi | Moonshot（月之暗面），支持超长上下文 |
-| OpenAI | GPT-4o 等，标准 API |
-| Claude | Anthropic Claude，通过原生 API 接入 |
-| Gemini | Google Gemini，支持 OAuth 2.0 认证 |
+| OpenAI | 默认 `gpt-6-astra`，标准 API |
+| Claude | 默认 `claude-opus-5-5`，通过原生 Messages API 接入 |
+| Gemini | 默认 `gemini-3.8-flash`，支持 OAuth 2.0 认证 |
 | **Vertex AI** | **Google Cloud Vertex AI，原生支持**。认证方式：Service Account JSON → JWT → OAuth2 token（自动缓存刷新）。走 Vertex AI 的 OpenAI 兼容端点，支持所有 Gemini 模型 |
-| **AWS Bedrock** | **原生支持**。认证方式：AWS SigV4 签名（手写实现，无 AWS SDK 依赖）。使用 Converse API（跨模型家族统一 API），支持 Claude / Llama / Mistral / Titan / Cohere 等所有 Bedrock 模型 |
-| MiniMax | 国内版 + 国际版，支持 MiniMax-Text-01 等 |
-| GLM | 智谱 AI，GLM-4 系列 |
-| Grok | xAI Grok |
+| **AWS Bedrock** | **原生支持**。认证方式：AWS SigV4 签名（手写实现，无 AWS SDK 依赖）。新版 Claude 使用 Mantle Messages API（默认 Opus 5.5），保留旧版 Runtime 配置路径 |
+| MiniMax | 国内版 + 国际版，默认 `MiniMax-M3.1-Flash` |
+| GLM | 智谱 AI，默认 `glm-5.3` |
+| Grok | xAI Grok，默认 `grok-4.7` |
 | 通义千问（DashScope） | 阿里 Qwen 系列，OpenAI 兼容模式 |
 | 腾讯混元 | Hunyuan-turbo / pro 等 |
 | 百度千帆（文心一言） | ERNIE-4.0 系列，OpenAI 兼容端点 |
@@ -321,19 +339,19 @@ LLM 批量阅读聊天记录，自动提炼关键事实（人名、事件、情�
 | Together AI | 开源模型托管，价格友好 |
 | Fireworks AI | 开源模型高速托管 |
 | Perplexity | 内置联网搜索（Sonar 系列） |
-| Cohere | Command R+，企业 RAG 强项 |
+| Cohere | Command A+，企业 RAG 强项 |
 | 硅基流动 SiliconFlow | 国内开源模型聚合（DeepSeek / Qwen / Llama 等） |
 | 零一万物（Yi） | yi-large 系列 |
-| 阶跃星辰（StepFun） | step-1 / step-2 系列 |
-| Azure OpenAI | 企业版 OpenAI；Base URL 需填写完整 deployment 端点 |
+| 阶跃星辰（StepFun） | 默认 `step-3.7-flash` |
+| Azure OpenAI | 企业版 OpenAI；Base URL 需填写自己的端点与部署名称 |
 | Ollama | 本地部署，完全离线，数据不出本机 |
 | 自定义 | 任意兼容 OpenAI 接口的模型服务 |
 
 在设置页面填写提供商、Base URL、API Key 和模型名称即可。支持为 AI 对话和记忆提炼分别指定不同的模型。
 
-> **Vertex AI 配置**：选择 `Google Vertex AI` provider → 粘贴完整的 Service Account JSON → 填写 GCP Project ID 和 Region → 选择模型（默认 `google/gemini-2.0-flash-001`）
+> **Vertex AI 配置**：选择 `Google Vertex AI` provider → 粘贴完整的 Service Account JSON → 填写 GCP Project ID 和 Region → 选择模型（默认 `google/gemini-3.8-flash`）
 >
-> **Bedrock 配置**：选择 `AWS Bedrock` provider → 填写 AWS Access Key ID 和 Secret Access Key → 填写 Region → 填写 Model ID（如 `anthropic.claude-3-5-sonnet-20241022-v2:0`）
+> **Bedrock 配置**：选择 `AWS Bedrock` provider → 填写 AWS Access Key ID 和 Secret Access Key → 按区域填写 Mantle Base URL（默认 us-east-1）→ 填写 Model ID（默认 `anthropic.claude-opus-5-5`）
 
 本地 Ollama 配置参考 [ollama-setup.md](docs/ollama-setup.md)，完整 AI 功能说明见 [ai-analysis.md](docs/ai-analysis.md)。
 
@@ -395,9 +413,9 @@ WeLink 内置 [MCP（Model Context Protocol）](https://modelcontextprotocol.io/
 | **opencode** | OpenCode Agent | `.opencode/agent/<name>.md` |
 | **cursor** | Cursor Rules | `.cursor/rules/<name>.mdc`（支持 glob） |
 | **generic** | 通用 Markdown | 工具无关，可粘贴到任何 AI 对话 |
-| **lora-jsonl** ⭐ | **本地微调训练集** | Alpaca jsonl + 训练食谱 zip，配 Unsloth / LLaMA-Factory 直接练自己的 LoRA |
+| **lora-jsonl** ⭐ | **SFT / LoRA 训练集** | ms-swift messages JSONL + 时间切分 + 训练/部署脚本 |
 
-> **lora-jsonl** 是纯本地数据导出，**不调 LLM、不抽风格画像**，把"我"和所有联系人的对话配成 `(对方上一句, 我的回复)` 训练样本。隐私保护：手机号 / 邮箱 / 身份证 / 卡号自动脱敏，联系人 wxid 匿名化为 c01..cNN，敏感模式整条丢弃。仅支持 `skill_type=self`。
+> **lora-jsonl** 是纯本地数据导出，**不调 LLM、不上传聊天记录**。支持训练“我的口吻”或指定联系人分身，连续短消息会合并为真实对话轮次，并按会话隔离、按时间生成 train / validation / test 三个集合。手机号 / 邮箱 / 身份证 / 卡号 / wxid 会做基础脱敏，但训练前仍应人工抽查；数据集和 adapter 都不要公开分享。
 
 ### 炼化的内容
 - **性格特征**：LLM 从真实对话里抽取的人物画像
@@ -684,7 +702,7 @@ LLM 会：
 | **AI 虚拟群聊** | 实验室 → 🎭 虚拟群聊 | 任意 2-8 个联系人组虚拟群，AI 用每个人的分身画像扮演；批量 N 轮 + 气泡 TTS + 会话持久化 |
 | **🎮 互动小说** | 联系人详情页头部 → 紫色 BookOpen 按钮 | 把 TA 当 NPC，写一段章节化、有选项、5 种结局的视觉小说；可读档回滚、Wrapped 风格回顾、长图导出 |
 | **移动端配对** | 设置 → 移动端配对（仅 PC 本机可开） | 生成 token + LAN IP → 手机 App 扫码验证；本机回环外只能 verify，不能改 token |
-| **本地微调训练集** | Skills → 类型 = 自画像 / 格式 = lora-jsonl | 把对话配成 Alpaca jsonl + 训练食谱 zip，给 Unsloth / LLaMA-Factory 练你的本地 LoRA |
+| **SFT 工作台（4.0 开发预览）** | AI 工作台 → 模型训练 | 准备与审核样本、连接 Mac / GPU Worker、预检训练、对比评测、导出 Adapter 和接入试聊；旧版 ms-swift 功能仍在 Skills 页面 |
 
 ---
 

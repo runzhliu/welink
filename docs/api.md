@@ -1201,7 +1201,7 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 | `opencode` | OpenCode Agent |
 | `cursor` | Cursor Rules `.mdc`（含 glob） |
 | `generic` | 通用 Markdown |
-| `lora-jsonl` | **LoRA 训练集 zip**：Alpaca jsonl + 训练食谱。纯本地处理无 LLM，仅 `skill_type=self` 支持，用于本地微调（Unsloth / LLaMA-Factory） |
+| `lora-jsonl` | **SFT / LoRA 训练集 zip**：ms-swift messages JSONL、按会话隔离的时间切分、训练与部署脚本。纯本地处理无 LLM，支持 `skill_type=self` 和 `skill_type=contact` |
 
 `lora-jsonl` 模式跳过 LLM 配置校验；其它格式要求已配置 provider + API Key（Ollama 例外）。
 
@@ -1220,6 +1220,100 @@ AI 对话续写 — AI 模拟双方继续聊天（SSE 流式）。
 ### `DELETE /api/skills/:id`
 
 删除单个 Skill（同时删除本地文件）。
+
+## SFT 本地训练
+
+这些接口管理运行 WeLink 后端所在机器上的 ms-swift 训练进程，仅允许本机界面访问。
+
+### `GET /api/sft-local/environment`
+
+检测 ms-swift CLI、Python、PyTorch、CUDA 和 NVIDIA GPU。macOS 上会识别并拒绝误命中的 Apple Swift 编译器；可通过 `WELINK_SWIFT_BIN=/absolute/path/to/swift` 指定 ms-swift CLI。
+
+### `POST /api/sft-local/jobs`
+
+提交一个串行执行的训练任务，立即返回 `queued` 记录。请求示例：
+
+```json
+{
+  "skill_id": "17886823023411880001669",
+  "model": "Qwen/Qwen3-4B-Instruct-2507",
+  "epochs": 2,
+  "learning_rate": 0.0001,
+  "lora_rank": 16,
+  "max_length": 1024,
+  "batch_size": 1,
+  "gradient_accumulation": 16,
+  "dtype": "bfloat16"
+}
+```
+
+`skill_id` 必须指向状态为 `success` 的 `lora-jsonl` Skill。后端只解包 `train.jsonl`、`validation.jsonl`、`test.jsonl`、`manifest.json` 和 `data.stats.json`，不会执行 zip 内脚本。
+
+### `GET /api/sft-local/jobs`
+
+获取训练任务列表。状态为 `queued` / `running` / `succeeded` / `failed` / `canceled`。
+
+### `GET /api/sft-local/jobs/:id`
+
+获取单个任务。完成后 `adapter_path` 指向最新包含 `adapter_config.json` 的 checkpoint。
+
+### `GET /api/sft-local/jobs/:id/log?offset=0`
+
+增量读取训练日志，每次最多 64 KiB。响应包含 `content`、`next_offset`、`truncated` 和 `eof`。
+
+### `POST /api/sft-local/jobs/:id/cancel`
+
+取消排队任务或终止运行中的 ms-swift 进程组。已到终态时为幂等操作。
+
+### `DELETE /api/sft-local/jobs/:id`
+
+删除终态任务以及对应的数据副本、日志、checkpoint 和 adapter。运行中的任务必须先取消。
+
+### `POST /api/sft-local/deployments`
+
+使用成功训练任务的 Adapter 启动本地 `swift deploy`。服务固定监听 `127.0.0.1`。
+
+```json
+{
+  "training_job_id": "178868243693637300059690b4388605d15",
+  "backend": "transformers",
+  "port": 8000,
+  "gpu": 0,
+  "served_model": "welink-sft-me"
+}
+```
+
+`backend` 仅允许 `transformers` / `vllm`，端口范围为 1024-65535。响应先返回 `starting`；`GET /v1/models` 健康检查通过后变为 `running`。
+
+### `GET /api/sft-local/deployments?status=running&limit=50`
+
+列出部署记录；`status` 可省略。状态为 `starting` / `running` / `stopped` / `failed`。
+
+### `GET /api/sft-local/deployments/:id`
+
+获取单个部署的端口、模型名、目标联系人、PID 和状态。
+
+### `GET /api/sft-local/deployments/:id/log?offset=0`
+
+增量读取部署日志，响应格式与训练日志相同。
+
+### `POST /api/sft-local/deployments/:id/stop`
+
+终止受管的 ms-swift 进程组并将部署标记为 `stopped`。
+
+### `POST /api/sft-local/deployments/:id/evaluate`
+
+```json
+{ "limit": 5 }
+```
+
+使用 held-out `test.jsonl` 做 1-20 条本地基线生成，返回逐条真实/生成回复、字符二元组 F1 和长度比。不调用裁判 LLM。
+
+### `DELETE /api/sft-local/deployments/:id`
+
+删除已停止/失败部署的记录和部署日志，不删除 Adapter 或训练任务。
+
+`POST /api/ai/clone/chat` 额外接受 `username`、`sft_deployment_id` 和 `routing_mode`。路由支持 `style`（纯 SFT）、`auto`（事实型问题按需本地 FTS）和 `hybrid`（始终本地 FTS）。
 
 
 ## AI 文生图

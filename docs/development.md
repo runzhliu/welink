@@ -246,6 +246,30 @@ make docs-build-push  # 跨平台构建并推送到 GHCR
 
 官网使用 VitePress，构建时会注入版本号到 `install.md`（通过 Dockerfile `ARG VERSION`）。
 
+### Google AdSense
+
+官网镜像支持在构建时注入 Google AdSense Auto Ads。默认不启用；只有传入 publisher id / client id 时才会生成广告脚本和 `ads.txt`。
+
+```bash
+ADSENSE_PUBLISHER_ID=pub-xxxxxxxxxxxxxxxx make docs-build
+ADSENSE_PUBLISHER_ID=pub-xxxxxxxxxxxxxxxx make docs-build-push
+
+# 发布生产镜像时同样适用
+ADSENSE_PUBLISHER_ID=pub-xxxxxxxxxxxxxxxx make server-push
+```
+
+也可以传完整 client id：
+
+```bash
+ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx make docs-build
+```
+
+如果要启用页面内广告块，再额外传广告位：
+
+```bash
+ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx ADSENSE_AD_SLOT=xxxxxxxxxx make docs-build
+```
+
 ## Build Tags
 
 后端代码使用 Go build tags 区分运行模式：

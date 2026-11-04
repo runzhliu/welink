@@ -148,11 +148,11 @@ mcpServers:
     type: stdio
     command: /绝对路径/welink-mcp
     env:
-      WELINK_URL: http://host.docker.internal:8080  # Docker 部署时用这个
+      WELINK_URL: http://host.docker.internal:8088  # Docker 部署时用这个
 ```
 
 ::: tip Docker 里访问宿主 WeLink
-LibreChat 如果在 Docker 里跑，`localhost` 指的是容器内部。用 `host.docker.internal:8080`（Mac/Windows 通用），Linux 下在 compose 里加 `extra_hosts: - "host.docker.internal:host-gateway"`。
+LibreChat 如果在 Docker 里跑，`localhost` 指的是容器内部。用 `host.docker.internal:8088`（Mac/Windows 通用），Linux 下在 compose 里加 `extra_hosts: - "host.docker.internal:host-gateway"`。
 :::
 
 ## Jan

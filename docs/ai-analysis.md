@@ -74,30 +74,47 @@ Prompt 中可以使用以下变量，运行时自动替换：
 
 ### 支持的 Provider
 
+默认型号核对日期：**2026-10-20**。仅在模型字段留空时使用新默认值；已经填写的模型名、Base URL 和凭证会继续保留。
+
 | Provider | 说明 | 默认模型 |
 |----------|------|---------|
 | `deepseek` | DeepSeek | `deepseek-v4-pro` |
-| `doubao` | 豆包（火山方舟 Volcengine Ark） | `doubao-seed-2-0-pro-260215` |
-| `kimi` | Kimi（月之暗面） | `kimi-k2.6` |
-| `gemini` | Google Gemini（AI Studio） | `gemini-3.5-flash` |
-| `vertex` | **Google Vertex AI**（原生） | `google/gemini-3.5-flash` |
-| `bedrock` | **AWS Bedrock**（原生） | `us.anthropic.claude-opus-4-8` |
-| `glm` | 智谱 AI | `glm-5.1` |
-| `grok` | xAI Grok | `grok-4.3` |
-| `minimax` | MiniMax 国际版 | `MiniMax-M3` |
-| `minimax-cn` | MiniMax 国内版 | `MiniMax-M3` |
-| `openai` | OpenAI | `gpt-5.5` |
-| `claude` | Anthropic Claude（直接 API） | `claude-opus-4-8` |
+| `doubao` | 豆包（火山方舟 Volcengine Ark） | `doubao-seed-2-1-pro-260915` |
+| `kimi` | Kimi（月之暗面） | `kimi-k3` |
+| `gemini` | Google Gemini（AI Studio） | `gemini-3.8-flash` |
+| `vertex` | **Google Vertex AI**（原生） | `google/gemini-3.8-flash` |
+| `bedrock` | **AWS Bedrock**（原生） | `anthropic.claude-opus-5-5` |
+| `glm` | 智谱 AI | `glm-5.3` |
+| `grok` | xAI Grok | `grok-4.7` |
+| `minimax` | MiniMax 国际版 | `MiniMax-M3.1-Flash` |
+| `minimax-cn` | MiniMax 国内版 | `MiniMax-M3.1-Flash` |
+| `openai` | OpenAI | `gpt-6-astra` |
+| `claude` | Anthropic Claude（直接 API） | `claude-opus-5-5` |
+| `qwen` | 通义千问（DashScope） | `qwen3.8-max` |
+| `openrouter` | OpenRouter | `openai/gpt-6-astra` |
+| `together` | Together AI | `deepseek-ai/DeepSeek-V4-Pro-0813` |
+| `azure` | Azure OpenAI | 用户填写部署名称，无通用默认值 |
 | `ollama` | 本地 Ollama | `llama3.3` |
 | `custom` | 自定义 OpenAI 兼容接口 | 用户指定 |
 
 ::: tip 说明
-- Base URL 留空自动使用各 Provider 的默认地址，无需手动填写
+- 普通云端 Provider 的 Base URL 可留空；Vertex AI、Azure、自定义接口需填写自己的端点
 - Claude 使用原生 API（`x-api-key` 鉴权），其他大多数 Provider 均为 OpenAI 兼容格式
 - Ollama 本地模式无需 API Key
 :::
 
-#### Google Vertex AI 配置指南
+### 型号与参数更新依据
+
+- [OpenAI 模型及迁移指南](https://developers.openai.com/api/docs/guides/latest-model)：默认 `gpt-6-astra`；保留 Chat Completions 文本对话路径。推理档位支持 low / medium / high / xhigh / max，留空使用模型默认，不代表关闭推理。
+- [Claude 当前型号](https://platform.claude.com/docs/en/models/overview)与[思考配置](https://platform.claude.com/docs/en/build-with-claude/thinking)：默认 `claude-opus-5-5`，新版使用 `thinking.type=adaptive` 与 `output_config.effort`，旧模型继续使用 `budget_tokens`。Opus 5.5 始终开启思考。
+- [Google Gemini 模型](https://ai.google.dev/gemini-api/docs/models)：Flash 默认升级为 `gemini-3.8-flash`，Vertex 使用 `google/` 前缀和 `global` 端点。
+- [DeepSeek](https://api-docs.deepseek.com/quick_start/pricing/)：`deepseek-v4-pro` 仍是当前 Pro 的滚动型号，继续保留。
+- [豆包模型发布公告](https://console.volcengine.com/ark/region:cn-beijing/docs/model-release-announcement)、[Kimi K3](https://platform.kimi.com/docs/guide/kimi-k3-quickstart)、[GLM-5.3](https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3)、[Grok](https://docs.x.ai/developers/models)、[MiniMax](https://platform.minimax.io/docs/api-reference/text-openai-api)、[千问](https://help.aliyun.com/zh/model-studio/qwen3-8-max)：使用各平台已列出的正式 API 型号。MiniMax M3.1 Flash 始终思考，可调节强度；推理增量从 `reasoning_content` 单独展示。
+- [Together 型号列表](https://docs.together.ai/docs/serverless/models)和 [OpenRouter GPT-6 Astra](https://openrouter.ai/openai/gpt-6-astra)：按托管平台核实完整 Model ID，避免直接套用原厂名称。
+
+连接测试使用与实际对话相同的协议、推理档位和 Ollama 设置。Claude/Mantle 走原生 Messages SSE；空响应与流内错误不会再报告连接成功。未核实有合适替代项的平台继续保留已有型号或滚动别名；Ollama 仍由用户安装本地模型。
+
+### Google Vertex AI 配置指南
 
 Vertex AI 是 Google Cloud 的企业级 AI 平台，适合公司已有 GCP 账号或想用 Gemini 模型的用户。WeLink **原生支持** Vertex AI，不需要安装 gcloud CLI 或 GCP SDK。
 
@@ -143,8 +160,8 @@ Vertex AI 是 Google Cloud 的企业级 AI 平台，适合公司已有 GCP 账�
 |------|--------|
 | **Provider** | 选择 `Google Vertex AI` |
 | **Service Account JSON** | 把下载的 JSON 文件内容**全部粘贴**进来 |
-| **Base URL** | `https://us-central1-aiplatform.googleapis.com/v1beta1/projects/my-welink-project-123/locations/us-central1/endpoints/openapi` |
-| **Model** | `google/gemini-3.5-flash`（留空也行，会用默认值） |
+| **Base URL** | `https://aiplatform.googleapis.com/v1beta1/projects/my-welink-project-123/locations/global/endpoints/openapi` |
+| **Model** | `google/gemini-3.8-flash`（留空也行，会用默认值） |
 
 ::: warning Base URL 格式
 Base URL 必须包含你的 **Project ID** 和 **Region**，格式为：
@@ -153,7 +170,7 @@ Base URL 必须包含你的 **Project ID** 和 **Region**，格式为：
 https://{region}-aiplatform.googleapis.com/v1beta1/projects/{project_id}/locations/{region}/endpoints/openapi
 ```
 
-把 `{region}` 替换为你的区域（如 `us-central1`、`europe-west1` 等），`{project_id}` 替换为你的项目 ID。
+Gemini 3.8 Flash 建议使用 `global`：主机名为 `aiplatform.googleapis.com`（不带 `global-` 前缀），路径中填写 `locations/global`。使用其他型号或区域时，按模型支持范围调整，`{project_id}` 替换为你的项目 ID。
 :::
 
 3. 点击 **测试连接** 验证
@@ -210,8 +227,8 @@ AWS Bedrock 是亚马逊云的托管大模型服务，适合公司已有 AWS 账
 |------|--------|
 | **Provider** | 选择 `AWS Bedrock` |
 | **API Key** | `AKIA...:wJalr...`（格式：`AccessKeyId:SecretAccessKey`，中间用英文冒号分隔） |
-| **Base URL** | `https://bedrock-runtime.us-east-1.amazonaws.com`（改成你的区域） |
-| **Model** | `us.anthropic.claude-opus-4-8`（或其他已开通的模型 ID） |
+| **Base URL** | `https://bedrock-mantle.us-east-1.api.aws/anthropic`（默认可留空，其他区域按开通情况调整） |
+| **Model** | `anthropic.claude-opus-5-5`（或其他已开通的模型 ID） |
 
 ::: tip API Key 格式
 WeLink 的 Bedrock 实现把 Access Key 和 Secret Key 合并成一个字符串，用 **英文冒号 `:`** 分隔：
@@ -228,9 +245,12 @@ AKIAIOSFODNN7EXAMPLE:wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 
 ##### 常见 Model ID
 
+Opus 4.7 及更新型号通过 [Mantle Messages API](https://platform.claude.com/docs/en/build-with-claude/claude-in-amazon-bedrock) 调用，使用 `anthropic.claude-*` 型号和 `bedrock-mantle` 区域地址；请求使用 SigV4 `bedrock-mantle` 服务签名。旧版 Runtime 仍可显式填写 `https://bedrock-runtime.{region}.amazonaws.com`，配合原有模型或该区域的 inference profile ID（必须填写，不推断跨区域路由）；不要混用两套端点与 ID。已有配置不会自动改写，迁移时需同时调整模型和端点。IAM 需具备所选 Mantle 模型的访问权限。
+
 | 模型 | Model ID |
 |------|---------|
-| Claude Opus 4.8（旗舰） | `us.anthropic.claude-opus-4-8` |
+| Claude Opus 5.5（Mantle，默认） | `anthropic.claude-opus-5-5` |
+| Claude Opus 4.8（Mantle） | `anthropic.claude-opus-4-8` |
 | Claude Sonnet 4.6 | `us.anthropic.claude-sonnet-4-6` |
 | Claude 3.5 Sonnet | `anthropic.claude-3-5-sonnet-20241022-v2:0` |
 | Claude 3.5 Haiku | `anthropic.claude-3-5-haiku-20241022-v1:0` |
@@ -454,18 +474,20 @@ Gemini provider 支持两种鉴权方式，二选一：
 estimated_tokens = msgCount × 15 + 500
 ```
 
-各 provider 上下文上限（按模型实际限制的 80% 保守估计）：
+已核实型号按实际窗口的 80% 估计；下表为当前默认型号。显式填写其他型号时继续使用保守的 Provider 估计，本地及自定义接口不会套用云端大窗口：
 
 | Provider | 模型上限 | 80% 保守限制 |
 |----------|---------|-------------|
-| deepseek | 64,000 | 51,200 |
-| doubao | 256,000 | 204,800 |
-| kimi | 128,000 | 102,400 |
-| gemini | 1,000,000 | 800,000 |
-| glm | 128,000 | 102,400 |
-| grok | 131,000 | 104,800 |
-| openai | 128,000 | 102,400 |
-| claude | 200,000 | 160,000 |
+| deepseek | 1,000,000 | 800,000 |
+| doubao（保守估计） | 256,000 | 204,800 |
+| kimi | 1,000,000 | 800,000 |
+| gemini / vertex | 1,048,576 | 838,861 |
+| glm | 1,000,000 | 800,000 |
+| grok | 500,000 | 400,000 |
+| openai / openrouter | 1,050,000 | 840,000 |
+| claude / bedrock Mantle | 1,000,000 | 800,000 |
+| minimax / minimax-cn / qwen | 1,000,000 | 800,000 |
+| together | 1,048,576 | 838,861 |
 | ollama / custom | 8,000 | 6,400 |
 
 估算超出上限时，前端展示"将自动分段摘要"提示，用户可提前缩短时间范围。
