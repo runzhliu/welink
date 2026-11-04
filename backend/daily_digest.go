@@ -62,6 +62,7 @@ type DigestUpcomingAnniv struct {
 	Type        string `json:"type"`
 	Username    string `json:"username"`
 	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar,omitempty"`
 	Date        string `json:"date"` // "MM-DD" 或 "YYYY-MM-DD"
 	DaysUntil   int    `json:"days_until"`
 }
@@ -177,7 +178,7 @@ func buildDailyDigest(svc *service.ContactService, date string) *DailyDigest {
 	var sleeping []DigestSleepingFriend
 	nowTs := time.Now().Unix()
 	const sleepThreshold = int64(30 * 86400) // 30 天没联系
-	const sleepMinMsg = int64(500)            // 历史累计 ≥ 500 条才算"老朋友"
+	const sleepMinMsg = int64(500)           // 历史累计 ≥ 500 条才算"老朋友"
 
 	for _, s := range stats {
 		// 活跃：LastMessageTs 在昨天区间内
@@ -186,7 +187,7 @@ func buildDailyDigest(svc *service.ContactService, date string) *DailyDigest {
 			activeToday = append(activeToday, activeEntry{
 				username: s.Username,
 				name:     name,
-				avatar:   s.SmallHeadURL,
+				avatar:   nonEmptyName(s.SmallHeadURL, s.BigHeadURL),
 				lastTs:   s.LastMessageTs,
 			})
 		}
@@ -198,7 +199,7 @@ func buildDailyDigest(svc *service.ContactService, date string) *DailyDigest {
 			sleeping = append(sleeping, DigestSleepingFriend{
 				Username:      s.Username,
 				Name:          name,
-				Avatar:        s.SmallHeadURL,
+				Avatar:        nonEmptyName(s.SmallHeadURL, s.BigHeadURL),
 				TotalMessages: s.TotalMessages,
 				DaysSince:     days,
 				LastMessage:   time.Unix(s.LastMessageTs, 0).In(time.Local).Format("2006-01-02"),
@@ -253,6 +254,7 @@ func buildDailyDigest(svc *service.ContactService, date string) *DailyDigest {
 				Type:        e.Type,
 				Username:    e.Username,
 				DisplayName: e.DisplayName,
+				Avatar:      e.AvatarURL,
 				Date:        e.Date,
 				DaysUntil:   days,
 			})
@@ -264,6 +266,7 @@ func buildDailyDigest(svc *service.ContactService, date string) *DailyDigest {
 				Type:        "milestone",
 				Username:    m.Username,
 				DisplayName: fmt.Sprintf("%s · 认识 %d 天", m.DisplayName, m.NextMilestone),
+				Avatar:      m.AvatarURL,
 				Date:        m.NextMilestoneDate,
 				DaysUntil:   m.DaysUntil,
 			})

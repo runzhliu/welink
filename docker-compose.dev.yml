@@ -33,4 +33,5 @@ services:
       - GIN_MODE=release
       - DEMO_MODE=true
       - DATA_DIR=/app/demo-data
+      - WELINK_SFT_TLS_PROXY=${WELINK_SFT_TLS_PROXY:-}
     restart: unless-stopped

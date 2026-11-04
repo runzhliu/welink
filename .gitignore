@@ -71,8 +71,19 @@ docs/.vitepress/cache/
 docs/certs/
 ai_analysis.db
 
+# Private SFT datasets / weights / worker credentials and Python build caches.
+sft-data/
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+
 # ===========================
 # 服务器本地配置（访问统计等，不提交）
 # ===========================
 .server-local/
 pics/*.md
+
+# Python worker packaging output
+workers/sft/build/
+workers/sft/dist/

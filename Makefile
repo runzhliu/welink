@@ -46,13 +46,23 @@ demo-logs:   ## 跟踪 Demo 容器日志
 _DOCS_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
 _DOCS_SHA := $(shell git rev-parse --short=6 HEAD 2>/dev/null)
 DOCS_VERSION := $(if $(_DOCS_TAG),$(_DOCS_TAG),$(_DOCS_SHA))
+DOCS_BUILD_ARGS := --build-arg VERSION=$(DOCS_VERSION)
+ifneq ($(strip $(ADSENSE_CLIENT)),)
+DOCS_BUILD_ARGS += --build-arg ADSENSE_CLIENT=$(ADSENSE_CLIENT)
+endif
+ifneq ($(strip $(ADSENSE_PUBLISHER_ID)),)
+DOCS_BUILD_ARGS += --build-arg ADSENSE_PUBLISHER_ID=$(ADSENSE_PUBLISHER_ID)
+endif
+ifneq ($(strip $(ADSENSE_AD_SLOT)),)
+DOCS_BUILD_ARGS += --build-arg ADSENSE_AD_SLOT=$(ADSENSE_AD_SLOT)
+endif
 
 docs-build:  ## 构建官网镜像（当前机器平台）
-	docker compose -f docs/docker-compose.yml build --build-arg VERSION=$(DOCS_VERSION)
+	docker compose -f docs/docker-compose.yml build $(DOCS_BUILD_ARGS)
 
 docs-build-push: ## 跨平台构建官网镜像并推送（linux/amd64 + linux/arm64）
 	docker buildx build --platform linux/amd64,linux/arm64 \
-	  --build-arg VERSION=$(DOCS_VERSION) \
+	  $(DOCS_BUILD_ARGS) \
 	  -t ghcr.io/runzhliu/welink/website:main \
 	  --push docs/
 
@@ -91,7 +101,7 @@ endef
 
 server-push: ## 【本地执行】多平台构建并推送到 Docker Hub（amd64 + arm64，需已 docker login）
 	@docker buildx use welink 2>/dev/null || docker buildx create --name welink --driver docker-container --use
-	$(call _server-build-push,$(DOCKER_USER)/welink-website,docs/,--build-arg VERSION=$(DOCS_VERSION))
+	$(call _server-build-push,$(DOCKER_USER)/welink-website,docs/,$(DOCS_BUILD_ARGS))
 	$(call _server-build-push,$(DOCKER_USER)/welink-frontend,frontend/)
 	$(call _server-build-push,$(DOCKER_USER)/welink-backend,backend/,--build-arg APP_VERSION=$(APP_VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT))
 

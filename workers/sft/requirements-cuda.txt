@@ -1,0 +1,2 @@
+# The lock targets CPython 3.12 / Linux x86_64. A matching NVIDIA driver is required.
+llamafactory==0.9.5

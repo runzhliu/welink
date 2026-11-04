@@ -1,0 +1,2 @@
+# Engine APIs are pinned. Run the engine contract suite before changing these.
+mlx-lm==0.32.2

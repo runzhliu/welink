@@ -35,9 +35,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -109,6 +109,7 @@ func main() {
 		// 所有 DB/服务器初始化放进后台 goroutine，webview 窗口在主线程立即弹出。
 		go serverMain()
 		startApp() // 阻塞直到窗口关闭
+		shutdownSFTRuntime()
 		return
 	}
 	serverMain()
@@ -299,6 +300,10 @@ func serverMain() {
 
 	// 启动文生图异步任务 worker pool（默认 2，与文本 WorkerCount 解耦避免相互拖累）
 	StartImageWorkers(imageWorkerCountDefault)
+	// SFT 训练默认串行，避免多个任务同时抢占同一块 GPU。
+	StartSFTTrainingWorker()
+	// 清理上次异常退出遗留的部署状态；新部署由用户显式启动。
+	StartSFTDeploymentSupervisor()
 	// 启动画廊软删 GC（每天扫一次，清理 30 天前软删的图）
 	StartGalleryGC()
 
@@ -345,7 +350,7 @@ func serverMain() {
 			origin == "capacitor://localhost" || origin == "ionic://localhost" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-WeLink-Token")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-WeLink-Token, X-SFT-Session, X-SFT-Owner, Idempotency-Key")
 			c.Writer.Header().Set("Vary", "Origin")
 		}
 		if c.Request.Method == "OPTIONS" {
@@ -1250,7 +1255,9 @@ func serverMain() {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-			if list == nil { list = []ConversationEntry{} }
+			if list == nil {
+				list = []ConversationEntry{}
+			}
 			c.JSON(http.StatusOK, gin.H{"conversations": list})
 			return
 		}
@@ -1456,7 +1463,21 @@ func serverMain() {
 		uname := c.Param("username")
 		p, err := GetCloneProfile(uname)
 		if err != nil || p == nil {
-			c.JSON(http.StatusOK, gin.H{"exists": false})
+			deployment, deployErr := GetRunningSFTDeploymentForTarget(uname)
+			if deployErr != nil || deployment == nil || deployment.SkillType != "contact" {
+				c.JSON(http.StatusOK, gin.H{"exists": false})
+				return
+			}
+			cloneCacheMu.Lock()
+			cloneSeq++
+			sid := fmt.Sprintf("clone-%s-%d", uname, cloneSeq)
+			cloneCache[sid] = fmt.Sprintf("你正在模拟「%s」与用户对话。说话风格主要由已经微调的模型决定。不要声称自己是 AI；不确定历史事实时坦率表达不确定。", deployment.TargetName)
+			cloneCacheMu.Unlock()
+			c.JSON(http.StatusOK, gin.H{
+				"exists": true, "session_id": sid, "sft_deployment_id": deployment.ID,
+				"private_count": 0, "group_count": 0, "has_profile": false,
+				"has_recent": false, "avg_msg_len": 0, "emoji_pct": 0,
+			})
 			return
 		}
 		// 恢复到内存缓存
@@ -1483,8 +1504,8 @@ func serverMain() {
 	// 步骤: 加载消息 → 统计分析 → LLM提炼长期档案 → LLM提炼中期近况 → 组装prompt
 	api.POST("/ai/clone/learn", func(c *gin.Context) {
 		var body struct {
-			Username string   `json:"username"`
-			Count    int      `json:"count"`
+			Username       string   `json:"username"`
+			Count          int      `json:"count"`
 			Groups         []string `json:"groups"`
 			Bio            string   `json:"bio"`
 			ExtractProfile bool     `json:"extract_profile"`
@@ -1668,15 +1689,15 @@ func serverMain() {
 
 		// 最终结果
 		result, _ := json.Marshal(gin.H{
-			"done":           true,
-			"session_id":     sessionID,
-			"sample_count":   len(theirTexts) + len(groupSamples),
-			"private_count":  len(theirTexts),
-			"group_count":    len(groupSamples),
-			"has_profile":    profileText != "",
-			"has_recent":     false,
-			"avg_msg_len":    avgLen,
-			"emoji_pct":      emojiPct,
+			"done":          true,
+			"session_id":    sessionID,
+			"sample_count":  len(theirTexts) + len(groupSamples),
+			"private_count": len(theirTexts),
+			"group_count":   len(groupSamples),
+			"has_profile":   profileText != "",
+			"has_recent":    false,
+			"avg_msg_len":   avgLen,
+			"emoji_pct":     emojiPct,
 		})
 		fmt.Fprintf(c.Writer, "data: %s\n\n", result)
 		flusher.Flush()
@@ -1685,25 +1706,17 @@ func serverMain() {
 	// POST /api/ai/clone/chat — 对话：通过 session_id 复用缓存的 system prompt
 	api.POST("/ai/clone/chat", func(c *gin.Context) {
 		var body struct {
-			SessionID string       `json:"session_id"`
-			Messages  []LLMMessage `json:"messages"`
-			ProfileID string       `json:"profile_id"`
+			SessionID       string       `json:"session_id"`
+			Username        string       `json:"username"`
+			Messages        []LLMMessage `json:"messages"`
+			ProfileID       string       `json:"profile_id"`
+			SFTDeploymentID string       `json:"sft_deployment_id"`
+			RoutingMode     string       `json:"routing_mode"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 			return
 		}
-		prefs := loadPreferences()
-		cfg := llmConfigForProfile(body.ProfileID, prefs)
-		if cfg.provider == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
-			return
-		}
-		if cfg.apiKey == "" && cfg.provider != "ollama" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
-			return
-		}
-
 		cloneCacheMu.RLock()
 		sysPrompt, ok := cloneCache[body.SessionID]
 		cloneCacheMu.RUnlock()
@@ -1712,6 +1725,39 @@ func serverMain() {
 			return
 		}
 
+		prefs := loadPreferences()
+		var deployment *SFTDeployment
+		var routeMode string
+		var err error
+		if body.SFTDeploymentID != "" {
+			deployment, err = validateSFTCloneDeployment(body.SFTDeploymentID, body.Username)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			routeMode, err = normalizeSFTCloneRoute(body.RoutingMode)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+		} else {
+			cfg := llmConfigForProfile(body.ProfileID, prefs)
+			if cfg.provider == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口或启动联系人 SFT 部署"})
+				return
+			}
+			if cfg.apiKey == "" && cfg.provider != "ollama" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+				return
+			}
+		}
+
+		var ragMeta *RagMeta
+		if deployment != nil && shouldUseSFTCloneRAG(routeMode, latestUserMessage(body.Messages)) {
+			contextText, meta := buildSFTCloneRAGContext(body.Username, latestUserMessage(body.Messages))
+			sysPrompt += contextText
+			ragMeta = meta
+		}
 		llmMessages := []LLMMessage{{Role: "system", Content: sysPrompt}}
 		llmMessages = append(llmMessages, body.Messages...)
 
@@ -1728,7 +1774,14 @@ func serverMain() {
 			fmt.Fprintf(c.Writer, "data: %s\n\n", data)
 			flusher.Flush()
 		}
-		streamLLMCoreWithProfile(sendChunk, llmMessages, prefs, body.ProfileID)
+		if ragMeta != nil {
+			sendChunk(StreamChunk{RagMeta: ragMeta})
+		}
+		if deployment != nil {
+			streamLLMCoreWithConfig(sendChunk, llmMessages, sftDeploymentLLMConfig(deployment))
+		} else {
+			streamLLMCoreWithProfile(sendChunk, llmMessages, prefs, body.ProfileID)
+		}
 	})
 
 	// ── 分身长期记忆：clone_chat_history 持久化 ──
@@ -1751,7 +1804,7 @@ func serverMain() {
 	api.POST("/ai/clone/history/:username", func(c *gin.Context) {
 		uname := c.Param("username")
 		var body struct {
-			Role    string `json:"role"`    // user / assistant
+			Role    string `json:"role"` // user / assistant
 			Content string `json:"content"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil || strings.TrimSpace(body.Content) == "" {
@@ -1794,24 +1847,40 @@ func serverMain() {
 	// POST /api/ai/clone/continue — 对话续写：AI 模拟双方继续聊天
 	api.POST("/ai/clone/continue", func(c *gin.Context) {
 		var body struct {
-			SessionID string `json:"session_id"`
-			ProfileID string `json:"profile_id"`
-			Rounds    int    `json:"rounds"`
-			Topic     string `json:"topic"`
-			MyName    string `json:"my_name"`
+			SessionID       string `json:"session_id"`
+			Username        string `json:"username"`
+			ProfileID       string `json:"profile_id"`
+			SFTDeploymentID string `json:"sft_deployment_id"`
+			RoutingMode     string `json:"routing_mode"`
+			Rounds          int    `json:"rounds"`
+			Topic           string `json:"topic"`
+			MyName          string `json:"my_name"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 			return
 		}
-		if body.Rounds <= 0 { body.Rounds = 10 }
-		if body.Rounds > 30 { body.Rounds = 30 }
-		if body.MyName == "" { body.MyName = "我" }
+		if body.Rounds <= 0 {
+			body.Rounds = 10
+		}
+		if body.Rounds > 30 {
+			body.Rounds = 30
+		}
+		if body.MyName == "" {
+			body.MyName = "我"
+		}
 
 		prefs := loadPreferences()
-		cfg := llmConfigForProfile(body.ProfileID, prefs)
-		if cfg.provider == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
+		var deployment *SFTDeployment
+		if body.SFTDeploymentID != "" {
+			var err error
+			deployment, err = validateSFTCloneDeployment(body.SFTDeploymentID, body.Username)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+		} else if cfg := llmConfigForProfile(body.ProfileID, prefs); cfg.provider == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口或启动联系人 SFT 部署"})
 			return
 		}
 
@@ -1858,7 +1927,11 @@ func serverMain() {
 			fmt.Fprintf(c.Writer, "data: %s\n\n", data)
 			flusher.Flush()
 		}
-		streamLLMCoreWithProfile(sendChunk, llmMessages, prefs, body.ProfileID)
+		if deployment != nil {
+			streamLLMCoreWithConfig(sendChunk, llmMessages, sftDeploymentLLMConfig(deployment))
+		} else {
+			streamLLMCoreWithProfile(sendChunk, llmMessages, prefs, body.ProfileID)
+		}
 	})
 
 	// POST /api/ai/complete — 非流式单次补全（用于分段摘要）
@@ -1916,9 +1989,9 @@ func serverMain() {
 				return
 			}
 		}
-		// lora-jsonl 仅支持 self 类型
-		if isLoRA && body.SkillType != "self" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "LoRA 数据集导出仅支持 skill_type=self"})
+		// SFT/LoRA 数据集支持训练「我的口吻」或指定联系人分身。
+		if isLoRA && body.SkillType != "self" && body.SkillType != "contact" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "SFT/LoRA 数据集导出仅支持 skill_type=self 或 contact"})
 			return
 		}
 		svc := getSvc()
@@ -1933,7 +2006,11 @@ func serverMain() {
 		} else if body.SkillType == "contact" && svc != nil {
 			for _, c := range svc.GetCachedStats() {
 				if c.Username == body.Username {
-					if c.Remark != "" { targetName = c.Remark } else if c.Nickname != "" { targetName = c.Nickname }
+					if c.Remark != "" {
+						targetName = c.Remark
+					} else if c.Nickname != "" {
+						targetName = c.Nickname
+					}
 					break
 				}
 			}
@@ -1982,7 +2059,11 @@ func serverMain() {
 				err      error
 			)
 			if opts.Format == "lora-jsonl" {
-				zipBytes, filename, err = BuildLoRAExportZip(s)
+				zipBytes, filename, err = BuildLoRAExportZip(s, SFTExportOptions{
+					TargetType:  opts.SkillType,
+					Username:    opts.Username,
+					MaxExamples: opts.MsgLimit,
+				})
 			} else {
 				zipBytes, filename, err = ForgeSkillZip(s, opts, p)
 			}
@@ -2104,25 +2185,31 @@ func serverMain() {
 	api.POST("/ai/group-sim", func(c *gin.Context) {
 		var body struct {
 			GroupUsername string `json:"group_username"`
-			MessageCount int    `json:"message_count"`
-			ProfileID    string `json:"profile_id"`
-			UserMessage  string `json:"user_message"`
-			History      []struct {
+			MessageCount  int    `json:"message_count"`
+			ProfileID     string `json:"profile_id"`
+			UserMessage   string `json:"user_message"`
+			History       []struct {
 				Speaker string `json:"speaker"`
 				Content string `json:"content"`
 			} `json:"history"`
 			Rounds  int      `json:"rounds"`
 			Topic   string   `json:"topic"`   // 话题/场景设定
-			Mood    string   `json:"mood"`     // 聊天氛围
+			Mood    string   `json:"mood"`    // 聊天氛围
 			Members []string `json:"members"` // 指定参与成员（为空则自动选 top 10）
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 			return
 		}
-		if body.MessageCount <= 0 { body.MessageCount = 1000 }
-		if body.Rounds <= 0 { body.Rounds = 5 }
-		if body.Rounds > 20 { body.Rounds = 20 }
+		if body.MessageCount <= 0 {
+			body.MessageCount = 1000
+		}
+		if body.Rounds <= 0 {
+			body.Rounds = 5
+		}
+		if body.Rounds > 20 {
+			body.Rounds = 20
+		}
 
 		prefs := loadPreferences()
 		cfg := llmConfigForProfile(body.ProfileID, prefs)
@@ -2148,18 +2235,20 @@ func serverMain() {
 		type memberInfo struct {
 			Name       string
 			Count      int
-			Samples    []string  // 文本消息样本
-			TotalChars int       // 总字符数
-			TextCount  int       // 文本消息数
-			EmojiCount int       // 含表情的消息数
-			QMarkCount int       // 含问号的消息数（爱提问）
-			ExclCount  int       // 含感叹号的消息数（情绪化）
-			ShortCount int       // <=5字的消息数（简短回复型）
-			LongCount  int       // >=50字的消息数（长篇大论型）
+			Samples    []string // 文本消息样本
+			TotalChars int      // 总字符数
+			TextCount  int      // 文本消息数
+			EmojiCount int      // 含表情的消息数
+			QMarkCount int      // 含问号的消息数（爱提问）
+			ExclCount  int      // 含感叹号的消息数（情绪化）
+			ShortCount int      // <=5字的消息数（简短回复型）
+			LongCount  int      // >=50字的消息数（长篇大论型）
 		}
 		memberMap := make(map[string]*memberInfo)
 		for _, m := range msgs {
-			if m.Speaker == "" || m.Speaker == "未知" { continue }
+			if m.Speaker == "" || m.Speaker == "未知" {
+				continue
+			}
 			mi, ok := memberMap[m.Speaker]
 			if !ok {
 				mi = &memberInfo{Name: m.Speaker}
@@ -2170,11 +2259,21 @@ func serverMain() {
 				mi.TextCount++
 				charLen := len([]rune(m.Content))
 				mi.TotalChars += charLen
-				if charLen <= 5 { mi.ShortCount++ }
-				if charLen >= 50 { mi.LongCount++ }
-				if strings.ContainsAny(m.Content, "？?") { mi.QMarkCount++ }
-				if strings.ContainsAny(m.Content, "！!") { mi.ExclCount++ }
-				if strings.ContainsAny(m.Content, "😂🤣😄😁😆😅😊😉😎🥰😍") || strings.Contains(m.Content, "[") { mi.EmojiCount++ }
+				if charLen <= 5 {
+					mi.ShortCount++
+				}
+				if charLen >= 50 {
+					mi.LongCount++
+				}
+				if strings.ContainsAny(m.Content, "？?") {
+					mi.QMarkCount++
+				}
+				if strings.ContainsAny(m.Content, "！!") {
+					mi.ExclCount++
+				}
+				if strings.ContainsAny(m.Content, "😂🤣😄😁😆😅😊😉😎🥰😍") || strings.Contains(m.Content, "[") {
+					mi.EmojiCount++
+				}
 				// 保留样本（均匀抽样：前中后各取一些）
 				if len(mi.Samples) < 30 {
 					mi.Samples = append(mi.Samples, m.Content)
@@ -2186,18 +2285,28 @@ func serverMain() {
 		members := make([]*memberInfo, 0, len(memberMap))
 		if len(body.Members) > 0 {
 			allowed := make(map[string]bool)
-			for _, name := range body.Members { allowed[name] = true }
+			for _, name := range body.Members {
+				allowed[name] = true
+			}
 			for _, mi := range memberMap {
-				if allowed[mi.Name] { members = append(members, mi) }
+				if allowed[mi.Name] {
+					members = append(members, mi)
+				}
 			}
 		} else {
-			for _, mi := range memberMap { members = append(members, mi) }
+			for _, mi := range memberMap {
+				members = append(members, mi)
+			}
 		}
 		sort.Slice(members, func(i, j int) bool { return members[i].Count > members[j].Count })
-		if len(members) > 10 { members = members[:10] }
+		if len(members) > 10 {
+			members = members[:10]
+		}
 
 		totalCount := 0
-		for _, mi := range members { totalCount += mi.Count }
+		for _, mi := range members {
+			totalCount += mi.Count
+		}
 
 		// 3. 构造系统 prompt（含风格特征画像）
 		var sb strings.Builder
@@ -2236,42 +2345,66 @@ func serverMain() {
 			var traits []string
 			if mi.TextCount > 0 {
 				avgLen := mi.TotalChars / mi.TextCount
-				if avgLen <= 8 { traits = append(traits, "惜字如金，回复简短") }
-				if avgLen >= 30 { traits = append(traits, "话多，经常长篇大论") }
-				if avgLen > 8 && avgLen < 30 { traits = append(traits, fmt.Sprintf("消息平均%d字", avgLen)) }
+				if avgLen <= 8 {
+					traits = append(traits, "惜字如金，回复简短")
+				}
+				if avgLen >= 30 {
+					traits = append(traits, "话多，经常长篇大论")
+				}
+				if avgLen > 8 && avgLen < 30 {
+					traits = append(traits, fmt.Sprintf("消息平均%d字", avgLen))
+				}
 			}
 			if mi.TextCount > 0 {
 				emojiPct := float64(mi.EmojiCount) / float64(mi.TextCount) * 100
-				if emojiPct > 30 { traits = append(traits, "爱用表情") }
-				if emojiPct < 5 { traits = append(traits, "很少用表情") }
+				if emojiPct > 30 {
+					traits = append(traits, "爱用表情")
+				}
+				if emojiPct < 5 {
+					traits = append(traits, "很少用表情")
+				}
 			}
 			if mi.TextCount > 0 {
 				qPct := float64(mi.QMarkCount) / float64(mi.TextCount) * 100
-				if qPct > 20 { traits = append(traits, "爱提问") }
+				if qPct > 20 {
+					traits = append(traits, "爱提问")
+				}
 			}
 			if mi.TextCount > 0 {
 				exclPct := float64(mi.ExclCount) / float64(mi.TextCount) * 100
-				if exclPct > 25 { traits = append(traits, "语气强烈，常用感叹号") }
+				if exclPct > 25 {
+					traits = append(traits, "语气强烈，常用感叹号")
+				}
 			}
 			if mi.TextCount > 0 {
 				shortPct := float64(mi.ShortCount) / float64(mi.TextCount) * 100
-				if shortPct > 40 { traits = append(traits, "经常几个字就回复") }
+				if shortPct > 40 {
+					traits = append(traits, "经常几个字就回复")
+				}
 			}
-			if len(traits) == 0 { traits = append(traits, "风格中等") }
+			if len(traits) == 0 {
+				traits = append(traits, "风格中等")
+			}
 			sb.WriteString(strings.Join(traits, "、") + "\n")
 
 			// 样本消息
 			sb.WriteString("说话样本：\n")
 			sampleCount := len(mi.Samples)
-			if sampleCount > 10 { sampleCount = 10 }
+			if sampleCount > 10 {
+				sampleCount = 10
+			}
 			for _, s := range mi.Samples[:sampleCount] {
-				if len(s) > 100 { s = s[:100] + "…" }
+				if len(s) > 100 {
+					s = s[:100] + "…"
+				}
 				sb.WriteString(fmt.Sprintf("- 「%s」\n", s))
 			}
 		}
 		sb.WriteString("\n【最近的群聊记录】\n")
 		recentStart := len(msgs) - 50
-		if recentStart < 0 { recentStart = 0 }
+		if recentStart < 0 {
+			recentStart = 0
+		}
 		for _, m := range msgs[recentStart:] {
 			if m.Content != "" {
 				sb.WriteString(fmt.Sprintf("%s：%s\n", m.Speaker, m.Content))
@@ -2322,9 +2455,14 @@ func serverMain() {
 			cumulative := 0
 			for _, mi := range members {
 				cumulative += mi.Count
-				if r < cumulative { chosen = mi; break }
+				if r < cumulative {
+					chosen = mi
+					break
+				}
 			}
-			if chosen == nil { chosen = members[0] }
+			if chosen == nil {
+				chosen = members[0]
+			}
 			speakerOrder = append(speakerOrder, chosen.Name)
 		}
 
@@ -2349,23 +2487,31 @@ func serverMain() {
 		// 流式输出，实时解析每行 "成员名：消息内容" 并逐条推送
 		var lineBuf strings.Builder
 		memberSet := make(map[string]bool)
-		for _, mi := range members { memberSet[mi.Name] = true }
+		for _, mi := range members {
+			memberSet[mi.Name] = true
+		}
 
 		streamLLMCoreWithProfile(func(chunk StreamChunk) {
-			if chunk.Delta == "" { return }
+			if chunk.Delta == "" {
+				return
+			}
 			lineBuf.WriteString(chunk.Delta)
 
 			// 逐行解析
 			for {
 				text := lineBuf.String()
 				nlIdx := strings.Index(text, "\n")
-				if nlIdx < 0 { break }
+				if nlIdx < 0 {
+					break
+				}
 
 				line := strings.TrimSpace(text[:nlIdx])
 				lineBuf.Reset()
 				lineBuf.WriteString(text[nlIdx+1:])
 
-				if line == "" { continue }
+				if line == "" {
+					continue
+				}
 
 				// 尝试解析 "成员名：内容" 或 "成员名:内容"
 				var speaker, content string
@@ -2381,7 +2527,9 @@ func serverMain() {
 						break
 					}
 				}
-				if speaker == "" || content == "" { continue }
+				if speaker == "" || content == "" {
+					continue
+				}
 
 				sendSim(SimMessage{Speaker: speaker, Content: content})
 			}
@@ -2854,16 +3002,24 @@ func serverMain() {
 
 		// 第一轮：放入所有命中消息
 		for _, ir := range allIndexed {
-			if !ir.hit { continue }
-			if totalChars+len(ir.line) > maxContextChars { break }
+			if !ir.hit {
+				continue
+			}
+			if totalChars+len(ir.line) > maxContextChars {
+				break
+			}
 			selected[ir.idx] = true
 			totalChars += len(ir.line)
 		}
 
 		// 第二轮：用窗口上下文消息填充剩余预算
 		for _, ir := range allIndexed {
-			if selected[ir.idx] { continue }
-			if totalChars+len(ir.line) > maxContextChars { break }
+			if selected[ir.idx] {
+				continue
+			}
+			if totalChars+len(ir.line) > maxContextChars {
+				break
+			}
 			selected[ir.idx] = true
 			totalChars += len(ir.line)
 		}
@@ -2872,7 +3028,9 @@ func serverMain() {
 		var ctxLines []string
 		snipets := make([]RagSnipet, 0, len(selected))
 		for _, ir := range allIndexed {
-			if !selected[ir.idx] { continue }
+			if !selected[ir.idx] {
+				continue
+			}
 			ctxLines = append(ctxLines, ir.line)
 			snipets = append(snipets, RagSnipet{
 				Datetime: ir.r.Datetime,
@@ -2995,6 +3153,10 @@ func serverMain() {
 		defer svcMu.RUnlock()
 		c.Next()
 	})
+
+	var sftPort atomic.Value
+	sftPort.Store(prefs.Port)
+	registerSFTRoutes(r, api, prot, acquireSvc, getSvc, func() string { return sftPort.Load().(string) })
 
 	{
 		// 极速获取缓存后的统计信息
@@ -3330,10 +3492,18 @@ func serverMain() {
 			}
 			monthSamples := make(map[string][]sampledMsg)
 			for _, m := range msgs {
-				if m.Type != 1 || m.Content == "" { continue } // 只要文本
+				if m.Type != 1 || m.Content == "" {
+					continue
+				} // 只要文本
 				month := ""
-				if m.Date != "" { month = m.Date[:7] } else { continue }
-				if len(monthSamples[month]) >= 3 { continue }
+				if m.Date != "" {
+					month = m.Date[:7]
+				} else {
+					continue
+				}
+				if len(monthSamples[month]) >= 3 {
+					continue
+				}
 				content := m.Content
 				if len([]rune(content)) > 80 {
 					content = string([]rune(content)[:80]) + "…"
@@ -3354,8 +3524,12 @@ func serverMain() {
 			var monthly []monthSummary
 			if detail != nil {
 				months := make(map[string]bool)
-				for m := range detail.TheirMonthlyTrend { months[m] = true }
-				for m := range detail.MyMonthlyTrend { months[m] = true }
+				for m := range detail.TheirMonthlyTrend {
+					months[m] = true
+				}
+				for m := range detail.MyMonthlyTrend {
+					months[m] = true
+				}
 				for m := range months {
 					their := detail.TheirMonthlyTrend[m]
 					mine := detail.MyMonthlyTrend[m]
@@ -3369,8 +3543,12 @@ func serverMain() {
 
 			// 5. 计算额外特征
 			displayName := stats.Remark
-			if displayName == "" { displayName = stats.Nickname }
-			if displayName == "" { displayName = stats.Username }
+			if displayName == "" {
+				displayName = stats.Nickname
+			}
+			if displayName == "" {
+				displayName = stats.Username
+			}
 			daysKnown := 0
 			if stats.FirstMessage != "" && stats.FirstMessage != "-" {
 				if t, err := time.Parse("2006-01-02", stats.FirstMessage); err == nil {
@@ -3390,33 +3568,48 @@ func serverMain() {
 			tokenEstimate := len(monthly)*50 + 500 // 粗略估算
 
 			c.JSON(http.StatusOK, gin.H{
-				"display_name":    displayName,
-				"username":        uname,
-				"first_message":   stats.FirstMessage,
-				"last_message":    stats.LastMessage,
-				"first_msg":       stats.FirstMsg,
-				"days_known":      daysKnown,
-				"total_messages":  stats.TotalMessages,
-				"their_messages":  stats.TheirMessages,
-				"my_messages":     stats.MyMessages,
-				"their_chars":     stats.TheirChars,
-				"my_chars":        stats.MyChars,
-				"avg_msg_len":     stats.AvgMsgLen,
-				"peak_monthly":    stats.PeakMonthly,
-				"peak_period":     stats.PeakPeriod,
-				"recent_monthly":  stats.RecentMonthly,
-				"recall_count":    stats.RecallCount,
-				"money_count":     stats.MoneyCount,
-				"emoji_count":     stats.EmojiCnt,
-				"shared_groups":   stats.SharedGroupsCount,
-				"type_cnt":        stats.TypeCnt,
-				"initiation_pct":  initiationPct,
-				"late_night_pct":  lateNightPct,
-				"late_night_count": func() int64 { if detail != nil { return detail.LateNightCount }; return 0 }(),
-				"total_sessions":  func() int64 { if detail != nil { return detail.TotalSessions }; return 0 }(),
-				"hourly_dist":     func() [24]int { if detail != nil { return detail.HourlyDist }; return [24]int{} }(),
-				"monthly":         monthly,
-				"token_estimate":  tokenEstimate,
+				"display_name":   displayName,
+				"username":       uname,
+				"first_message":  stats.FirstMessage,
+				"last_message":   stats.LastMessage,
+				"first_msg":      stats.FirstMsg,
+				"days_known":     daysKnown,
+				"total_messages": stats.TotalMessages,
+				"their_messages": stats.TheirMessages,
+				"my_messages":    stats.MyMessages,
+				"their_chars":    stats.TheirChars,
+				"my_chars":       stats.MyChars,
+				"avg_msg_len":    stats.AvgMsgLen,
+				"peak_monthly":   stats.PeakMonthly,
+				"peak_period":    stats.PeakPeriod,
+				"recent_monthly": stats.RecentMonthly,
+				"recall_count":   stats.RecallCount,
+				"money_count":    stats.MoneyCount,
+				"emoji_count":    stats.EmojiCnt,
+				"shared_groups":  stats.SharedGroupsCount,
+				"type_cnt":       stats.TypeCnt,
+				"initiation_pct": initiationPct,
+				"late_night_pct": lateNightPct,
+				"late_night_count": func() int64 {
+					if detail != nil {
+						return detail.LateNightCount
+					}
+					return 0
+				}(),
+				"total_sessions": func() int64 {
+					if detail != nil {
+						return detail.TotalSessions
+					}
+					return 0
+				}(),
+				"hourly_dist": func() [24]int {
+					if detail != nil {
+						return detail.HourlyDist
+					}
+					return [24]int{}
+				}(),
+				"monthly":        monthly,
+				"token_estimate": tokenEstimate,
 			})
 		})
 
@@ -3624,18 +3817,22 @@ func serverMain() {
 			// 清理 markdown fence
 			raw = strings.TrimSpace(raw)
 			if strings.HasPrefix(raw, "```") {
-				if idx := strings.Index(raw, "\n"); idx >= 0 { raw = raw[idx+1:] }
-				if idx := strings.LastIndex(raw, "```"); idx >= 0 { raw = raw[:idx] }
+				if idx := strings.Index(raw, "\n"); idx >= 0 {
+					raw = raw[idx+1:]
+				}
+				if idx := strings.LastIndex(raw, "```"); idx >= 0 {
+					raw = raw[:idx]
+				}
 				raw = strings.TrimSpace(raw)
 			}
 
 			var parsed struct {
-				Mode         string `json:"mode"`
-				DB           string `json:"db"`
-				SQL          string `json:"sql"`
-				ContactHint  string `json:"contact_hint"`
-				MessageSQL   string `json:"message_sql"`
-				Explain      string `json:"explain"`
+				Mode        string `json:"mode"`
+				DB          string `json:"db"`
+				SQL         string `json:"sql"`
+				ContactHint string `json:"contact_hint"`
+				MessageSQL  string `json:"message_sql"`
+				Explain     string `json:"explain"`
 			}
 			if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
 				c.JSON(http.StatusOK, gin.H{"generated_sql": raw, "error": "LLM 返回格式异常"})
@@ -3666,15 +3863,21 @@ func serverMain() {
 					return
 				}
 				username := ""
-				if s, ok := contactResult.Rows[0][0].(string); ok { username = s }
+				if s, ok := contactResult.Rows[0][0].(string); ok {
+					username = s
+				}
 				if username == "" {
 					c.JSON(http.StatusOK, gin.H{"error": "联系人 username 为空"})
 					return
 				}
 				contactName := ""
-				if s, ok := contactResult.Rows[0][1].(string); ok && s != "" { contactName = s }
+				if s, ok := contactResult.Rows[0][1].(string); ok && s != "" {
+					contactName = s
+				}
 				if contactName == "" {
-					if s, ok := contactResult.Rows[0][2].(string); ok { contactName = s }
+					if s, ok := contactResult.Rows[0][2].(string); ok {
+						contactName = s
+					}
 				}
 
 				// Step 2: 计算表名 + 找到 DB + 执行
@@ -3696,9 +3899,13 @@ func serverMain() {
 					dbRows, _ := mdb.Query("PRAGMA database_list")
 					if dbRows != nil {
 						for dbRows.Next() {
-							var seq int; var name, file string
+							var seq int
+							var name, file string
 							dbRows.Scan(&seq, &name, &file)
-							if seq == 0 { usedDB = filepath.Base(file); break }
+							if seq == 0 {
+								usedDB = filepath.Base(file)
+								break
+							}
 						}
 						dbRows.Close()
 					}
@@ -4167,9 +4374,9 @@ func serverMain() {
 		needsDataDir := merged.DataDir == "" && len(merged.DataDirProfiles) == 0
 		log.Printf("[IMPORT] backup=%s needs_data_dir=%v", bak, needsDataDir)
 		c.JSON(http.StatusOK, gin.H{
-			"status":          "ok",
-			"backup":          bak,
-			"needs_data_dir":  needsDataDir, // 前端可据此提示用户重新选数据目录
+			"status":         "ok",
+			"backup":         bak,
+			"needs_data_dir": needsDataDir, // 前端可据此提示用户重新选数据目录
 		})
 	})
 
@@ -4178,6 +4385,9 @@ func serverMain() {
 
 	// 记忆库相关端点（/api/memory/*）
 	registerMemoryRoutes(api)
+
+	// 本地 ms-swift 环境检测与训练任务管理（仅本机界面可访问）
+	registerSFTTrainingRoutes(api)
 
 	// 播客相关端点（/api/podcast/*）
 	registerPodcastRoutes(prot, getSvc)
@@ -4371,6 +4581,7 @@ func serverMain() {
 	if err != nil {
 		log.Fatalf("WeLink 后端无法监听端口：%v", err)
 	}
+	sftPort.Store(actualPort)
 	log.Printf("WeLink Backend serving on %s:%s", host, actualPort)
 
 	if hasFrontend {

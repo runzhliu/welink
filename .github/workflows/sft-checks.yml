@@ -1,0 +1,46 @@
+name: SFT workbench checks
+on:
+  pull_request:
+    paths: ['backend/**', 'frontend/**', 'workers/sft/**', 'scripts/check_sft_release.py', '.github/workflows/release.yml', '.github/workflows/sft-checks.yml']
+  push:
+    branches: [main]
+    paths: ['backend/**', 'frontend/**', 'workers/sft/**', 'scripts/check_sft_release.py', '.github/workflows/release.yml', '.github/workflows/sft-checks.yml']
+permissions:
+  contents: read
+concurrency:
+  group: sft-checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: go test -race ./...
+        working-directory: backend
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run test:ui && npm run build
+        working-directory: frontend
+  worker-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: PYTHONPATH=workers/sft python -m unittest discover -s workers/sft/tests -v
+      - run: python -m compileall -q workers/sft/welink_worker
+      - run: echo 'CPU contract tests do not replace the Mac and CUDA hardware release gate in docs/sft-release-checklist.md.' >> "$GITHUB_STEP_SUMMARY"

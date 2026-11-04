@@ -98,6 +98,16 @@ func InitAIDB() error {
 		aiDB = nil
 		return fmt.Errorf("ai_store: %w", err)
 	}
+	if err := initSFTTrainingTables(); err != nil {
+		db.Close()
+		aiDB = nil
+		return fmt.Errorf("ai_store: %w", err)
+	}
+	if err := initSFTDeploymentTables(); err != nil {
+		db.Close()
+		aiDB = nil
+		return fmt.Errorf("ai_store: %w", err)
+	}
 	if err := initPodcastTables(); err != nil {
 		db.Close()
 		aiDB = nil
@@ -374,12 +384,12 @@ type AIUsageStats struct {
 
 // AIUsageProviderStat 单个 provider 的小计
 type AIUsageProviderStat struct {
-	Provider    string  `json:"provider"`
-	Model       string  `json:"model,omitempty"`
-	Count       int     `json:"count"`
-	Chars       int64   `json:"chars"`
-	Tokens      int64   `json:"tokens"`
-	ElapsedSec  float64 `json:"elapsed_sec"`
+	Provider   string  `json:"provider"`
+	Model      string  `json:"model,omitempty"`
+	Count      int     `json:"count"`
+	Chars      int64   `json:"chars"`
+	Tokens     int64   `json:"tokens"`
+	ElapsedSec float64 `json:"elapsed_sec"`
 }
 
 // GetAIUsageStats 扫描所有 ai_conversations 汇总用量。数据量小（每联系人至多 1 条），

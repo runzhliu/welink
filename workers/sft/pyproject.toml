@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "welink-sft-worker"
+version = "1.0.0"
+description = "WeLink 4.0 scoped MLX and CUDA training worker"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+welink-sft = "welink_worker.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["welink_worker*"]

@@ -91,6 +91,7 @@ type ImageProfile struct {
 
 // LLMProfile 单个 LLM 配置项，支持多 provider 并行配置与一键切换。
 type LLMProfile struct {
+	SFTDeploymentID string `json:"sft_deployment_id,omitempty"`
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Provider string `json:"provider"`
@@ -98,9 +99,9 @@ type LLMProfile struct {
 	BaseURL  string `json:"base_url,omitempty"`
 	Model    string `json:"model,omitempty"`
 	NoThink  bool   `json:"no_think,omitempty"` // Ollama 思考型模型（Qwen3+）专用：开启后在消息前加 /no_think 跳过推理
-	// 深度思考档位：off（默认）/ low / medium / high。
-	//   - Claude (Sonnet 4+ / Opus 4+)  → 映射为 thinking.budget_tokens（2K/8K/16K）
-	//   - OpenAI o-series / gpt-5-reasoning → reasoning_effort 字段
+	// 深度思考档位：空/off（模型默认）/ low / medium / high / xhigh / max。
+	//   - 新版 Claude → adaptive + output_config.effort；旧模型 → thinking.budget_tokens
+	//   - OpenAI / MiniMax M3.1 Flash → reasoning_effort 字段
 	//   - DeepSeek R1 / Ollama qwen3 等     → 模型自带 <think>，本字段不影响
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 }

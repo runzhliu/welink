@@ -206,6 +206,7 @@ type ContactService struct {
 	cache         []ContactStatsExtended
 	global        GlobalStats
 	cacheMu       sync.RWMutex
+	sftIdentity   string // immutable once the source account has been confirmed
 	isIndexing    bool
 	isInitialized bool // 标记初始化是否完成
 	// 进度快照（由 performAnalysis 更新，/api/status 读取）
@@ -473,6 +474,7 @@ func (s *ContactService) reinitialize(newParams *AnalysisParams, from, to int64)
 	s.filterFrom = from
 	s.filterTo = to
 	s.isInitialized = false
+	s.sftIdentity = ""
 	s.isIndexing = true
 	s.progressTotal = 0
 	s.progressDone = 0
@@ -940,6 +942,7 @@ func (s *ContactService) performAnalysisCtx(ctx context.Context) {
 
 	s.cacheMu.Lock()
 	s.cache = result
+	s.sftIdentity = ""
 
 	// 计算总消息量
 	var totalMessages int64 = 0
@@ -3335,7 +3338,7 @@ func (s *ContactService) GetSelfInfo() *SelfInfo {
 	s.cacheMu.RLock()
 	var sampleUsername string
 	for _, c := range s.cache {
-		if c.TotalMessages >= 10 && !strings.Contains(c.Username, "@chatroom") {
+		if c.MyMessages > 0 && !strings.Contains(c.Username, "@chatroom") {
 			sampleUsername = c.Username
 			break
 		}

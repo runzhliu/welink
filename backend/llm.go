@@ -25,20 +25,20 @@ type LLMMessage struct {
 
 // StreamChunk 是 SSE 推给前端的单次增量
 type StreamChunk struct {
-	Delta   string   `json:"delta,omitempty"`
-	Thinking string  `json:"thinking,omitempty"` // 思考型模型的推理过程增量（Ollama reasoning 字段）
-	Done    bool     `json:"done,omitempty"`
-	Error   string   `json:"error,omitempty"`
-	RagMeta *RagMeta `json:"rag_meta,omitempty"`
+	Delta    string   `json:"delta,omitempty"`
+	Thinking string   `json:"thinking,omitempty"` // 思考型模型的推理过程增量（Ollama reasoning 字段）
+	Done     bool     `json:"done,omitempty"`
+	Error    string   `json:"error,omitempty"`
+	RagMeta  *RagMeta `json:"rag_meta,omitempty"`
 }
 
 // RagMeta 携带 RAG 检索统计信息及命中消息（在 LLM 流式响应前发送）。
 type RagMeta struct {
-	Hits      int         `json:"hits"`               // FTS 直接命中数
-	Retrieved int         `json:"retrieved"`          // 含窗口扩展后的消息数
-	Total     int         `json:"total,omitempty"`    // 检索到的总数（截断前）
+	Hits      int         `json:"hits"`                // FTS 直接命中数
+	Retrieved int         `json:"retrieved"`           // 含窗口扩展后的消息数
+	Total     int         `json:"total,omitempty"`     // 检索到的总数（截断前）
 	Truncated bool        `json:"truncated,omitempty"` // 是否因 token 预算截断
-	Messages  []RagSnipet `json:"messages,omitempty"` // 命中消息片段
+	Messages  []RagSnipet `json:"messages,omitempty"`  // 命中消息片段
 }
 
 // RagSnipet 是返回给前端展示的单条检索结果。
@@ -62,8 +62,9 @@ type llmConfig struct {
 	apiKey          string
 	baseURL         string
 	model           string
+	trustedLocal    bool   // 仅限 WeLink 自己固定在 loopback 启动的受管服务
 	noThink         bool   // Ollama 思考型模型专用，开启后请求前加 /no_think 前缀
-	reasoningEffort string // off / low / medium / high；空字符串 = off
+	reasoningEffort string // 空字符串/off = 模型默认；low / medium / high / xhigh / max
 }
 
 // reasoningBudgetTokens 把档位映射到 Claude thinking.budget_tokens
@@ -80,7 +81,8 @@ func reasoningBudgetTokens(effort string) int {
 	}
 }
 
-// defaultsFor 为已知 provider 填充默认 baseURL 和 model（若用户未配置）
+// defaultsFor 为已知 provider 填充默认 baseURL 和 model（若用户未配置）。
+// 默认型号核对日期：2026-10-20；来源及平台差异见 docs/ai-analysis.md。
 func defaultsFor(p *llmConfig) {
 	switch p.provider {
 	case "deepseek":
@@ -96,57 +98,57 @@ func defaultsFor(p *llmConfig) {
 			p.baseURL = "https://ark.cn-beijing.volces.com/api/v3"
 		}
 		if p.model == "" {
-			p.model = "doubao-seed-2-0-pro-260215"
+			p.model = "doubao-seed-2-1-pro-260915"
 		}
 	case "kimi":
 		if p.baseURL == "" {
 			p.baseURL = "https://api.moonshot.cn/v1"
 		}
 		if p.model == "" {
-			p.model = "kimi-k2.6"
+			p.model = "kimi-k3"
 		}
 	case "gemini":
 		if p.baseURL == "" {
 			p.baseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
 		}
 		if p.model == "" {
-			// gemini-2.0-flash 已于 2026-06-01 关停（NOT_FOUND）；用稳定 GA 的 3.5-flash
-			p.model = "gemini-3.5-flash"
+			// 使用当前稳定版 Flash，保留低延迟定位
+			p.model = "gemini-3.8-flash"
 		}
 	case "glm":
 		if p.baseURL == "" {
 			p.baseURL = "https://open.bigmodel.cn/api/paas/v4"
 		}
 		if p.model == "" {
-			p.model = "glm-5.1"
+			p.model = "glm-5.3"
 		}
 	case "grok":
 		if p.baseURL == "" {
 			p.baseURL = "https://api.x.ai/v1"
 		}
 		if p.model == "" {
-			p.model = "grok-4.3"
+			p.model = "grok-4.7"
 		}
 	case "minimax":
 		if p.baseURL == "" {
 			p.baseURL = "https://api.minimax.io/v1"
 		}
 		if p.model == "" {
-			p.model = "MiniMax-M3"
+			p.model = "MiniMax-M3.1-Flash"
 		}
 	case "minimax-cn":
 		if p.baseURL == "" {
 			p.baseURL = "https://api.minimaxi.com/v1"
 		}
 		if p.model == "" {
-			p.model = "MiniMax-M3"
+			p.model = "MiniMax-M3.1-Flash"
 		}
 	case "openai":
 		if p.baseURL == "" {
 			p.baseURL = "https://api.openai.com/v1"
 		}
 		if p.model == "" {
-			p.model = "gpt-5.5"
+			p.model = "gpt-6-astra"
 		}
 	case "ollama":
 		if p.baseURL == "" {
@@ -157,23 +159,34 @@ func defaultsFor(p *llmConfig) {
 			p.model = "llama3.3"
 		}
 	case "claude":
-		// Claude 使用原生 API，不需要 baseURL
+		if p.baseURL == "" {
+			p.baseURL = "https://api.anthropic.com"
+		}
+		// Claude 使用原生 Messages API
 		if p.model == "" {
-			// 旗舰 Opus 4.8；4.6 代起 id 改为无日期后缀格式，本身即 pinned 快照
-			p.model = "claude-opus-4-8"
+			// 当前通用旗舰，思考参数使用 adaptive + output_config.effort
+			p.model = "claude-opus-5-5"
 		}
 	case "bedrock":
 		if p.baseURL == "" {
-			p.baseURL = "https://bedrock-runtime.us-east-1.amazonaws.com"
+			p.baseURL = "https://bedrock-mantle.us-east-1.api.aws/anthropic"
+			// 显式指定旧 Runtime 模型时保留原端点。
+			if p.model != "" && !usesBedrockMantleModel(p.model) {
+				p.baseURL = "https://bedrock-runtime.us-east-1.amazonaws.com"
+			}
 		}
 		if p.model == "" {
-			p.model = "us.anthropic.claude-opus-4-8"
+			p.model = "anthropic.claude-opus-5-5"
+			if !isBedrockMantle(p.baseURL) {
+				// Runtime 的 Model ID / inference profile 依区域而定，需用户指定。
+				p.model = ""
+			}
 		}
 	case "vertex":
 		// BaseURL 由用户填写完整端点，model 给个默认
 		if p.model == "" {
-			// gemini-2.0-flash-001 已于 2026-06-01 关停；用稳定 GA 的 3.5-flash
-			p.model = "google/gemini-3.5-flash"
+			// Vertex 使用带 google/ 前缀的 OpenAI 兼容模型名
+			p.model = "google/gemini-3.8-flash"
 		}
 	case "qwen":
 		// 阿里通义千问 / DashScope 兼容模式
@@ -181,7 +194,7 @@ func defaultsFor(p *llmConfig) {
 			p.baseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 		}
 		if p.model == "" {
-			p.model = "qwen3.7-max"
+			p.model = "qwen3.8-max"
 		}
 	case "hunyuan":
 		// 腾讯混元，OpenAI 兼容
@@ -204,7 +217,7 @@ func defaultsFor(p *llmConfig) {
 			p.baseURL = "https://openrouter.ai/api/v1"
 		}
 		if p.model == "" {
-			p.model = "openai/gpt-5.5"
+			p.model = "openai/gpt-6-astra"
 		}
 	case "mistral":
 		if p.baseURL == "" {
@@ -226,7 +239,7 @@ func defaultsFor(p *llmConfig) {
 			p.baseURL = "https://api.together.xyz/v1"
 		}
 		if p.model == "" {
-			p.model = "deepseek-ai/DeepSeek-R1"
+			p.model = "deepseek-ai/DeepSeek-V4-Pro-0813"
 		}
 	case "fireworks":
 		if p.baseURL == "" {
@@ -277,9 +290,7 @@ func defaultsFor(p *llmConfig) {
 	case "azure":
 		// Azure OpenAI：用户必须填写完整 BaseURL（含 deployment 路径）
 		// 例：https://{resource}.openai.azure.com/openai/deployments/{deployment}
-		if p.model == "" {
-			p.model = "gpt-5.5"
-		}
+		// model 必须填写用户在 Azure 创建的部署名称。
 	}
 }
 
@@ -293,11 +304,20 @@ func llmConfigForProfile(profileID string, prefs Preferences) llmConfig {
 		for _, p := range prefs.LLMProfiles {
 			if p.ID == profileID {
 				cfg = llmConfig{provider: p.Provider, apiKey: p.APIKey, baseURL: p.BaseURL, model: p.Model, noThink: p.NoThink, reasoningEffort: p.ReasoningEffort}
+				if p.SFTDeploymentID != "" {
+					cfg.baseURL = sftInferenceURL(p.SFTDeploymentID, cfg.baseURL)
+				}
 				goto applyGemini
 			}
 		}
 	}
 	cfg = llmConfig{provider: prefs.LLMProvider, apiKey: prefs.LLMAPIKey, baseURL: prefs.LLMBaseURL, model: prefs.LLMModel}
+	if len(prefs.LLMProfiles) > 0 {
+		p := prefs.LLMProfiles[0]
+		if p.SFTDeploymentID != "" && p.Model == cfg.model {
+			cfg.baseURL = sftInferenceURL(p.SFTDeploymentID, cfg.baseURL)
+		}
+	}
 applyGemini:
 	if cfg.provider == "gemini" && cfg.apiKey == "" && prefs.GeminiAccessToken != "" {
 		if token, err := geminiValidToken(&prefs); err == nil {
@@ -372,27 +392,30 @@ func streamLLMCoreWithProfile(sendChunk func(StreamChunk), msgs []LLMMessage, pr
 	sendChunk(StreamChunk{Done: true})
 }
 
+// streamLLMCoreWithConfig streams through an already validated configuration.
+// It is used by managed local SFT deployments, which are not persisted as
+// user-editable LLM profiles and therefore cannot be resolved by profile ID.
+func streamLLMCoreWithConfig(sendChunk func(StreamChunk), msgs []LLMMessage, cfg llmConfig) {
+	err := dispatchLLMStream(sendChunk, msgs, cfg)
+	if err != nil {
+		sendChunk(StreamChunk{Error: err.Error()})
+	}
+	sendChunk(StreamChunk{Done: true})
+}
+
 // testLLMConnProfile 测试指定 profile 的连接可用性，返回实际使用的模型名。
 func testLLMConnProfile(profileID string, prefs Preferences) (string, error) {
 	cfg := llmConfigForProfile(profileID, prefs)
-	if cfg.baseURL == "" || cfg.model == "" {
-		return "", fmt.Errorf("未配置 Base URL 或模型")
-	}
-	// 复用 testLLMConn 逻辑：构造临时 Preferences 只填 LLM 字段
-	tmp := Preferences{
-		LLMProvider: cfg.provider,
-		LLMAPIKey:   cfg.apiKey,
-		LLMBaseURL:  cfg.baseURL,
-		LLMModel:    cfg.model,
-	}
-	return testLLMConn(tmp)
+	return testLLMConfig(cfg)
 }
 
 // dispatchLLMStream 统一流式分发
 func dispatchLLMStream(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) error {
 	// Demo 模式下拒绝指向内网的 baseURL，防 SSRF（M2/L4）；本地部署不限制（Ollama 等走 localhost）
-	if err := guardOutboundURL(cfg.baseURL); err != nil {
-		return err
+	if !cfg.trustedLocal {
+		if err := guardOutboundURL(cfg.baseURL); err != nil {
+			return err
+		}
 	}
 	t := startTimer("llm_stream")
 	var err error
@@ -431,9 +454,26 @@ type openAIRequest struct {
 	Model           string       `json:"model"`
 	Messages        []LLMMessage `json:"messages"`
 	Stream          bool         `json:"stream"`
-	Think           *bool        `json:"think,omitempty"`            // Ollama 专用：false = 禁用思考模式
-	Stop            []string     `json:"stop,omitempty"`             // 停止词，防止模型输出特殊 token
-	ReasoningEffort string       `json:"reasoning_effort,omitempty"` // OpenAI o-series / gpt-5-reasoning：low / medium / high
+	Think           *bool        `json:"think,omitempty"` // Ollama 专用：false = 禁用思考模式
+	Stop            []string     `json:"stop,omitempty"`  // 停止词，防止模型输出特殊 token
+	ReasoningEffort string       `json:"reasoning_effort,omitempty"`
+}
+
+// 流式、非流式和连接测试使用相同参数，防止保存后的设置仅在部分调用中生效。
+func newOpenAIRequest(msgs []LLMMessage, cfg llmConfig, stream bool) openAIRequest {
+	reqBody := openAIRequest{Model: cfg.model, Messages: msgs, Stream: stream}
+	if cfg.noThink && cfg.provider == "ollama" {
+		f := false
+		reqBody.Think = &f
+	}
+	if cfg.provider == "ollama" {
+		reqBody.Stop = []string{"<|endoftext|>", "<|im_end|>", "<|im_start|>"}
+	}
+	if cfg.reasoningEffort != "" && cfg.reasoningEffort != "off" &&
+		(cfg.provider == "openai" || ((cfg.provider == "minimax" || cfg.provider == "minimax-cn") && cfg.model == "MiniMax-M3.1-Flash")) {
+		reqBody.ReasoningEffort = cfg.reasoningEffort
+	}
+	return reqBody
 }
 
 func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) error {
@@ -446,20 +486,7 @@ func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig
 	if cfg.model == "" {
 		return fmt.Errorf("未配置模型")
 	}
-
-	reqBody := openAIRequest{Model: cfg.model, Messages: msgs, Stream: true}
-	if cfg.noThink {
-		f := false
-		reqBody.Think = &f
-	}
-	if cfg.provider == "ollama" {
-		reqBody.Stop = []string{"<|endoftext|>", "<|im_end|>", "<|im_start|>"}
-	}
-	// OpenAI o-series / gpt-5-reasoning 等支持 reasoning_effort 的模型
-	if cfg.reasoningEffort != "" && cfg.reasoningEffort != "off" && cfg.provider == "openai" {
-		reqBody.ReasoningEffort = cfg.reasoningEffort
-	}
-	body, _ := json.Marshal(reqBody)
+	body, _ := json.Marshal(newOpenAIRequest(msgs, cfg, true))
 
 	req, err := http.NewRequest("POST", cfg.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
@@ -497,8 +524,9 @@ func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig
 		var chunk struct {
 			Choices []struct {
 				Delta struct {
-					Content   string `json:"content"`
-					Reasoning string `json:"reasoning"` // Ollama 思考型模型的推理增量
+					Content          string `json:"content"`
+					Reasoning        string `json:"reasoning"`         // Ollama 思考型模型的推理增量
+					ReasoningContent string `json:"reasoning_content"` // DeepSeek / Kimi / MiniMax
 				} `json:"delta"`
 			} `json:"choices"`
 		}
@@ -515,6 +543,9 @@ func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig
 			// Ollama 专用 reasoning 字段
 			if d.Reasoning != "" {
 				send(StreamChunk{Thinking: d.Reasoning})
+			}
+			if d.ReasoningContent != "" {
+				send(StreamChunk{Thinking: d.ReasoningContent})
 			}
 			if d.Content != "" {
 				// 解析 <think>...</think> 标签（流式逐 chunk 拼接）
@@ -573,28 +604,35 @@ func streamOpenAICompat(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig
 // ─── Claude 原生 API 流式实现 ─────────────────────────────────────────────────
 
 type claudeRequest struct {
-	Model     string           `json:"model"`
-	MaxTokens int              `json:"max_tokens"`
-	System    string           `json:"system,omitempty"`
-	Messages  []LLMMessage     `json:"messages"`
-	Stream    bool             `json:"stream"`
-	Thinking  *claudeThinking  `json:"thinking,omitempty"` // Extended Thinking（Sonnet 4+ / Opus 4+）
+	Model        string              `json:"model"`
+	MaxTokens    int                 `json:"max_tokens"`
+	System       string              `json:"system,omitempty"`
+	Messages     []LLMMessage        `json:"messages"`
+	Stream       bool                `json:"stream"`
+	Thinking     *claudeThinking     `json:"thinking,omitempty"`
+	OutputConfig *claudeOutputConfig `json:"output_config,omitempty"`
 }
 
 type claudeThinking struct {
-	Type         string `json:"type"`           // "enabled"
-	BudgetTokens int    `json:"budget_tokens"`  // 1024-64000
+	Type         string `json:"type"` // adaptive 或旧模型的 enabled
+	BudgetTokens int    `json:"budget_tokens,omitempty"`
+	Display      string `json:"display,omitempty"`
 }
 
-func streamClaude(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) error {
-	if cfg.apiKey == "" {
-		return fmt.Errorf("未配置 API Key")
-	}
-	if cfg.model == "" {
-		return fmt.Errorf("未配置模型")
-	}
+type claudeOutputConfig struct {
+	Effort string `json:"effort"`
+}
 
-	// 分离 system 消息
+func usesClaudeAdaptiveThinking(model string) bool {
+	for _, name := range []string{"claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-sonnet-4-6", "claude-opus-5", "claude-sonnet-5", "claude-haiku-5", "claude-fable-5", "claude-mythos"} {
+		if strings.Contains(model, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func newClaudeRequest(msgs []LLMMessage, cfg llmConfig, stream bool, maxTokens int) claudeRequest {
 	var system string
 	var userMsgs []LLMMessage
 	for _, m := range msgs {
@@ -607,29 +645,59 @@ func streamClaude(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) erro
 
 	reqObj := claudeRequest{
 		Model:     cfg.model,
-		MaxTokens: 8192,
+		MaxTokens: maxTokens,
 		System:    system,
 		Messages:  userMsgs,
-		Stream:    true,
+		Stream:    stream,
 	}
-	if budget := reasoningBudgetTokens(cfg.reasoningEffort); budget > 0 {
+	// 新模型的输出额度也包含思考，给同步摘要留出足够空间。
+	if usesClaudeAdaptiveThinking(cfg.model) && reqObj.MaxTokens < 8192 {
+		reqObj.MaxTokens = 8192
+	}
+	if cfg.reasoningEffort != "" && cfg.reasoningEffort != "off" && usesClaudeAdaptiveThinking(cfg.model) {
+		reqObj.Thinking = &claudeThinking{Type: "adaptive", Display: "summarized"}
+		reqObj.OutputConfig = &claudeOutputConfig{Effort: cfg.reasoningEffort}
+	} else if budget := reasoningBudgetTokens(cfg.reasoningEffort); budget > 0 {
 		reqObj.Thinking = &claudeThinking{Type: "enabled", BudgetTokens: budget}
 		// Extended Thinking 要求 max_tokens > budget_tokens
-		reqObj.MaxTokens = budget + 8192
+		reqObj.MaxTokens = budget + maxTokens
 	}
-	body, _ := json.Marshal(reqObj)
+	return reqObj
+}
 
+func newClaudeHTTPRequest(msgs []LLMMessage, cfg llmConfig, stream bool, maxTokens int) (*http.Request, error) {
+	body, _ := json.Marshal(newClaudeRequest(msgs, cfg, stream, maxTokens))
 	baseURL := "https://api.anthropic.com"
 	if cfg.baseURL != "" {
 		baseURL = cfg.baseURL
 	}
-	req, err := http.NewRequest("POST", baseURL+"/v1/messages", bytes.NewReader(body))
+	req, err := http.NewRequest("POST", strings.TrimRight(baseURL, "/")+"/v1/messages", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("anthropic-version", "2023-06-01")
+	if cfg.provider == "bedrock" {
+		if err := signBedrockMantleRequest(req, body, cfg.apiKey); err != nil {
+			return nil, err
+		}
+	} else {
+		req.Header.Set("x-api-key", cfg.apiKey)
+	}
+	return req, nil
+}
+
+func streamClaude(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) error {
+	if cfg.apiKey == "" {
+		return fmt.Errorf("未配置 API Key")
+	}
+	if cfg.model == "" {
+		return fmt.Errorf("未配置模型")
+	}
+	req, err := newClaudeHTTPRequest(msgs, cfg, true, 8192)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", cfg.apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
 
 	resp, err := httpClientLLMStream.Do(req)
 	if err != nil {
@@ -653,9 +721,9 @@ func streamClaude(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) erro
 		var event struct {
 			Type  string `json:"type"`
 			Delta struct {
-				Type     string `json:"type"`      // "text_delta" / "thinking_delta"
-				Text     string `json:"text"`      // text_delta
-				Thinking string `json:"thinking"`  // thinking_delta
+				Type     string `json:"type"`     // "text_delta" / "thinking_delta"
+				Text     string `json:"text"`     // text_delta
+				Thinking string `json:"thinking"` // thinking_delta
 			} `json:"delta"`
 		}
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
@@ -744,18 +812,7 @@ func completeOpenAICompatSync(msgs []LLMMessage, cfg llmConfig) (string, error) 
 		return "", fmt.Errorf("未配置模型")
 	}
 
-	reqBody := openAIRequest{Model: cfg.model, Messages: msgs, Stream: false}
-	if cfg.noThink {
-		f := false
-		reqBody.Think = &f
-	}
-	if cfg.provider == "ollama" {
-		reqBody.Stop = []string{"<|endoftext|>", "<|im_end|>", "<|im_start|>"}
-	}
-	if cfg.reasoningEffort != "" && cfg.reasoningEffort != "off" && cfg.provider == "openai" {
-		reqBody.ReasoningEffort = cfg.reasoningEffort
-	}
-	body, _ := json.Marshal(reqBody)
+	body, _ := json.Marshal(newOpenAIRequest(msgs, cfg, false))
 	req, err := http.NewRequest("POST", cfg.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", err
@@ -798,36 +855,10 @@ func completeClaudeSync(msgs []LLMMessage, cfg llmConfig) (string, error) {
 		return "", fmt.Errorf("未配置模型")
 	}
 
-	var system string
-	var userMsgs []LLMMessage
-	for _, m := range msgs {
-		if m.Role == "system" {
-			system = m.Content
-		} else {
-			userMsgs = append(userMsgs, m)
-		}
-	}
-
-	reqObj := claudeRequest{
-		Model: cfg.model, MaxTokens: 2048,
-		System: system, Messages: userMsgs, Stream: false,
-	}
-	if budget := reasoningBudgetTokens(cfg.reasoningEffort); budget > 0 {
-		reqObj.Thinking = &claudeThinking{Type: "enabled", BudgetTokens: budget}
-		reqObj.MaxTokens = budget + 2048
-	}
-	body, _ := json.Marshal(reqObj)
-	baseURL := "https://api.anthropic.com"
-	if cfg.baseURL != "" {
-		baseURL = cfg.baseURL
-	}
-	req, err := http.NewRequest("POST", baseURL+"/v1/messages", bytes.NewReader(body))
+	req, err := newClaudeHTTPRequest(msgs, cfg, false, 2048)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", cfg.apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
 
 	resp, err := httpClientLLMSync.Do(req)
 	if err != nil {
@@ -875,6 +906,13 @@ func testLLMConn(prefs Preferences) (string, error) {
 	}
 	defaultsFor(&cfg)
 
+	return testLLMConfig(cfg)
+}
+
+func testLLMConfig(cfg llmConfig) (string, error) {
+	if err := guardOutboundURL(cfg.baseURL); err != nil {
+		return cfg.model, err
+	}
 	if cfg.baseURL == "" || cfg.model == "" {
 		return "", fmt.Errorf("未配置 Base URL 或模型")
 	}
@@ -883,7 +921,7 @@ func testLLMConn(prefs Preferences) (string, error) {
 	}
 
 	// Bedrock / Vertex 走专用测试路径
-	if cfg.provider == "bedrock" {
+	if cfg.provider == "bedrock" && !isBedrockMantle(cfg.baseURL) {
 		result, err := completBedrockSync([]LLMMessage{{Role: "user", Content: "Hi"}}, cfg)
 		if err != nil {
 			return cfg.model, err
@@ -897,13 +935,21 @@ func testLLMConn(prefs Preferences) (string, error) {
 		return testVertexConn(cfg)
 	}
 
-	body, _ := json.Marshal(openAIRequest{Model: cfg.model, Messages: []LLMMessage{{Role: "user", Content: "Hi"}}, Stream: true})
-	req, err := http.NewRequest("POST", cfg.baseURL+"/chat/completions", bytes.NewReader(body))
+	var req *http.Request
+	var err error
+	if cfg.provider == "claude" || (cfg.provider == "bedrock" && isBedrockMantle(cfg.baseURL)) {
+		req, err = newClaudeHTTPRequest([]LLMMessage{{Role: "user", Content: "Hi"}}, cfg, true, 2048)
+	} else {
+		body, _ := json.Marshal(newOpenAIRequest([]LLMMessage{{Role: "user", Content: "Hi"}}, cfg, true))
+		req, err = http.NewRequest("POST", strings.TrimRight(cfg.baseURL, "/")+"/chat/completions", bytes.NewReader(body))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+cfg.apiKey)
+		}
+	}
 	if err != nil {
 		return cfg.model, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+cfg.apiKey)
 
 	resp, err := httpClientFast.Do(req)
 	if err != nil {
@@ -928,6 +974,10 @@ func testLLMConn(prefs Preferences) (string, error) {
 			break
 		}
 		var event struct {
+			Type  string `json:"type"`
+			Error *struct {
+				Message string `json:"message"`
+			} `json:"error"`
 			Choices []struct {
 				Delta struct {
 					Content string `json:"content"`
@@ -937,12 +987,18 @@ func testLLMConn(prefs Preferences) (string, error) {
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
 			continue
 		}
-		if len(event.Choices) > 0 {
+		if event.Error != nil {
+			return cfg.model, fmt.Errorf("模型响应错误：%s", event.Error.Message)
+		}
+		if event.Type == "message_start" || len(event.Choices) > 0 {
 			// 收到第一个 chunk（不管内容是否为空），即表示模型在响应，连接正常
 			return cfg.model, nil
 		}
 	}
-	return cfg.model, nil
+	if err := scanner.Err(); err != nil {
+		return cfg.model, fmt.Errorf("读取响应失败：%w", err)
+	}
+	return cfg.model, fmt.Errorf("响应为空，未收到有效的模型数据")
 }
 
 // ─── 辅助 ──────────────────────────────────────────────────────────────────────

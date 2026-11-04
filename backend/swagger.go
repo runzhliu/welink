@@ -1642,7 +1642,7 @@ func swaggerUI() []byte {
   <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css"/>
   <style>
     body { margin: 0; background: #f8f9fb; }
-    .swagger-ui .topbar { background: #07c160; }
+    .swagger-ui .topbar { background: #087f5b; }
     .swagger-ui .topbar .download-url-wrapper { display: none; }
   </style>
 </head>
@@ -1653,7 +1653,7 @@ func swaggerUI() []byte {
     SwaggerUIBundle({
       url: '/api/swagger.json',
       dom_id: '#swagger-ui',
-      presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+      presets: [SwaggerUIBundle.presets.apis],
       layout: 'BaseLayout',
       deepLinking: true,
       defaultModelsExpandDepth: 1,

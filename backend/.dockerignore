@@ -7,3 +7,16 @@ static/
 *.syso
 versioninfo_build.json
 .DS_Store
+
+# SFT and runtime private data
+preferences.json
+prefs.json
+sft-data/
+contact/
+message/
+decrypted/
+data/
+ai_analysis.db*
+*.log
+.env*
+.venv/

@@ -8,7 +8,7 @@ services:
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: welink-backend
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8088:8080"
     volumes:
       # ⚠ 启动前请确认宿主机仓库根目录下 decrypted/ 存在，且包含
       #   contact/contact.db 和 message/message_*.db。

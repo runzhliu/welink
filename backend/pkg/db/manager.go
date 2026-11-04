@@ -86,6 +86,9 @@ type DBManager struct {
 	extraMu  sync.RWMutex
 }
 
+// DataRoot is immutable for this manager's lifetime.
+func (mgr *DBManager) DataRoot() string { return mgr.dataDir }
+
 // RegisterExtraDB 注册一个额外的数据库（如 ai_analysis.db）到管理器，使其可被 SQL 编辑器访问。
 func (mgr *DBManager) RegisterExtraDB(name, path string) {
 	mgr.extraMu.Lock()

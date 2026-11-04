@@ -29,6 +29,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Validate SFT hardware evidence for 4.x releases
+        env:
+          SFT_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: python3 scripts/check_sft_release.py --tag "$SFT_RELEASE_TAG"
+
       - name: 确定版本号和发布类型
         id: version
         run: |

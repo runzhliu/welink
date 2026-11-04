@@ -8,7 +8,7 @@
  *   Provider: "vertex"
  *   APIKey:   完整的 Service Account JSON 字符串
  *   BaseURL:  https://{region}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{region}/endpoints/openapi
- *   Model:    例如 google/gemini-3.5-flash
+ *   Model:    例如 google/gemini-3.8-flash
  */
 
 package main

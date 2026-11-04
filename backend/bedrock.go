@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -67,6 +68,31 @@ func signAWSRequest(req *http.Request, body []byte, region, service, accessKey, 
 
 // ─── Bedrock Streaming ───────────────────────────────────────────────────────
 
+// Opus 4.7+ 使用 Mantle 的 Anthropic Messages API，旧模型仍可显式配置 Runtime。
+func isBedrockMantle(baseURL string) bool {
+	u, err := url.Parse(baseURL)
+	return err == nil && (strings.HasPrefix(u.Hostname(), "bedrock-mantle.") ||
+		strings.HasSuffix(strings.TrimRight(u.Path, "/"), "/anthropic"))
+}
+
+func usesBedrockMantleModel(model string) bool {
+	return strings.HasPrefix(model, "anthropic.claude-") && usesClaudeAdaptiveThinking(model) &&
+		!strings.Contains(model, "-4-6")
+}
+
+func signBedrockMantleRequest(req *http.Request, body []byte, apiKey string) error {
+	parts := strings.SplitN(apiKey, ":", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf("AWS 凭证格式错误，请使用 accessKeyId:secretAccessKey 格式")
+	}
+	region := "us-east-1"
+	if host := req.URL.Hostname(); strings.HasPrefix(host, "bedrock-mantle.") {
+		region = strings.Split(strings.TrimPrefix(host, "bedrock-mantle."), ".")[0]
+	}
+	signAWSRequest(req, body, region, "bedrock-mantle", parts[0], parts[1])
+	return nil
+}
+
 // bedrockRequest matches the Anthropic Messages API format used by Bedrock's invoke-model.
 type bedrockRequest struct {
 	AnthropicVersion string       `json:"anthropic_version"`
@@ -76,6 +102,9 @@ type bedrockRequest struct {
 }
 
 func streamBedrock(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) error {
+	if isBedrockMantle(cfg.baseURL) {
+		return streamClaude(send, msgs, cfg)
+	}
 	if cfg.apiKey == "" {
 		return fmt.Errorf("未配置 AWS Access Key（格式：accessKeyId:secretAccessKey）")
 	}
@@ -189,6 +218,9 @@ func streamBedrock(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) err
 }
 
 func completBedrockSync(msgs []LLMMessage, cfg llmConfig) (string, error) {
+	if isBedrockMantle(cfg.baseURL) {
+		return completeClaudeSync(msgs, cfg)
+	}
 	if cfg.apiKey == "" {
 		return "", fmt.Errorf("未配置 AWS Access Key（格式：accessKeyId:secretAccessKey）")
 	}
