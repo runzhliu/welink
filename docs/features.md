@@ -53,7 +53,7 @@ description: WeLink 的完整功能清单 —— AI 能力 / 数据分析 / 关�
 <div class="feat-card"><div class="icon">💓</div><h4>情感曲线</h4><p>LLM 无关的情感词典打分，把任意联系人的对话情感倾向沿时间画出曲线，识别关系情绪波动。</p></div>
 <div class="feat-card"><div class="icon">🎨</div><h4>AI 文生图</h4><p>群年报封面 / 高光瞬间插画 / 联系人 AI 头像三个场景的文生图。默认豆包即梦，OpenAI 兼容；本地 hash 缓存避免重复调用。</p></div>
 <div class="feat-card"><div class="icon">🖼️</div><h4>联系人 AI 头像</h4><p>LLM 从 TA 最近 200 条消息抽 3-5 个性格关键词 → 拼 prompt 生抽象意象头像，无人脸、无文字、圆形构图，直接当头像用。</p></div>
-<div class="feat-card"><div class="icon">🧪</div><h4><a href="./sft">SFT 工作台 · 4.0 开发预览</a></h4><p>审核私聊样本，连接 Mac / NVIDIA GPU 训练环境，完成 LoRA 预检、训练、对比评测、导出和试聊。当前工作台聚焦本人表达风格，远程训练会向所选训练机发送样本。</p></div>
+<div class="feat-card"><div class="icon">🧪</div><h4><a href="./sft">SFT 工作台 · v0.4.0 开发预览</a></h4><p>审核私聊样本，连接 Mac / NVIDIA GPU 训练环境，完成 LoRA 预检、训练、对比评测、导出和试聊。当前工作台聚焦本人表达风格，远程训练会向所选训练机发送样本。</p></div>
 <div class="feat-card"><div class="icon">🧭</div><h4>训练流程与界面引导</h4><p>工作台展示训练原理、可点击的流程步骤、项目状态与下一步；数据范围和远程 GPU 配对也有分步说明。</p></div>
 <div class="feat-card"><div class="icon">✨</div><h4>统一的界面交互</h4><p>搜索选择、日期时间和弹窗使用统一控件，改善移动端布局、键盘导航与焦点管理。</p></div>
 <div class="feat-card"><div class="icon">👻</div><h4><a href="./labs#_12-这句话谁说过（反向语义搜索，v0-2-x-新增）">这句话谁说过</a></h4><p>反向语义搜索：输入一句话，跨全库找最像这句的历史消息，按"说话人"聚合 ——「这句话最像 X、Y、Z 说过的话」。复用现有向量索引。</p></div>

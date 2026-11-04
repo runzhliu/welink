@@ -24,7 +24,7 @@ hero:
 
 features:
   - icon: 🧪
-    title: SFT 工作台 · 4.0 开发预览
+    title: SFT 工作台 · v0.4.0 开发预览
     details: 从私聊准备数据，在 Mac 或 NVIDIA GPU 环境训练 LoRA，比较效果、导出并接入 WeLink。
     link: /sft
     linkText: 探索训练流程
@@ -87,7 +87,7 @@ features:
 
 <section class="welink-sft-spotlight" aria-labelledby="welink-sft-title">
   <div class="welink-sft-intro">
-    <span class="welink-sft-badge">4.0 · 开发预览</span>
+    <span class="welink-sft-badge">v0.4.0 · 开发预览</span>
     <h2 id="welink-sft-title">让模型学会你的表达方式</h2>
     <p>从自己愿意使用的聊天记录出发，准备样本、微调小模型、比较效果，再接入 WeLink 试聊。训练过程和产物由你选择的环境管理。</p>
     <a class="welink-sft-link" href="/sft">了解 SFT 工作台 <span aria-hidden="true">→</span></a>
@@ -98,7 +98,7 @@ features:
     <div><span>03</span><strong>预检与训练</strong><small>LoRA · 任务与指标</small></div>
     <div><span>04</span><strong>对比与试用</strong><small>盲评 · 导出 · 接入</small></div>
   </div>
-  <p class="welink-sft-footnote">4.0 尚在验收中，已发布版本和在线 Demo 不一定包含。训练数据会发送到你选择的训练机；模型也可能记住聊天内容，请谨慎保存与分享。</p>
+  <p class="welink-sft-footnote">v0.4.0 尚在验收中，公开 Demo 仅展示训练流程。训练数据会发送到你选择的训练机；模型也可能记住聊天内容，请谨慎保存与分享。</p>
 </section>
 
 <div class="welink-stats">
@@ -272,7 +272,7 @@ docker compose up
 <div class="welink-marquee" aria-hidden="true">
   <div class="welink-marquee-track">
     <span>本地优先</span>
-    <span>SFT 工作台 · 4.0 预览</span>
+    <span>SFT 工作台 · v0.4.0 预览</span>
     <span>AI 分身</span>
     <span>AI 虚拟群聊</span>
     <span>互动小说</span>
@@ -288,7 +288,7 @@ docker compose up
     <span>MCP × Claude Code</span>
     <!-- 复制一份保证无缝循环 -->
     <span>本地优先</span>
-    <span>SFT 工作台 · 4.0 预览</span>
+    <span>SFT 工作台 · v0.4.0 预览</span>
     <span>AI 分身</span>
     <span>AI 虚拟群聊</span>
     <span>互动小说</span>

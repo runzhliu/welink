@@ -25,7 +25,7 @@
 | [cross-contact-qa.md](./cross-contact-qa.md) | 跨联系人 AI 问答 |
 | [podcast.md](./podcast.md) | 播客与 TTS |
 | [skill-forge.md](./skill-forge.md) | Skill 炼化格式与实现 |
-| [sft.md](./sft.md) | 4.0 SFT 工作台、远程 GPU 连接、训练与评测，以及旧版 ms-swift 流程 |
+| [sft.md](./sft.md) | v0.4.0 SFT 工作台、远程 GPU 连接、训练与评测，以及旧版 ms-swift 流程 |
 
 ## 技术细节
 
@@ -53,7 +53,7 @@
 | 文件 | 内容 |
 |------|------|
 | [sft-workbench-design.md](./sft-workbench-design.md) | SFT 工作台完整设计，已落地工作台与 worker；硬件验收待完成 |
-| [sft-release-checklist.md](./sft-release-checklist.md) | 4.0 已验证范围、真实训练 / 视觉发布门槛与当前交付边界 |
+| [sft-release-checklist.md](./sft-release-checklist.md) | v0.4.0 已验证范围、真实训练 / 视觉发布门槛与当前交付边界 |
 | [SFT Worker 连接指南](./sft.md#连接远程-gpu-容器) | Mac / CUDA 环境安装、远程连接与配对；完整 Worker 说明位于仓库 `workers/sft/README.md` |
 
 ## 贡献
