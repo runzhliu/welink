@@ -1,4 +1,4 @@
-"""Stable 4.x+ releases require explicit hardware/visual evidence, never CPU mocks."""
+"""Stable v0.4.0+ releases require hardware/visual evidence, never CPU mocks."""
 import argparse
 import json
 from pathlib import Path
@@ -8,8 +8,8 @@ import sys
 
 
 def validate(tag, matrix, changed_since):
-    version = re.match(r"^v?(\d+)\.", tag)
-    if not version or int(version.group(1)) < 4:
+    version = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", tag)
+    if not version or tuple(map(int, version.groups())) < (0, 4, 0):
         return []
     errors = []
     for engine in ("mlx", "cuda"):
@@ -49,7 +49,7 @@ def main():
     args = parser.parse_args()
     errors = validate(args.tag, json.loads(Path(args.matrix).read_text()), changed_since)
     if errors:
-        print("SFT 4.0 正式发布门槛未通过：\n- " + "\n- ".join(errors), file=sys.stderr)
+        print("SFT v0.4.0 正式发布门槛未通过：\n- " + "\n- ".join(errors), file=sys.stderr)
         print("请完成 docs/sft-release-checklist.md；不得用 CPU 合约测试代替真实训练。", file=sys.stderr)
         return 1
     return 0

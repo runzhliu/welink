@@ -9,9 +9,11 @@ spec.loader.exec_module(gate)
 
 
 class ReleaseGate(unittest.TestCase):
-    def test_pending_matrix_cannot_release_four_but_allows_development(self):
+    def test_pending_matrix_cannot_release_0_4_but_allows_development(self):
+        self.assertTrue(gate.validate("v0.4.0", {}, lambda _: False))
         self.assertTrue(gate.validate("v4.0.0", {}, lambda _: False))
         self.assertFalse(gate.validate("dev-abcd", {}, lambda _: False))
+        self.assertFalse(gate.validate("v0.4.0-rc.1", {}, lambda _: False))
         self.assertFalse(gate.validate("v0.3.0", {}, lambda _: False))
 
     def test_code_changes_invalidate_recorded_hardware_evidence(self):

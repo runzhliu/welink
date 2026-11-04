@@ -70,6 +70,22 @@ func demoBlockRawSQL(c *gin.Context) {
 	c.Abort()
 }
 
+// The public demo is a shared instance, not a private training or backup space.
+// In particular, never accept uploaded SFT data or expose worker credentials
+// there, even if a client supplies forged loopback Origin/Referer headers.
+func demoPublicSafety(c *gin.Context) {
+	path := c.Request.URL.Path
+	if path == "/api/sft" || strings.HasPrefix(path, "/api/sft/") || strings.HasPrefix(path, "/api/sft-") {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "公开 Demo 仅展示训练流程，不支持上传训练数据或连接训练环境；请在自己的 WeLink 中使用 SFT。"})
+		return
+	}
+	if path == "/api/preferences/export" || path == "/api/preferences/import" || path == "/api/preferences/reset" {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "公开 Demo 不支持导出、导入或重置配置。"})
+		return
+	}
+	c.Next()
+}
+
 // ── 2. Avatar 域名白名单 ─────────────────────────────────────────────────────
 
 // avatarAllowedHosts 只允许这些域名通过 /api/avatar 代理，防止 SSRF 探内网。
@@ -131,9 +147,9 @@ func isPrivateURL(rawURL string) bool {
 // ── 4. 全局限速（令牌桶，按 IP） ────────────────────────────────────────────
 
 const (
-	rateLimitPerSec = 20   // 每秒允许的最大请求数
-	rateLimitBurst  = 40   // 突发上限
-	rateLimitClean  = 5    // 过期条目清理间隔（分钟）
+	rateLimitPerSec = 20 // 每秒允许的最大请求数
+	rateLimitBurst  = 40 // 突发上限
+	rateLimitClean  = 5  // 过期条目清理间隔（分钟）
 )
 
 type tokenBucket struct {

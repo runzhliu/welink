@@ -341,6 +341,7 @@ func serverMain() {
 	// Demo 模式：全局限速（每 IP 每秒 20 请求）
 	if isDemoMode {
 		r.Use(demoRateLimit)
+		r.Use(demoPublicSafety)
 	}
 
 	// 跨域设置：仅允许 localhost 来源（开发调试用），生产流量通过 Nginx 反代不需要 CORS
