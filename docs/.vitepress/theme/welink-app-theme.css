@@ -1,0 +1,202 @@
+/* Keep the documentation site aligned with frontend/src/index.css. */
+:root {
+  --vp-font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --vp-font-family-mono: "SF Mono", Monaco, "Courier New", monospace;
+
+  --wl-page: #f6f7f8;
+  --wl-card: #ffffff;
+  --wl-subtle: #f0f2f3;
+  --wl-sidebar: #fafbfb;
+  --wl-border: #e1e6e8;
+  --wl-border-strong: #c9d1d5;
+  --wl-text: #20282c;
+  --wl-text-secondary: #616e75;
+  --wl-text-muted: #77848a;
+  --wl-accent: #087f5b;
+  --wl-accent-hover: #066649;
+  --wl-accent-soft: #e4f3eb;
+  --wl-on-accent: #ffffff;
+  --wl-card-shadow: 0 2px 6px rgba(25, 50, 35, 0.025), 0 12px 32px rgba(25, 50, 35, 0.035);
+
+  --vp-c-bg: var(--wl-page);
+  --vp-c-bg-alt: var(--wl-sidebar);
+  --vp-c-bg-elv: var(--wl-card);
+  --vp-c-bg-soft: var(--wl-subtle);
+  --vp-c-divider: var(--wl-border);
+  --vp-c-border: var(--wl-border-strong);
+  --vp-c-text-1: var(--wl-text);
+  --vp-c-text-2: var(--wl-text-secondary);
+  --vp-c-text-3: var(--wl-text-muted);
+  --vp-c-brand-1: var(--wl-accent);
+  --vp-c-brand-2: var(--wl-accent-hover);
+  --vp-c-brand-3: var(--wl-accent-hover);
+  --vp-c-brand-soft: var(--wl-accent-soft);
+  --vp-sidebar-bg-color: var(--wl-sidebar);
+}
+
+:lang(zh) {
+  --vp-font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.dark {
+  --wl-page: #14181b;
+  --wl-card: #1c2226;
+  --wl-subtle: #252d32;
+  --wl-sidebar: #171d21;
+  --wl-border: #333e45;
+  --wl-border-strong: #4a5a64;
+  --wl-text: #e8edef;
+  --wl-text-secondary: #a8b5bd;
+  --wl-text-muted: #8c9fa9;
+  --wl-accent: #72d6a5;
+  --wl-accent-hover: #92e4bc;
+  --wl-accent-soft: #203c2c;
+  --wl-on-accent: #102b1d;
+  --wl-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+body {
+  color: var(--wl-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--wl-accent-soft); color: var(--wl-text); }
+:where(a, button, input, textarea, select):focus-visible {
+  outline: 2px solid var(--wl-accent);
+  outline-offset: 3px;
+}
+
+/* The app uses quiet surfaces and a single green accent instead of a glow. */
+.VPHome::before,
+.VPHome::after,
+.VPHome .VPHero::after { display: none; }
+
+/* A tall mobile feature grid should be visible without waiting for scroll animation. */
+.VPHome .VPFeatures .welink-fade-in,
+.VPHome .VPFeatures .welink-fade-in-stagger > * {
+  opacity: 1;
+  transform: none;
+}
+
+.VPHome .VPHero .image,
+.VPHome .VPHero .tagline,
+.VPHome .VPHero .actions {
+  animation: none;
+}
+.VPHome .VPHero .image,
+.VPHome .VPHero .image:hover {
+  filter: none;
+  transform: none;
+}
+.VPHome .VPHero .text {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  animation: none;
+  color: var(--wl-text);
+  font-size: clamp(30px, 2.6vw, 36px) !important;
+  font-weight: 600;
+  line-height: 1.2 !important;
+  letter-spacing: -0.025em;
+  white-space: normal;
+  text-wrap: balance;
+}
+.VPHome .VPHero .name {
+  color: var(--wl-accent);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+.VPHome .VPHero .tagline { color: var(--wl-text-secondary); }
+
+.VPButton,
+a.btn-download,
+.welink-all-features-cta a {
+  border-radius: 10px;
+  font-weight: 600;
+}
+.VPHero .VPButton { border-radius: 10px !important; }
+.VPHero .VPButton.brand,
+.VPHero .VPButton.brand:hover {
+  color: var(--wl-on-accent) !important;
+  font-weight: 600 !important;
+  animation: none;
+  box-shadow: none;
+  transform: none;
+}
+.VPButton.brand,
+a.btn-download { background: var(--wl-accent); border-color: var(--wl-accent); color: var(--wl-on-accent) !important; }
+.VPButton.brand:hover,
+a.btn-download:hover { background: var(--wl-accent-hover); border-color: var(--wl-accent-hover); }
+.VPHero .VPButton.alt {
+  border: 1px solid var(--wl-border-strong);
+  background: var(--wl-card);
+  color: var(--wl-text-secondary);
+  font-weight: 600 !important;
+}
+.VPHero .VPButton.alt:hover { background: var(--wl-subtle); color: var(--wl-text); }
+
+.VPHome .VPFeatures .VPFeature,
+.vp-doc .feat-card,
+.welink-sft-spotlight,
+.welink-stat-card,
+.dark .welink-stat-card,
+.welink-pillars .pillar,
+.welink-video-card,
+.welink-more-videos details,
+.welink-demo-embed {
+  background: var(--wl-card);
+  border: 1px solid var(--wl-border);
+  border-radius: 18px;
+  box-shadow: var(--wl-card-shadow);
+}
+.VPHome .VPFeatures .VPFeature:hover,
+.dark .VPFeature:hover,
+.vp-doc .feat-card:hover,
+.dark .feat-card:hover,
+.welink-stat-card:hover,
+.welink-pillars .pillar:hover,
+.welink-video-card:hover,
+.welink-lazy-video:hover,
+.welink-demo-embed:hover {
+  transform: none;
+  border-color: var(--wl-border-strong) !important;
+  box-shadow: var(--wl-card-shadow);
+}
+.VPFeature:hover .icon,
+.vp-doc .feat-card:hover .icon,
+.welink-pillars .pillar:hover .pillar-icon svg,
+.vp-doc video:hover { transform: none; }
+.VPHome .VPFeatures .VPFeature .icon { background: var(--wl-subtle); border-radius: 10px; }
+.VPFeature .title,
+.welink-pillars .pillar-title { color: var(--wl-text); font-weight: 600; }
+.VPFeature .details,
+.welink-pillars .pillar-body { color: var(--wl-text-secondary); }
+.welink-pillars .pillar::before,
+.welink-pillars .pillar::after,
+.welink-stat-card::before { display: none; }
+.welink-pillars .pillar:hover .pillar-icon svg { stroke: var(--wl-accent); }
+.welink-sft-journey > div { background: var(--wl-subtle); border-color: var(--wl-border); }
+.welink-stat-card { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.welink-stats .num { color: var(--wl-text); font-weight: 600; }
+.welink-stats .stat-suffix { font-size: 24px; }
+.welink-stats .stat-text { font-size: 25px; }
+.welink-marquee,
+.dark .welink-marquee { background: var(--wl-subtle); }
+.welink-scroll-progress { background: var(--wl-accent); }
+.welink-mascot,
+.dark .welink-mascot {
+  background: var(--wl-accent-soft);
+  color: var(--wl-accent);
+  border: 1px solid var(--wl-border);
+  box-shadow: var(--wl-card-shadow);
+  animation: none;
+}
+.welink-mascot:hover { transform: none; box-shadow: var(--wl-card-shadow); }
+
+@media (max-width: 768px) {
+  .VPHome .VPHero .text { font-size: 30px !important; }
+  .welink-sft-spotlight,
+  .VPFeature,
+  .welink-stat-card,
+  .welink-pillars .pillar { border-radius: 14px; }
+}

@@ -103,23 +103,23 @@ features:
 
 <div class="welink-stats">
   <div class="welink-stat-card">
-    <div class="stat-icon" style="color:#07c160;">🛠️</div>
-    <div class="num" style="color:#07c160;"><span class="welink-countup" data-to="20" data-dur="1500">0</span></div>
+    <div class="stat-icon">🛠️</div>
+    <div class="num"><span class="welink-countup" data-to="20" data-dur="1500">0</span></div>
     <div class="lbl">MCP 工具</div>
   </div>
   <div class="welink-stat-card">
-    <div class="stat-icon" style="color:#10aeff;">📦</div>
-    <div class="num" style="color:#10aeff;"><span class="welink-countup" data-to="8" data-dur="1200">0</span></div>
+    <div class="stat-icon">📦</div>
+    <div class="num"><span class="welink-countup" data-to="8" data-dur="1200">0</span></div>
     <div class="lbl">导出目标</div>
   </div>
   <div class="welink-stat-card">
-    <div class="stat-icon" style="color:#ff9500;">🧩</div>
-    <div class="num" style="color:#ff9500;"><span class="welink-countup" data-to="25" data-dur="1400">0</span><span style="font-size:24px;">+</span></div>
+    <div class="stat-icon">🧩</div>
+    <div class="num"><span class="welink-countup" data-to="25" data-dur="1400">0</span><span class="stat-suffix">+</span></div>
     <div class="lbl">LLM 提供商</div>
   </div>
   <div class="welink-stat-card">
-    <div class="stat-icon" style="color:#fa5151;">🔒</div>
-    <div class="num" style="color:#fa5151;font-size:25px;">本地优先</div>
+    <div class="stat-icon">🔒</div>
+    <div class="num stat-text">本地优先</div>
     <div class="lbl">部署方式自主选择</div>
   </div>
 </div>

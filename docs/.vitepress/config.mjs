@@ -45,7 +45,7 @@ const head = [
   // ─── SEO & Open Graph ─────────────────────────────────────────
   ['meta', { name: 'author', content: 'WeLink contributors' }],
   ['meta', { name: 'keywords', content: '微信聊天分析, SFT, LoRA, 模型微调, AI 分身, 关系预测, MCP Server, 本地 AI, 微信数据, welink' }],
-  ['meta', { name: 'theme-color', content: '#07c160' }],
+  ['meta', { name: 'theme-color', content: '#f6f7f8' }],
   // Open Graph
   ['meta', { property: 'og:type', content: 'website' }],
   ['meta', { property: 'og:site_name', content: 'WeLink' }],

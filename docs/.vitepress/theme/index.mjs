@@ -5,6 +5,7 @@ import mediumZoom from 'medium-zoom'
 import AdsenseAd from './AdsenseAd.vue'
 import GiscusComments from './GiscusComments.vue'
 import './custom.css'
+import './welink-app-theme.css'
 
 // ── 滚动淡入：给常见内容容器加 .welink-fade-in，进入视口后加 .is-visible ──
 function initFadeIn() {
