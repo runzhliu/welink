@@ -441,6 +441,20 @@ backend:
 
 ## Demo 模式（无需真实数据）
 
+### 官网服务器固定 Demo 版本
+
+`server-compose.yml` 是官网与公开 Demo 的服务器配置。为了避免更新时前后端漂移，可将 `server-compose.demo-release.example.yml` 复制为服务器本地的 `server-compose.demo-release.yml`，把其中两个镜像都改为同一个已发布版本。这个本地文件不会提交到仓库。已有覆盖文件时请先检查其挂载和配置，不要直接覆盖。
+
+`make server-up`、`make server-pull`、`make server-logs` 和 `make server-down` 会自动使用此覆盖文件。更新后检查：
+
+```bash
+docker compose -f server-compose.yml -f server-compose.demo-release.yml ps
+curl -fsS https://demo.welink.click/api/app/info
+curl -s -o /dev/null -w '%{http_code}\n' https://demo.welink.click/api/sft/capabilities
+```
+
+确认前后端镜像是目标版本，`/api/app/info` 的 `version` 符合预期，SFT 接口返回 403。需要回滚时，将两个镜像一起改回先前的版本并重新执行 `make server-up`，然后重复检查；不要修改已发布的版本标签。官网镜像由基础配置单独管理。
+
 ```bash
 docker compose -f docker-compose.demo.yml up
 ```

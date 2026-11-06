@@ -86,6 +86,8 @@ docs-logs:   ## 跟踪官网容器日志
 
 DOCKER_USER   := runzhliu
 BUILD_PLATFORMS := linux/amd64,linux/arm64
+# Preserve a locally managed release override when updating an existing server.
+SERVER_COMPOSE_FILES ?= -f server-compose.yml $(if $(wildcard server-compose.demo-release.yml),-f server-compose.demo-release.yml,)
 
 ## _server-build-push 使用 docker buildx 一次性多平台构建并推送
 ## 用法：$(call _server-build-push,<tag>,<context>[,extra-build-args])
@@ -105,20 +107,20 @@ server-push: ## 【本地执行】多平台构建并推送到 Docker Hub（amd64
 	$(call _server-build-push,$(DOCKER_USER)/welink-frontend,frontend/)
 	$(call _server-build-push,$(DOCKER_USER)/welink-backend,backend/,--build-arg APP_VERSION=$(APP_VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT))
 
-server-up:   ## 【服务器执行】拉取最新镜像并启动官网 + Demo
-	docker compose -f server-compose.yml pull
-	docker compose -f server-compose.yml up -d
+server-up:   ## 【服务器执行】拉取镜像并启动官网 + Demo
+	docker compose $(SERVER_COMPOSE_FILES) pull
+	docker compose $(SERVER_COMPOSE_FILES) up -d
 
 server-down: ## 停止官网 + Demo 所有容器
-	docker compose -f server-compose.yml down
+	docker compose $(SERVER_COMPOSE_FILES) down
 
 server-logs: ## 跟踪官网 + Demo 容器日志
-	docker compose -f server-compose.yml logs -f
+	docker compose $(SERVER_COMPOSE_FILES) logs -f
 
 server-pull: ## 【服务器执行】git pull + 拉取新镜像 + 重启（一键更新）
 	git pull
-	docker compose -f server-compose.yml pull
-	docker compose -f server-compose.yml up -d
+	docker compose $(SERVER_COMPOSE_FILES) pull
+	docker compose $(SERVER_COMPOSE_FILES) up -d
 
 ## ─── 本地开发部署 ─────────────────────────────────────────────
 dev-deploy:  ## 本地 build 并部署（需设置 DEV_DOMAIN 环境变量）

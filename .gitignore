@@ -89,3 +89,5 @@ pics/*.md
 # Python worker packaging output
 workers/sft/build/
 workers/sft/dist/
+# Server-specific image pins; start from server-compose.demo-release.example.yml.
+server-compose.demo-release.yml

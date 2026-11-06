@@ -1,0 +1,7 @@
+# Copy to server-compose.demo-release.yml and set both images to the same
+# published release. This file changes images only, preserving existing mounts.
+services:
+  demo-frontend:
+    image: ghcr.io/runzhliu/welink/frontend:0.4.0
+  demo-backend:
+    image: ghcr.io/runzhliu/welink/backend:0.4.0

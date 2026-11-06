@@ -9,6 +9,8 @@
 #   git clone https://github.com/runzhliu/welink && cd welink
 #   make server-up        # 拉取最新镜像并启动
 #   make server-pull      # 后续更新：git pull + docker pull + restart
+#   若存在 server-compose.demo-release.yml，上述 make 命令会自动加载该覆盖文件。
+#   用覆盖文件固定 Demo 前后端的同一发布版本；更新后检查 /api/app/info 的 version。
 #
 # 前提：
 #   - 证书已在 /etc/letsencrypt/live/welink.click/{fullchain,privkey}.pem
