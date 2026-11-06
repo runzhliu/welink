@@ -5,13 +5,14 @@ import { DatePicker } from '../common/DatePicker';
  */
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Search, Loader2, ChevronRight, Users, Download, Clock, X, FileText, Calendar, ArrowUpDown, BarChart3 } from 'lucide-react';
+import { Search, Loader2, ChevronRight, Download, Clock, X, FileText, Calendar, ArrowUpDown, BarChart3 } from 'lucide-react';
 import type { GlobalSearchGroup, ContactStats } from '../../types';
 import { searchApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
+import { useSelfInfo } from '../../contexts/SelfInfoContext';
+import { Avatar } from '../common/Avatar';
 import { SearchContextModal, type SearchContextTarget } from './SearchContextModal';
 import { exportSearchResultsCsv, exportSearchResultsTxt, parseExportResult } from '../../utils/exportChat';
-import { avatarSrc } from '../../utils/avatar';
 
 interface Props {
   contacts: ContactStats[];
@@ -41,6 +42,7 @@ function saveHistory(list: string[]) {
 
 export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupClick, blockedGroups = [] }) => {
   const { privacyMode } = usePrivacyMode();
+  const selfInfo = useSelfInfo();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<GlobalSearchGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -371,17 +373,7 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
                     className={`flex items-center gap-3 px-5 py-3 bg-[#f8f9fb] dk-subtle border-b border-gray-100 dk-border ${clickable ? 'cursor-pointer hover:bg-[#eef8f4] dark:hover:bg-[#07c160]/10 transition-colors' : ''}`}
                     onClick={() => { if (group.is_group) onGroupClick?.(group.username); else if (contact) onContactClick?.(contact); }}
                   >
-                    <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-gray-200">
-                      {group.small_head_url ? (
-                        <img loading="lazy" src={avatarSrc(group.small_head_url)} alt="" className="w-full h-full object-cover"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      ) : (
-                        <div className={`w-full h-full flex items-center justify-center text-white text-xs font-black
-                          ${group.is_group ? 'bg-gradient-to-br from-[#576b95] to-[#3d4f77]' : 'bg-[#087f5b]'}`}>
-                          {group.is_group ? <Users size={14} /> : group.display_name.charAt(0)}
-                        </div>
-                      )}
-                    </div>
+                    <Avatar src={group.small_head_url} contact={group.is_group ? undefined : contact} name={group.display_name} className={`w-8 h-8 !text-xs ring-1 ring-gray-200 ${privacyMode ? 'privacy-blur' : ''}`} />
                     <span className={`font-bold text-sm dk-text text-[#1d1d1f]${privacyMode ? ' privacy-blur' : ''}`}>
                       {group.display_name}
                     </span>
@@ -404,13 +396,16 @@ export const SearchView: React.FC<Props> = ({ contacts, onContactClick, onGroupC
                           targetTime: msg.time,
                           targetContent: msg.content,
                           isGroup: group.is_group,
-                          avatarUrl: group.is_group ? undefined : (group.small_head_url || undefined),
+                          avatarUrl: group.is_group ? undefined : (contact?.small_head_url || contact?.big_head_url || group.small_head_url || undefined),
                         })}
                         title="点击查看当天完整对话"
                       >
-                        <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[9px] font-black mt-0.5 ${msg.is_mine ? 'bg-[#07c160]' : 'bg-[#576b95]'}`}>
-                          {msg.is_mine ? '我' : group.is_group ? <Users size={10} /> : group.display_name.charAt(0)}
-                        </div>
+                        <Avatar
+                          src={msg.is_mine ? selfInfo?.avatar_url : group.is_group ? msg.avatar_url : group.small_head_url}
+                          contact={!msg.is_mine && !group.is_group ? contact : undefined}
+                          name={msg.is_mine ? '我' : group.is_group ? (msg.speaker || '群成员') : group.display_name}
+                          className={`w-6 h-6 mt-0.5 !text-[9px] ${privacyMode ? 'privacy-blur' : ''}`}
+                        />
                         <div className={`flex flex-col gap-0.5 max-w-[80%] ${msg.is_mine ? 'items-end' : 'items-start'}`}>
                           <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words whitespace-pre-wrap
                             ${msg.is_mine ? 'bg-[#07c160] text-white rounded-br-sm' : 'bg-[#f0f0f0] dark:bg-white/10 text-[#1d1d1f] dark:text-gray-100 rounded-bl-sm'}`}>

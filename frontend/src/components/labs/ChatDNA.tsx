@@ -94,13 +94,14 @@ export const ChatDNA: React.FC = () => {
   const exportPng = async () => {
     if (!data || !cardRef.current || exporting) return;
     setExporting(true);
+    const isDark = document.documentElement.classList.contains('dark');
     const r = await captureCardToPng(cardRef.current, {
       filename: `welink-chat-dna-${Date.now()}.png`,
-      backgroundColor: '#0b0b14',
+      backgroundColor: isDark ? '#0b0b14' : '#ffffff',
       appendHTML: welinkBrandHTML({
         label: '我的聊天 DNA',
         date: new Date().toLocaleDateString('zh-CN'),
-        variant: 'dark',
+        variant: isDark ? 'dark' : 'light',
       }),
     });
     setExporting(false);
@@ -155,9 +156,9 @@ export const ChatDNA: React.FC = () => {
       )}
 
       {data && (
-        <div ref={cardRef} className="rounded-2xl overflow-hidden bg-[#0b0b14] text-white">
+        <div ref={cardRef} className="rounded-2xl overflow-hidden border border-gray-100 dark:border-white/10 bg-white dark:bg-[#0b0b14] text-[#1d1d1f] dark:text-white">
           {/* Hero */}
-          <div className="px-7 py-8 bg-[#07c160]">
+          <div className="px-7 py-8 bg-[#07c160] text-white">
             <div className="text-xs uppercase tracking-[0.2em] text-white/70 font-bold mb-2">
               CHAT DNA · 我的聊天 DNA
             </div>
@@ -170,7 +171,7 @@ export const ChatDNA: React.FC = () => {
           </div>
 
           {/* 大数 grid */}
-          <div className="grid grid-cols-2 gap-px bg-white/5">
+          <div className="grid grid-cols-2 gap-px bg-gray-100 dark:bg-white/5">
             <Stat icon={<Clock size={14} />} label="最爱聊天的时段" value={`${data.busiest_hour}:00`} sub={`${(data.busiest_hour_pct * 100).toFixed(0)}% 的消息发生在这个小时`} />
             <Stat icon={<Moon size={14} />} label="深夜含量" value={`${(data.late_night_pct * 100).toFixed(0)}%`} sub="00:00-05:00 的消息占比" />
             <Stat icon={<MessageSquare size={14} />} label="我说了多少" value={fmtNum(data.my_messages)} sub={`Ta 们回了 ${fmtNum(data.their_messages)} 条`} />
@@ -179,23 +180,23 @@ export const ChatDNA: React.FC = () => {
 
           {/* Top 联系人 */}
           {data.top_contacts.length > 0 && (
-            <div className="px-7 py-5 border-t border-white/5">
+            <div className="px-7 py-5 border-t border-gray-100 dark:border-white/5">
               <SectionTitle icon={<Crown size={14} className="text-[#07c160]" />}>本年的 5 位主角</SectionTitle>
               <div className="space-y-2.5">
                 {data.top_contacts.map((c, i) => (
                   <div key={c.username} className="flex items-center gap-3">
                     <div className="text-[#07c160] font-black text-lg w-5 text-center">{i + 1}</div>
                     {(c.avatar) ? (
-                      <img src={avatarSrc(c.avatar) || ''} className="w-9 h-9 rounded-full object-cover bg-white/10" alt="" />
+                      <img src={avatarSrc(c.avatar) || ''} className="w-9 h-9 rounded-full object-cover bg-gray-100 dark:bg-white/10" alt="" />
                     ) : (
-                      <div className="w-9 h-9 rounded-full bg-white/10" />
+                      <div className="w-9 h-9 rounded-full bg-gray-100 dark:bg-white/10" />
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold truncate">{c.display_name}</div>
-                      <div className="text-[11px] text-white/50">{fmtNum(c.messages)} 条消息</div>
+                      <div className="text-[11px] text-gray-500 dark:text-white/50">{fmtNum(c.messages)} 条消息</div>
                     </div>
                     {/* bar */}
-                    <div className="w-24 h-2 rounded-full bg-white/5 overflow-hidden">
+                    <div className="w-24 h-2 rounded-full bg-gray-100 dark:bg-white/5 overflow-hidden">
                       <div
                         className="h-full bg-[#07c160]"
                         style={{ width: `${(c.messages / data.top_contacts[0].messages) * 100}%` }}
@@ -208,7 +209,7 @@ export const ChatDNA: React.FC = () => {
           )}
 
           {/* 角色卡 */}
-          <div className="px-7 py-5 border-t border-white/5 space-y-4">
+          <div className="px-7 py-5 border-t border-gray-100 dark:border-white/5 space-y-4">
             {data.quickest_replier && (
               <BadgeCard
                 icon={<Zap size={14} className="text-[#07c160]" />}
@@ -235,17 +236,17 @@ export const ChatDNA: React.FC = () => {
           </div>
 
           {/* Top emoji + opener */}
-          <div className="grid grid-cols-2 gap-px bg-white/5">
+          <div className="grid grid-cols-2 gap-px bg-gray-100 dark:bg-white/5">
             <div className="px-7 py-5">
               <SectionTitle icon={<Smile size={14} className="text-[#07c160]" />}>最爱用的 emoji</SectionTitle>
               {data.top_emojis.length === 0 ? (
-                <div className="text-xs text-white/40">没找到 emoji 痕迹</div>
+                <div className="text-xs text-gray-500 dark:text-white/40">没找到 emoji 痕迹</div>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {data.top_emojis.slice(0, 8).map(e => (
-                    <div key={e.emoji} className="inline-flex items-center gap-1 bg-white/5 rounded-lg px-2 py-1 text-sm">
+                    <div key={e.emoji} className="inline-flex items-center gap-1 bg-gray-100 dark:bg-white/5 rounded-lg px-2 py-1 text-sm">
                       <span>{e.emoji}</span>
-                      <span className="text-[10px] text-white/40">×{e.count}</span>
+                      <span className="text-[10px] text-gray-500 dark:text-white/40">×{e.count}</span>
                     </div>
                   ))}
                 </div>
@@ -254,13 +255,13 @@ export const ChatDNA: React.FC = () => {
             <div className="px-7 py-5">
               <SectionTitle icon={<Quote size={14} className="text-[#07c160]" />}>常用开场白</SectionTitle>
               {data.top_openers.length === 0 ? (
-                <div className="text-xs text-white/40">还没有典型开场白</div>
+                <div className="text-xs text-gray-500 dark:text-white/40">还没有典型开场白</div>
               ) : (
                 <div className="space-y-1.5">
                   {data.top_openers.map(o => (
                     <div key={o.text} className="flex items-center justify-between text-sm">
-                      <span className="text-white/90 truncate">"{o.text}"</span>
-                      <span className="text-[10px] text-white/40 ml-2 shrink-0">×{o.count}</span>
+                      <span className="text-gray-800 dark:text-white/90 truncate">"{o.text}"</span>
+                      <span className="text-[10px] text-gray-500 dark:text-white/40 ml-2 shrink-0">×{o.count}</span>
                     </div>
                   ))}
                 </div>
@@ -270,10 +271,10 @@ export const ChatDNA: React.FC = () => {
 
           {/* 长句 */}
           {data.longest_message && (
-            <div className="px-7 py-5 border-t border-white/5 bg-white/[0.02]">
+            <div className="px-7 py-5 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
               <SectionTitle icon={<Quote size={14} className="text-[#07c160]" />}>你说过最长的一句话</SectionTitle>
-              <div className="text-sm text-white/90 italic leading-relaxed break-words whitespace-pre-wrap">"{data.longest_message}"</div>
-              <div className="text-[11px] text-white/40 mt-2">{data.longest_message_len} 字</div>
+              <div className="text-sm text-gray-800 dark:text-white/90 italic leading-relaxed break-words whitespace-pre-wrap">"{data.longest_message}"</div>
+              <div className="text-[11px] text-gray-500 dark:text-white/40 mt-2">{data.longest_message_len} 字</div>
             </div>
           )}
         </div>
@@ -283,27 +284,27 @@ export const ChatDNA: React.FC = () => {
 };
 
 const Stat: React.FC<{ icon: React.ReactNode; label: string; value: string; sub?: string }> = ({ icon, label, value, sub }) => (
-  <div className="px-5 py-4 bg-[#0b0b14]">
-    <div className="flex items-center gap-1.5 text-[11px] text-white/50 mb-1.5">{icon}{label}</div>
+  <div className="px-5 py-4 bg-white dark:bg-[#0b0b14]">
+    <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-white/50 mb-1.5">{icon}{label}</div>
     <div className="text-2xl font-black tracking-tight">{value}</div>
-    {sub && <div className="text-[10px] text-white/40 mt-0.5">{sub}</div>}
+    {sub && <div className="text-[10px] text-gray-500 dark:text-white/40 mt-0.5">{sub}</div>}
   </div>
 );
 
 const SectionTitle: React.FC<{ icon: React.ReactNode; children: React.ReactNode }> = ({ icon, children }) => (
-  <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-white/60 font-bold mb-3">{icon}{children}</div>
+  <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-gray-500 dark:text-white/60 font-bold mb-3">{icon}{children}</div>
 );
 
 const BadgeCard: React.FC<{ icon: React.ReactNode; title: string; desc: string; avatar?: string }> = ({ icon, title, desc, avatar }) => (
-  <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
+  <div className="flex items-center gap-3 rounded-xl bg-gray-100 dark:bg-white/5 p-3">
     {avatar ? (
-      <img src={avatarSrc(avatar) || ''} className="w-10 h-10 rounded-full object-cover bg-white/10" alt="" />
+      <img src={avatarSrc(avatar) || ''} className="w-10 h-10 rounded-full object-cover bg-gray-100 dark:bg-white/10" alt="" />
     ) : (
-      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">{icon}</div>
+      <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center">{icon}</div>
     )}
     <div className="min-w-0">
       <div className="text-sm font-bold flex items-center gap-1.5">{icon}<span className="truncate">{title}</span></div>
-      <div className="text-[11px] text-white/60 truncate">{desc}</div>
+      <div className="text-[11px] text-gray-500 dark:text-white/60 truncate">{desc}</div>
     </div>
   </div>
 );

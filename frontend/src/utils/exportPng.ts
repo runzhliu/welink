@@ -33,9 +33,7 @@ export async function prepareForCapture(node: HTMLElement): Promise<void> {
 
   const imgs = Array.from(node.querySelectorAll('img'));
   await Promise.all(imgs.map(img => {
-    if (img.complete && img.naturalWidth > 0) {
-      return img.decode().catch(() => undefined);
-    }
+    if (img.complete) return img.naturalWidth > 0 ? img.decode().catch(() => undefined) : Promise.resolve();
     return new Promise<void>(resolve => {
       const done = () => resolve();
       img.addEventListener('load', done, { once: true });
@@ -56,12 +54,17 @@ export interface CaptureOpts {
   backgroundColor?: string;
   /** wrapper 总宽度，默认 720 */
   width?: number;
+  /** 截图逻辑高度和像素倍率；默认按内容高度、2 倍像素。 */
+  height?: number;
+  scale?: number;
   /** 截图前往 wrapper 末尾插入的额外 HTML 字符串（如 brand footer） */
   appendHTML?: string;
   /** 截图前往 wrapper 起始插入的额外 HTML 字符串（如 brand header） */
   prependHTML?: string;
   /** 让调用方做额外处理（如改 chatNode 样式），在 capture 之前调用 */
   beforeCapture?: (wrapper: HTMLElement) => void | Promise<void>;
+  /** html2canvas 的文档副本中恢复滚动等状态。 */
+  onClone?: (wrapper: HTMLElement) => void;
 }
 
 /**
@@ -88,6 +91,8 @@ export async function captureCardToPng(card: HTMLElement, opts: CaptureOpts): Pr
   const bg = opts.backgroundColor ?? '#ffffff';
 
   const wrapper = document.createElement('div');
+  const captureId = `capture-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  wrapper.dataset.captureId = captureId;
   wrapper.style.cssText = `
     width: ${width}px;
     background: ${bg};
@@ -114,14 +119,23 @@ export async function captureCardToPng(card: HTMLElement, opts: CaptureOpts): Pr
     }
     await prepareForCapture(wrapper);
 
+    const scale = opts.scale ?? 2;
+    const height = opts.height ?? wrapper.scrollHeight;
+    if (height * scale > 16384 || width * height * scale * scale > 100_000_000) {
+      throw new Error('聊天记录太长，无法安全生成单张图片；请使用手机屏幕截图分段导出');
+    }
+
     const canvas = await html2canvas(wrapper, {
       backgroundColor: bg,
-      scale: 2,
+      scale,
+      ...(opts.height ? { height: opts.height } : {}),
       useCORS: true,
       logging: false,
       // onclone 在 html2canvas 内部 clone 一份 DOM 时调用，这里把字体强行套到每个
       // 非 mono 元素上 —— canvas 渲染时用 computed style，覆盖一次才稳。
       onclone: (clonedDoc) => {
+        const clonedWrapper = clonedDoc.querySelector<HTMLElement>(`[data-capture-id="${captureId}"]`);
+        if (clonedWrapper) opts.onClone?.(clonedWrapper);
         const all = clonedDoc.querySelectorAll<HTMLElement>('*');
         all.forEach(el => {
           let cur = '';

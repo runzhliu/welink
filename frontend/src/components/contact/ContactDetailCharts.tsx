@@ -93,7 +93,7 @@ export const ContactDetailCharts: React.FC<Props> = ({ detail, totalMessages, us
     <div className="space-y-6">
       {/* 社交指纹卡片行 */}
       <p className="text-xs text-gray-400 -mb-3">与该联系人的互动特征统计</p>
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="conversation-profile-metrics grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-[#1d1d1f] text-white rounded-2xl p-4 flex flex-col gap-2">
           <Moon size={18} className="text-blue-400" />
           <div className="text-2xl font-black">{detail.late_night_count.toLocaleString()}</div>

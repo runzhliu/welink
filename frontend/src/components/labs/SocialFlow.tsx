@@ -101,7 +101,7 @@ export const SocialFlow: React.FC = () => {
     setExporting(true);
     const r = await captureCardToPng(cardRef.current, {
       filename: `social-flow-${today.replace(/\//g, '-')}.png`,
-      backgroundColor: '#ffffff',
+      backgroundColor: document.documentElement.classList.contains('dark') ? '#1c1c1e' : '#ffffff',
       appendHTML: '',
     });
     setExporting(false);

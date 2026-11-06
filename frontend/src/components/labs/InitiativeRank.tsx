@@ -77,7 +77,7 @@ export const InitiativeRank: React.FC = () => {
     setExporting(true);
     const r = await captureCardToPng(cardRef.current, {
       filename: `initiative-${today.replace(/\//g, '-')}.png`,
-      backgroundColor: '#ffffff',
+      backgroundColor: document.documentElement.classList.contains('dark') ? '#1c1c1e' : '#ffffff',
       appendHTML: '',
     });
     setExporting(false);

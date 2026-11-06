@@ -1,4 +1,5 @@
 import { DatePicker } from '../common/DatePicker';
+import '../common/conversation-dialog.css';
 /**
  * 联系人详情弹窗组件
  */
@@ -299,7 +300,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
     <>
     <div
       className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-in fade-in duration-200 ${
-        fullscreen ? 'bg-white dark:bg-[var(--bg-page)]' : 'bg-[#1d1d1f]/90 backdrop-blur-md sm:p-8'
+        fullscreen ? 'bg-white dark:bg-[var(--bg-page)]' : 'bg-[#101b18]/70 backdrop-blur-sm sm:p-6'
       }`}
       onClick={fullscreen ? undefined : onClose}
     >
@@ -307,16 +308,16 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         role="dialog"
         aria-modal="true"
         aria-labelledby="contact-dialog-title"
-        className={`dk-card bg-white overflow-hidden shadow-2xl relative transition-all duration-300 ${
+        className={`conversation-dialog dk-card bg-white overflow-hidden shadow-2xl relative transition-all duration-300 ${
           fullscreen
             ? 'w-full h-full rounded-none'
-            : 'rounded-t-[32px] sm:rounded-[48px] w-full sm:max-w-5xl max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in'
+            : 'rounded-t-[18px] sm:rounded-2xl w-full sm:max-w-5xl max-h-[calc(100dvh-2rem)] sm:max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-      <div className={`overflow-y-auto p-4 sm:p-8 lg:p-16 ${fullscreen ? 'h-full' : 'max-h-[calc(100dvh-5rem)] sm:max-h-[92vh]'}`}>
+      <div className={`overflow-y-auto p-4 sm:p-8 lg:p-10 ${fullscreen ? 'h-full' : 'max-h-[calc(100dvh-2rem)] sm:max-h-[92vh]'}`}>
         {/* Top-right actions */}
-        <div className="absolute top-5 right-5 sm:top-10 sm:right-10 flex items-center gap-2">
+        <div className="conversation-dialog-actions sticky top-0 z-20 bg-[var(--bg-card)] flex flex-wrap justify-end items-center gap-1 mb-3">
           {/* 导出 */}
           <div className="relative" ref={exportPanelRef}>
             <button
@@ -427,7 +428,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         <div className="animate-in fade-in duration-200">
 
         {/* Header */}
-        <div className="mb-6 sm:mb-8 pr-10 sm:pr-0 flex items-center gap-4">
+        <div className="mb-6 sm:mb-8 flex items-center gap-4">
           <div className="relative flex-shrink-0">
             {useAiAvatar && aiAvatarURL ? (
               <button
@@ -711,7 +712,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
 
         {/* Tabs + 消息范围切换 */}
         <div className="flex items-center justify-between gap-3 mb-6 dk-border border-b border-gray-100">
-          <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="联系人详情视图">
+          <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto" role="tablist" aria-label="联系人详情视图">
             {(['wordcloud', 'detail', 'sentiment', 'search', 'wechat', 'replay', 'ai', 'clone', 'insights'] as ModalTab[]).map((t) => (
               <button
                 type="button"
@@ -753,7 +754,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
               type="button"
               onClick={() => handleToggleMine(!includeMine)}
               aria-pressed={includeMine}
-              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border transition-all mb-1 ${
+              className={`flex shrink-0 whitespace-nowrap items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border transition-all mb-1 ${
                 includeMine
                   ? 'bg-[#07c160] text-white border-[#07c160]'
                   : 'bg-white dark:bg-white/5 text-gray-400 border-gray-200 dark:border-white/15 hover:border-[#07c160] hover:text-[#07c160]'
@@ -784,11 +785,11 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
             </div>
 
             {/* Side Info */}
-            <div className="space-y-4 sm:space-y-8">
-              <div className="dk-subtle dk-border bg-[#f8f9fb] border border-gray-100 p-5 rounded-[28px] flex flex-col gap-1">
+            <div className="min-w-0 space-y-4 sm:space-y-8">
+              <div className="min-w-0 dk-subtle dk-border bg-[#f8f9fb] border border-gray-100 p-5 rounded-[28px] flex flex-col gap-1">
                 <p className="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-[0.16em]">第一条消息</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{contact.first_message_time}</p>
-                <p className="dk-text text-sm italic font-medium text-[#1d1d1f] leading-relaxed mt-1">
+                <p className="min-w-0 break-words [overflow-wrap:anywhere] dk-text text-sm italic font-medium text-[#1d1d1f] leading-relaxed mt-1">
                   "{contact.first_msg || '穿越时空的信号...'}"
                 </p>
               </div>

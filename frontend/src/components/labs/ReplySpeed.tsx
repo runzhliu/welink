@@ -84,7 +84,7 @@ export const ReplySpeed: React.FC = () => {
     setExporting(true);
     const r = await captureCardToPng(cardRef.current, {
       filename: `reply-speed-${today.replace(/\//g, '-')}.png`,
-      backgroundColor: '#ffffff',
+      backgroundColor: document.documentElement.classList.contains('dark') ? '#1c1c1e' : '#ffffff',
       appendHTML: '', // brand 已在卡片 JSX 里
     });
     setExporting(false);

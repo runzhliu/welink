@@ -19,8 +19,9 @@ import { Hourglass, MessageSquare, ChevronLeft, ChevronRight, X, Users, Messages
 import { calendarApi } from '../../services/api';
 import type { CalendarDayEntry, ContactStats, ChatMessage, GroupChatMessage } from '../../types';
 import { Section } from '../common/Section';
+import { Avatar } from '../common/Avatar';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
-import { avatarSrc } from '../../utils/avatar';
+import { useSelfInfo } from '../../contexts/SelfInfoContext';
 import { DayAIPanel } from './DayAIPanel';
 import { QuarterlyView } from './QuarterlyView';
 import { MonthView } from './MonthView';
@@ -57,12 +58,15 @@ const TrendTooltip: React.FC<{ active?: boolean; payload?: { value: number }[]; 
 interface MessagesViewProps {
   date: string;
   entry: CalendarDayEntry;
+  contact?: ContactStats;
   onBack: () => void;
 }
 
-const MessagesView: React.FC<MessagesViewProps> = ({ date, entry, onBack }) => {
+const MessagesView: React.FC<MessagesViewProps> = ({ date, entry, contact, onBack }) => {
   const [msgs, setMsgs] = useState<(ChatMessage | GroupChatMessage)[]>([]);
   const [loading, setLoading] = useState(true);
+  const { privacyMode } = usePrivacyMode();
+  const selfInfo = useSelfInfo();
 
   useEffect(() => {
     let alive = true;
@@ -89,15 +93,8 @@ const MessagesView: React.FC<MessagesViewProps> = ({ date, entry, onBack }) => {
           <ChevronLeft size={16} className="text-gray-500" />
         </button>
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          {entry.small_head_url ? (
-            <img loading="lazy" src={avatarSrc(entry.small_head_url)} alt="" className="w-7 h-7 rounded-lg object-cover flex-shrink-0"
-              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-          ) : (
-            <div className="w-7 h-7 rounded-lg bg-[#087f5b] flex items-center justify-center text-white text-xs font-black flex-shrink-0">
-              {entry.display_name.charAt(0)}
-            </div>
-          )}
-          <span className="font-bold text-sm truncate">{entry.display_name}</span>
+          <Avatar src={entry.small_head_url} contact={contact} name={entry.display_name} className={`w-7 h-7 !rounded-lg !text-xs ${privacyMode ? 'privacy-blur' : ''}`} />
+          <span className={`font-bold text-sm truncate ${privacyMode ? 'privacy-blur' : ''}`}>{entry.display_name}</span>
         </div>
         <span className="text-xs text-gray-400 flex-shrink-0">{date}</span>
       </div>
@@ -107,14 +104,13 @@ const MessagesView: React.FC<MessagesViewProps> = ({ date, entry, onBack }) => {
         {msgs.map((m, i) => {
           const isMine = 'is_mine' in m ? m.is_mine : false;
           const speaker = 'speaker' in m ? (m as GroupChatMessage).speaker : (isMine ? '我' : entry.display_name);
+          const messageAvatar = isMine ? selfInfo?.avatar_url : 'speaker' in m ? m.avatar_url : entry.small_head_url;
           const key = `${m.time || ''}-${i}`;
           return (
             <div key={key} className={`flex gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
-              <div className={`text-[10px] font-bold flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-white mt-0.5 ${isMine ? 'bg-[#07c160]' : 'bg-gray-300'}`}>
-                {speaker.charAt(0)}
-              </div>
+              <Avatar src={messageAvatar} contact={!isMine && !entry.is_group ? contact : undefined} name={isMine ? '我' : speaker || '未知'} className={`w-5 h-5 mt-0.5 !text-[10px] ${privacyMode ? 'privacy-blur' : ''}`} />
               <div className={`max-w-[80%] flex flex-col gap-0.5 ${isMine ? 'items-end' : 'items-start'}`}>
-                {'speaker' in m && !isMine && <span className="text-[10px] text-gray-400 ml-1">{speaker}</span>}
+                {'speaker' in m && !isMine && <span className={`text-[10px] text-gray-400 ml-1 ${privacyMode ? 'privacy-blur' : ''}`}>{speaker}</span>}
                 <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words ${isMine ? 'bg-[#07c160] text-white rounded-tr-sm' : 'bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-gray-200 rounded-tl-sm'}`}>
                   {m.content}
                 </div>
@@ -135,11 +131,12 @@ interface DayPanelProps {
   contacts: CalendarDayEntry[];
   groups: CalendarDayEntry[];
   loading: boolean;
+  contactIndex: Map<string, ContactStats>;
   onClose: () => void;
   onOpenSettings?: () => void;
 }
 
-const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, onClose, onOpenSettings }) => {
+const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, contactIndex, onClose, onOpenSettings }) => {
   const { privacyMode } = usePrivacyMode();
   const [viewEntry, setViewEntry] = useState<CalendarDayEntry | null>(null);
   const [aiMode, setAiMode] = useState(false);
@@ -147,7 +144,7 @@ const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, on
 
   const total = contacts.reduce((s, c) => s + c.count, 0) + groups.reduce((s, g) => s + g.count, 0);
 
-  if (viewEntry) return <MessagesView date={date} entry={viewEntry} onBack={() => setViewEntry(null)} />;
+  if (viewEntry) return <MessagesView date={date} entry={viewEntry} contact={viewEntry.is_group ? undefined : contactIndex.get(viewEntry.username)} onBack={() => setViewEntry(null)} />;
   if (aiMode) return <DayAIPanel date={date} contacts={contacts} groups={groups} onBack={() => setAiMode(false)} onOpenSettings={onOpenSettings} />;
 
   const renderEntry = (entry: CalendarDayEntry) => (
@@ -158,14 +155,7 @@ const DayPanel: React.FC<DayPanelProps> = ({ date, contacts, groups, loading, on
       aria-label={`${entry.display_name}，${entry.is_group ? '群聊' : '私聊'}，${entry.count} 条`}
       className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group focus:outline-none focus-visible:bg-gray-50 dark:focus-visible:bg-white/5"
     >
-      {entry.small_head_url ? (
-        <img loading="lazy" src={avatarSrc(entry.small_head_url)} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0"
-          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-      ) : (
-        <div className="w-9 h-9 rounded-xl bg-[#087f5b] flex items-center justify-center text-white text-sm font-black flex-shrink-0">
-          {entry.display_name.charAt(0)}
-        </div>
-      )}
+      <Avatar src={entry.small_head_url} contact={entry.is_group ? undefined : contactIndex.get(entry.username)} name={entry.display_name} className={`w-9 h-9 !rounded-xl ${privacyMode ? 'privacy-blur' : ''}`} />
       <div className="flex-1 min-w-0">
         <div className={`font-semibold text-sm truncate${privacyMode ? ' privacy-blur' : ''}`}>{entry.display_name}</div>
         <div className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
@@ -274,6 +264,7 @@ const ViewSwitcher: React.FC<{ value: CalendarViewType; onChange: (v: CalendarVi
 // ─── 主页面 ────────────────────────────────────────────────────────────────────
 
 export const ChatCalendarPage: React.FC<Props> = ({ contacts, onContactClick, onOpenSettings }) => {
+  const contactIndex = useMemo(() => new Map(contacts.map(contact => [contact.username, contact])), [contacts]);
   const [heatmap, setHeatmap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
@@ -525,6 +516,7 @@ export const ChatCalendarPage: React.FC<Props> = ({ contacts, onContactClick, on
             contacts={dayContacts}
             groups={dayGroups}
             loading={dayLoading}
+            contactIndex={contactIndex}
             onClose={() => setSelectedDate(null)}
             onOpenSettings={onOpenSettings}
           />

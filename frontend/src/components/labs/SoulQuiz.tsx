@@ -89,11 +89,11 @@ export const SoulQuiz: React.FC<Props> = ({ contacts }) => {
     setExporting(true);
     const r = await captureCardToPng(cardRef.current, {
       filename: `welink-soul-quiz-${Date.now()}.png`,
-      backgroundColor: '#ffffff',
+      backgroundColor: document.documentElement.classList.contains('dark') ? '#1c1c1e' : '#ffffff',
       appendHTML: welinkBrandHTML({
         label: '灵魂提问机',
         date: new Date().toLocaleDateString('zh-CN'),
-        variant: 'light',
+        variant: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
       }),
     });
     setExporting(false);

@@ -1,4 +1,5 @@
 import { DatePicker } from '../common/DatePicker';
+import '../common/conversation-dialog.css';
 import { Select } from '../common/Select';
 /**
  * 群聊画像视图
@@ -30,6 +31,7 @@ import { EmptyState } from '../common/EmptyState';
 
 const SearchContextModal = lazy(() => import('../search/SearchContextModal').then(m => ({ default: m.SearchContextModal })));
 const GroupChatReplay = lazy(() => import('./GroupChatReplay').then(m => ({ default: m.GroupChatReplay })));
+const WeChatView = lazy(() => import('../contact/WeChatView').then(m => ({ default: m.WeChatView })));
 const GroupYearReviewModal = lazy(() => import('./GroupYearReviewModal').then(m => ({ default: m.GroupYearReviewModal })));
 const GroupMemberModal = lazy(() => import('./GroupMemberModal').then(m => ({ default: m.GroupMemberModal })));
 const RelationshipGraphPanel = lazy(() => import('./RelationshipGraphPanel').then(m => ({ default: m.RelationshipGraphPanel })));
@@ -84,7 +86,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
       c.username === displayName
     ) ?? null;
   };
-  const [tab, setTab] = useState<'portrait' | 'search' | 'ai' | 'relationships' | 'sim' | 'replay'>('portrait');
+  const [tab, setTab] = useState<'portrait' | 'search' | 'ai' | 'relationships' | 'sim' | 'replay' | 'wechat'>('portrait');
   const [showYearReview, setShowYearReview] = useState(false);
   // 群友画像（Issue #104）：任意成员（无论好友与否）的群内发言分析
   const [memberDetail, setMemberDetail] = useState<{ wxid: string; speaker: string } | null>(null);
@@ -269,7 +271,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
   return (
     <div
       className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-in fade-in duration-200 ${
-        fullscreen ? 'bg-white dark:bg-[var(--bg-page)]' : 'bg-[#1d1d1f]/90 backdrop-blur-md sm:p-8'
+        fullscreen ? 'bg-white dark:bg-[var(--bg-page)]' : 'bg-[#101b18]/70 backdrop-blur-sm sm:p-6'
       }`}
       onClick={fullscreen ? undefined : onClose}
     >
@@ -277,17 +279,17 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         role="dialog"
         aria-modal="true"
         aria-labelledby="group-dialog-title"
-        className={`dk-card bg-white overflow-hidden shadow-2xl relative transition-all duration-300 ${
+        className={`conversation-dialog dk-card bg-white overflow-hidden shadow-2xl relative transition-all duration-300 ${
           fullscreen
             ? 'w-full h-full rounded-none'
-            : 'rounded-t-[32px] sm:rounded-[48px] w-full sm:max-w-5xl max-h-[calc(100dvh-5rem)] sm:max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in'
+            : 'rounded-t-[18px] sm:rounded-2xl w-full sm:max-w-5xl max-h-[calc(100dvh-2rem)] sm:max-h-[92vh] animate-in slide-in-from-bottom sm:zoom-in'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-      <div className={`overflow-y-auto ${fullscreen ? 'h-full' : 'max-h-[calc(100dvh-5rem)] sm:max-h-[92vh]'}`}>
+      <div className={`overflow-y-auto ${fullscreen ? 'h-full' : 'max-h-[calc(100dvh-2rem)] sm:max-h-[92vh]'}`}>
         {/* 固定顶部区域（不随内容滚动的视觉效果，通过 sticky 实现） */}
         <div className="sticky top-0 z-10 bg-white dark:bg-[var(--bg-card)] px-4 sm:px-8 lg:px-10 pt-4 sm:pt-6">
-        <div className="absolute top-4 right-4 sm:top-6 sm:right-8 flex items-center gap-2">
+        <div className="conversation-dialog-actions flex flex-wrap justify-end items-center gap-1 mb-3">
           {/* 导出 */}
           <div className="relative" ref={exportPanelRef}>
             <button
@@ -372,7 +374,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         </div>
 
         {/* Header */}
-        <div className="flex items-center gap-4 mb-6 pr-10">
+        <div className="flex items-center gap-4 mb-6">
           {group.small_head_url ? (
             <img loading="lazy" src={avatarSrc(group.small_head_url)} alt="" className="w-14 h-14 rounded-2xl object-cover flex-shrink-0"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -399,7 +401,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
 
         {/* Tab bar */}
         <div className="flex gap-1 overflow-x-auto border-b border-gray-100 dk-border" role="tablist" aria-label="群聊详情视图">
-          {(['portrait', 'relationships', 'search', 'replay', 'ai', 'sim'] as const).map((t) => (
+          {(['portrait', 'relationships', 'search', 'wechat', 'replay', 'ai', 'sim'] as const).map((t) => (
             <button
               type="button"
               key={t}
@@ -417,7 +419,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             >
               {t === 'ai' && <MessageSquare size={13} className="flex-shrink-0" />}
               {t === 'sim' && <Users size={13} className="flex-shrink-0" />}
-              {t === 'portrait' ? '群聊画像' : t === 'relationships' ? '人物关系' : t === 'search' ? '搜索记录' : t === 'replay' ? '回放' : t === 'sim' ? 'AI 群聊' : 'AI 分析'}
+              {t === 'portrait' ? '群聊画像' : t === 'relationships' ? '人物关系' : t === 'search' ? '搜索记录' : t === 'wechat' ? '微信视图' : t === 'replay' ? '回放' : t === 'sim' ? 'AI 群聊' : 'AI 分析'}
               {t === 'ai' && <AIAnalysisBadge username={group.username} isGroup={true} />}
             </button>
           ))}
@@ -452,6 +454,12 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         {tab === 'replay' && (
           <Suspense fallback={<LazyFallback />}>
             <GroupChatReplay username={group.username} groupName={group.name} />
+          </Suspense>
+        )}
+
+        {tab === 'wechat' && (
+          <Suspense fallback={<LazyFallback />}>
+            <WeChatView username={group.username} displayName={group.name} lastMessageTime={group.last_message_time} isGroup />
           </Suspense>
         )}
 

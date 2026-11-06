@@ -153,7 +153,7 @@ export const FlirtProbe: React.FC = () => {
     setExporting(true);
     const r = await captureCardToPng(cardRef.current, {
       filename: `flirt-probe-${today.replace(/\//g, '-')}.png`,
-      backgroundColor: '#ffffff',
+      backgroundColor: document.documentElement.classList.contains('dark') ? '#1c1c1e' : '#ffffff',
     });
     setExporting(false);
     if (r.ok) {

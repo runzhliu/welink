@@ -1,4 +1,5 @@
 import { DatePicker } from '../common/DatePicker';
+import { Select } from '../common/Select';
 /**
  * WeChatView —— 1:1 复刻微信手机端私聊界面的只读视图。
  *
@@ -16,9 +17,10 @@ import { DatePicker } from '../common/DatePicker';
 
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { ChevronLeft, ChevronRight, Calendar, Loader2, Share2, Check, MoreHorizontal, ChevronLeft as Back, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Loader2, Share2, Check, User, Signal, Wifi, BatteryFull, Mic, Smile, PlusCircle } from 'lucide-react';
 import { avatarSrc } from '../../utils/avatar';
 import { useSelfInfo } from '../../contexts/SelfInfoContext';
+import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { captureCardToPng } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
 
@@ -27,6 +29,8 @@ interface ChatMsg {
   content: string;
   is_mine: boolean;
   type: number;      // local_type
+  speaker?: string;
+  avatar_url?: string;
 }
 
 interface Props {
@@ -35,7 +39,16 @@ interface Props {
   avatarUrl?: string;
   /** 联系人最后一条消息时间，如 "2024-03-15 14:23"，用作默认日期 */
   lastMessageTime?: string;
+  isGroup?: boolean;
 }
+
+// Native pixel dimensions: https://www.apple.com/iphone-18-pro/specs/
+// and https://www.apple.com/iphone-duo/specs/. Logical dimensions are at 3×.
+const DEVICES = {
+  promax: { label: 'iPhone 18 Pro Max · 1320 × 2868', width: 440, height: 956 },
+  duoOuter: { label: 'iPhone Duo 外屏 · 1398 × 2034', width: 466, height: 678 },
+  duoInner: { label: 'iPhone Duo 内屏 · 1878 × 2670', width: 626, height: 890 },
+} as const;
 
 // 从 "2024-03-15 14:23" 或 "2024-03-15" 抠出 YYYY-MM-DD；抠不到用今天
 function pickDefaultDate(s?: string): string {
@@ -93,9 +106,11 @@ function mediaLabel(type: number, content: string): string | null {
   }
 }
 
-export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, lastMessageTime }) => {
+export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, lastMessageTime, isGroup = false }) => {
   const toast = useToast();
   const selfInfo = useSelfInfo();
+  const { privacyMode } = usePrivacyMode();
+  const visibleName = privacyMode ? (isGroup ? '群聊' : '联系人') : displayName;
   const [date, setDate] = useState(() => pickDefaultDate(lastMessageTime));
   const [activeDates, setActiveDates] = useState<string[]>([]);
   const [datesLoaded, setDatesLoaded] = useState(false);
@@ -104,6 +119,9 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
   const [err, setErr] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
+  const [exportOptions, setExportOptions] = useState(false);
+  const [device, setDevice] = useState<keyof typeof DEVICES>('promax');
+  const [exportMode, setExportMode] = useState<'long' | 'screen'>('long');
   const cardRef = useRef<HTMLDivElement>(null);
 
   // 拉该联系人「有记录的日期」列表，默认落到最后有记录那天
@@ -128,7 +146,7 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
     let ignore = false;
     setLoading(true);
     setErr('');
-    axios.get<ChatMsg[]>('/api/contacts/messages', { params: { username, date } })
+    axios.get<ChatMsg[]>(isGroup ? '/api/groups/messages' : '/api/contacts/messages', { params: { username, date } })
       .then(r => {
         if (ignore) return;
         setMsgs(Array.isArray(r.data) ? r.data : []);
@@ -142,7 +160,7 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
       })
       .finally(() => { if (!ignore) setLoading(false); });
     return () => { ignore = true; };
-  }, [date, username]);
+  }, [date, username, isGroup]);
 
   // 前一天 / 后一天：跳到「有记录的相邻日期」，而不是盲目 ±1 个自然日
   const curIdx = activeDates.indexOf(date);
@@ -174,14 +192,48 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
   const exportPng = async () => {
     if (!cardRef.current || exporting || msgs.length === 0) return;
     setExporting(true);
+    const preset = DEVICES[device];
+    const originalMessages = cardRef.current.querySelector<HTMLElement>('[data-wechat-messages]');
+    const scrollFraction = originalMessages && originalMessages.scrollHeight > originalMessages.clientHeight
+      ? originalMessages.scrollTop / (originalMessages.scrollHeight - originalMessages.clientHeight) : 0;
     const r = await captureCardToPng(cardRef.current, {
-      filename: `wechat-${displayName}-${date}.png`,
+      filename: `wechat-${visibleName}-${date}-${device}-${exportMode}.png`,
       backgroundColor: '#ededed',
-      width: 420, // 接近手机宽度，气泡比例更真
+      width: preset.width,
+      height: exportMode === 'screen' ? preset.height : undefined,
+      scale: 3,
+      beforeCapture: wrapper => {
+        const card = wrapper.querySelector<HTMLElement>('[data-wechat-card]');
+        const messages = wrapper.querySelector<HTMLElement>('[data-wechat-messages]');
+        if (!card || !messages) throw new Error('找不到聊天视图');
+        // html2canvas 对 CJK 字体的基线计算偏低。单独调整文字，不移动气泡或尖角。
+        wrapper.querySelectorAll<HTMLElement>('[data-wechat-bubble]').forEach(bubble => {
+          bubble.style.paddingTop = '4px';
+          bubble.style.paddingBottom = '12px';
+        });
+        wrapper.querySelectorAll<HTMLElement>('[data-wechat-content], [data-wechat-avatar-label]').forEach(content => {
+          content.style.position = 'relative';
+          content.style.top = '-5px';
+        });
+        card.style.height = exportMode === 'screen' ? `${preset.height}px` : 'auto';
+        if (exportMode === 'long') {
+          messages.style.flex = 'none';
+          messages.style.overflow = 'visible';
+          messages.style.maxHeight = 'none';
+        } else {
+          messages.scrollTop = scrollFraction * (messages.scrollHeight - messages.clientHeight);
+        }
+      },
+      onClone: wrapper => {
+        if (exportMode !== 'screen') return;
+        const messages = wrapper.querySelector<HTMLElement>('[data-wechat-messages]');
+        if (messages) messages.scrollTop = scrollFraction * (messages.scrollHeight - messages.clientHeight);
+      },
     });
     setExporting(false);
     if (r.ok) {
       setExported(true);
+      setExportOptions(false);
       setTimeout(() => setExported(false), 2000);
     } else {
       toast.error('截图失败：' + (r.error || '未知错误'));
@@ -229,32 +281,48 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
         </div>
         {msgs.length > 0 && (
           <button
-            onClick={exportPng}
+            onClick={() => setExportOptions(v => !v)}
             disabled={exporting}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#07c160] text-white hover:bg-[#06ad56] disabled:opacity-50 transition-colors"
           >
             {exporting ? <Loader2 size={12} className="animate-spin" /> : exported ? <Check size={12} /> : <Share2 size={12} />}
-            {exported ? '已下载' : '导出长图'}
+            {exported ? '已下载' : '导出图片'}
           </button>
         )}
       </div>
+
+      {exportOptions && <div className="mb-4 p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 space-y-3">
+        <div className="text-sm font-semibold text-gray-700 dark:text-gray-200">导出尺寸</div>
+        <Select aria-label="选择手机屏幕尺寸" value={device} onValueChange={v => setDevice(v as keyof typeof DEVICES)} className="w-full">
+          {Object.entries(DEVICES).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
+        </Select>
+        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-gray-600 dark:text-gray-300">
+          <label className="flex items-center gap-2"><input type="radio" name="wechat-export-mode" checked={exportMode === 'long'} onChange={() => setExportMode('long')} />完整长图</label>
+          <label className="flex items-center gap-2"><input type="radio" name="wechat-export-mode" checked={exportMode === 'screen'} onChange={() => setExportMode('screen')} />手机屏幕截图</label>
+        </div>
+        <p className="text-xs text-gray-400 leading-relaxed">{exportMode === 'long' ? '包含当天全部消息，宽度按所选屏幕像素，高度随内容增长。' : '导出选定手机的精确屏幕像素，显示当前滚动位置附近的内容；其他消息可滚动后再次导出。'}</p>
+        <button type="button" onClick={exportPng} disabled={exporting} className="px-4 py-2 rounded-lg text-xs font-bold bg-[#07c160] text-white disabled:opacity-50">{exporting ? '正在生成…' : '下载 PNG'}</button>
+      </div>}
 
       {err && (
         <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-500/10 dark:border-red-500/30 p-3 mb-3 text-xs text-red-700 dark:text-red-300">{err}</div>
       )}
 
       {/* 微信聊天面板 */}
-      <div className="rounded-2xl overflow-hidden border border-gray-200 dark:border-white/10 shadow-sm">
-        <div ref={cardRef} className="bg-[#ededed]">
+      <div className="mx-auto max-w-[440px] rounded-2xl overflow-hidden border border-gray-200 dark:border-white/10 shadow-sm">
+        <div ref={cardRef} data-wechat-card className="bg-[#ededed] flex flex-col" style={{ height: 'min(72vh, 720px)', minHeight: 360 }}>
+          <div aria-hidden="true" className="h-11 shrink-0 flex items-center justify-between px-6 text-[13px] font-semibold text-[#181818]">
+            <span>9:41</span><span className="flex items-center gap-1"><Signal size={14} /><Wifi size={14} /><BatteryFull size={19} /></span>
+          </div>
           {/* 顶栏：微信灰底 + 居中联系人名 */}
-          <div className="relative flex items-center justify-center h-11 bg-[#ededed] border-b border-black/5 px-10">
-            <Back size={20} className="absolute left-2 text-[#181818]" strokeWidth={2.5} />
-            <span className="text-[15px] font-semibold text-[#181818] truncate max-w-[60%]">{displayName}</span>
-            <MoreHorizontal size={20} className="absolute right-2 text-[#181818]" />
+          <div className="relative flex items-center justify-center h-11 shrink-0 bg-[#ededed] px-10">
+            <span aria-hidden="true" className="absolute left-3 text-[28px] leading-none text-[#181818]">‹</span>
+            <span className="text-[15px] font-semibold text-[#181818] truncate max-w-[60%]">{visibleName}</span>
+            <span aria-hidden="true" className="absolute right-3 text-[17px] tracking-[2px] leading-none text-[#181818]">•••</span>
           </div>
 
           {/* 消息区 */}
-          <div className="px-3 py-3 min-h-[200px] max-h-[60vh] overflow-y-auto">
+          <div data-wechat-messages className="px-3 py-3 min-h-0 flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center h-40 text-gray-400 text-sm gap-2">
                 <Loader2 size={14} className="animate-spin" /> 加载中…
@@ -262,7 +330,7 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
             ) : msgs.length === 0 ? (
               <div className="text-center py-16 text-[#9a9a9a] text-[13px]">
                 这一天没有聊天记录
-                <div className="text-xs text-[#b8b8b8] mt-1">换个日期试试 · {displayName}</div>
+                <div className="text-xs text-[#b8b8b8] mt-1">换个日期试试 · {visibleName}</div>
               </div>
             ) : (
               <>
@@ -283,13 +351,16 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
                             <span className="text-[12px] text-[#a5a5a5]">{wechatTime(m.time)}</span>
                           </div>
                         )}
-                        <Bubble m={m} displayName={displayName} avatarUrl={avatarUrl} myAvatar={myAvatar} selfName={selfInfo?.nickname} />
+                        <Bubble m={m} displayName={isGroup ? (privacyMode ? '群成员' : (m.speaker || '未知')) : visibleName} avatarUrl={privacyMode ? undefined : (isGroup ? m.avatar_url : avatarUrl)} myAvatar={privacyMode ? undefined : myAvatar} selfName={privacyMode ? undefined : selfInfo?.nickname} isGroup={isGroup} />
                       </React.Fragment>
                     );
                   })}
                 </div>
               </>
             )}
+          </div>
+          <div aria-label="只读聊天记录" className="h-[58px] shrink-0 flex items-center gap-3 px-3 bg-[#f7f7f7] border-t border-black/5 text-[#222]">
+            <Mic size={23} strokeWidth={1.6} /><div className="h-9 flex-1 rounded-md bg-white" /><Smile size={23} strokeWidth={1.6} /><PlusCircle size={23} strokeWidth={1.6} />
           </div>
         </div>
       </div>
@@ -302,7 +373,7 @@ export const WeChatView: React.FC<Props> = ({ username, displayName, avatarUrl, 
 };
 
 // 单条气泡
-const Bubble: React.FC<{ m: ChatMsg; displayName: string; avatarUrl?: string; myAvatar?: string; selfName?: string }> = ({ m, displayName, avatarUrl, myAvatar, selfName }) => {
+const Bubble: React.FC<{ m: ChatMsg; displayName: string; avatarUrl?: string; myAvatar?: string; selfName?: string; isGroup?: boolean }> = ({ m, displayName, avatarUrl, myAvatar, selfName, isGroup }) => {
   const media = mediaLabel(m.type, m.content);
   const mine = m.is_mine;
   const avatar = mine ? myAvatar : avatarUrl;
@@ -322,18 +393,20 @@ const Bubble: React.FC<{ m: ChatMsg; displayName: string; avatarUrl?: string; my
           line-height 用紧凑值：html2canvas 截图时把文字按行框顶部对齐，行高过大
           单行气泡下方会留一截空白（看着"字没在中间"）。1.3 + 对称 py 视觉居中。 */}
       <div className="relative max-w-[70%]">
+        {isGroup && !mine && <div className="text-[11px] text-[#999] mb-1 ml-0.5">{displayName}</div>}
         <div
+          data-wechat-bubble
           className="relative px-3 py-2 text-[16px] break-words whitespace-pre-wrap text-[#181818]"
           style={{ background: bubbleColor, borderRadius: 5, lineHeight: 1.3 }}
         >
-          {media ? (
-            <span className="inline-flex items-center gap-1 text-[#576b95]" style={{ lineHeight: 1.3 }}>
-              <span className="text-[15px]">{mediaIcon(media)}</span>
-              <span className="text-[14px]">{media}</span>
-            </span>
-          ) : (
-            m.content
-          )}
+          <span data-wechat-content className="block">
+            {media ? (
+              <span className="inline-flex items-center gap-1 text-[#576b95]" style={{ lineHeight: 1.3 }}>
+                <span className="text-[15px]">{mediaIcon(media)}</span>
+                <span className="text-[14px]">{media}</span>
+              </span>
+            ) : m.content}
+          </span>
           <span className="absolute w-0 h-0" style={tailStyle} />
         </div>
       </div>
@@ -344,6 +417,7 @@ const Bubble: React.FC<{ m: ChatMsg; displayName: string; avatarUrl?: string; my
 // 头像：圆角方块；有图显图，无图显灰底人形（接近微信默认头像观感）
 const Avatar: React.FC<{ src?: string; fallbackChar: string }> = ({ src, fallbackChar }) => {
   const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
   if (src && !failed) {
     return (
       <img
@@ -356,7 +430,7 @@ const Avatar: React.FC<{ src?: string; fallbackChar: string }> = ({ src, fallbac
   }
   return (
     <div className="w-10 h-10 rounded-[5px] flex-shrink-0 flex items-center justify-center bg-[#c8c8c8] text-white">
-      {fallbackChar ? <span className="text-sm font-semibold">{fallbackChar}</span> : <User size={20} className="text-white/90" />}
+      {fallbackChar ? <span data-wechat-avatar-label className="text-sm font-semibold">{fallbackChar}</span> : <User size={20} className="text-white/90" />}
     </div>
   );
 };

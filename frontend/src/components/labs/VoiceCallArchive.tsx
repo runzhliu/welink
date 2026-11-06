@@ -105,7 +105,7 @@ export const VoiceCallArchive: React.FC = () => {
     setExporting(true);
     const r = await captureCardToPng(cardRef.current, {
       filename: `voice-call-${today.replace(/\//g, '-')}.png`,
-      backgroundColor: '#ffffff',
+      backgroundColor: document.documentElement.classList.contains('dark') ? '#1c1c1e' : '#ffffff',
       appendHTML: '',
     });
     setExporting(false);

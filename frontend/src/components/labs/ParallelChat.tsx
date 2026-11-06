@@ -171,11 +171,11 @@ export const ParallelChat: React.FC<Props> = ({ contacts }) => {
     setExporting(true);
     const r = await captureCardToPng(cardRef.current, {
       filename: `welink-parallel-${Date.now()}.png`,
-      backgroundColor: '#ffffff',
+      backgroundColor: document.documentElement.classList.contains('dark') ? '#1c1c1e' : '#ffffff',
       appendHTML: welinkBrandHTML({
         label: '平行宇宙对话',
         date: new Date().toLocaleDateString('zh-CN'),
-        variant: 'light',
+        variant: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
       }),
     });
     setExporting(false);

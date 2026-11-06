@@ -1867,11 +1867,13 @@ func (s *ContactService) GetSelfPortrait() *SelfPortrait {
 
 // ChatMessage 单条聊天消息（用于日历点击查看当天记录）
 type ChatMessage struct {
-	Time    string `json:"time"`           // "14:23"
-	Content string `json:"content"`        // 消息内容或类型描述
-	IsMine  bool   `json:"is_mine"`        // true=我发的
-	Type    int    `json:"type"`           // local_type
-	Date    string `json:"date,omitempty"` // "2024-03-15"，搜索结果中使用
+	Time      string `json:"time"`                 // "14:23"
+	Content   string `json:"content"`              // 消息内容或类型描述
+	IsMine    bool   `json:"is_mine"`              // true=我发的
+	Type      int    `json:"type"`                 // local_type
+	Date      string `json:"date,omitempty"`       // "2024-03-15"，搜索结果中使用
+	Speaker   string `json:"speaker,omitempty"`    // 群聊搜索的发言人
+	AvatarURL string `json:"avatar_url,omitempty"` // 群聊搜索的发言人头像
 }
 
 // GetDayMessages 返回指定联系人某一天的聊天记录（按时间排序）
@@ -3856,6 +3858,10 @@ func (s *ContactService) GetGroupDayMessages(username, date string) []GroupChatM
 
 	nameMap := s.loadContactNameMap()
 	avatarMap := s.loadContactAvatarMap()
+	selfWxid := ""
+	if self := s.GetSelfInfo(); self != nil {
+		selfWxid = self.Wxid
+	}
 
 	var msgs []GroupChatMessage
 	for _, mdb := range s.msgRepo.DBsForUsername(username) {
@@ -3872,17 +3878,7 @@ func (s *ContactService) GetGroupDayMessages(username, date string) []GroupChatM
 			n2iRows.Close()
 		}
 
-		// 找我自己在本 DB 的 rowid（匹配 contact.db 中有 flag&3 的我自己的账号）
-		// 通过 nameMap：我自己不在 contact 表里，但可通过排除所有联系人来判断
-		// 更简单：群聊消息中 is_mine 通过 wxid 判断，需要知道自己的 wxid
-		// 由于自己的 wxid 可能不在联系人表，这里用 isMine=false 作为保守值
-		// 实际通过检查：若 wxid 不在 nameMap（非好友/自己），视为自己
-		// 注意：群里有很多非好友，不能用此逻辑。改为：
-		// 凡是 wxid 能在 nameMap 中找到（是好友），则不是我；否则用群消息格式里的前缀判断
-		// 最可靠：和私聊一样，查 Name2Id 找我的 rowid
-		// 我的 wxid 是 contact.db 中 flag=2055 左右的那个（只能启动时读一次）
-		// 这里简化：每条消息根据 sender wxid 是否等于 "自己"（后续可配置）
-		// 当前版本：is_mine = 从群消息前缀"wxid:\n"判断
+		// 只在确切知道自己的 wxid 时标记本人，避免把非好友误认成自己。
 
 		rows, err := mdb.Query(fmt.Sprintf(
 			"SELECT create_time, local_type, message_content, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s] WHERE create_time >= %d AND create_time < %d ORDER BY create_time ASC",
@@ -3957,7 +3953,7 @@ func (s *ContactService) GetGroupDayMessages(username, date string) []GroupChatM
 				Time:      time.Unix(ts, 0).In(s.tz).Format("15:04"),
 				Speaker:   speaker,
 				Content:   content,
-				IsMine:    false,
+				IsMine:    selfWxid != "" && speakerWxid == selfWxid,
 				Type:      lt,
 				AvatarURL: avatarMap[speakerWxid],
 			})
@@ -4643,6 +4639,15 @@ type GlobalSearchGroup struct {
 // 之前是 O(对象数 × DB 数) 串行 LIKE 全表扫，几百群直接超过前端 120s axios timeout。
 func (s *ContactService) GlobalSearch(ctx context.Context, q, searchType string) []GlobalSearchGroup {
 	pattern := "%" + q + "%"
+	var groupNames, groupAvatars map[string]string
+	selfWxid := ""
+	if searchType == "group" || searchType == "all" {
+		groupNames = s.loadContactNameMap()
+		groupAvatars = s.loadContactAvatarMap()
+		if self := s.GetSelfInfo(); self != nil {
+			selfWxid = self.Wxid
+		}
+	}
 
 	const concurrency = 8
 	sem := make(chan struct{}, concurrency)
@@ -4691,8 +4696,9 @@ func (s *ContactService) GlobalSearch(ctx context.Context, q, searchType string)
 			var sqlText string
 			if isGroup {
 				sqlText = fmt.Sprintf(
-					`SELECT create_time, local_type, message_content
-					 FROM [%s] WHERE local_type = 1 AND message_content LIKE ? ORDER BY create_time DESC LIMIT 5`,
+					`SELECT m.create_time, m.local_type, m.message_content, COALESCE(m.real_sender_id,0), COALESCE(n.user_name,'')
+					 FROM [%s] m LEFT JOIN Name2Id n ON n.rowid = m.real_sender_id
+					 WHERE m.local_type = 1 AND m.message_content LIKE ? ORDER BY m.create_time DESC LIMIT 5`,
 					tableName)
 			} else {
 				sqlText = fmt.Sprintf(
@@ -4701,6 +4707,10 @@ func (s *ContactService) GlobalSearch(ctx context.Context, q, searchType string)
 					tableName)
 			}
 			rows, err := mdb.QueryContext(ctx, sqlText, pattern)
+			if err != nil && isGroup {
+				// 旧库可能没有 Name2Id；仍保留文本搜索和消息前缀里的发言人。
+				rows, err = mdb.QueryContext(ctx, fmt.Sprintf(`SELECT create_time, local_type, message_content, COALESCE(real_sender_id,0), '' FROM [%s] WHERE local_type = 1 AND message_content LIKE ? ORDER BY create_time DESC LIMIT 5`, tableName), pattern)
+			}
 			if err != nil {
 				continue
 			}
@@ -4709,26 +4719,42 @@ func (s *ContactService) GlobalSearch(ctx context.Context, q, searchType string)
 				var lt int
 				var content string
 				var senderID int64
+				var speakerWxid, senderWxid, speaker, avatarURL string
 				if isGroup {
-					rows.Scan(&ts, &lt, &content)
+					if rows.Scan(&ts, &lt, &content, &senderID, &senderWxid) != nil {
+						continue
+					}
 					// 群消息格式："speakerWxid:\ncontent"，去掉发言人前缀
 					if idx := strings.Index(content, ":\n"); idx > 0 && idx < 80 {
+						speakerWxid = content[:idx]
 						content = content[idx+2:]
 					}
+					if speakerWxid == "" {
+						speakerWxid = senderWxid
+					}
+					speaker = groupNames[speakerWxid]
+					if speaker == "" {
+						speaker = speakerWxid
+					}
+					avatarURL = groupAvatars[speakerWxid]
 				} else {
 					rows.Scan(&ts, &lt, &content, &senderID)
 				}
 				dt := time.Unix(ts, 0).In(s.tz)
 				isMine := false
-				if !isGroup {
+				if isGroup {
+					isMine = selfWxid != "" && speakerWxid == selfWxid
+				} else {
 					isMine = contactRowID < 0 || senderID != contactRowID
 				}
 				msgs = append(msgs, ChatMessage{
-					Time:    dt.Format("15:04"),
-					Date:    dt.Format("2006-01-02"),
-					Content: content,
-					IsMine:  isMine,
-					Type:    lt,
+					Time:      dt.Format("15:04"),
+					Date:      dt.Format("2006-01-02"),
+					Content:   content,
+					IsMine:    isMine,
+					Type:      lt,
+					Speaker:   speaker,
+					AvatarURL: avatarURL,
 				})
 			}
 			rows.Close()

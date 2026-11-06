@@ -1,0 +1,45 @@
+/* Shared visual frame for private and group conversation details. */
+.conversation-dialog {
+  border: 1px solid var(--border);
+}
+
+.conversation-dialog-actions > button,
+.conversation-dialog-actions > div > button {
+  color: var(--text-secondary);
+}
+
+.conversation-dialog [role='tablist'] button {
+  border-radius: 0;
+}
+
+.conversation-dialog .conversation-profile-metrics {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.conversation-dialog .conversation-profile-metrics > div {
+  min-width: 0;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-radius: 0;
+  border-right: 1px solid var(--border);
+}
+
+.conversation-dialog .conversation-profile-metrics > div:last-child {
+  border-right: 0;
+}
+
+.conversation-dialog .conversation-profile-metrics > div > svg {
+  color: var(--accent-text);
+}
+
+.conversation-dialog .conversation-profile-metrics > div > div:not(:first-of-type) {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 639px) {
+  .conversation-dialog .conversation-profile-metrics > div:nth-child(even) { border-right: 0; }
+  .conversation-dialog .conversation-profile-metrics > div:nth-child(-n+4) { border-bottom: 1px solid var(--border); }
+}

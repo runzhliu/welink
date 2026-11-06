@@ -92,7 +92,7 @@ const buildTimeline = (data: MSResp): TLItem[] => {
       icon: <MessageCircle size={14} />,
       iconColor: '#07c160',
       title: '首次互动',
-      body: <span className="text-white/70">这一天，你和 {name} 的故事开始了。</span>,
+      body: <span>这一天，你和 {name} 的故事开始了。</span>,
       quote: data.first_message.content
         ? { speaker: data.first_message.speaker, content: data.first_message.content }
         : undefined,
@@ -106,7 +106,7 @@ const buildTimeline = (data: MSResp): TLItem[] => {
       icon: <BookOpen size={14} />,
       iconColor: '#10aeff',
       title: `首条长文 · ${data.first_long_message.length} 字`,
-      body: <span className="text-white/70">关系开始有"想多说几句"的瞬间。</span>,
+      body: <span>关系开始有"想多说几句"的瞬间。</span>,
       quote: data.first_long_message.content
         ? { speaker: data.first_long_message.speaker, content: data.first_long_message.content }
         : undefined,
@@ -120,7 +120,7 @@ const buildTimeline = (data: MSResp): TLItem[] => {
       icon: <Moon size={14} />,
       iconColor: '#a78bfa',
       title: '首次深夜聊天',
-      body: <span className="text-white/70">凌晨 0–5 点之间的第一条消息。这里通常藏着最掏心窝子的话。</span>,
+      body: <span>凌晨 0–5 点之间的第一条消息。这里通常藏着最掏心窝子的话。</span>,
       quote: data.first_late_night.content
         ? { speaker: data.first_late_night.speaker, content: data.first_late_night.content }
         : undefined,
@@ -134,7 +134,7 @@ const buildTimeline = (data: MSResp): TLItem[] => {
       icon: <TrendingUp size={14} />,
       iconColor: '#07c160',
       title: '最高频的一周',
-      body: <span className="text-white/70">这一周你们一共聊了 <strong className="text-white">{fmtNum(data.peak_week.message_count)}</strong> 条消息。</span>,
+      body: <span>这一周你们一共聊了 <strong className="text-[#1d1d1f] dark:text-white">{fmtNum(data.peak_week.message_count)}</strong> 条消息。</span>,
     });
   }
   if (data.busiest_day) {
@@ -145,7 +145,7 @@ const buildTimeline = (data: MSResp): TLItem[] => {
       icon: <Flame size={14} />,
       iconColor: '#ffa94d',
       title: '一天里聊得最多的那天',
-      body: <span className="text-white/70">仅这一天就聊了 <strong className="text-white">{fmtNum(data.busiest_day.message_count)}</strong> 条。那天到底发生了什么？</span>,
+      body: <span>仅这一天就聊了 <strong className="text-[#1d1d1f] dark:text-white">{fmtNum(data.busiest_day.message_count)}</strong> 条。那天到底发生了什么？</span>,
     });
   }
   if (data.longest_gap) {
@@ -156,7 +156,7 @@ const buildTimeline = (data: MSResp): TLItem[] => {
       icon: <CloudOff size={14} />,
       iconColor: '#ff6b6b',
       title: `最长的一次沉默 · ${data.longest_gap.gap_days} 天`,
-      body: <span className="text-white/70">从 {data.longest_gap.from_date} 到 {data.longest_gap.to_date}，整整 {data.longest_gap.gap_days} 天没说话。</span>,
+      body: <span>从 {data.longest_gap.from_date} 到 {data.longest_gap.to_date}，整整 {data.longest_gap.gap_days} 天没说话。</span>,
     });
   }
   if (data.reunion) {
@@ -167,7 +167,7 @@ const buildTimeline = (data: MSResp): TLItem[] => {
       icon: <Hand size={14} />,
       iconColor: '#07c160',
       title: '重联那一刻',
-      body: <span className="text-white/70">长沉默结束的第一句话。</span>,
+      body: <span>长沉默结束的第一句话。</span>,
       quote: data.reunion.content
         ? { speaker: data.reunion.speaker, content: data.reunion.content }
         : undefined,
@@ -185,7 +185,7 @@ const buildTimeline = (data: MSResp): TLItem[] => {
         : '第一个周年纪念日',
       body: data.anniversary.days_until_next === 0
         ? <span className="text-[#f59e0b] font-bold">今天就是！</span>
-        : <span className="text-white/70">距离 <strong className="text-white">{data.anniversary.next_date}</strong> 还有 <strong className="text-[#f59e0b]">{data.anniversary.days_until_next}</strong> 天。</span>,
+        : <span>距离 <strong className="text-[#1d1d1f] dark:text-white">{data.anniversary.next_date}</strong> 还有 <strong className="text-[#b76e00] dark:text-[#f59e0b]">{data.anniversary.days_until_next}</strong> 天。</span>,
     });
   }
 
@@ -247,13 +247,14 @@ export const Milestones: React.FC<Props> = ({ contacts }) => {
   const exportPng = async () => {
     if (!data || !cardRef.current || exporting) return;
     setExporting(true);
+    const isDark = document.documentElement.classList.contains('dark');
     const r = await captureCardToPng(cardRef.current, {
       filename: `welink-milestones-${Date.now()}.png`,
-      backgroundColor: '#0b0b14',
+      backgroundColor: isDark ? '#0b0b14' : '#ffffff',
       appendHTML: welinkBrandHTML({
         label: '关系考古',
         date: new Date().toLocaleDateString('zh-CN'),
-        variant: 'dark',
+        variant: isDark ? 'dark' : 'light',
       }),
     });
     setExporting(false);
@@ -354,9 +355,9 @@ export const Milestones: React.FC<Props> = ({ contacts }) => {
             </button>
           </div>
 
-          <div ref={cardRef} className="rounded-2xl overflow-hidden bg-[#0b0b14] text-white">
+          <div ref={cardRef} className="rounded-2xl overflow-hidden border border-gray-100 dark:border-white/10 bg-white dark:bg-[#0b0b14] text-[#1d1d1f] dark:text-white">
             {/* Hero */}
-            <div className="px-7 py-7 bg-[#087f5b]">
+            <div className="px-7 py-7 bg-[#087f5b] text-white">
               <div className="text-xs uppercase tracking-[0.2em] text-white/80 font-bold mb-2">
                 MILESTONES · 关系考古
               </div>
@@ -377,13 +378,13 @@ export const Milestones: React.FC<Props> = ({ contacts }) => {
             {/* 时间轴 */}
             <div className="px-7 py-6">
               {timeline.length === 0 ? (
-                <div className="text-center text-white/40 text-sm py-10">
+                <div className="text-center text-gray-400 dark:text-white/40 text-sm py-10">
                   这位联系人的消息不够触发任何里程碑（≥ 20 条才行）
                 </div>
               ) : (
                 <div className="relative">
                   {/* 竖线 */}
-                  <div className="absolute left-[11px] top-2 bottom-2 w-px bg-white/10" />
+                  <div className="absolute left-[11px] top-2 bottom-2 w-px bg-gray-200 dark:bg-white/10" />
                   <div className="space-y-5">
                     {timeline.map((it, idx) => (
                       <div key={idx} className="relative pl-8">
@@ -394,19 +395,19 @@ export const Milestones: React.FC<Props> = ({ contacts }) => {
                         >
                           {it.icon}
                         </div>
-                        <div className="text-[10px] uppercase tracking-wider text-white/40 mb-0.5">
+                        <div className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-white/40 mb-0.5">
                           {it.displayDate}
                         </div>
                         <div className="text-sm font-bold mb-1">{it.title}</div>
-                        {it.body && <div className="text-[12px] leading-relaxed">{it.body}</div>}
+                        {it.body && <div className="text-[12px] leading-relaxed text-gray-600 dark:text-white/70">{it.body}</div>}
                         {it.quote && (
-                          <div className="mt-2 rounded-xl bg-white/5 px-3 py-2.5">
-                            <div className="text-[11px] text-white/60 mb-0.5">
-                              <strong className={it.quote.speaker === '我' ? 'text-[#07c160]' : 'text-white/80'}>
+                          <div className="mt-2 rounded-xl bg-gray-50 dark:bg-white/5 px-3 py-2.5">
+                            <div className="text-[11px] text-gray-500 dark:text-white/60 mb-0.5">
+                              <strong className={it.quote.speaker === '我' ? 'text-[#087f5b] dark:text-[#07c160]' : 'text-gray-700 dark:text-white/80'}>
                                 {it.quote.speaker}
                               </strong>
                             </div>
-                            <div className="text-xs text-white/85 leading-relaxed break-words">
+                            <div className="text-xs text-gray-700 dark:text-white/85 leading-relaxed break-words">
                               "{it.quote.content}"
                             </div>
                           </div>
@@ -421,7 +422,6 @@ export const Milestones: React.FC<Props> = ({ contacts }) => {
             <WelinkBrand
               label="关系考古"
               leftText={<span>{new Date().toLocaleDateString('zh-CN')}</span>}
-              variant="dark"
             />
           </div>
         </>

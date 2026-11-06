@@ -51,7 +51,15 @@ export const RelationGraph: React.FC = () => {
   const [hovered, setHovered] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
   const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => setIsDark(root.classList.contains('dark')));
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -152,12 +160,12 @@ export const RelationGraph: React.FC = () => {
     setExporting(true);
     const r = await captureCardToPng(cardRef.current, {
       filename: `welink-relation-graph-${Date.now()}.png`,
-      backgroundColor: '#0a0a14',
+      backgroundColor: document.documentElement.classList.contains('dark') ? '#0a0a14' : '#ffffff',
       width: 760,
       appendHTML: welinkBrandHTML({
         label: '我的关系星图',
         date: new Date().toLocaleDateString('zh-CN'),
-        variant: 'dark',
+        variant: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
       }),
     });
     setExporting(false);
@@ -213,13 +221,13 @@ export const RelationGraph: React.FC = () => {
 
       {data && layout && (
         <>
-          <div ref={cardRef} className="rounded-2xl bg-[#0a0a14] overflow-hidden">
+          <div ref={cardRef} className="rounded-2xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#0a0a14] overflow-hidden">
             <div className="px-6 pt-5 pb-2 flex items-baseline justify-between">
               <div>
                 <div className="text-xs uppercase tracking-widest text-[#07c160] font-bold">Relation Constellation</div>
-                <div className="text-xl font-black text-white">我的微信宇宙</div>
+                <div className="text-xl font-black text-[#1d1d1f] dark:text-white">我的微信宇宙</div>
               </div>
-              <div className="text-[11px] text-white/50">
+              <div className="text-[11px] text-gray-500 dark:text-white/50">
                 {data.nodes.length} 颗星 · {data.edges.length} 条连线
               </div>
             </div>
@@ -234,7 +242,7 @@ export const RelationGraph: React.FC = () => {
                     key={i}
                     x1={a.x} y1={a.y} x2={b.x} y2={b.y}
                     stroke={NODE_COLOR}
-                    strokeOpacity={isHi ? 0.65 : 0.18}
+                    strokeOpacity={isHi ? 0.65 : isDark ? 0.18 : 0.35}
                     strokeWidth={Math.min(0.4 + e.w * 0.4, 3)}
                   />
                 );
@@ -250,7 +258,7 @@ export const RelationGraph: React.FC = () => {
                       r={n.r}
                       fill={NODE_COLOR}
                       fillOpacity={isHi ? 1 : 0.78}
-                      stroke={isHi ? '#fff' : 'rgba(255,255,255,0.2)'}
+                      stroke={isHi ? (isDark ? '#fff' : '#087f5b') : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(8,127,91,0.25)')}
                       strokeWidth={isHi ? 2 : 1}
                     />
                     {(n.r > 16 || isHi) && (
@@ -259,7 +267,7 @@ export const RelationGraph: React.FC = () => {
                         y={n.y + n.r + 11}
                         textAnchor="middle"
                         fontSize={10}
-                        fill="rgba(255,255,255,0.85)"
+                        fill={isDark ? 'rgba(255,255,255,0.85)' : '#3d4a50'}
                         style={{ pointerEvents: 'none', fontWeight: 600 }}
                       >
                         {n.display_name.length > 10 ? n.display_name.slice(0, 10) + '…' : n.display_name}
@@ -270,7 +278,7 @@ export const RelationGraph: React.FC = () => {
               })}
             </svg>
             {/* 图例：去掉时段着色（当前 backend 不计算 peak hour），保留尺寸/连线说明 */}
-            <div className="px-6 pb-4 flex flex-wrap gap-3 text-[10px] text-white/60">
+            <div className="px-6 pb-4 flex flex-wrap gap-3 text-[10px] text-gray-500 dark:text-white/60">
               <span>气泡大小 = 跟我的消息量</span>
               <span>·</span>
               <span>连线粗细 = 共同群数</span>

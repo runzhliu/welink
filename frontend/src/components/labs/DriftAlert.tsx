@@ -82,13 +82,14 @@ export const DriftAlert: React.FC = () => {
   const exportPng = async () => {
     if (!data || !cardRef.current || exporting) return;
     setExporting(true);
+    const isDark = document.documentElement.classList.contains('dark');
     const r = await captureCardToPng(cardRef.current, {
       filename: `drift-alert-${data.today}.png`,
-      backgroundColor: '#1a0d12',
+      backgroundColor: isDark ? '#1a0d12' : '#ffffff',
       appendHTML: welinkBrandHTML({
         label: '断联预警',
         date: data.today,
-        variant: 'dark',
+        variant: isDark ? 'dark' : 'light',
       }),
     });
     setExporting(false);
@@ -153,9 +154,9 @@ export const DriftAlert: React.FC = () => {
       )}
 
       {data && data.total_adrift > 0 && (
-        <div ref={cardRef} className="rounded-2xl overflow-hidden bg-[#1a0d12] text-white">
+        <div ref={cardRef} className="rounded-2xl overflow-hidden border border-gray-100 dark:border-white/10 bg-white dark:bg-[#1a0d12] text-[#1d1d1f] dark:text-white">
           {/* Hero —— 暖色警示，跟 DNA 的绿色形成"两面镜子"的视觉对照 */}
-          <div className="px-7 py-8 bg-gradient-to-br from-[#ff6b6b] to-[#c92a2a]">
+          <div className="px-7 py-8 bg-gradient-to-br from-[#ff6b6b] to-[#c92a2a] text-white">
             <div className="text-xs uppercase tracking-[0.2em] text-white/80 font-bold mb-2">
               DRIFT ALERT · 断联预警
             </div>
@@ -168,15 +169,15 @@ export const DriftAlert: React.FC = () => {
           </div>
 
           {/* 三档分级 */}
-          <div className="grid grid-cols-3 gap-px bg-white/5">
-            <Tier label="30+ 天" count={data.summary.tier_30_plus} sub="开始疏远" color="#ffa94d" />
-            <Tier label="90+ 天" count={data.summary.tier_90_plus} sub="深度断联" color="#ff6b6b" />
-            <Tier label="180+ 天" count={data.summary.tier_180_plus} sub="几乎失联" color="#c92a2a" />
+          <div className="grid grid-cols-3 gap-px bg-gray-100 dark:bg-white/5">
+            <Tier label="30+ 天" count={data.summary.tier_30_plus} sub="开始疏远" colorClass="text-[#a85b0c] dark:text-[#ffa94d]" />
+            <Tier label="90+ 天" count={data.summary.tier_90_plus} sub="深度断联" colorClass="text-[#c43e3e] dark:text-[#ff6b6b]" />
+            <Tier label="180+ 天" count={data.summary.tier_180_plus} sub="几乎失联" colorClass="text-[#c92a2a] dark:text-[#ff8888]" />
           </div>
 
           {/* 之最 */}
           {(data.superlatives.longest_silent || data.superlatives.biggest_volume || data.superlatives.oldest_friend) && (
-            <div className="px-7 py-5 border-t border-white/5 space-y-3">
+            <div className="px-7 py-5 border-t border-gray-100 dark:border-white/5 space-y-3">
               <SectionTitle icon={<Crown size={14} className="text-[#ffa94d]" />}>断联之最</SectionTitle>
               {data.superlatives.longest_silent && (
                 <SuperlativeCard
@@ -210,7 +211,7 @@ export const DriftAlert: React.FC = () => {
 
           {/* Top 榜单 */}
           {data.top.length > 0 && (
-            <div className="px-7 py-5 border-t border-white/5">
+            <div className="px-7 py-5 border-t border-gray-100 dark:border-white/5">
               <SectionTitle icon={<AlertCircle size={14} className="text-[#ff6b6b]" />}>
                 心碎指数 Top {data.top.length}
               </SectionTitle>
@@ -219,19 +220,19 @@ export const DriftAlert: React.FC = () => {
                   <div key={e.username} className="flex items-center gap-3">
                     <div className="text-[#ff6b6b] font-black text-sm w-6 text-center">{i + 1}</div>
                     {e.avatar ? (
-                      <img src={avatarSrc(e.avatar) || ''} className="w-8 h-8 rounded-full object-cover bg-white/10" alt="" />
+                      <img src={avatarSrc(e.avatar) || ''} className="w-8 h-8 rounded-full object-cover bg-gray-100 dark:bg-white/10" alt="" />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-white/10" />
+                      <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10" />
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold truncate">{e.display_name}</div>
-                      <div className="text-[11px] text-white/50">
+                      <div className="text-[11px] text-gray-500 dark:text-white/50">
                         共 {fmtNum(e.total_messages)} 条 · 上次 {e.last_date}
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
                       <div className="text-sm font-black text-[#ff6b6b]">{fmtDays(e.days_silent)}</div>
-                      <div className="text-[10px] text-white/40">没说话</div>
+                      <div className="text-[10px] text-gray-500 dark:text-white/40">没说话</div>
                     </div>
                   </div>
                 ))}
@@ -240,10 +241,10 @@ export const DriftAlert: React.FC = () => {
           )}
 
           {/* CTA */}
-          <div className="px-7 py-5 border-t border-white/5 bg-white/[0.02] text-center">
-            <div className="text-sm text-white/85 leading-relaxed">
+          <div className="px-7 py-5 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] text-center">
+            <div className="text-sm text-gray-700 dark:text-white/85 leading-relaxed">
               要不要今天挑一个，发条消息？<br/>
-              <span className="text-[11px] text-white/40">关系最怕的从来不是吵架，是没声音了。</span>
+              <span className="text-[11px] text-gray-500 dark:text-white/40">关系最怕的从来不是吵架，是没声音了。</span>
             </div>
           </div>
         </div>
@@ -252,28 +253,28 @@ export const DriftAlert: React.FC = () => {
   );
 };
 
-const Tier: React.FC<{ label: string; count: number; sub: string; color: string }> = ({ label, count, sub, color }) => (
-  <div className="px-5 py-4 bg-[#1a0d12]">
-    <div className="text-[11px] uppercase tracking-wider font-bold mb-1.5" style={{ color }}>{label}</div>
-    <div className="text-2xl font-black tracking-tight">{count.toLocaleString('zh-CN')}<span className="text-[11px] text-white/40 ml-1 font-normal">人</span></div>
-    <div className="text-[10px] text-white/40 mt-0.5">{sub}</div>
+const Tier: React.FC<{ label: string; count: number; sub: string; colorClass: string }> = ({ label, count, sub, colorClass }) => (
+  <div className="px-5 py-4 bg-white dark:bg-[#1a0d12]">
+    <div className={`text-[11px] uppercase tracking-wider font-bold mb-1.5 ${colorClass}`}>{label}</div>
+    <div className="text-2xl font-black tracking-tight">{count.toLocaleString('zh-CN')}<span className="text-[11px] text-gray-500 dark:text-white/40 ml-1 font-normal">人</span></div>
+    <div className="text-[10px] text-gray-500 dark:text-white/40 mt-0.5">{sub}</div>
   </div>
 );
 
 const SectionTitle: React.FC<{ icon: React.ReactNode; children: React.ReactNode }> = ({ icon, children }) => (
-  <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-white/60 font-bold mb-3">{icon}{children}</div>
+  <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-gray-500 dark:text-white/60 font-bold mb-3">{icon}{children}</div>
 );
 
 const SuperlativeCard: React.FC<{ icon: React.ReactNode; title: string; desc: string; avatar?: string }> = ({ icon, title, desc, avatar }) => (
-  <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
+  <div className="flex items-center gap-3 rounded-xl bg-gray-100 dark:bg-white/5 p-3">
     {avatar ? (
-      <img src={avatarSrc(avatar) || ''} className="w-10 h-10 rounded-full object-cover bg-white/10" alt="" />
+      <img src={avatarSrc(avatar) || ''} className="w-10 h-10 rounded-full object-cover bg-gray-100 dark:bg-white/10" alt="" />
     ) : (
-      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">{icon}</div>
+      <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center">{icon}</div>
     )}
     <div className="min-w-0">
       <div className="text-sm font-bold flex items-center gap-1.5">{icon}<span className="truncate">{title}</span></div>
-      <div className="text-[11px] text-white/60 truncate">{desc}</div>
+      <div className="text-[11px] text-gray-500 dark:text-white/60 truncate">{desc}</div>
     </div>
   </div>
 );

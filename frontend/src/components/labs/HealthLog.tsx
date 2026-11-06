@@ -122,11 +122,11 @@ export const HealthLog: React.FC = () => {
     setExporting(true);
     const r = await captureCardToPng(cardRef.current, {
       filename: `health-log-${today.replace(/\//g, '-')}.png`,
-      backgroundColor: '#ffffff',
+      backgroundColor: document.documentElement.classList.contains('dark') ? '#1c1c1e' : '#ffffff',
       appendHTML: welinkBrandHTML({
         label: '健康日记',
         date: today,
-        variant: 'light',
+        variant: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
       }),
     });
     setExporting(false);

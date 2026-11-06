@@ -392,7 +392,7 @@ export interface GlobalSearchGroup {
   username: string;
   display_name: string;
   small_head_url: string;
-  messages: ChatMessage[];
+  messages: (ChatMessage & { speaker?: string; avatar_url?: string })[];
   count: number;
   is_group: boolean;
 }

@@ -1,5 +1,6 @@
 import { DatePicker } from '../common/DatePicker';
 import { Select } from '../common/Select';
+import { ModelAvatar } from '../common/ModelAvatar';
 /**
  * AI 分析 Tab — 支持私聊和群聊，可选时间范围，附 token 估算与提示
  */
@@ -272,9 +273,7 @@ const AssistantMessage: React.FC<{
   return (
     <div className="flex flex-col gap-1">
       <div className="flex gap-2 flex-row group">
-        <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-[#576b95] text-white text-[10px] font-black mt-0.5">
-          <MessageSquare size={13} />
-        </div>
+        <ModelAvatar provider={msg.provider || (msg.streaming ? currentProvider : undefined)} model={msg.model || (msg.streaming ? currentModel : undefined)} />
         <div className="flex flex-col gap-1 max-w-[80%]">
           <div className="px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm leading-relaxed bg-[#f0f0f0] dark:bg-white/10 text-[#1d1d1f] dark:text-gray-100 prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-hr:my-2">
             {msg.thinking && (
