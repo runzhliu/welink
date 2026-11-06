@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.version.outputs.tag }}
+      existing_release: ${{ steps.existing_release.outputs.skip }}
 
     steps:
       - name: Checkout
@@ -29,12 +30,35 @@ jobs:
         with:
           fetch-depth: 0
 
+      # v0.4.0 was explicitly published with unverified hardware evidence and
+      # manually built assets. A manual reconciliation must never overwrite it
+      # or pretend that the hardware gate passed. New releases retain the gate.
+      - name: 核对已发布的 v0.4.0
+        id: existing_release
+        if: github.event_name == 'workflow_dispatch' && inputs.tag == 'v0.4.0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          EXPECTED_COMMIT=1d737143e53f49ec1836d452703f4408b7214d47
+          test "$(git rev-parse 'refs/tags/v0.4.0^{commit}')" = "$EXPECTED_COMMIT"
+          release=$(gh release view v0.4.0 --json isDraft,isPrerelease,assets)
+          echo "$release" | jq -e '.isDraft == false and .isPrerelease == false' >/dev/null
+          echo "$release" | jq -e '[.assets[] | select(.name == "WeLink.dmg" and .digest == "sha256:5aa25445e0e875745cb59c3610a3e74bfa408ef630ed26aed6c6057991fd6489")] | length == 1' >/dev/null
+          echo "$release" | jq -e '[.assets[] | select(.name == "WeLink-windows-amd64.zip" and .digest == "sha256:add7ec960199be1faacc775ab8595ced6c000bcabdade3e1742055e859151683")] | length == 1' >/dev/null
+          echo 'skip=true' >> "$GITHUB_OUTPUT"
+          echo '### 已发布版本核对' >> "$GITHUB_STEP_SUMMARY"
+          echo '已核对 v0.4.0 标签和现有安装包摘要。本次未重新构建或覆盖发布文件。MLX、CUDA 和视觉完整验收仍未完成。' >> "$GITHUB_STEP_SUMMARY"
+          echo '::warning::仅核对既有发布；MLX、CUDA 和视觉完整验收仍未完成。'
+
       - name: Validate SFT hardware evidence for 4.x releases
+        if: steps.existing_release.outputs.skip != 'true'
         env:
           SFT_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: python3 scripts/check_sft_release.py --tag "$SFT_RELEASE_TAG"
 
       - name: 确定版本号和发布类型
+        if: steps.existing_release.outputs.skip != 'true'
         id: version
         run: |
           if [ "${{ github.event_name }}" = "push" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
@@ -56,6 +80,7 @@ jobs:
           fi
 
       - name: 生成 Changelog
+        if: steps.existing_release.outputs.skip != 'true'
         id: changelog
         run: |
           PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
@@ -88,6 +113,7 @@ jobs:
           printf "EOF\n" >> "$GITHUB_OUTPUT"
 
       - name: 创建 Release
+        if: steps.existing_release.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -100,6 +126,7 @@ jobs:
   build-dmg:
     name: macOS DMG
     needs: prepare
+    if: needs.prepare.outputs.existing_release != 'true'
     runs-on: macos-latest
 
     steps:
@@ -141,6 +168,7 @@ jobs:
   build-exe:
     name: Windows EXE
     needs: prepare
+    if: needs.prepare.outputs.existing_release != 'true'
     runs-on: ubuntu-latest
 
     steps:
