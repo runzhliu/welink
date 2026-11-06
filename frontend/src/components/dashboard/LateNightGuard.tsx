@@ -59,14 +59,14 @@ export const LateNightGuard: React.FC<Props> = ({
   return (
     <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-[#1a1a2e] to-[#16213e] px-5 py-4 flex items-center gap-3">
+      <div className="insights-night-header bg-gradient-to-r from-[#1a1a2e] to-[#16213e] px-5 py-4 flex items-center gap-3">
         <div className="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center">
           <Moon size={18} className="text-yellow-300" strokeWidth={2.5} />
         </div>
         <h3 className="text-lg font-bold text-white">深夜守护</h3>
       </div>
 
-      <div className="p-5 space-y-5">
+      <div className="insights-night-content p-5 space-y-5">
         {isHealthy ? (
           <div className="flex items-center justify-center py-8">
             <span className="inline-flex items-center gap-2 bg-green-50 text-green-600 text-sm font-semibold px-4 py-2 rounded-full">
@@ -77,7 +77,7 @@ export const LateNightGuard: React.FC<Props> = ({
         ) : (
           <>
             {/* Night Owl Stats */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="insights-night-stats grid grid-cols-3 gap-3">
               <div className="bg-gray-50 rounded-xl p-3 text-center">
                 <p className="text-xs text-gray-500 mb-1">深夜消息占比</p>
                 <p className="text-lg font-bold text-[#1a1a2e]">

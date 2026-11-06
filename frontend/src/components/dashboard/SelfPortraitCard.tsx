@@ -25,7 +25,7 @@ interface Props {
 }
 
 // ─── MBTI 计算（从原 MBTICard 搬来） ─────────────────────────────────────
-function computeMBTI(contacts: ContactStats[], globalStats: GlobalStats | null) {
+export function computeMBTI(contacts: ContactStats[], globalStats: GlobalStats | null) {
   let myMsgs = 0, theirMsgs = 0, myChars = 0, lateNight = 0, totalMsgs = 0;
   for (const c of contacts) {
     myMsgs += c.my_messages ?? 0;
@@ -33,11 +33,12 @@ function computeMBTI(contacts: ContactStats[], globalStats: GlobalStats | null) 
     myChars += c.my_chars ?? 0;
     totalMsgs += c.total_messages ?? 0;
   }
-  const hourly = (globalStats as unknown as { hourly?: number[] })?.hourly;
-  if (hourly && hourly.length >= 24) {
-    for (let h = 0; h < 6; h++) lateNight += hourly[h] ?? 0;
-  }
-  const lateRatio = totalMsgs > 0 ? lateNight / totalMsgs : 0;
+  const hourly = globalStats?.hourly_heatmap;
+  if (!hourly || hourly.length < 24 || myMsgs + theirMsgs === 0 || myMsgs === 0) return null;
+  for (let h = 0; h < 6; h++) lateNight += hourly[h] ?? 0;
+  const hourlyTotal = hourly.reduce((sum, count) => sum + count, 0);
+  if (hourlyTotal === 0 || totalMsgs === 0) return null;
+  const lateRatio = lateNight / hourlyTotal;
   const initiativeRatio = (myMsgs + theirMsgs) > 0 ? myMsgs / (myMsgs + theirMsgs) : 0.5;
   const avgLen = myMsgs > 0 ? myChars / myMsgs : 0;
   const I_E = initiativeRatio > 0.55 ? 'E' : 'I';
@@ -50,13 +51,14 @@ function computeMBTI(contacts: ContactStats[], globalStats: GlobalStats | null) 
     emojiCount += tc['表情'] ?? 0;
     textCount += tc['文本'] ?? 0;
   }
+  if (textCount === 0) return null;
   const emojiRatio = textCount > 0 ? emojiCount / textCount : 0;
   const J_P = emojiRatio < 0.05 ? 'J' : 'P';
   return {
     label: I_E + N_S + T_F + J_P,
     axes: [
-      { axis: '社交倾向', left: 'I 内向', right: 'E 外向', value: initiativeRatio, pick: I_E, desc: `主动消息占比 ${Math.round(initiativeRatio * 100)}%` },
-      { axis: '时段偏好', left: 'S 日间', right: 'N 深夜', value: lateRatio, pick: N_S, desc: `深夜 0-6h 占比 ${Math.round(lateRatio * 100)}%` },
+      { axis: '发言占比', left: 'I', right: 'E', value: initiativeRatio, pick: I_E, desc: `我发出的消息占双方 ${Math.round(initiativeRatio * 100)}%` },
+      { axis: '时段偏好', left: 'S', right: 'N', value: lateRatio, pick: N_S, desc: `整体消息 0–6 时占比 ${Math.round(lateRatio * 100)}%` },
       { axis: '表达风格', left: 'T 简练', right: 'F 详尽', value: Math.min(1, avgLen / 30), pick: T_F, desc: `平均每条 ${avgLen.toFixed(1)} 字` },
       { axis: '情感表达', left: 'J 克制', right: 'P 豪放', value: Math.min(1, emojiRatio * 10), pick: J_P, desc: `表情 / 文字比 ${(emojiRatio * 100).toFixed(1)}%` },
     ],
@@ -178,8 +180,8 @@ export const SelfPortraitCard: React.FC<Props> = ({ blockedDisplayNames, contact
 
   return (
     <div className="bg-white dk-card rounded-3xl border border-gray-100 dk-border p-6">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <div className="flex shrink-0 items-center gap-2">
           <User size={18} className="text-[#07c160]" />
           <h3 className="text-lg font-black text-[#1d1d1f] dk-text">个人自画像</h3>
         </div>
@@ -200,7 +202,7 @@ export const SelfPortraitCard: React.FC<Props> = ({ blockedDisplayNames, contact
 
       {tab === 'overview' && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+          <div className="insights-portrait-stats grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
             <div className="bg-[#07c160]/5 rounded-2xl p-3 text-center">
               <MessageSquare size={14} className="mx-auto text-[#07c160] mb-1" />
               <div className="text-xl font-black text-[#07c160]">{data.total_sent.toLocaleString()}</div>
@@ -222,7 +224,7 @@ export const SelfPortraitCard: React.FC<Props> = ({ blockedDisplayNames, contact
               <div className="text-[10px] text-gray-400">联系过的人</div>
             </div>
           </div>
-          <div className="bg-[#f8f9fb] dark:bg-white/5 rounded-2xl p-4 mb-4 space-y-1 text-sm">
+          <div className="insights-portrait-summary bg-[#f8f9fb] dark:bg-white/5 rounded-2xl p-4 mb-4 space-y-1 text-sm">
             <div className="flex items-center gap-2">
               <Calendar size={12} className="text-gray-400 flex-shrink-0" />
               <span className="text-gray-500 dk-text">
@@ -265,7 +267,7 @@ export const SelfPortraitCard: React.FC<Props> = ({ blockedDisplayNames, contact
       {tab === 'mbti' && mbti && (
         <>
           <div className="text-4xl font-black text-[#07c160] tracking-wider mb-1">{mbti.label}</div>
-          <p className="text-xs text-gray-400 mb-4">基于主动率、时段、消息长度、表情密度的趣味四轴，仅供娱乐</p>
+          <p className="text-xs text-gray-400 mb-4">根据发言占比、时段、消息长度和表情比例生成的趣味标签，并非性格测评。</p>
           <div className="space-y-2.5">
             {mbti.axes.map(a => (
               <div key={a.axis}>

@@ -28,11 +28,12 @@ import {
   FirstEncountersCard, EmojiDensityCard, MonologueCard, WordAlmanacCard, InsomniaTopCard,
 } from './FunStatsPage';
 import { RelationshipForecastSection } from './RelationshipForecastSection';
+import { OrganizedInsights } from './OrganizedInsights';
 
 type Layouts = { lg: LayoutItem[]; md: LayoutItem[] };
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
-interface StatsPageProps {
+export interface StatsPageProps {
   contacts: ContactStats[];
   globalStats: GlobalStats | null;
   healthStatus: HealthStatus;
@@ -40,6 +41,9 @@ interface StatsPageProps {
   blockedUsers: string[];
   blockedDisplayNames: Set<string>;
   onOpenSettings?: () => void;
+  timeRangeLabel?: string;
+  statsLoading?: boolean;
+  onReselect?: () => void;
 }
 
 const LAYOUT_KEY = 'welink_stats_layout_v3';
@@ -116,7 +120,7 @@ function buildDefaultLayouts(): Layouts {
   };
 }
 
-export const StatsPage: React.FC<StatsPageProps> = ({
+const LegacyStatsPage: React.FC<StatsPageProps> = ({
   contacts,
   globalStats,
   healthStatus,
@@ -600,4 +604,13 @@ export const StatsPage: React.FC<StatsPageProps> = ({
       )}
     </div>
   );
+};
+
+export const StatsPage: React.FC<StatsPageProps> = (props) => {
+  const [legacy, setLegacy] = useState(false);
+  if (!legacy) return <OrganizedInsights {...props} onCustomize={() => setLegacy(true)} />;
+  return <div>
+    <button type="button" onClick={() => setLegacy(false)} className="ui-button ui-button-secondary mb-5">← 返回分区洞察</button>
+    <LegacyStatsPage {...props} />
+  </div>;
 };

@@ -553,6 +553,9 @@ function AppInner() {
             contacts={contacts}
             globalStats={globalStats}
             healthStatus={healthStatus}
+            timeRangeLabel={timeRange.label}
+            statsLoading={statsLoading}
+            onReselect={handleReselect}
             onContactClick={handleContactClick}
             blockedUsers={blockedUsers}
             blockedDisplayNames={blockedDisplayNames}

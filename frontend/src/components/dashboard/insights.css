@@ -1,0 +1,84 @@
+/* Keep the reorganized insights page quiet; shared cards elsewhere retain their styling. */
+.insights-workspace .rounded-3xl,
+.insights-workspace .rounded-2xl {
+  border-radius: 8px;
+}
+
+.insights-workspace .rounded-xl {
+  border-radius: 6px;
+}
+
+.insights-workspace .insights-widget > .dk-card,
+.insights-workspace .insights-fun-grid > .dk-card {
+  box-shadow: none;
+}
+
+.insights-fun-grid {
+  columns: 1;
+  column-gap: 12px;
+}
+
+.insights-fun-grid > * {
+  break-inside: avoid;
+  margin-bottom: 12px;
+}
+
+@media (min-width: 1024px) {
+  .insights-fun-grid { columns: 2; }
+}
+
+.insights-workspace .insights-portrait-stats,
+.insights-workspace .insights-night-stats {
+  gap: 0;
+}
+
+.insights-workspace .insights-portrait-stats > div,
+.insights-workspace .insights-night-stats > div {
+  background: transparent;
+  border-radius: 0;
+  border-right: 1px solid var(--border);
+}
+
+.insights-workspace .insights-portrait-stats > div:last-child,
+.insights-workspace .insights-night-stats > div:last-child {
+  border-right: 0;
+}
+
+.insights-workspace .insights-portrait-summary {
+  background: transparent;
+  border-radius: 0;
+  border-block: 1px solid var(--border);
+  padding-inline: 0;
+}
+
+.insights-workspace .insights-night-header {
+  background: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.insights-workspace .insights-night-header h3,
+.insights-workspace .insights-night-stats > div p:last-child {
+  color: var(--text-primary);
+}
+
+.insights-workspace .insights-night-header > div {
+  background: var(--bg-subtle);
+}
+
+.insights-workspace .insights-night-header svg {
+  color: var(--accent-text);
+}
+
+.insights-workspace .insights-night-content .text-gray-700,
+.insights-workspace .insights-night-content .text-gray-800 {
+  color: var(--text-primary);
+}
+
+.insights-workspace .insights-night-content .text-gray-500 {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 639px) {
+  .insights-workspace .insights-portrait-stats > div:nth-child(2) { border-right: 0; }
+  .insights-workspace .insights-portrait-stats > div:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
+}
