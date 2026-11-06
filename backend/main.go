@@ -336,7 +336,9 @@ func serverMain() {
 	StartTaskScheduler(acquireSvc)
 
 	// 4. 初始化 Gin 路由
-	r := gin.Default()
+	r := gin.New()
+	// OAuth callback query contains a one-time authorization code; never log it.
+	r.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/auth/callback"}}), gin.Recovery())
 
 	// Demo 模式：全局限速（每 IP 每秒 20 请求）
 	if isDemoMode {
@@ -367,6 +369,8 @@ func serverMain() {
 	// 必须带对应 Bearer token；同源请求（PC 本机）和 /app/info 等白名单
 	// 端点始终放行。未启用时完全是 no-op。
 	api.Use(requirePairingTokenIfEnabled)
+	registerChatGPTRoutes(r, api)
+	registerChatGPTModelsRoute(api)
 
 	// 配对相关端点
 	registerPairingRoutes(api)
@@ -1433,7 +1437,7 @@ func serverMain() {
 			return
 		}
 		if cfg.apiKey == "" && cfg.provider != "ollama" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成账号授权"})
 			return
 		}
 		flusher, ok := c.Writer.(http.Flusher)
@@ -1517,7 +1521,7 @@ func serverMain() {
 		}
 
 		prefs := loadPreferences()
-		hasLLM := prefs.LLMProvider != "" && (prefs.LLMAPIKey != "" || prefs.LLMProvider == "ollama")
+		hasLLM := prefs.LLMProvider != "" && (llmConfigForProfile("", prefs).apiKey != "" || prefs.LLMProvider == "ollama")
 
 		// SSE 进度推送
 		flusher, fOk := c.Writer.(http.Flusher)
@@ -1748,7 +1752,7 @@ func serverMain() {
 				return
 			}
 			if cfg.apiKey == "" && cfg.provider != "ollama" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成账号授权"})
 				return
 			}
 		}
@@ -1949,8 +1953,8 @@ func serverMain() {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
 			return
 		}
-		if prefs.LLMAPIKey == "" && !(prefs.LLMProvider == "gemini" && prefs.GeminiAccessToken != "") && prefs.LLMProvider != "ollama" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+		if llmConfigForProfile("", prefs).apiKey == "" && prefs.LLMProvider != "ollama" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成账号授权"})
 			return
 		}
 		content, err := CompleteLLM(body.Messages, prefs)
@@ -1986,7 +1990,7 @@ func serverMain() {
 				return
 			}
 			if cfg.apiKey == "" && cfg.provider != "ollama" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成账号授权"})
 				return
 			}
 		}
@@ -2898,7 +2902,7 @@ func serverMain() {
 			return
 		}
 		if cfg.apiKey == "" && cfg.provider != "ollama" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成账号授权"})
 			return
 		}
 
@@ -3085,8 +3089,8 @@ func serverMain() {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
 			return
 		}
-		if prefs.LLMAPIKey == "" && !(prefs.LLMProvider == "gemini" && prefs.GeminiAccessToken != "") && prefs.LLMProvider != "ollama" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成 Google 授权"})
+		if llmConfigForProfile("", prefs).apiKey == "" && prefs.LLMProvider != "ollama" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成账号授权"})
 			return
 		}
 

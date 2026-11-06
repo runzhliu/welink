@@ -38,14 +38,14 @@ type DiagnosticsIndex struct {
 }
 
 type DiagnosticsLLMProfile struct {
-	Status     string `json:"status"`
-	Name       string `json:"name"`
-	Provider   string `json:"provider"`
-	Model      string `json:"model"`
-	BaseURL    string `json:"base_url,omitempty"`
-	HasAPIKey  bool   `json:"has_api_key"`
-	LatencyMs  int64  `json:"latency_ms,omitempty"`
-	Message    string `json:"message"`
+	Status    string `json:"status"`
+	Name      string `json:"name"`
+	Provider  string `json:"provider"`
+	Model     string `json:"model"`
+	BaseURL   string `json:"base_url,omitempty"`
+	HasAPIKey bool   `json:"has_api_key"`
+	LatencyMs int64  `json:"latency_ms,omitempty"`
+	Message   string `json:"message"`
 }
 
 type DiagnosticsDisk struct {
@@ -186,6 +186,17 @@ func llmProbe(p LLMProfile) DiagnosticsLLMProfile {
 	}
 	if d.Name == "" {
 		d.Name = p.Provider
+	}
+	if p.Provider == "chatgpt" {
+		chatGPTMu.Lock()
+		cred, err := chatGPTRead()
+		chatGPTMu.Unlock()
+		if err != nil || cred.RefreshToken == "" || !chatGPTHasScope(cred.Scopes, "chatgpt.tokens.use.direct") {
+			d.Status, d.Message = "warn", "尚未授权 ChatGPT 订阅"
+		} else {
+			d.Status, d.Message = "ok", "已保存 ChatGPT 授权；请使用测试连接确认模型可用"
+		}
+		return d
 	}
 	switch p.Provider {
 	case "claude", "bedrock", "vertex", "gemini":

@@ -6,6 +6,8 @@
 
 - [AI 分析概览](#ai-分析概览)
 - [LLM 配置](#llm-配置)
+- [ChatGPT 订阅登录](#chatgpt-订阅登录)
+- [Claude 订阅的 API 额度](#claude-订阅的-api-额度)
 - [Embedding 配置](#embedding-配置)
 - [Gemini OAuth 2.0 授权](#gemini-oauth-20-授权)
 - [全量分析模式](#全量分析模式)
@@ -71,6 +73,22 @@ Prompt 中可以使用以下变量，运行时自动替换：
 
 自定义 Prompt 存储在 `preferences.json` 的 `prompt_templates` 字段中。
 ## LLM 配置
+
+### ChatGPT 订阅登录
+
+本机运行 WeLink 时，可在「设置 → AI 配置 → 分析模型」将提供商选为 **ChatGPT 订阅**，点击 **Continue with ChatGPT**，在 OpenAI 页面登录并允许该应用使用订阅。返回后选择账号可用模型，点击「测试连接」，再保存配置。符合条件的 Plus、Pro 账号可使用此功能，额度和模型以 OpenAI 对账号的实际授权为准；原有 OpenAI API Key 配置仍然独立。
+
+授权采用 OpenAI 的 [Sign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source) 和 Responses API。当前仅支持本机 HTTP 地址（`localhost` / `127.0.0.1`），包括本机 Docker；公开 Demo 和远程网页不能通过此入口授权。当前每个 WeLink 安装保存一个 ChatGPT 账号。Docker 用户需要持久化偏好设置卷才能在容器重建后保留登录状态。
+
+授权文件 `chatgpt-auth.json` 与偏好配置位于同一目录，包含敏感令牌，默认不纳入 WeLink 的配置导出，也不应提交或分享。退出授权会清除本地令牌并尝试通知 OpenAI 撤销；如远端撤销未确认，请在 ChatGPT 设置中检查应用访问权限。
+
+分析时，选定的聊天内容会发送到 OpenAI；授权本身不会让 WeLink 读取 ChatGPT 聊天记录。此接入目前用于文本模型，不为生图、TTS、Embedding 提供订阅授权。可用模型、共享额度及具体限制请参阅 [OpenAI 预览限制](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations)。
+
+### Claude 订阅的 API 额度
+
+Claude 订阅与 Claude API 是不同服务。Anthropic 当前不允许第三方应用接入 Claude 账号登录、代管订阅令牌并以订阅凭据代用户发起模型请求；WeLink 的 Claude 配置使用官方 API Key。详见 [Anthropic 身份验证说明](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use)。
+
+符合条件的 Claude Max、Ultra 和 Team 订阅包含可领取的 Claude API 额度。用户可在 Claude 的账单设置中，将订阅与有权限管理的 Claude Console 组织关联，再把该组织的 API Key 填入 WeLink 的 Claude 配置。Pro 订阅不包含该项额度，具体资格、额度、有效期和使用规则以 [Anthropic 官方说明](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers)为准。
 
 ### 支持的 Provider
 

@@ -24,6 +24,11 @@ RUN printf 'server {\n\
     listen 80;\n\
     resolver 127.0.0.11 valid=5s;\n\
     client_max_body_size 64m;\n\
+    location = /auth/callback {\n\
+        access_log off;\n\
+        set $backend http://backend:8080;\n\
+        proxy_pass $backend;\n\
+    }\n\
     location / {\n\
         root /usr/share/nginx/html;\n\
         index index.html;\n\

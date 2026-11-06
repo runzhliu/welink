@@ -49,6 +49,7 @@ export default defineConfig({
   server: {
     port: 3418,
     proxy: {
+      '/auth/callback': backendTarget,
       '/api': backendTarget,
       '/swagger': backendTarget,
     }

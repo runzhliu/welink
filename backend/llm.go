@@ -143,6 +143,9 @@ func defaultsFor(p *llmConfig) {
 		if p.model == "" {
 			p.model = "MiniMax-M3.1-Flash"
 		}
+	case "chatgpt":
+		// Never send a subscription bearer token to a user-configurable URL.
+		p.baseURL = chatGPTResource
 	case "openai":
 		if p.baseURL == "" {
 			p.baseURL = "https://api.openai.com/v1"
@@ -319,6 +322,9 @@ func llmConfigForProfile(profileID string, prefs Preferences) llmConfig {
 		}
 	}
 applyGemini:
+	if cfg.provider == "chatgpt" {
+		cfg.apiKey, _ = chatGPTValidToken()
+	}
 	if cfg.provider == "gemini" && cfg.apiKey == "" && prefs.GeminiAccessToken != "" {
 		if token, err := geminiValidToken(&prefs); err == nil {
 			cfg.apiKey = token
@@ -363,13 +369,7 @@ func streamLLMCore(sendChunk func(StreamChunk), msgs []LLMMessage, prefs Prefere
 			prefs.LLMAPIKey = token
 		}
 	}
-	cfg := llmConfig{
-		provider: prefs.LLMProvider,
-		apiKey:   prefs.LLMAPIKey,
-		baseURL:  prefs.LLMBaseURL,
-		model:    prefs.LLMModel,
-	}
-	defaultsFor(&cfg)
+	cfg := llmConfigForProfile("", prefs)
 
 	err := dispatchLLMStream(sendChunk, msgs, cfg)
 	if err != nil {
@@ -420,6 +420,8 @@ func dispatchLLMStream(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig)
 	t := startTimer("llm_stream")
 	var err error
 	switch cfg.provider {
+	case "chatgpt":
+		err = streamChatGPT(send, msgs, cfg)
 	case "claude":
 		err = streamClaude(send, msgs, cfg)
 	case "bedrock":
@@ -765,13 +767,7 @@ func CompleteLLM(msgs []LLMMessage, prefs Preferences) (string, error) {
 			prefs.LLMAPIKey = token
 		}
 	}
-	cfg := llmConfig{
-		provider: prefs.LLMProvider,
-		apiKey:   prefs.LLMAPIKey,
-		baseURL:  prefs.LLMBaseURL,
-		model:    prefs.LLMModel,
-	}
-	defaultsFor(&cfg)
+	cfg := llmConfigForProfile("", prefs)
 	// Demo 模式下拒绝内网 baseURL，防 SSRF（M2/L4）
 	if err := guardOutboundURL(cfg.baseURL); err != nil {
 		return "", err
@@ -782,6 +778,8 @@ func CompleteLLM(msgs []LLMMessage, prefs Preferences) (string, error) {
 		err error
 	)
 	switch cfg.provider {
+	case "chatgpt":
+		out, err = completeChatGPT(msgs, cfg)
 	case "claude":
 		out, err = completeClaudeSync(msgs, cfg)
 	case "bedrock":
@@ -898,13 +896,7 @@ func testLLMConn(prefs Preferences) (string, error) {
 			prefs.LLMAPIKey = token
 		}
 	}
-	cfg := llmConfig{
-		provider: prefs.LLMProvider,
-		apiKey:   prefs.LLMAPIKey,
-		baseURL:  prefs.LLMBaseURL,
-		model:    prefs.LLMModel,
-	}
-	defaultsFor(&cfg)
+	cfg := llmConfigForProfile("", prefs)
 
 	return testLLMConfig(cfg)
 }
@@ -917,7 +909,14 @@ func testLLMConfig(cfg llmConfig) (string, error) {
 		return "", fmt.Errorf("未配置 Base URL 或模型")
 	}
 	if cfg.apiKey == "" && cfg.provider != "ollama" {
+		if cfg.provider == "chatgpt" {
+			return cfg.model, fmt.Errorf("请先完成 ChatGPT 订阅授权")
+		}
 		return "", fmt.Errorf("未配置 API Key")
+	}
+	if cfg.provider == "chatgpt" {
+		_, err := completeChatGPT([]LLMMessage{{Role: "user", Content: "Hi"}}, cfg)
+		return cfg.model, err
 	}
 
 	// Bedrock / Vertex 走专用测试路径

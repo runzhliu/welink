@@ -176,7 +176,7 @@ export const DiagnosticsSection: React.FC<{
                         <>
                           <div>{p.provider} / {p.model || '(未指定 model)'}</div>
                           {p.base_url && <div className="font-mono text-[10px] text-gray-400 break-all">{p.base_url}</div>}
-                          {!p.has_api_key && <div className="text-amber-600">未配置 API Key</div>}
+                          {!p.has_api_key && p.provider !== 'chatgpt' && <div className="text-amber-600">未配置 API Key</div>}
                         </>
                       }
                     />

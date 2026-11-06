@@ -8,6 +8,8 @@ data/
 # App 模式走 ~/Library/Application Support/WeLink/）。绝对不能提交。
 preferences.json
 prefs.json
+chatgpt-auth.json
+.chatgpt-auth-*
 
 # ===========================
 # 后端

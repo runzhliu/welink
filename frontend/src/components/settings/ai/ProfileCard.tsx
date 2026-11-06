@@ -4,6 +4,7 @@ import { X, Loader2, AlertCircle, Check, LogIn, LogOut, ExternalLink } from 'luc
 import { Switch } from '../../common/Switch';
 import { openProviderUrl } from '../constants';
 import { PROVIDERS, getDefaultModel, getDefaultBaseURL, type LLMProfile, type ProviderValue } from './types';
+import { ChatGPTConnection } from './ChatGPTConnection';
 
 export const ProfileCard: React.FC<{
   profile: LLMProfile;
@@ -93,10 +94,21 @@ export const ProfileCard: React.FC<{
         </Select>
       </div>
 
+      {profile.provider === 'chatgpt' ? <ChatGPTConnection profile={profile} onChange={onChange} onSaveAndTest={onSaveAndTest} testing={testing} testMsg={testMsg} /> : <>
       {profile.provider === 'bedrock' && (
         <p className="text-[11px] text-gray-400 leading-relaxed">
           默认使用 Mantle Messages API（Opus 5.5）。旧模型可填写 bedrock-runtime 区域地址及原 Model ID。
         </p>
+      )}
+
+      {profile.provider === 'claude' && (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-3 space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+          <p className="font-semibold text-[var(--text-primary)]">Claude 订阅用户</p>
+          <p>符合条件的 Max、Ultra 和 Team 订阅可领取 Claude API 额度。将订阅关联到 Claude Console 后，使用该组织的 API Key 即可在 WeLink 中使用额度。Pro 订阅不包含此项额度，具体条件以 Anthropic 为准。</p>
+          <button type="button" onClick={() => openProviderUrl('https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers')} className="inline-flex items-center gap-1 font-semibold text-[var(--accent-text)] hover:underline">
+            查看领取和使用说明 <ExternalLink size={12} />
+          </button>
+        </div>
       )}
 
       {/* API Key */}
@@ -299,6 +311,7 @@ export const ProfileCard: React.FC<{
           </span>
         )}
       </div>
+      </>}
     </div>
   );
 };
