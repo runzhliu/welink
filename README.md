@@ -413,9 +413,9 @@ WeLink 内置 [MCP（Model Context Protocol）](https://modelcontextprotocol.io/
 | **opencode** | OpenCode Agent | `.opencode/agent/<name>.md` |
 | **cursor** | Cursor Rules | `.cursor/rules/<name>.mdc`（支持 glob） |
 | **generic** | 通用 Markdown | 工具无关，可粘贴到任何 AI 对话 |
-| **lora-jsonl** ⭐ | **SFT / LoRA 训练集** | ms-swift messages JSONL + 时间切分 + 训练/部署脚本 |
+| **lora-jsonl**（旧版） | **SFT / LoRA 训练集** | ms-swift messages JSONL + 时间切分 + 训练/部署脚本 |
 
-> **lora-jsonl** 是纯本地数据导出，**不调 LLM、不上传聊天记录**。支持训练“我的口吻”或指定联系人分身，连续短消息会合并为真实对话轮次，并按会话隔离、按时间生成 train / validation / test 三个集合。手机号 / 邮箱 / 身份证 / 卡号 / wxid 会做基础脱敏，但训练前仍应人工抽查；数据集和 adapter 都不要公开分享。
+> **lora-jsonl** 是旧版纯本地数据导出，**不调 LLM、不上传聊天记录**。支持训练“我的口吻”或指定联系人分身，连续短消息会合并为真实对话轮次，并按会话隔离、按时间生成 train / validation / test 三个集合。手机号 / 邮箱 / 身份证 / 卡号 / wxid 会做基础脱敏，但训练前仍应人工抽查；数据集和 adapter 都不要公开分享。新训练流程请使用「模型训练」，旧版任务与新版工作台分开保存，不会自动迁移。
 
 ### 炼化的内容
 - **性格特征**：LLM 从真实对话里抽取的人物画像
@@ -702,7 +702,7 @@ LLM 会：
 | **AI 虚拟群聊** | 实验室 → 🎭 虚拟群聊 | 任意 2-8 个联系人组虚拟群，AI 用每个人的分身画像扮演；批量 N 轮 + 气泡 TTS + 会话持久化 |
 | **🎮 互动小说** | 联系人详情页头部 → 紫色 BookOpen 按钮 | 把 TA 当 NPC，写一段章节化、有选项、5 种结局的视觉小说；可读档回滚、Wrapped 风格回顾、长图导出 |
 | **移动端配对** | 设置 → 移动端配对（仅 PC 本机可开） | 生成 token + LAN IP → 手机 App 扫码验证；本机回环外只能 verify，不能改 token |
-| **SFT 工作台（v0.4.0 开发预览）** | AI 工作台 → 模型训练 | 准备与审核样本、连接 Mac / GPU Worker、预检训练、对比评测、导出 Adapter 和接入试聊；旧版 ms-swift 功能仍在 Skills 页面 |
+| **SFT 工作台（v0.4.0 开发预览）** | AI 工作台 → 模型训练 | 准备与审核样本、连接 Mac / GPU Worker、预检训练、对比评测、导出 Adapter 和接入试聊 |
 
 ---
 

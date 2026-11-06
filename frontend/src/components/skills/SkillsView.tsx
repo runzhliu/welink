@@ -9,8 +9,6 @@ import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { RevealLink } from '../common/RevealLink';
 import { RelativeTime } from '../common/RelativeTime';
 import { EmptyState } from '../common/EmptyState';
-import { SFTTrainingPanel } from './SFTTrainingPanel';
-import { SFTDeploymentPanel } from './SFTDeploymentPanel';
 
 type SortKey = 'target_name' | 'skill_type' | 'format' | 'created_at' | 'file_size' | 'status';
 type SortDir = 'asc' | 'desc';
@@ -231,11 +229,8 @@ export const SkillsView: React.FC = () => {
           <Package size={24} className="text-[var(--text-secondary)]" />
           Skills
         </h1>
-        <p className="text-gray-400 text-sm">管理 Skill 包、SFT 数据集和本地微调任务</p>
+        <p className="text-gray-400 text-sm">管理已生成的 Skill 包</p>
       </div>
-
-      <SFTTrainingPanel datasets={skills} privacyMode={privacyMode} />
-      <SFTDeploymentPanel privacyMode={privacyMode} />
 
       {/* 搜索 + 筛选 */}
       {!loading && skills.length > 0 && (
