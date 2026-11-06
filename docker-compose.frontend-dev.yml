@@ -1,0 +1,22 @@
+# 与 docker-compose.yml 一起使用：前端在容器里运行 Vite，后端保持原样。
+services:
+  frontend:
+    image: node:22-alpine
+    build: !reset null
+    working_dir: /app
+    command:
+      - sh
+      - -c
+      - npm ci --no-audit --no-fund --registry=https://registry.npmjs.org/ && exec npm run dev -- --host 0.0.0.0 --port 3418 --strictPort
+    environment:
+      API_PROXY_TARGET: http://backend:8080
+      CHOKIDAR_USEPOLLING: 'true'
+      CHOKIDAR_INTERVAL: '500'
+    ports: !override
+      - '127.0.0.1:3418:3418'
+    volumes:
+      - ./frontend:/app
+      - frontend-dev-node-modules:/app/node_modules
+
+volumes:
+  frontend-dev-node-modules:

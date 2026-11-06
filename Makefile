@@ -1,5 +1,5 @@
 .PHONY: up down logs restart build build-backend build-frontend build-mcp \
-        dev-backend dev-frontend test test-short lint clean help \
+        dev-backend dev-frontend dev-docker-frontend dev-docker-frontend-logs dev-docker-frontend-restore dev-docker-backend dev-docker-backend-logs dev-docker-backend-restore test test-short lint clean help \
         docs-build docs-build-push docs-up docs-down docs-logs \
         demo-up demo-up-build demo-down demo-logs \
         server-up server-down server-logs server-pull \
@@ -152,6 +152,24 @@ dev-backend:     ## 本地启动后端（读取 config.yaml 或默认值）
 
 dev-frontend:    ## 本地启动前端 Vite dev server
 	cd frontend && npm run dev
+
+dev-docker-frontend: ## Docker 中启动前端热更新（沿用已启动的后端）
+	docker compose -f docker-compose.yml -f docker-compose.frontend-dev.yml up -d --no-deps frontend
+
+dev-docker-frontend-logs: ## 查看 Docker 前端开发服务器日志
+	docker compose -f docker-compose.yml -f docker-compose.frontend-dev.yml logs -f frontend
+
+dev-docker-frontend-restore: ## 切回 Docker 前端静态镜像
+	docker compose -f docker-compose.yml up -d --no-deps --no-build frontend
+
+dev-docker-backend: ## Docker 中监听 Go 源码并重新编译（会重启后端）
+	docker compose -f docker-compose.yml -f docker-compose.backend-dev.yml up -d --no-deps --build backend
+
+dev-docker-backend-logs: ## 查看 Docker 后端开发服务器日志
+	docker compose -f docker-compose.yml -f docker-compose.backend-dev.yml logs -f backend
+
+dev-docker-backend-restore: ## 切回 Docker 后端静态镜像
+	docker compose -f docker-compose.yml up -d --no-deps --no-build backend
 
 ## ─── 测试 ────────────────────────────────────────────────────────────────────
 

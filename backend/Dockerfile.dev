@@ -1,0 +1,13 @@
+FROM golang:1.25-alpine
+
+RUN go install github.com/air-verse/air@v1.63.4 && \
+    adduser -D -u 1001 welink && \
+    mkdir -p /app/prefs /workspace /home/welink/go/pkg/mod /home/welink/.cache/go-build && \
+    chown -R welink:welink /app /home/welink
+
+WORKDIR /workspace
+ENV HOME=/home/welink GOPATH=/home/welink/go GOCACHE=/home/welink/.cache/go-build \
+    DATA_DIR=/app/data WELINK_LISTEN_LAN=1 CGO_ENABLED=0 GOPROXY=https://goproxy.cn,direct
+USER welink
+EXPOSE 8080
+CMD ["/go/bin/air", "-c", ".air.toml"]

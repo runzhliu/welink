@@ -77,7 +77,52 @@ cd backend && go run .
 DEMO_MODE=true go run .
 ```
 
+#### Docker 后端热编译（无需本机安装 Go）
+
+已经运行 `docker compose up -d` 时，可将后端切换到开发容器：
+
+```bash
+make dev-docker-backend       # 首次构建镜像、下载 Go 依赖并编译，可能需要几分钟
+make dev-docker-backend-logs  # 查看编译和启动进度
+```
+
+保存 `backend/` 下的 Go 源码后，容器会自动编译并重启后端。每次重启会中断正在进行的请求或训练，开发时请留意。源码以只读方式挂载，Go 依赖和编译缓存保存在独立 Docker 卷；原有的 `decrypted/` 和 `welink-prefs` 挂载保持不变，不会复制到缓存卷。前端容器可独立使用下方的热更新配置。
+
+切换或停止开发后端时不会删除数据卷；恢复静态镜像：
+
+```bash
+make dev-docker-backend-restore
+```
+
 ### 前端
+
+#### Docker 前端热更新（无需本机安装 Node.js）
+
+如果已经使用 Docker Compose 启动后端，可以只把前端切换为容器内的 Vite 开发服务器（需要 Docker Compose 2.24.4 或更新版本）：
+
+```bash
+# 确认后端已启动后，在仓库根目录执行：
+make dev-docker-frontend
+
+# 首次启动会在容器里安装依赖；查看进度
+make dev-docker-frontend-logs
+```
+
+打开 `http://localhost:3418`。修改本机 `frontend/` 下的源码后，Vite 会自动更新页面；不需要重新构建镜像。源码挂载到容器，依赖保存在独立的 Docker 卷，不会使用或覆盖本机的 `frontend/node_modules`。Vite 启动时可能在源码目录生成并清理临时配置文件。开发端口只绑定本机回环地址，`/api` 和 `/swagger` 通过 Docker 网络代理到现有后端。
+
+修改 `package.json` 或 `package-lock.json` 后，重新执行 `make dev-docker-frontend` 不会自动重启已有容器；请执行下面的命令重新安装依赖：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.frontend-dev.yml restart frontend
+```
+
+停止开发后，用以下命令切回原本的前端静态镜像；后端和数据卷不会被重建：
+
+```bash
+make dev-docker-frontend-restore
+```
+
+#### 本机 Vite 开发服务器
 
 ```bash
 # 启动 Vite 开发服务器（端口 3418，自动代理 /api 到 8080）
@@ -293,6 +338,12 @@ make help              # 查看所有可用命令
 # 开发
 make dev-backend       # 启动后端
 make dev-frontend      # 启动前端
+make dev-docker-backend          # 容器内后端热编译
+make dev-docker-backend-logs     # 查看后端热编译日志
+make dev-docker-backend-restore  # 切回后端静态镜像
+make dev-docker-frontend         # 容器内前端热更新，复用 Docker 后端
+make dev-docker-frontend-logs    # 查看热更新容器日志
+make dev-docker-frontend-restore # 切回前端静态镜像
 make test              # 运行测试
 make lint              # 代码检查
 

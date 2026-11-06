@@ -1,0 +1,15 @@
+# 与 docker-compose.yml 一起使用；仅 Go 源码和依赖缓存供开发容器使用。
+services:
+  backend:
+    image: welink-backend-dev:local
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./backend:/workspace:ro
+      - backend-dev-go-mod:/home/welink/go/pkg/mod
+      - backend-dev-go-build:/home/welink/.cache/go-build
+
+volumes:
+  backend-dev-go-mod:
+  backend-dev-go-build:
