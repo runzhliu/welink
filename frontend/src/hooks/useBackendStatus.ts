@@ -11,6 +11,7 @@ export const useBackendStatus = (pollInterval = 1000) => {
   const [backendReady, setBackendReady] = useState(false); // 后端可连通
   const [error, setError] = useState<Error | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const interval = status?.is_initialized && !status?.is_indexing ? Math.max(5000, pollInterval) : pollInterval;
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -19,34 +20,29 @@ export const useBackendStatus = (pollInterval = 1000) => {
       setBackendReady(true);
       setError(null);
 
-      // 初始化完成后停止轮询
-      if (data.is_initialized) {
-        if (timerRef.current) {
-          clearInterval(timerRef.current);
-          timerRef.current = null;
-        }
-      }
     } catch (err) {
       setError(err as Error);
+      setBackendReady(false);
       console.error('Failed to fetch backend status:', err);
     }
   }, []);
 
   const startPolling = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
+    void fetchStatus();
     timerRef.current = setInterval(fetchStatus, pollInterval);
   }, [fetchStatus, pollInterval]);
 
   useEffect(() => {
     fetchStatus();
-    timerRef.current = setInterval(fetchStatus, pollInterval);
+    timerRef.current = setInterval(fetchStatus, interval);
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
     };
-  }, [fetchStatus, pollInterval]);
+  }, [fetchStatus, interval]);
 
   return {
     status,

@@ -52,14 +52,7 @@ Demo 数据以阿森纳 2025/26 赛季一线队球员与教练组为联系人，
 
 **第一步** — 手机微信 → 「我」→「设置」→「通用」→「聊天记录迁移与备份」→「迁移到电脑」，把完整历史迁到电脑。迁移过程中保持电脑微信处于登录状态。
 
-**第二步** — 使用 [wechat-decrypt](https://github.com/ylytdeng/wechat-decrypt) 提取并解密：
-
-```bash
-git clone https://github.com/ylytdeng/wechat-decrypt
-cd wechat-decrypt
-sudo python3 main.py
-# 选择 decrypt 模式
-```
+**第二步** — 选择与系统及微信版本兼容的工具，按其说明提取并解密。原 `ylytdeng/wechat-decrypt` 仓库目前不可用；社区项目 [WeinanHu/wechat-decrypt](https://github.com/WeinanHu/wechat-decrypt) 可供参考，其输出与 WeLink 的兼容性尚未验证。使用前请检查工具来源、权限及明文数据保存位置。
 
 解密完成后得到如下目录结构：
 
@@ -74,7 +67,7 @@ decrypted/
 ```
 
 ::: tip 数据安全
-解密后的数据库文件包含你的所有聊天记录，请妥善保管。WeLink 所有分析都在本地进行，不会上传任何服务器。
+解密后的数据库包含私人聊天，请妥善保管。基础分析在运行 WeLink 的设备上处理；云端 AI 和远程 GPU 训练会向你选择的服务发送相关内容。
 :::
 
 ---

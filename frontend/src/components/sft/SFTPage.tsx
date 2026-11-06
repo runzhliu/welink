@@ -25,6 +25,36 @@ function Empty({ title, children }: { title: string; children: ReactNode }) { re
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) { return <label className="sft-field"><span>{label}</span>{isValidElement<Record<string, unknown>>(children) ? cloneElement(children, { 'aria-label': children.props['aria-label'] || label }) : children}{hint && <small>{hint}</small>}</label>; }
 
 export default function SFTPage({ contacts = [] }: { contacts?: ContactStats[] }) {
+  const [mode, setMode] = useState<'checking' | 'demo' | 'normal'>('checking');
+  useEffect(() => {
+    let active = true;
+    void appApi.getInfo().then(info => { if (active) setMode(info.demo_mode ? 'demo' : 'normal'); }).catch(() => { if (active) setMode('normal'); });
+    return () => { active = false; };
+  }, []);
+  if (mode === 'checking') return <div className="sft-page"><Empty title="正在读取工作台">正在检查运行环境…</Empty></div>;
+  if (mode === 'demo') return <SFTDemo />;
+  return <SFTWorkspace contacts={contacts} />;
+}
+
+function SFTDemo() {
+  const [step, setStep] = useState(0);
+  const examples = [
+    { title: '准备数据', detail: '从聊天记录或 JSONL 准备样本，检查隐私后冻结训练、验证和测试集。', example: '示例：240 条虚构对话 → 192 条训练 / 24 条验证 / 24 条测试。' },
+    { title: '连接环境', detail: '将本机或 GPU 容器中的 Worker 与训练项目配对，再检查设备、存储和网络。', example: '示例环境：一台临时 GPU 容器；示例不连接真实机器。' },
+    { title: '预检与训练', detail: '选择基础模型及固定版本，先运行预检，再使用审核后的数据训练 LoRA Adapter。', example: '示例：短训 100 步；此处不运行训练，也不显示真实指标。' },
+    { title: '对比评测', detail: '用同一批未参与训练的测试样本对比基础模型和微调模型，并进行人工盲评。', example: '比较表达方式和帮助程度，并检查是否复述训练原文。' },
+    { title: '导出与试用', detail: '训练完成后可下载 Adapter，或启动服务试聊、接入和回滚。', example: 'Adapter 可能记住聊天内容，请勿随意分享。' },
+  ];
+  return <div className="sft-page"><header className="sft-heading"><div><div className="sft-eyebrow">AI 工作台 / 模型训练</div><h1>SFT 工作台</h1><p>用示例了解如何将自己的表达方式训练成可比较、试用的模型。</p></div></header>
+    <div className="sft-alert" role="status">演示模式 · 以下均为虚构示例；不会读取或上传你的聊天记录，也不会连接训练环境。</div>
+    <section className="sft-workflow" aria-labelledby="demo-workflow-heading"><div className="sft-workflow-heading"><div><h2 id="demo-workflow-heading">训练流程</h2><p>点击步骤，了解从数据到模型的完整过程。</p></div></div>
+      <div className="sft-workflow-explainer"><div><strong>工作原理</strong><p>以聊天上下文为输入、自己的回复为目标，微调基础模型。</p></div><div><strong>可以做什么</strong><p>让模型的回复更贴近自己的表达方式，并进行对比和试聊。</p></div><div><strong>与检索的区别</strong><p>具体事实仍可能需要检索；模型也可能出错。</p></div></div>
+      <ol className="sft-workflow-steps">{examples.map((item, index) => <li key={item.title}><button type="button" aria-current={step === index ? 'step' : undefined} onClick={() => setStep(index)}><span className="sft-workflow-number">{index + 1}</span><span className="sft-workflow-copy"><strong>{item.title}</strong><span>查看示例</span></span></button></li>)}</ol>
+    </section><section className="sft-card sft-form" aria-live="polite"><div><div className="sft-eyebrow">第 {step + 1} 步 / 仅供展示</div><h2>{examples[step].title}</h2></div><p>{examples[step].detail}</p><p className="sft-muted">{examples[step].example}</p><p className="sft-muted">公开演示不支持创建项目、上传数据、训练或导出；请在自己的 WeLink 环境中操作。</p></section>
+  </div>;
+}
+
+function SFTWorkspace({ contacts }: { contacts: ContactStats[] }) {
   const { privacyMode } = usePrivacyMode();
   const [projects, setProjects] = useState<SFTProject[]>([]), [project, setProject] = useState('');
   const [datasets, setDatasets] = useState<SFTDataset[]>([]), [jobs, setJobs] = useState<SFTJob[]>([]), [workers, setWorkers] = useState<SFTWorker[]>([]), [models, setModels] = useState<SFTModel[]>([]), [deployments, setDeployments] = useState<SFTDeployment[]>([]);

@@ -87,7 +87,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
           <div>
             <p className="text-sm font-bold text-amber-800">注意数据安全</p>
             <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
-              请仅分析您本人的聊天数据，未经他人同意分析其私人聊天记录可能违反隐私法律。所有数据仅在本地处理，不会上传至任何服务器。
+              请仅处理有权使用的聊天数据。基础分析在运行 WeLink 的设备上处理；使用云端 AI 或远程 GPU 训练时，相关内容会发送到你选择的服务或训练环境。
             </p>
           </div>
         </div>
@@ -111,7 +111,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
               <div className="w-6 h-6 rounded-full bg-[#07c16015] text-[#07c160] text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
               <div>
                 <p className="text-sm font-bold text-[#1d1d1f] dk-text">确保微信在电脑上保持运行</p>
-                <p className="text-xs text-gray-400 mt-0.5">解密工具（macOS / Windows 均支持）需要从运行中的微信进程内存读取密钥</p>
+                <p className="text-xs text-gray-400 mt-0.5">解密方式取决于微信版本和系统；请先阅读工具说明并核对兼容性。</p>
               </div>
             </div>
 
@@ -119,21 +119,18 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
             <div className="flex gap-3">
               <div className="w-6 h-6 rounded-full bg-[#07c16015] text-[#07c160] text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
               <div>
-                <p className="text-sm font-bold text-[#1d1d1f] dk-text">克隆并运行解密工具</p>
+                <p className="text-sm font-bold text-[#1d1d1f] dk-text">选择兼容的解密工具</p>
+                <p className="text-xs text-gray-400 mt-1">原 wechat-decrypt 项目目前不可用。以下社区项目可供参考，WeLink 尚未验证其输出兼容性；请先检查其说明、来源与安全性。</p>
                 <a
-                  href="https://github.com/ylytdeng/wechat-decrypt"
+                  href="https://github.com/WeinanHu/wechat-decrypt"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-xs text-[#07c160] hover:underline mt-0.5"
                 >
-                  github.com/ylytdeng/wechat-decrypt
+                  github.com/WeinanHu/wechat-decrypt
                   <ExternalLink size={11} />
                 </a>
-                <div className="mt-2 bg-[#f8f9fb] dk-subtle rounded-xl px-3 py-2 flex items-center gap-2">
-                  <Terminal size={12} className="text-gray-400 flex-shrink-0" />
-                  <code className="text-xs text-gray-600 dark:text-gray-300 font-mono">sudo python3 main.py</code>
-                </div>
-                <p className="text-xs text-gray-400 mt-1.5">选择 <span className="font-mono bg-gray-100 dark:bg-white/10 px-1 rounded">decrypt</span> 模式，工具会自动提取密钥并解密所有数据库</p>
+                <p className="text-xs text-gray-400 mt-1.5">请按所选工具的当前文档操作，留意系统权限、密钥和明文数据库的保存位置。</p>
               </div>
             </div>
 
@@ -178,7 +175,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
           <div className="mt-5 pt-4 border-t border-gray-100 dk-border flex items-center gap-2">
             <Monitor size={13} className="text-gray-300" />
             <p className="text-xs text-gray-400">
-              解密方案由{' '}
+              感谢原解密项目{' '}
               <a
                 href="https://github.com/ylytdeng/wechat-decrypt"
                 target="_blank"
@@ -187,7 +184,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
               >
                 ylytdeng/wechat-decrypt
               </a>
-              {' '}提供，感谢开源贡献
+              {' '}的开源贡献（目前不可用）
             </p>
           </div>
         </div>

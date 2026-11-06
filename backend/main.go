@@ -103,6 +103,12 @@ func analysisParamsFromPrefs(p Preferences) service.AnalysisParams {
 	}
 }
 
+// Existing bounded ranges predate the explicit marker. The marker distinguishes
+// a saved all-time range (0,0) from a fresh installation with no selection.
+func shouldRestoreIndex(from, to int64, configured bool) bool {
+	return configured || from != 0 || to != 0
+}
+
 func main() {
 	if hasFrontend {
 		// App 模式：webview 必须在进程启动后立刻创建，否则 macOS 报「没有响应」。
@@ -137,7 +143,7 @@ func serverMain() {
 	)
 
 	// reinitSvc 用新数据目录替换数据库连接和服务层（线程安全）。
-	reinitSvc := func(dataDir string, params service.AnalysisParams, initFrom, initTo int64) error {
+	reinitSvc := func(dataDir string, params service.AnalysisParams, initFrom, initTo int64, autoInit bool) error {
 		reinitMu.Lock()
 		defer reinitMu.Unlock()
 		newMgr, err := db.NewDBManager(dataDir)
@@ -160,7 +166,7 @@ func serverMain() {
 		if oldMgr != nil {
 			oldMgr.Close()
 		}
-		if initFrom != 0 || initTo != 0 {
+		if shouldRestoreIndex(initFrom, initTo, autoInit) {
 			newSvc.Reinitialize(initFrom, initTo)
 		}
 		dbMgr = newMgr
@@ -258,7 +264,7 @@ func serverMain() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	if err := reinitSvc(prefs.DataDir, analysisParamsFromPrefs(prefs), prefs.DefaultInitFrom, prefs.DefaultInitTo); err != nil {
+	if err := reinitSvc(prefs.DataDir, analysisParamsFromPrefs(prefs), prefs.DefaultInitFrom, prefs.DefaultInitTo, prefs.DefaultInitConfigured); err != nil {
 		// 服务层保持 nil —— 前端通过 /api/app/info 识别并引导用户
 		candidates := probeDataDirs(prefs.DataDir)
 		log.Printf("────────────────────────────────────────────────────────────────")
@@ -400,6 +406,7 @@ func serverMain() {
 		if !trusted {
 			c.JSON(http.StatusOK, gin.H{
 				"app_mode":      hasFrontend,
+				"demo_mode":     demoModeEnabled(),
 				"version":       appVersion,
 				"platform":      runtime.GOOS,
 				"needs_pairing": currentPairingToken() != "",
@@ -418,6 +425,7 @@ func serverMain() {
 
 		c.JSON(http.StatusOK, gin.H{
 			"app_mode":     hasFrontend,
+			"demo_mode":    demoModeEnabled(),
 			"needs_setup":  needsSetup,
 			"ready":        ready,
 			"version":      appVersion,
@@ -755,7 +763,7 @@ func serverMain() {
 			os.Unsetenv("DEMO_MODE")
 		}
 		merged := effectiveConfig(body)
-		if err := reinitSvc(merged.DataDir, analysisParamsFromPrefs(merged), merged.DefaultInitFrom, merged.DefaultInitTo); err != nil {
+		if err := reinitSvc(merged.DataDir, analysisParamsFromPrefs(merged), merged.DefaultInitFrom, merged.DefaultInitTo, merged.DefaultInitConfigured); err != nil {
 			return fmt.Errorf("无效的数据库目录：%w", err)
 		}
 		if err := saveAppConfig(&body); err != nil {
@@ -766,6 +774,7 @@ func serverMain() {
 		existing := loadPreferences()
 		existing.DefaultInitFrom = merged.DefaultInitFrom
 		existing.DefaultInitTo = merged.DefaultInitTo
+		existing.DefaultInitConfigured = merged.DefaultInitConfigured
 		existing.DataDir = body.DataDir
 		if err := savePreferences(existing); err != nil {
 			log.Printf("[APP] persist init range to preferences failed: %v", err)
@@ -774,6 +783,7 @@ func serverMain() {
 		prefs.DataDir = body.DataDir
 		prefs.DefaultInitFrom = merged.DefaultInitFrom
 		prefs.DefaultInitTo = merged.DefaultInitTo
+		prefs.DefaultInitConfigured = merged.DefaultInitConfigured
 		return nil
 	}
 
@@ -1942,22 +1952,24 @@ func serverMain() {
 	// POST /api/ai/complete — 非流式单次补全（用于分段摘要）
 	api.POST("/ai/complete", func(c *gin.Context) {
 		var body struct {
-			Messages []LLMMessage `json:"messages"`
+			Messages  []LLMMessage `json:"messages"`
+			ProfileID string       `json:"profile_id"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 			return
 		}
 		prefs := loadPreferences()
-		if prefs.LLMProvider == "" {
+		cfg := llmConfigForProfile(body.ProfileID, prefs)
+		if cfg.provider == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
 			return
 		}
-		if llmConfigForProfile("", prefs).apiKey == "" && prefs.LLMProvider != "ollama" {
+		if cfg.apiKey == "" && cfg.provider != "ollama" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成账号授权"})
 			return
 		}
-		content, err := CompleteLLM(body.Messages, prefs)
+		content, err := CompleteLLMWithProfile(body.Messages, prefs, body.ProfileID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, CompleteResponse{Error: err.Error()})
 			return
@@ -3961,6 +3973,7 @@ func serverMain() {
 			existing := loadPreferences()
 			existing.DefaultInitFrom = body.From
 			existing.DefaultInitTo = body.To
+			existing.DefaultInitConfigured = true
 			if err := savePreferences(existing); err != nil {
 				log.Printf("[INIT] persist init range failed: %v", err)
 			}
@@ -4111,7 +4124,7 @@ func serverMain() {
 		merged := effectiveConfig(existing)
 		merged.DataDir = picked.Path
 		os.Unsetenv("DEMO_MODE")
-		if err := reinitSvc(merged.DataDir, analysisParamsFromPrefs(merged), 0, 0); err != nil {
+		if err := reinitSvc(merged.DataDir, analysisParamsFromPrefs(merged), 0, 0, false); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "切换失败：" + err.Error()})
 			return
 		}

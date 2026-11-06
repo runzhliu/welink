@@ -15,13 +15,28 @@ import (
 
 // AIMessage 与前端 AnalysisMessage 结构对应
 type AIMessage struct {
-	Role         string  `json:"role"`
-	Content      string  `json:"content"`
-	Provider     string  `json:"provider,omitempty"`
-	Model        string  `json:"model,omitempty"`
-	ElapsedSecs  float64 `json:"elapsedSecs,omitempty"`
-	TokensPerSec int     `json:"tokensPerSec,omitempty"`
-	CharCount    int     `json:"charCount,omitempty"`
+	Role         string         `json:"role"`
+	Content      string         `json:"content"`
+	Provider     string         `json:"provider,omitempty"`
+	Model        string         `json:"model,omitempty"`
+	ElapsedSecs  float64        `json:"elapsedSecs,omitempty"`
+	TokensPerSec int            `json:"tokensPerSec,omitempty"`
+	CharCount    int            `json:"charCount,omitempty"`
+	Sources      []AIChatSource `json:"sources,omitempty"`
+}
+
+// AIChatSource records only messages actually supplied to the answering model.
+type AIChatSource struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	IsGroup     bool   `json:"is_group"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	Date        string `json:"date"`
+	Time        string `json:"time"`
+	Content     string `json:"content"`
+	IsMine      bool   `json:"is_mine"`
+	Speaker     string `json:"speaker,omitempty"`
 }
 
 var (

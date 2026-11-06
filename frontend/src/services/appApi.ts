@@ -42,6 +42,7 @@ export interface SelfInfo {
 
 export interface AppInfo {
   app_mode: boolean;
+  demo_mode?: boolean;
   needs_setup: boolean;
   ready: boolean;
   version?: string;

@@ -11,6 +11,8 @@ interface InitializingScreenProps {
   progress?: IndexProgress;       // 来自 useBackendStatus.progress
   cancellable?: boolean;          // 是否显示「取消」按钮
   onCancelled?: () => void;       // 取消成功后回调
+  error?: string;
+  onRetry?: () => void;
 }
 
 function fmtElapsed(ms: number): string {
@@ -24,6 +26,8 @@ export const InitializingScreen: React.FC<InitializingScreenProps> = ({
   progress,
   cancellable = false,
   onCancelled,
+  error,
+  onRetry,
 }) => {
   const [cancelling, setCancelling] = useState(false);
 
@@ -56,30 +60,30 @@ export const InitializingScreen: React.FC<InitializingScreenProps> = ({
     : null;
 
   return (
-    <div className="fixed inset-0 dk-page bg-white flex items-center justify-center z-50" role="status" aria-live="polite" aria-busy="true">
-      <div className="flex flex-col items-center gap-0 w-80">
+    <div className="fixed inset-0 dk-page flex items-center justify-center z-50 px-5" role="status" aria-live="polite" aria-busy={!error}>
+      <div className="w-full max-w-md">
 
         {/* Logo 区 */}
-        <div className="flex items-center gap-4 mb-10">
-          <img loading="lazy" src="/favicon.svg" alt="WeLink" className="w-16 h-16 rounded-2xl shadow-lg shadow-green-100" />
+        <div className="flex items-center gap-3 mb-8">
+          <img loading="lazy" src="/favicon.svg" alt="WeLink" className="w-12 h-12 rounded-xl" />
           <div>
-            <h1 className="text-3xl font-black text-[#1d1d1f] tracking-tight leading-none mb-1">
+            <h1 className="text-xl font-semibold dk-text tracking-tight leading-none mb-1">
               WeLink
             </h1>
-            <p className="text-sm font-semibold text-gray-400 leading-none">
-              AI 驱动 · 微信聊天分析
+            <p className="text-xs text-[var(--text-secondary)] leading-none">
+              让每段关系被看见
             </p>
           </div>
         </div>
 
-        {/* 主状态文字 */}
-        <p className="text-sm font-semibold text-[#07c160] mb-3 self-start">
-          {message}
-        </p>
+        <section className="dk-card border rounded-xl p-6 shadow-sm">
+        <p className="text-xs font-medium text-[var(--accent-text)] mb-2">{error ? '需要处理' : '正在准备'}</p>
+        <p className="text-base font-semibold dk-text mb-2">{error ? '索引暂未完成' : message}</p>
+        <p className="text-xs text-[var(--text-secondary)] mb-5">{error ? '可以重试，或重新选择分析范围。' : '正在准备聊天记录，完成后会自动进入。'}</p>
 
         {/* 进度条 */}
         <div
-          className="w-full h-1.5 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden mb-3 relative"
+          className="w-full h-1.5 bg-[var(--bg-subtle)] rounded-full overflow-hidden mb-3 relative"
           role="progressbar"
           aria-label={message}
           aria-valuemin={hasProgress ? 0 : undefined}
@@ -88,12 +92,12 @@ export const InitializingScreen: React.FC<InitializingScreenProps> = ({
         >
           {hasProgress ? (
             <div
-              className="h-full bg-gradient-to-r from-[#09d46a] to-[#07c160] rounded-full transition-all duration-500 ease-out"
+              className="h-full bg-[var(--accent)] rounded-full transition-all duration-500 ease-out"
               style={{ width: `${pct}%` }}
             />
           ) : (
             // 没有进度数据：indeterminate 滚动条
-            <div className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-[#07c160] to-transparent animate-[slide_1.5s_ease-in-out_infinite]" />
+            <div className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent animate-[slide_1.5s_ease-in-out_infinite]" />
           )}
         </div>
 
@@ -102,7 +106,7 @@ export const InitializingScreen: React.FC<InitializingScreenProps> = ({
           <div className="w-full text-xs text-gray-500 space-y-1">
             <div className="flex justify-between">
               <span>{progress!.done} / {progress!.total} 个联系人</span>
-              <span className="font-semibold text-[#07c160]">{pct}%</span>
+            <span className="font-semibold text-[var(--accent-text)]">{pct}%</span>
             </div>
             <div className="flex justify-between">
               <span className="truncate max-w-[14rem]" title={progress!.current_contact}>
@@ -113,27 +117,32 @@ export const InitializingScreen: React.FC<InitializingScreenProps> = ({
             {eta && <div className="text-gray-400">预计剩余 {eta}</div>}
           </div>
         ) : (
-          <p className="w-full text-xs text-gray-400 text-center">
-            正在准备索引…
+          <p className="w-full text-xs text-[var(--text-secondary)]">
+            {error ? '索引没有继续运行。' : '正在准备索引…'}
           </p>
         )}
 
+        {error && <p role="alert" className="mt-4 break-words text-xs text-red-600 dark:text-red-400">{error === 'indexing cancelled' ? '索引已取消。' : error}</p>}
+
         {/* 取消按钮 */}
+        {(cancellable || (error && onRetry)) && <div className="mt-5 flex items-center gap-3">
+          {error && onRetry && <button type="button" onClick={onRetry} className="ui-button ui-button-primary">重试索引</button>}
         {cancellable && (
           <button
             type="button"
             onClick={handleCancel}
             disabled={cancelling}
-            className="mt-8 text-xs text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+            className="ui-button ui-button-secondary disabled:opacity-50"
           >
-            {cancelling ? '正在取消…' : '取消索引'}
+            {cancelling ? '正在取消…' : error ? '重新选择时间' : '取消索引'}
           </button>
-        )}
+        )}</div>}
 
         {/* 底部提示 */}
-        <p className="mt-6 text-xs text-gray-300 font-medium text-center">
-          首次启动需要约 10–30 秒，请耐心等待
+        <p className="mt-5 text-xs text-[var(--text-muted)]">
+          耗时取决于聊天记录大小和设备性能。刷新页面不会主动取消索引。
         </p>
+        </section>
       </div>
     </div>
   );

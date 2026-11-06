@@ -5,8 +5,9 @@ import { ModelAvatar } from '../common/ModelAvatar';
  */
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { MessageSquare, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, ArrowUpRight, Share2, Users, Plus, ChevronDown, ChevronRight, ListTree, Globe, Settings } from 'lucide-react';
+import { MessageSquare, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, ArrowUpRight, Share2, Users, Plus, ChevronDown, ChevronRight, ListTree, Globe, Settings, RefreshCw } from 'lucide-react';
 import { CrossContactQA } from './CrossContactQA';
+import { ReplyAssistant } from './ReplyAssistant';
 import { ConversationHistory } from './ConversationHistory';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -458,7 +459,8 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   onOpenSettings,
 }) => {
   const { privacyMode } = usePrivacyMode();
-  const [mode, setMode] = useState<'contact' | 'cross'>('contact');
+  const [mode, setMode] = useState<'contact' | 'cross' | 'reply'>('contact');
+  const [recentPage, setRecentPage] = useState(0);
   const [selectedItems, setSelectedItems] = useState<SelectableItem[]>([]);
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [input, setInput] = useState('');
@@ -536,8 +538,8 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   const llmProvider = selectedProfile?.provider ?? '';
   const llmModel = selectedProfile?.model ?? '';
 
-  // 最近聊天：联系人 + 群聊，按最后消息时间排序取前 14 个
-  const recentItems = useMemo(() => {
+  // 联系人与群聊按最近消息排序，按批次浏览而不丢失选择。
+  const allRecentItems = useMemo(() => {
     const contactItems: SelectableItem[] = contacts
       .filter(c => c.total_messages > 0)
       .map(c => ({ kind: 'contact' as const, data: c }));
@@ -545,11 +547,14 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
       .map(g => ({ kind: 'group' as const, data: g }));
     const all = [...contactItems, ...groupItems];
     return all.sort((a, b) => {
-      const aT = new Date(a.data.last_message_time).getTime();
-      const bT = new Date(b.data.last_message_time).getTime();
+      const aT = new Date(a.data.last_message_time).getTime() || 0;
+      const bT = new Date(b.data.last_message_time).getTime() || 0;
       return bT - aT;
-    }).slice(0, 14);
+    });
   }, [contacts, groups]);
+  const recentPageCount = Math.ceil(allRecentItems.length / 14);
+  const currentRecentPage = recentPageCount ? recentPage % recentPageCount : 0;
+  const recentItems = allRecentItems.slice(currentRecentPage * 14, (currentRecentPage + 1) * 14);
 
   // 智能第一个问题：基于 Top 3 联系人和群聊生成个性化建议
   const smartSuggestions = useMemo(() => {
@@ -1137,9 +1142,10 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
           <Globe size={12} />
           跨联系人问答
         </button>
+        <button type="button" onClick={() => setMode('reply')} aria-pressed={mode === 'reply'}>我的口吻回复</button>
       </div>
 
-      {mode === 'cross' ? (
+      {mode === 'reply' ? <ReplyAssistant onOpenSettings={onOpenSettings} /> : mode === 'cross' ? (
         <div className="w-full max-w-2xl mx-auto" style={{ minHeight: 400 }}>
           <CrossContactQA
             onOpenSettings={onOpenSettings}
@@ -1240,8 +1246,8 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
 
       {/* 最近聊天（联系人 + 群聊混合） */}
       {recentItems.length > 0 && (
-        <div className="w-full max-w-2xl mt-8">
-          <p className="text-xs font-medium text-gray-400 mb-3 text-center">最近聊天</p>
+        <div className="w-full max-w-2xl mt-8" aria-label="最近聊天">
+          <div className="relative mb-3 text-center"><span className="text-xs font-medium text-gray-400">最近聊天</span>{recentPageCount > 1 && <button type="button" onClick={() => setRecentPage(page => (page + 1) % recentPageCount)} className="absolute right-0 inline-flex items-center gap-1 text-xs text-gray-400 hover:text-[#07835d]" aria-label={`换一批最近聊天，当前第 ${currentRecentPage + 1} / ${recentPageCount} 批`}><RefreshCw size={12} />换一批</button>}</div>
           <div className="flex gap-2 overflow-x-auto pb-1 justify-center flex-wrap">
             {recentItems.map(item => {
               const name = itemName(item);

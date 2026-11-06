@@ -21,7 +21,7 @@ const { act } = React;
 const require = createRequire(import.meta.url);
 for (const extension of ['.ts', '.tsx']) require.extensions[extension] = (module, filename) => { module._compile(ts.transpileModule(readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX }, fileName: filename }).outputText, filename); };
 require.extensions['.css'] = () => {};
-const { sftApi } = require('../src/services/sftApi.ts');
+const { sftApi, SFTError } = require('../src/services/sftApi.ts');
 const { appApi } = require('../src/services/appApi.ts');
 const { default: SFTPage, LossChart } = require('../src/components/sft/SFTPage.tsx');
 const { PrivacyModeContext } = require('../src/contexts/PrivacyModeContext.tsx');
@@ -48,6 +48,25 @@ const buttons = text => [...document.querySelectorAll('button')].filter(b => b.t
 async function click(button) { assert.ok(button, 'button exists'); await act(async () => button.click()); }
 async function change(input, value) { assert.ok(input, 'input exists'); await act(async () => Simulate.change(input, { target: { value } })); }
 async function choose(label, option) { await click(document.querySelector(`[role="combobox"][aria-label="${label}"]`)); await click([...document.querySelectorAll('[role="option"]')].find(o => o.textContent.trim() === option)); }
+
+test('demo presents an interactive read-only workflow without calling SFT APIs', async () => {
+  appApi.getInfo = async () => ({ demo_mode: true });
+  sftApi.capabilities = async () => { calls.push('capabilities'); throw new Error('must not call SFT in demo'); };
+  await render();
+  assert.match(document.body.textContent, /演示模式.*虚构示例/);
+  assert.match(document.body.textContent, /192 条训练/);
+  await click(document.querySelectorAll('.sft-workflow-steps button')[3]);
+  assert.match(document.body.textContent, /进行人工盲评/);
+  assert.match(document.body.textContent, /不支持创建项目、上传数据、训练或导出/);
+  assert.deepEqual(calls, []);
+});
+
+test('a forbidden SFT request outside demo remains an error rather than showing mock data', async () => {
+  sftApi.capabilities = async () => { throw new SFTError('没有访问权限', 403); };
+  await render();
+  assert.match(document.body.textContent, /没有访问权限/);
+  assert.doesNotMatch(document.body.textContent, /演示模式 · 以下均为虚构示例/);
+});
 
 test('empty workspace creates a project and never invents jobs, metrics or environments', async () => {
   state.projects = [];

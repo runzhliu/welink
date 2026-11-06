@@ -81,14 +81,15 @@ export const AppSetupPage: React.FC<Props> = ({ onSetupComplete }) => {
             </p>
             <div className="flex items-center gap-2 bg-[#f8f9fb] rounded-xl px-3 py-2">
               <a
-                href="https://github.com/ylytdeng/wechat-decrypt"
+                href="https://github.com/WeinanHu/wechat-decrypt"
                 className="text-xs text-[#07c160] font-medium hover:underline inline-flex items-center gap-1"
-                onClick={(e) => { e.preventDefault(); fetch('/api/open-url?url=' + encodeURIComponent('https://github.com/ylytdeng/wechat-decrypt')); }}
+                onClick={(e) => { e.preventDefault(); fetch('/api/open-url?url=' + encodeURIComponent('https://github.com/WeinanHu/wechat-decrypt')); }}
               >
                 <Github size={13} />
-                github.com/ylytdeng/wechat-decrypt
+                github.com/WeinanHu/wechat-decrypt
               </a>
             </div>
+            <p>原工具目前不可用。上方社区项目仅供参考，尚未验证与 WeLink 的输出兼容性；请先检查工具的权限、来源和使用说明。</p>
             <p>解密完成后，目录结构应如下：</p>
             <div className="bg-[#f8f9fb] rounded-xl px-3 py-2">
               <code className="text-xs text-gray-600 font-mono leading-relaxed">

@@ -757,6 +757,10 @@ func streamClaude(send func(StreamChunk), msgs []LLMMessage, cfg llmConfig) erro
 
 // CompleteLLM 发起非流式请求，返回完整响应文本（用于分段摘要）
 func CompleteLLM(msgs []LLMMessage, prefs Preferences) (string, error) {
+	return CompleteLLMWithProfile(msgs, prefs, "")
+}
+
+func CompleteLLMWithProfile(msgs []LLMMessage, prefs Preferences, profileID string) (string, error) {
 	// Demo 模式：AI 被锁死时直接返回 canned 响应，不走真实 provider
 	if DemoMockActive() {
 		return demoLLMComplete(msgs), nil
@@ -767,7 +771,7 @@ func CompleteLLM(msgs []LLMMessage, prefs Preferences) (string, error) {
 			prefs.LLMAPIKey = token
 		}
 	}
-	cfg := llmConfigForProfile("", prefs)
+	cfg := llmConfigForProfile(profileID, prefs)
 	// Demo 模式下拒绝内网 baseURL，防 SSRF（M2/L4）
 	if err := guardOutboundURL(cfg.baseURL); err != nil {
 		return "", err

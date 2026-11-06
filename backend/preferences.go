@@ -17,8 +17,9 @@ import (
 var prefsMu sync.Mutex
 
 // resolveDownloadDir 返回当前应该写入导出文件的目录：
-//   1. 用户在设置里配置的 DownloadDir（存在且可写）
-//   2. 平台默认：$HOME/Downloads（Mac/Win）或 $XDG_DOWNLOAD_DIR（Linux）
+//  1. 用户在设置里配置的 DownloadDir（存在且可写）
+//  2. 平台默认：$HOME/Downloads（Mac/Win）或 $XDG_DOWNLOAD_DIR（Linux）
+//
 // 目录必须在用户 home 之下（防止前端传入 /etc 之类触发任意写）。
 func resolveDownloadDir() (string, error) {
 	home, err := os.UserHomeDir()
@@ -72,9 +73,9 @@ func migrateConfigYAML() {
 
 // DataDirProfile 单个数据目录配置项（用于多账号切换）。
 type DataDirProfile struct {
-	ID            string `json:"id"`               // 短 UUID，前端用作 key
-	Name          string `json:"name"`             // 用户起的别名，如「主号」「老婆账号」
-	Path          string `json:"path"`             // 解密后 decrypted/ 目录的绝对路径
+	ID            string `json:"id"`                        // 短 UUID，前端用作 key
+	Name          string `json:"name"`                      // 用户起的别名，如「主号」「老婆账号」
+	Path          string `json:"path"`                      // 解密后 decrypted/ 目录的绝对路径
 	LastIndexedAt int64  `json:"last_indexed_at,omitempty"` // 上次成功索引的 Unix 秒
 }
 
@@ -92,13 +93,13 @@ type ImageProfile struct {
 // LLMProfile 单个 LLM 配置项，支持多 provider 并行配置与一键切换。
 type LLMProfile struct {
 	SFTDeploymentID string `json:"sft_deployment_id,omitempty"`
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Provider string `json:"provider"`
-	APIKey   string `json:"api_key,omitempty"`
-	BaseURL  string `json:"base_url,omitempty"`
-	Model    string `json:"model,omitempty"`
-	NoThink  bool   `json:"no_think,omitempty"` // Ollama 思考型模型（Qwen3+）专用：开启后在消息前加 /no_think 跳过推理
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Provider        string `json:"provider"`
+	APIKey          string `json:"api_key,omitempty"`
+	BaseURL         string `json:"base_url,omitempty"`
+	Model           string `json:"model,omitempty"`
+	NoThink         bool   `json:"no_think,omitempty"` // Ollama 思考型模型（Qwen3+）专用：开启后在消息前加 /no_think 跳过推理
 	// 深度思考档位：空/off（模型默认）/ low / medium / high / xhigh / max。
 	//   - 新版 Claude → adaptive + output_config.effort；旧模型 → thinking.budget_tokens
 	//   - OpenAI / MiniMax M3.1 Flash → reasoning_effort 字段
@@ -133,15 +134,16 @@ type Preferences struct {
 	GinMode string `json:"gin_mode,omitempty"` // debug / release
 
 	// 分析参数（支持热加载）
-	Timezone             string `json:"timezone,omitempty"`                // 默认 Asia/Shanghai
-	LateNightStartHour   int    `json:"late_night_start_hour,omitempty"`   // 默认 0
-	LateNightEndHour     int    `json:"late_night_end_hour,omitempty"`     // 默认 5
-	SessionGapSeconds    int64  `json:"session_gap_seconds,omitempty"`     // 默认 21600（6 小时）
-	WorkerCount          int    `json:"worker_count,omitempty"`            // 默认 4
-	LateNightMinMessages int64  `json:"late_night_min_messages,omitempty"` // 默认 100
-	LateNightTopN        int    `json:"late_night_top_n,omitempty"`        // 默认 20
-	DefaultInitFrom      int64  `json:"default_init_from,omitempty"`
-	DefaultInitTo        int64  `json:"default_init_to,omitempty"`
+	Timezone              string `json:"timezone,omitempty"`                // 默认 Asia/Shanghai
+	LateNightStartHour    int    `json:"late_night_start_hour,omitempty"`   // 默认 0
+	LateNightEndHour      int    `json:"late_night_end_hour,omitempty"`     // 默认 5
+	SessionGapSeconds     int64  `json:"session_gap_seconds,omitempty"`     // 默认 21600（6 小时）
+	WorkerCount           int    `json:"worker_count,omitempty"`            // 默认 4
+	LateNightMinMessages  int64  `json:"late_night_min_messages,omitempty"` // 默认 100
+	LateNightTopN         int    `json:"late_night_top_n,omitempty"`        // 默认 20
+	DefaultInitFrom       int64  `json:"default_init_from,omitempty"`
+	DefaultInitTo         int64  `json:"default_init_to,omitempty"`
+	DefaultInitConfigured bool   `json:"default_init_configured,omitempty"`
 
 	// 日志配置（支持热加载）
 	LogLevel string `json:"log_level,omitempty"` // debug / info / warn / error，默认 info
@@ -172,7 +174,7 @@ type Preferences struct {
 	FlirtExcluded []string `json:"flirt_excluded,omitempty"`
 
 	// LLM 配置（多 provider，支持在 AI 分析页面切换）
-	LLMProfiles      []LLMProfile `json:"llm_profiles,omitempty"`
+	LLMProfiles []LLMProfile `json:"llm_profiles,omitempty"`
 	// 以下单配置字段保持向后兼容（自动同步为 LLMProfiles[0]）
 	LLMProvider      string `json:"llm_provider,omitempty"` // openai/deepseek/kimi/gemini/claude/grok/glm/ollama/custom
 	LLMAPIKey        string `json:"llm_api_key,omitempty"`
@@ -212,21 +214,21 @@ type Preferences struct {
 	PromptTemplates map[string]string `json:"prompt_templates,omitempty"`
 
 	// 导出中心：第三方笔记/文档平台令牌
-	NotionToken      string `json:"notion_token,omitempty"`       // Notion Integration Token (secret_xxx)
-	NotionParentPage string `json:"notion_parent_page,omitempty"` // 默认上传到的 Page ID（也可在导出时覆盖）
-	FeishuAppID      string `json:"feishu_app_id,omitempty"`      // 飞书自建应用 App ID
-	FeishuAppSecret  string `json:"feishu_app_secret,omitempty"`  // 飞书自建应用 App Secret
+	NotionToken       string `json:"notion_token,omitempty"`        // Notion Integration Token (secret_xxx)
+	NotionParentPage  string `json:"notion_parent_page,omitempty"`  // 默认上传到的 Page ID（也可在导出时覆盖）
+	FeishuAppID       string `json:"feishu_app_id,omitempty"`       // 飞书自建应用 App ID
+	FeishuAppSecret   string `json:"feishu_app_secret,omitempty"`   // 飞书自建应用 App Secret
 	FeishuFolderToken string `json:"feishu_folder_token,omitempty"` // 默认导入到的文件夹 Token（留空 = 我的空间根目录）
 
 	// 导出中心：云盘 / 对象存储
 	// WebDAV（坚果云 / Nextcloud / ownCloud / 群晖等）
-	WebDAVURL      string `json:"webdav_url,omitempty"`      // 完整 URL，例 https://dav.jianguoyun.com/dav/
+	WebDAVURL      string `json:"webdav_url,omitempty"` // 完整 URL，例 https://dav.jianguoyun.com/dav/
 	WebDAVUsername string `json:"webdav_username,omitempty"`
 	WebDAVPassword string `json:"webdav_password,omitempty"` // 应用密码
 	WebDAVPath     string `json:"webdav_path,omitempty"`     // 上传前缀，例 WeLink-Export/
 
 	// S3 兼容（AWS S3 / Cloudflare R2 / 阿里 OSS / 腾讯 COS / 七牛 / MinIO / Backblaze）
-	S3Endpoint     string `json:"s3_endpoint,omitempty"`       // 主机名，空=AWS 官方；自定义端点用于国内云
+	S3Endpoint     string `json:"s3_endpoint,omitempty"` // 主机名，空=AWS 官方；自定义端点用于国内云
 	S3Region       string `json:"s3_region,omitempty"`
 	S3Bucket       string `json:"s3_bucket,omitempty"`
 	S3AccessKey    string `json:"s3_access_key,omitempty"`
@@ -273,8 +275,8 @@ type CustomAnniversary struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
 	Date      string `json:"date"`               // YYYY-MM-DD
-	Recurring bool   `json:"recurring"`           // 每年重复
-	Username  string `json:"username,omitempty"`   // 可选关联联系人
+	Recurring bool   `json:"recurring"`          // 每年重复
+	Username  string `json:"username,omitempty"` // 可选关联联系人
 }
 
 // preferencesPath 返回 preferences.json 的绝对路径。
@@ -517,7 +519,9 @@ const hasKeyPlaceholder = "__HAS_KEY__"
 // API Key 不返回脱敏值，只返回占位符标记是否已设置。
 func sanitizeForResponse(p Preferences) Preferences {
 	redact := func(s string) string {
-		if s == "" { return "" }
+		if s == "" {
+			return ""
+		}
 		return hasKeyPlaceholder
 	}
 	out := p

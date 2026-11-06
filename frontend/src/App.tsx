@@ -237,7 +237,9 @@ function AppInner() {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
 
   // Backend Status Hook
-  const { isInitialized, isIndexing, backendReady, startPolling, progress } = useBackendStatus(1000);
+  const { isInitialized, isIndexing, backendReady, startPolling, progress, lastError } = useBackendStatus(1000);
+  const [indexStartError, setIndexStartError] = useState('');
+  const autoIndexAttempted = useRef(false);
 
   // Privacy settings
   const {
@@ -474,10 +476,17 @@ function AppInner() {
   //   2. 用户刚 setup 完真实数据目录（appInfo.ready 翻 true），但 hasStarted 已是 true，
   //      会直接跳过 WelcomePage —— 必须由前端补一次 /api/init，否则后端永远不会开始 performAnalysis
   useEffect(() => {
-    if (appInfo?.ready && hasStarted && !isInitialized && !isIndexing && !initLoading) {
-      globalApi.init(timeRange.from, timeRange.to).then(() => startPolling()).catch(console.error);
-    }
-  }, [backendReady, appInfo?.ready]);
+    if (!backendReady || !hasStarted || isInitialized) { autoIndexAttempted.current = false; return; }
+    if (!appInfo?.ready || isIndexing || initLoading || lastError || indexStartError || autoIndexAttempted.current) return;
+    // Give backend startup a moment to report an index already being restored.
+    const timer = window.setTimeout(() => {
+      autoIndexAttempted.current = true;
+      void globalApi.init(timeRange.from, timeRange.to).then(() => startPolling()).catch((e: unknown) => {
+        setIndexStartError(e instanceof Error ? e.message : '无法开始索引');
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [backendReady, appInfo?.ready, hasStarted, isInitialized, isIndexing, initLoading, lastError, indexStartError, timeRange.from, timeRange.to, startPolling]);
 
   // 后端未连通时等待
   if (!backendReady) {
@@ -515,6 +524,12 @@ function AppInner() {
         message={`正在建立索引（${timeRange.label}）...`}
         progress={progress}
         cancellable
+        error={indexStartError || lastError}
+        onRetry={() => {
+          setIndexStartError('');
+          autoIndexAttempted.current = true;
+          void globalApi.init(timeRange.from, timeRange.to).then(() => startPolling()).catch((e: unknown) => setIndexStartError(e instanceof Error ? e.message : '无法开始索引'));
+        }}
       />
     );
   }

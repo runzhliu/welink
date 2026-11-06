@@ -65,7 +65,7 @@ PIN 后端 **bcrypt 哈希**存，验证不走任何远端。全屏毛玻璃遮�
 见 [下载与安装 → 解密微信数据库](./install#解密微信数据库)。关键步骤：
 
 1. 手机微信 → 聊天记录迁移到电脑
-2. 在电脑上用 [wechat-decrypt](https://github.com/ylytdeng/wechat-decrypt) 提取密钥并解密
+2. 选择兼容系统及微信版本的工具提取密钥并解密；原工具目前不可用，替代工具的兼容性请先核实
 
 ### macOS 打不开 / Windows SmartScreen 拦截
 
