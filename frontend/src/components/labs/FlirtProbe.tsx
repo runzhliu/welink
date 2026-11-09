@@ -285,12 +285,12 @@ export const FlirtProbe: React.FC = () => {
                           />
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-[#617078] flex items-center justify-center text-xs text-white font-bold flex-shrink-0">
-                            {c.display_name.charAt(0)}
+                            <span data-capture-lift-text="5">{c.display_name.charAt(0)}</span>
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <div className="text-sm font-semibold text-[#1d1d1f] dark:text-gray-200 truncate max-w-[160px]">{c.display_name}</div>
+                          <div className="flex items-center gap-2 flex-wrap mb-3">
+                            <div className="text-sm font-semibold text-[#1d1d1f] dark:text-gray-200 truncate max-w-[160px]"><span data-capture-lift-text>{c.display_name}</span></div>
                             {Object.entries(c.categories ?? {})
                               .sort((a, b) => b[1] - a[1])
                               .slice(0, 3)
@@ -299,8 +299,8 @@ export const FlirtProbe: React.FC = () => {
                                 if (!m) return null;
                                 return (
                                   <span key={cat} className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap ${m.color} ${m.bg}`}>
-                                    <span>{m.label}</span>
-                                    <span className="font-mono opacity-70">{cnt}</span>
+                                    <span data-capture-lift-text="6">{m.label}</span>
+                                    <span data-capture-lift-text="6" className="font-mono opacity-70">{cnt}</span>
                                   </span>
                                 );
                               })}
@@ -320,6 +320,7 @@ export const FlirtProbe: React.FC = () => {
                           </div>
                         </div>
                         <button
+                          data-capture-ignore
                           onClick={() => setExpandedRow(isExpanded ? null : c.username)}
                           className="p-1.5 rounded text-gray-400 hover:text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-500/10 transition-colors flex-shrink-0"
                           title={isExpanded ? '收起' : '看高光语录'}
@@ -327,6 +328,7 @@ export const FlirtProbe: React.FC = () => {
                           {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </button>
                         <button
+                          data-capture-ignore
                           onClick={() => handleExclude(c.username, c.display_name)}
                           disabled={excludeBusy === c.username}
                           className="p-1.5 rounded text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors flex-shrink-0 disabled:opacity-50"
@@ -387,7 +389,7 @@ export const FlirtProbe: React.FC = () => {
                             if (!m) return null;
                             return (
                               <span key={cat} className={`text-[9px] px-1.5 py-0 rounded font-bold whitespace-nowrap ${m.bg} ${m.color}`}>
-                                {m.label}
+                                <span data-capture-lift-text>{m.label}</span>
                               </span>
                             );
                           })}

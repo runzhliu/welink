@@ -53,15 +53,15 @@ const FLOW_META: Record<string, { label: string; cls: string }> = {
 // 把 change_pct 渲染成带箭头的涨跌（999 当作 NEW）
 function ChangeBadge({ pct, lastYear }: { pct: number; lastYear: number }) {
   if (lastYear === 0) {
-    return <span className="inline-flex items-center gap-0.5 text-[#07c160] font-bold"><FileText size={11} />全新</span>;
+    return <span className="inline-flex items-center gap-0.5 text-[#07c160] font-bold"><FileText size={11} /><span data-capture-lift-text="5">全新</span></span>;
   }
   if (pct > 0) {
-    return <span className="inline-flex items-center gap-0.5 text-[#07c160] font-bold"><ArrowUpRight size={11} />+{pct}%</span>;
+    return <span className="inline-flex items-center gap-0.5 text-[#07c160] font-bold"><ArrowUpRight size={11} /><span data-capture-lift-text="5">+{pct}%</span></span>;
   }
   if (pct < 0) {
-    return <span className="inline-flex items-center gap-0.5 text-sky-500 font-bold"><ArrowDownRight size={11} />{pct}%</span>;
+    return <span className="inline-flex items-center gap-0.5 text-sky-500 font-bold"><ArrowDownRight size={11} /><span data-capture-lift-text="5">{pct}%</span></span>;
   }
-  return <span className="inline-flex items-center gap-0.5 text-gray-400 font-bold"><Minus size={11} />持平</span>;
+  return <span className="inline-flex items-center gap-0.5 text-gray-400 font-bold"><Minus size={11} /><span data-capture-lift-text="5">持平</span></span>;
 }
 
 export const SocialFlow: React.FC = () => {
@@ -243,14 +243,14 @@ export const SocialFlow: React.FC = () => {
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-[#087f5b] flex items-center justify-center text-xs text-white font-bold flex-shrink-0">
-                            {c.display_name.charAt(0)}
+                            <span data-capture-lift-text="5">{c.display_name.charAt(0)}</span>
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-semibold text-[#1d1d1f] dark:text-gray-200 truncate">{c.display_name}</span>
+                            <span className="text-sm font-semibold text-[#1d1d1f] dark:text-gray-200 truncate"><span data-capture-lift-text>{c.display_name}</span></span>
                             {tab === 'all' && (
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black flex-shrink-0 ${fm.cls}`}>{fm.label}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black flex-shrink-0 ${fm.cls}`}><span data-capture-lift-text="6">{fm.label}</span></span>
                             )}
                           </div>
                           {/* 今年 vs 去年消息量 */}

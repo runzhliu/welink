@@ -7,15 +7,14 @@
  *   3. 数据对比：VN 亲密度 vs 真实关系热度（来自 RelationshipForecast 数据）
  *   4. 解锁面板：本次解锁 + 还差几个结局未通
  *
- * 长图导出：复用 html2canvas + Highlights / GroupYearReview 的 wrapper 模式
+ * 长图导出使用统一截图工具。
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import html2canvas from 'html2canvas';
 import { BookOpen, Heart, Skull, Star, Trophy, EyeOff, RotateCcw, Loader2, FileText, Check, ArrowLeft, ArrowRight, Download, Lock } from 'lucide-react';
 import type { VNChapterDTO, VNStoryDTO, VNEndingDTO } from '../../services/api';
 import { vnApi, forecastApi } from '../../services/api';
-import { prepareForCapture } from '../../utils/exportPng';
+import { captureCardToPng } from '../../utils/exportPng';
 import { useToast } from '../common/Toast';
 
 interface Props {
@@ -76,53 +75,30 @@ export const VNEndingPage: React.FC<Props> = ({ ending, story, chapters, display
   const exportPng = async () => {
     if (!cardRef.current || exporting) return;
     setExporting(true);
-    const root = document.documentElement;
-    const hadDark = root.classList.contains('dark');
-    if (hadDark) root.classList.remove('dark');
-    let wrapper: HTMLElement | null = null;
     try {
-      const node = cardRef.current.cloneNode(true) as HTMLElement;
-      wrapper = document.createElement('div');
-      wrapper.style.cssText = `
-        width: 720px; background: #ffffff; padding: 0;
-        font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-        position: fixed; left: -10000px; top: 0; z-index: -1;
-      `;
-      node.style.background = '#ffffff';
-      node.style.color = '#1d1d1f';
-      wrapper.appendChild(node);
-
       const footer = document.createElement('div');
-      footer.style.cssText =
-        'padding:16px 28px; background:#f8f9fb; border-top: 1px solid #eee; display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#888;';
-      footer.innerHTML = `
-        <div>
-          <div><strong style="color:#555">WeLink · 互动小说</strong></div>
-          <div style="color:#bbb; margin-top:2px;">${new Date().toLocaleDateString()} · welink.click</div>
-        </div>
-        <div style="color:${meta.color}; font-weight:700;">${meta.tag}</div>
-      `;
-      wrapper.appendChild(footer);
-      document.body.appendChild(wrapper);
-      await prepareForCapture(wrapper);
-
-      const canvas = await html2canvas(wrapper, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
+      footer.style.cssText = 'padding:16px 28px;background:#f8f9fb;border-top:1px solid #eee;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#888;';
+      const label = document.createElement('div');
+      label.textContent = `WeLink · 互动小说 · ${new Date().toLocaleDateString()} · welink.click`;
+      const tag = document.createElement('strong');
+      tag.style.color = meta.color;
+      tag.textContent = meta.tag;
+      footer.append(label, tag);
+      const result = await captureCardToPng(cardRef.current, {
+        filename: `welink-vn-${displayName}-${ending.type}-${Date.now()}`,
+        theme: 'light',
+        appendHTML: footer.outerHTML,
+        beforeCapture: wrapper => {
+          const node = wrapper.firstElementChild as HTMLElement;
+          node.style.background = '#ffffff';
+          node.style.color = '#1d1d1f';
+        },
       });
-      const dataUrl = canvas.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = dataUrl;
-      a.download = `welink-vn-${displayName}-${ending.type}-${Date.now()}.png`;
-      a.click();
+      if (!result.ok) throw new Error(result.error || '未知错误');
       toast.success('已导出');
     } catch (e) {
       toast.error('导出失败：' + ((e as Error).message || '未知错误'));
     } finally {
-      if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-      if (hadDark) root.classList.add('dark');
       setExporting(false);
     }
   };

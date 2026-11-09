@@ -9,6 +9,7 @@ import { PrivacyModeContext } from './contexts/PrivacyModeContext';
 import { SelfInfoProvider } from './contexts/SelfInfoContext';
 import { LockProvider, useLock } from './contexts/LockContext';
 import { LockOverlay } from './components/common/LockOverlay';
+import { PairingGate } from './components/common/PairingGate';
 
 // Layout —— 永远在屏
 import { Sidebar } from './components/layout/Sidebar';
@@ -707,10 +708,12 @@ function AppInner() {
 
 function App() {
   return (
-    <LockProvider>
-      <AppInner />
-      <LockOverlay />
-    </LockProvider>
+    <PairingGate>
+      <LockProvider>
+        <AppInner />
+        <LockOverlay />
+      </LockProvider>
+    </PairingGate>
   );
 }
 

@@ -16,6 +16,7 @@ import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { ConversationHistory } from './ConversationHistory';
 import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
 import { getServerURL, getToken } from '../../runtimeConfig';
+import { saveConversation } from '../../services/conversationStore';
 
 function apiFetch(path: string, init: RequestInit = {}) {
   const token = getToken(), headers = new Headers(init.headers);
@@ -345,11 +346,7 @@ export const CrossContactQA: React.FC<Props> = ({ onOpenSettings, onContactClick
     const saveData = messages
       .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.searching))
       .map(m => ({ role: m.role, content: m.content, ...(m.sources ? { sources: m.sources } : {}) }));
-    apiFetch('/ai/conversations', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, messages: saveData }),
-    }).then(() => {
+    saveConversation(key, saveData).then(() => {
       window.dispatchEvent(new Event('welink:conversation-saved'));
     }).catch(() => {});
   }, [messages, loading, conversationKey]);
@@ -413,6 +410,7 @@ export const CrossContactQA: React.FC<Props> = ({ onOpenSettings, onContactClick
         currentKey={conversationKey}
         onSelect={loadConversation}
         onNew={startNew}
+        busy={loading}
         className="mb-3"
       />
 

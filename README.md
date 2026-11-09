@@ -62,21 +62,13 @@ SFT 侧重学习表达习惯，不保证记住或准确回答具体事实；涉�
 
 ## 功能示例
 
-> 点击可放大查看
+以下浅色界面预览由新版页面截图切换组成，使用项目内置的虚构演示数据。
 
-| AI 分身 | AI 分析 |
+| 私聊与联系人画像 | 群聊画像与微信视图 |
 |:---:|:---:|
-| [![AI 分身](pics/previews/1.webp)](pics/1-AI分身.mp4) | [![AI 分析](pics/previews/2.webp)](pics/2-AI分析.mp4) |
-| **AI 群聊** | **AI 首页** |
-| [![AI 群聊](pics/previews/3.webp)](pics/3-AI群聊.mp4) | [![AI 首页](pics/previews/4.webp)](pics/4-AI首页.mp4) |
-| **快速入门引导** | **好友总览** |
-| [![快速入门引导](pics/previews/5.webp)](pics/5-快速入门引导.mp4) | [![好友总览](pics/previews/6.webp)](pics/6-好友总览.mp4) |
-| **好友深度画像** | **群聊画像** |
-| [![好友深度画像](pics/previews/7.webp)](pics/7-好友深度画像.mp4) | [![群聊画像](pics/previews/8.webp)](pics/8-群聊画像.mp4) |
-| **全局搜索** | **时间线** |
-| [![全局搜索](pics/previews/9.webp)](pics/9-全局搜索.mp4) | [![时间线](pics/previews/10.webp)](pics/10-时间线.mp4) |
-| **时光机** | **纪念日** |
-| [![时光机](pics/previews/11.webp)](pics/11-时光机.mp4) | [![纪念日](pics/previews/12.webp)](pics/12-纪念日.mp4) |
+| ![私聊与联系人画像](pics/demos/contact.gif) | ![群聊画像与微信视图](pics/demos/groups.gif) |
+| **私聊微信视图** | **SFT 工作台** |
+| ![私聊微信视图](pics/demos/wechat.gif) | ![SFT 工作台](pics/demos/sft.gif) |
 
 ---
 
@@ -394,6 +386,12 @@ LLM 批量阅读聊天记录，自动提炼关键事实（人名、事件、情�
 WeLink 内置 [MCP（Model Context Protocol）](https://modelcontextprotocol.io/) 服务器，让你在 **Claude Code（CLI）** 里用自然语言查询微信数据，无需打开浏览器。
 
 完整配置见 [mcp-server/README.md](mcp-server/README.md)。
+
+使用 DeepSeek Harness 的用户也可以安装 [WeLink DSH 插件](plugins/dsh-welink/README.md)。插件默认不授权任何会话、不开放聊天原文；配置授权后可在 DSH 中按日期或关键词查询，支持私聊和群聊。该插件当前随源码提供，需要使用包含 Agent 查询接口的 WeLink 后端。
+
+![DSH 使用 WeLink 插件整理群聊待办的演示](pics/dsh-welink-demo.png)
+
+*演示使用虚构群聊数据：DSH 查询指定日期的消息，并整理出待办、负责人和待确认事项。*
 
 ---
 

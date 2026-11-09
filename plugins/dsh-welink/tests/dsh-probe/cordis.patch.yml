@@ -1,0 +1,3 @@
+- insert:
+    - id: welink-probe
+      name: '@test/welink-dsh-probe'

@@ -13,7 +13,7 @@
  *        canvas 渲染 system-ui 时 fallback 链跟 DOM 不同，
  *        系统字体里的"考"会被画成"老"、"郭"画成"邦"等 —— 必须
  *        显式指定 PingFang SC / Hiragino Sans GB / Microsoft YaHei
- *      - **onclone 二次套字体** 到每一个非 mono 元素
+ *      - 在测量前统一非等宽字体，避免截图时换字体导致重新排版
  *      - **去掉 cloneNode 里的 truncate 类** 避免 ellipsis 切字
  *      - 等 fonts.ready + img.decode + 2× rAF 再 capture
  *      - 自动 download blob，带 .png 后缀
@@ -26,16 +26,28 @@ const CJK_FONT_STACK =
   "'PingFang SC', 'Hiragino Sans GB', 'Heiti SC', 'Microsoft YaHei', " +
   "'WenQuanYi Micro Hei', 'Noto Sans CJK SC', system-ui, -apple-system, sans-serif";
 
+/** 所有 DOM 截图共用同一渲染入口；调用方可提供自己的尺寸和克隆处理。 */
+export async function renderCaptureCanvas(node: HTMLElement, options: Parameters<typeof html2canvas>[1] = {}): Promise<HTMLCanvasElement> {
+  await prepareForCapture(node);
+  return html2canvas(node, { useCORS: true, logging: false, ...options });
+}
+
 export async function prepareForCapture(node: HTMLElement): Promise<void> {
   if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
-    try { await document.fonts.ready; } catch { /* 字体加载失败不阻塞导出 */ }
+    try { await withCaptureTimeout(document.fonts.ready); } catch { /* 字体加载失败不阻塞导出 */ }
   }
 
   const imgs = Array.from(node.querySelectorAll('img'));
   await Promise.all(imgs.map(img => {
-    if (img.complete) return img.naturalWidth > 0 ? img.decode().catch(() => undefined) : Promise.resolve();
+    if (img.complete) return img.naturalWidth > 0 ? withCaptureTimeout(img.decode().catch(() => undefined)) : Promise.resolve();
     return new Promise<void>(resolve => {
-      const done = () => resolve();
+      const done = () => {
+        clearTimeout(timeout);
+        img.removeEventListener('load', done);
+        img.removeEventListener('error', done);
+        resolve();
+      };
+      const timeout = setTimeout(done, 8000);
       img.addEventListener('load', done, { once: true });
       img.addEventListener('error', done, { once: true });
     });
@@ -44,6 +56,15 @@ export async function prepareForCapture(node: HTMLElement): Promise<void> {
   await new Promise<void>(resolve => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
+}
+
+async function withCaptureTimeout<T>(promise: Promise<T>): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([promise, new Promise<void>(resolve => { timer = setTimeout(resolve, 8000); })]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /** captureCardToPng 选项 */
@@ -65,6 +86,8 @@ export interface CaptureOpts {
   beforeCapture?: (wrapper: HTMLElement) => void | Promise<void>;
   /** html2canvas 的文档副本中恢复滚动等状态。 */
   onClone?: (wrapper: HTMLElement) => void;
+  /** 只影响截图文档，不切换页面当前主题。 */
+  theme?: 'light' | 'current';
 }
 
 /**
@@ -74,12 +97,15 @@ export interface CaptureOpts {
 export async function captureCardToPng(card: HTMLElement, opts: CaptureOpts): Promise<{ ok: boolean; size: number; error?: string }> {
   const node = card.cloneNode(true) as HTMLElement;
 
+  node.querySelectorAll('[data-capture-ignore]').forEach(el => el.remove());
+
   // 去 truncate / ellipsis：截图后没有滚动条，标题被 ellipsis 切掉就再也看不到
   node.querySelectorAll<HTMLElement>('.truncate').forEach(el => {
     el.classList.remove('truncate');
     el.style.whiteSpace = 'normal';
     el.style.textOverflow = 'clip';
     el.style.overflow = 'visible';
+    el.style.overflowWrap = 'anywhere';
   });
   // 兜底：内联了 text-overflow / white-space 的也修一遍
   node.querySelectorAll<HTMLElement>('[style*="text-overflow"], [style*="white-space"]').forEach(el => {
@@ -114,51 +140,50 @@ export async function captureCardToPng(card: HTMLElement, opts: CaptureOpts): Pr
   document.body.appendChild(wrapper);
 
   try {
+    // cloneNode 不复制 canvas 像素，图表及手绘内容需要显式复制。
+    const sourceCanvases = Array.from(card.querySelectorAll('canvas'))
+      .filter(canvas => !canvas.closest('[data-capture-ignore]'));
+    node.querySelectorAll('canvas').forEach((canvas, index) => {
+      const source = sourceCanvases[index];
+      if (source) canvas.getContext('2d')?.drawImage(source, 0, 0);
+    });
+    // html2canvas 在部分系统上会把紧凑标签中的中文画得偏低；只移动文字，保留背景和布局。
+    node.querySelectorAll<HTMLElement>('[data-capture-lift-text]').forEach(el => {
+      el.style.position = 'relative';
+      const requested = Number(el.dataset.captureLiftText) || 3;
+      el.style.top = `-${Math.min(8, Math.max(0, requested))}px`;
+    });
     if (opts.beforeCapture) {
       await opts.beforeCapture(wrapper);
     }
+    // 字体变更必须发生在测量之前，避免克隆文档中的换行与截图尺寸不一致。
+    [wrapper, ...Array.from(wrapper.querySelectorAll<HTMLElement>('*'))].forEach(el => {
+      const current = getComputedStyle(el).fontFamily;
+      if (!/mono|courier|consolas|menlo/i.test(current)) el.style.fontFamily = CJK_FONT_STACK;
+    });
     await prepareForCapture(wrapper);
 
     const scale = opts.scale ?? 2;
     const height = opts.height ?? wrapper.scrollHeight;
     if (height * scale > 16384 || width * height * scale * scale > 100_000_000) {
-      throw new Error('聊天记录太长，无法安全生成单张图片；请使用手机屏幕截图分段导出');
+      throw new Error('内容过长，无法安全生成单张图片；请缩短内容或分段导出');
     }
 
-    const canvas = await html2canvas(wrapper, {
+    const canvas = await renderCaptureCanvas(wrapper, {
       backgroundColor: bg,
       scale,
       ...(opts.height ? { height: opts.height } : {}),
       useCORS: true,
       logging: false,
-      // onclone 在 html2canvas 内部 clone 一份 DOM 时调用，这里把字体强行套到每个
-      // 非 mono 元素上 —— canvas 渲染时用 computed style，覆盖一次才稳。
       onclone: (clonedDoc) => {
+        if (opts.theme === 'light') clonedDoc.documentElement.classList.remove('dark');
         const clonedWrapper = clonedDoc.querySelector<HTMLElement>(`[data-capture-id="${captureId}"]`);
         if (clonedWrapper) opts.onClone?.(clonedWrapper);
-        const all = clonedDoc.querySelectorAll<HTMLElement>('*');
-        all.forEach(el => {
-          let cur = '';
-          try {
-            cur = clonedDoc.defaultView?.getComputedStyle(el).fontFamily ?? '';
-          } catch { /* ignore */ }
-          // 保留 monospace（数字 / 代码块）；其余强制 CJK 链
-          if (!/mono|courier|consolas|menlo/i.test(cur)) {
-            el.style.fontFamily = CJK_FONT_STACK;
-          }
-          // 防 ellipsis 切字
-          if (el.style.textOverflow === 'ellipsis') el.style.textOverflow = 'clip';
-          if (el.classList.contains('truncate')) {
-            el.classList.remove('truncate');
-            el.style.whiteSpace = 'normal';
-            el.style.overflow = 'visible';
-          }
-        });
       },
     });
 
     const blob = await new Promise<Blob | null>(res => canvas.toBlob(b => res(b), 'image/png'));
-    if (!blob) return { ok: false, size: 0, error: 'canvas.toBlob 返回 null' };
+    if (!blob || blob.size === 0) return { ok: false, size: 0, error: '生成的图片为空，请重试' };
 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

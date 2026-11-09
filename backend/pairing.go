@@ -12,8 +12,7 @@ package main
 // 2. PC 把 http://<局域网IP>:3418/?token=<token> 显示为二维码
 // 3. 手机扫码 → 前端取 ?token=xxx 存 localStorage；之后所有 axios
 //    请求 header 带上 Authorization: Bearer <token>
-// 4. 后端中间件：开启配对后，非同源请求必须带正确 token；同源请求
-//    （PC 端 webview / 浏览器访问自己）直接放行保持体验
+// 4. 后端中间件：开启配对后，仅 TCP 回环请求可免 token；其他请求必须认证。
 //
 // 没启用配对 = 行为完全不变（向后兼容现有部署）。
 
@@ -23,7 +22,6 @@ import (
 	"encoding/hex"
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -47,15 +45,9 @@ func currentPairingToken() string {
 
 // requirePairingTokenIfEnabled 是 Gin 中间件：
 //   - 配对未启用（token 为空）→ 放行（向后兼容）
-//   - 启用后 → 严格鉴权：loopback 连接 / 浏览器同源 / 带正确 token 三选一
+//   - 启用后 → 仅 TCP loopback 或正确 token 放行。
 //
-// 为什么要加"浏览器同源"：Docker 部署下 backend 看到的 RemoteAddr 是 nginx
-// 容器的 IP（不是 loopback），如果只信 TCP loopback，PC 本机浏览器通过
-// localhost:3418 访问也会全 401。
-//
-// 同源检查用 **url.Parse 后 exact host match** 而不是 strings.HasPrefix，
-// 避免 "http://localhost.attacker.com" 这类子域名绕过。只认 localhost /
-// 127.0.0.1 / ::1 三个值，不放开 .local / 局域网 IP（那些仍需 token）。
+// Origin 和 Referer 是调用方可伪造的输入，不能用来认证请求。
 func requirePairingTokenIfEnabled(c *gin.Context) {
 	tok := currentPairingToken()
 	if tok == "" {
@@ -71,11 +63,6 @@ func requirePairingTokenIfEnabled(c *gin.Context) {
 	}
 
 	if isLoopbackRequest(c.Request) {
-		c.Next()
-		return
-	}
-
-	if isSameOriginBrowserRequest(c.Request) {
 		c.Next()
 		return
 	}
@@ -101,27 +88,6 @@ func isLoopbackRequest(r *http.Request) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
-}
-
-// isSameOriginBrowserRequest 判断请求的 Origin / Referer 指向本机 loopback。
-// 用 url.Parse 精确取 hostname，杜绝 HasPrefix 导致的 "localhost.attacker.com"
-// 绕过。只认 localhost / 127.0.0.1 / ::1，mDNS / LAN IP 一律不信任。
-func isSameOriginBrowserRequest(r *http.Request) bool {
-	for _, h := range []string{"Origin", "Referer"} {
-		v := r.Header.Get(h)
-		if v == "" {
-			continue
-		}
-		u, err := url.Parse(v)
-		if err != nil {
-			continue
-		}
-		host := strings.ToLower(u.Hostname())
-		if host == "localhost" || host == "127.0.0.1" || host == "::1" {
-			return true
-		}
-	}
-	return false
 }
 
 // hasValidPairingToken 判断请求是否带了正确的 pairing token（未启用时始终返回 false）。

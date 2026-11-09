@@ -1867,6 +1867,7 @@ func (s *ContactService) GetSelfPortrait() *SelfPortrait {
 
 // ChatMessage 单条聊天消息（用于日历点击查看当天记录）
 type ChatMessage struct {
+	timestamp int64
 	Time      string `json:"time"`                 // "14:23"
 	Content   string `json:"content"`              // 消息内容或类型描述
 	IsMine    bool   `json:"is_mine"`              // true=我发的
@@ -1941,10 +1942,11 @@ func (s *ContactService) GetDayMessages(username, date string) []ChatMessage {
 			isMine := contactRowID < 0 || senderID != contactRowID
 			timeStr := time.Unix(ts, 0).In(s.tz).Format("15:04")
 			msgs = append(msgs, ChatMessage{
-				Time:    timeStr,
-				Content: content,
-				IsMine:  isMine,
-				Type:    lt,
+				timestamp: ts,
+				Time:      timeStr,
+				Content:   content,
+				IsMine:    isMine,
+				Type:      lt,
 			})
 		}
 		rows.Close()
@@ -1953,6 +1955,7 @@ func (s *ContactService) GetDayMessages(username, date string) []ChatMessage {
 	if msgs == nil {
 		return []ChatMessage{}
 	}
+	sort.SliceStable(msgs, func(i, j int) bool { return msgs[i].timestamp < msgs[j].timestamp })
 	return msgs
 }
 
@@ -2024,6 +2027,12 @@ func (s *ContactService) GetMonthMessages(username, month string, includeMine bo
 
 // SearchMessages 在指定联系人的聊天记录中搜索关键词，返回匹配的文本消息（最多200条）
 func (s *ContactService) SearchMessages(username, query string, includeMine bool) []ChatMessage {
+	return s.SearchMessagesWithLimit(username, query, includeMine, 200)
+}
+
+// SearchMessagesWithLimit supports callers that need to detect more than the UI's
+// 200-result cap. A non-positive limit returns all matching results.
+func (s *ContactService) SearchMessagesWithLimit(username, query string, includeMine bool, limit int) []ChatMessage {
 	if query == "" {
 		return []ChatMessage{}
 	}
@@ -2075,11 +2084,12 @@ func (s *ContactService) SearchMessages(username, query string, includeMine bool
 			isMine := contactRowID < 0 || senderID != contactRowID
 			t := time.Unix(ts, 0).In(s.tz)
 			msgs = append(msgs, ChatMessage{
-				Time:    t.Format("15:04"),
-				Date:    t.Format("2006-01-02"),
-				Content: content,
-				IsMine:  isMine,
-				Type:    1,
+				timestamp: ts,
+				Time:      t.Format("15:04"),
+				Date:      t.Format("2006-01-02"),
+				Content:   content,
+				IsMine:    isMine,
+				Type:      1,
 			})
 		}
 		rows.Close()
@@ -2089,9 +2099,9 @@ func (s *ContactService) SearchMessages(username, query string, includeMine bool
 		return []ChatMessage{}
 	}
 	// 按时间倒序（最新在前）
-	sort.Slice(msgs, func(i, j int) bool { return msgs[i].Date+msgs[i].Time > msgs[j].Date+msgs[j].Time })
-	if len(msgs) > 200 {
-		msgs = msgs[:200]
+	sort.SliceStable(msgs, func(i, j int) bool { return msgs[i].timestamp > msgs[j].timestamp })
+	if limit > 0 && len(msgs) > limit {
+		msgs = msgs[:limit]
 	}
 	return msgs
 }
@@ -3836,6 +3846,7 @@ func (s *ContactService) computeGroupDetail(username string, generation uint64) 
 
 // GroupChatMessage 群聊单条消息（含发言者显示名）
 type GroupChatMessage struct {
+	timestamp int64
 	Time      string `json:"time"`                 // "HH:MM"
 	Speaker   string `json:"speaker"`              // 发言者显示名
 	Content   string `json:"content"`              // 消息内容
@@ -3950,6 +3961,7 @@ func (s *ContactService) GetGroupDayMessages(username, date string) []GroupChatM
 			}
 
 			msgs = append(msgs, GroupChatMessage{
+				timestamp: ts,
 				Time:      time.Unix(ts, 0).In(s.tz).Format("15:04"),
 				Speaker:   speaker,
 				Content:   content,
@@ -3964,6 +3976,7 @@ func (s *ContactService) GetGroupDayMessages(username, date string) []GroupChatM
 	if msgs == nil {
 		return []GroupChatMessage{}
 	}
+	sort.SliceStable(msgs, func(i, j int) bool { return msgs[i].timestamp < msgs[j].timestamp })
 	return msgs
 }
 
@@ -3985,6 +3998,10 @@ func (s *ContactService) SearchGroupMessages(username, query, speaker string) []
 
 	nameMap := s.loadContactNameMap()
 	avatarMap := s.loadContactAvatarMap()
+	selfWxid := ""
+	if self := s.GetSelfInfo(); self != nil {
+		selfWxid = self.Wxid
+	}
 	lowerQuery := strings.ToLower(query)
 	var msgs []GroupChatMessage
 
@@ -4052,11 +4069,12 @@ func (s *ContactService) SearchGroupMessages(username, query, speaker string) []
 
 			t := time.Unix(ts, 0).In(s.tz)
 			msgs = append(msgs, GroupChatMessage{
+				timestamp: ts,
 				Time:      t.Format("15:04"),
 				Date:      t.Format("2006-01-02"),
 				Speaker:   speakerName,
 				Content:   content,
-				IsMine:    false,
+				IsMine:    selfWxid != "" && speakerWxid == selfWxid,
 				Type:      1,
 				AvatarURL: avatarMap[speakerWxid],
 			})
@@ -4067,7 +4085,7 @@ func (s *ContactService) SearchGroupMessages(username, query, speaker string) []
 	if msgs == nil {
 		return []GroupChatMessage{}
 	}
-	sort.Slice(msgs, func(i, j int) bool { return msgs[i].Date+msgs[i].Time > msgs[j].Date+msgs[j].Time })
+	sort.SliceStable(msgs, func(i, j int) bool { return msgs[i].timestamp > msgs[j].timestamp })
 	return msgs
 }
 

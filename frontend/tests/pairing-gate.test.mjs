@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import { after, test } from 'node:test';
+import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import ts from 'typescript';
+import { Window } from 'happy-dom';
+
+const window = new Window({ url: 'http://localhost:3418/' });
+for (const key of ['window', 'document', 'HTMLElement', 'Element', 'Node', 'Event', 'MouseEvent', 'localStorage']) globalThis[key] = key === 'window' ? window : window[key];
+Object.defineProperty(globalThis, 'navigator', { configurable: true, value: window.navigator });
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+const React = await import('react');
+const { createRoot } = await import('react-dom/client');
+const { act } = React;
+const require = createRequire(import.meta.url);
+for (const extension of ['.ts', '.tsx']) require.extensions[extension] = (module, filename) => module._compile(ts.transpileModule(readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true }, fileName: filename }).outputText, filename);
+const configPath = require.resolve('../src/runtimeConfig.ts');
+let saved;
+require.cache[configPath] = { id: configPath, filename: configPath, loaded: true, exports: { setRuntimeConfig: value => { saved = value; } } };
+const { PairingGate } = require('../src/components/common/PairingGate.tsx');
+const originalFetch = globalThis.fetch;
+after(() => { globalThis.fetch = originalFetch; window.happyDOM.close(); });
+
+test('配对失败时不存储令牌，验证成功后才展示应用', async () => {
+  let valid = false;
+  globalThis.fetch = async url => new Response('{}', { status: url === '/api/app/info' ? 401 : valid ? 200 : 401 });
+  const host = document.createElement('div'); document.body.append(host);
+  const root = createRoot(host);
+  await act(async () => root.render(React.createElement(PairingGate, null, React.createElement('p', null, '应用内容'))));
+  assert.match(host.textContent, /输入已有的配对令牌/);
+  assert.doesNotMatch(host.textContent, /应用内容/);
+  const input = host.querySelector('input');
+  await act(async () => { Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, 'synthetic-token'); input.dispatchEvent(new window.Event('input', { bubbles: true })); });
+  await act(async () => host.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })));
+  assert.equal(saved, undefined);
+  assert.match(host.textContent, /配对令牌无效/);
+  valid = true;
+  await act(async () => host.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })));
+  assert.deepEqual(saved, { token: 'synthetic-token' });
+  assert.match(host.textContent, /应用内容/);
+  await act(async () => root.unmount()); host.remove();
+});

@@ -11,6 +11,7 @@ import { subscribeAnalysis, getAnalysisSnapshot } from '../../stores/llmAnalysis
 import { RelativeTime } from '../common/RelativeTime';
 import { Avatar } from '../common/Avatar';
 import { EmptyState } from '../common/EmptyState';
+import { DataPagination } from '../common/DataPagination';
 
 interface ContactTableProps {
   contacts: ContactStats[];
@@ -23,8 +24,6 @@ interface ContactTableProps {
 type SortKey = 'name' | 'total_messages' | 'shared_groups' | 'last_message_time' | 'status' | 'peak_monthly' | 'recent_monthly' | 'avg_msg_len' | 'money_count';
 type SortDir = 'asc' | 'desc';
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
-
 const getStatusTier = (contact: ContactStats): 0 | 1 | 2 | 3 | 4 => {
   if (contact.total_messages === 0) return 4;
   const days = (Date.now() - new Date(contact.last_message_time).getTime()) / 86400000;
@@ -35,11 +34,11 @@ const getStatusTier = (contact: ContactStats): 0 | 1 | 2 | 3 | 4 => {
 };
 
 const STATUS_BADGES = [
-  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#e7f8f0] text-[#07c160]">活跃</span>,
-  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#f0fce8] text-[#7bc934]">温热</span>,
-  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-[#ff9500]">渐冷</span>,
-  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#eef1f7] text-[#576b95]">沉寂</span>,
-  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-400">零消息</span>,
+  <span className="data-status data-status-active">活跃</span>,
+  <span className="data-status data-status-warm">温热</span>,
+  <span className="data-status data-status-cooling">渐冷</span>,
+  <span className="data-status data-status-quiet">沉寂</span>,
+  <span className="data-status data-status-empty">零消息</span>,
 ];
 
 const getStatusBadge = (contact: ContactStats) => STATUS_BADGES[getStatusTier(contact)];
@@ -54,7 +53,7 @@ export const AIAnalysisBadge: React.FC<{ username: string; isGroup?: boolean }> 
   if (state.loading) {
     const prog = state.chunkProgress;
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-600 border border-purple-100">
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--text-secondary)]">
         <Loader2 size={9} className="animate-spin" />
         {prog ? `分段 ${prog.current}/${prog.total}` : 'AI 分析中'}
       </span>
@@ -62,7 +61,7 @@ export const AIAnalysisBadge: React.FC<{ username: string; isGroup?: boolean }> 
   }
 
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#e7f8f0] text-[#07c160] border border-[#c3efdc]">
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--accent-text)]">
       <MessageSquare size={9} />
       AI 已完成
     </span>
@@ -121,8 +120,8 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
       return sortDir === 'asc' ? cmp : -cmp;
     }), [contacts, sortDir, sortKey]);
 
-  const totalPages = Math.ceil(sorted.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
+  const visiblePage = Math.min(currentPage, Math.max(1, Math.ceil(sorted.length / itemsPerPage)));
+  const startIndex = (visiblePage - 1) * itemsPerPage;
   const currentContacts = sorted.slice(startIndex, startIndex + itemsPerPage);
 
   const handlePageSizeChange = (size: number) => {
@@ -145,7 +144,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
       <button
         type="button"
         onClick={() => handleSort(col)}
-        className="flex min-h-9 items-center gap-1 whitespace-nowrap rounded-lg px-1 text-xs font-black uppercase tracking-wider text-gray-500 transition-colors hover:text-[#07c160]"
+        className="flex min-h-9 items-center gap-1 whitespace-nowrap rounded-md px-1 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--accent-text)]"
       >
         {children}<SortIcon col={col} />
       </button>
@@ -162,7 +161,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
   }
 
   return (
-    <div className="dk-card dk-border bg-white rounded-2xl sm:rounded-3xl border border-gray-100 overflow-hidden">
+    <div className="dk-card dk-border bg-white rounded-xl border border-gray-100 overflow-hidden">
       <div className="hidden sm:flex items-center justify-between gap-4 border-b border-gray-100 px-4 py-3 dark:border-white/5">
         <p className="ui-caption">默认展示最常用的联系指标</p>
         <button
@@ -228,7 +227,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                 </td>
                 {showExtendedColumns && <td className="px-3 py-3.5 text-sm">
                   {(contact.shared_groups_count ?? 0) > 0 ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600">
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--text-secondary)] tabular-nums">
                       <Users size={11} />{contact.shared_groups_count}
                     </span>
                   ) : (
@@ -237,7 +236,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
                 </td>}
                 {showExtendedColumns && <td className="px-3 py-3.5 text-sm">
                   {(contact.money_count ?? 0) > 0 ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-orange-600">
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--text-secondary)] tabular-nums">
                       <Gift size={11} />{contact.money_count}
                     </span>
                   ) : (
@@ -314,80 +313,7 @@ export const ContactTable: React.FC<ContactTableProps> = ({ contacts, onContactC
         ))}
       </div>
 
-      {/* Pagination */}
-      <div className="dk-thead dk-border px-4 sm:px-8 py-4 sm:py-5 bg-[#f8f9fb] border-t border-gray-100 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="text-xs sm:text-sm text-gray-600 font-medium">
-            {startIndex + 1}–{Math.min(startIndex + itemsPerPage, sorted.length)} / {sorted.length}
-          </span>
-          {/* 每页条数选择 */}
-          <div className="hidden sm:flex items-center gap-1">
-            {PAGE_SIZE_OPTIONS.map(size => (
-              <button
-                key={size}
-                onClick={() => handlePageSizeChange(size)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                  itemsPerPage === size
-                    ? 'bg-[#07c160] text-white'
-                    : 'text-gray-400 hover:bg-white dark:hover:bg-white/5 hover:text-gray-600'
-                }`}
-              >
-                {size}
-              </button>
-            ))}
-            <span className="text-xs text-gray-300 ml-1">条/页</span>
-          </div>
-        </div>
-
-        <div className="flex gap-1 sm:gap-2">
-          <button
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            className="px-3 sm:px-4 py-2 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-white/5"
-          >
-            上一页
-          </button>
-          <div className="hidden sm:flex items-center gap-1">
-            {(() => {
-              const pages: (number | '...')[] = [];
-              const delta = 2;
-              const left = currentPage - delta;
-              const right = currentPage + delta;
-              let last = 0;
-              for (let p = 1; p <= totalPages; p++) {
-                if (p === 1 || p === totalPages || (p >= left && p <= right)) {
-                  if (last && p - last > 1) pages.push('...');
-                  pages.push(p);
-                  last = p;
-                }
-              }
-              return pages.map((p, idx) =>
-                p === '...' ? (
-                  <span key={`ellipsis-${idx}`} className="w-8 text-center text-gray-400 text-sm">…</span>
-                ) : (
-                  <button
-                    key={p}
-                    onClick={() => setCurrentPage(p as number)}
-                    className={`w-10 h-10 rounded-xl font-bold text-sm transition-all ${
-                      currentPage === p ? 'bg-[#07c160] text-white shadow-lg shadow-green-100/50' : 'hover:bg-white dark:hover:bg-white/5 hover:shadow-sm'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                )
-              );
-            })()}
-          </div>
-          <span className="sm:hidden flex items-center text-sm text-gray-500 px-2">{currentPage}/{totalPages}</span>
-          <button
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-            className="px-3 sm:px-4 py-2 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-white/5"
-          >
-            下一页
-          </button>
-        </div>
-      </div>
+      <DataPagination total={sorted.length} page={visiblePage} pageSize={itemsPerPage} onPageChange={setCurrentPage} onPageSizeChange={handlePageSizeChange} />
     </div>
   );
 };

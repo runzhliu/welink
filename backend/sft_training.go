@@ -654,7 +654,7 @@ func readSFTTrainingLog(job *SFTTrainingJob, offset int64) (content string, next
 func registerSFTTrainingRoutes(api *gin.RouterGroup) {
 	local := api.Group("/sft-local")
 	local.Use(func(c *gin.Context) {
-		if !isLoopbackRequest(c.Request) && !isSameOriginBrowserRequest(c.Request) {
+		if !isLoopbackRequest(c.Request) {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "SFT 训练管理仅允许从本机界面访问"})
 			return
 		}

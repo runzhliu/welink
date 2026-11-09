@@ -8,6 +8,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { MessageSquare, Send, X, Search, RotateCcw, Loader2, Copy, Check, Square, ArrowLeft, ArrowUpRight, Share2, Users, Plus, ChevronDown, ChevronRight, ListTree, Globe, Settings, RefreshCw } from 'lucide-react';
 import { CrossContactQA } from './CrossContactQA';
 import { ReplyAssistant } from './ReplyAssistant';
+import { saveConversation } from '../../services/conversationStore';
 import { ConversationHistory } from './ConversationHistory';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -798,11 +799,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
       provider: m.stats?.provider,
       model: m.stats?.model,
     }));
-    fetch('/api/ai/conversations', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, messages: saveData }),
-    }).then(() => {
+    saveConversation(key, saveData).then(() => {
       window.dispatchEvent(new Event('welink:conversation-saved'));
     }).catch(() => {});
   }, [messages, loading, conversationKey]);
@@ -1167,6 +1164,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         currentKey={conversationKey}
         onSelect={loadConversation}
         onNew={startNewConversation}
+        busy={loading}
         className="w-full max-w-2xl mx-auto mb-4"
       />
 

@@ -1,6 +1,7 @@
 import { DatePicker } from '../common/DatePicker';
 import '../common/conversation-dialog.css';
 import { Select } from '../common/Select';
+import { DataPagination } from '../common/DataPagination';
 /**
  * 群聊画像视图
  */
@@ -286,10 +287,8 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-      <div className={`overflow-y-auto ${fullscreen ? 'h-full' : 'max-h-[calc(100dvh-2rem)] sm:max-h-[92vh]'}`}>
-        {/* 固定顶部区域（不随内容滚动的视觉效果，通过 sticky 实现） */}
-        <div className="sticky top-0 z-10 bg-white dark:bg-[var(--bg-card)] px-4 sm:px-8 lg:px-10 pt-4 sm:pt-6">
-        <div className="conversation-dialog-actions flex flex-wrap justify-end items-center gap-1 mb-3">
+      <div className={`flex min-h-0 flex-col ${fullscreen ? 'h-full' : 'max-h-[calc(100dvh-2rem)] sm:max-h-[92vh]'}`}>
+        <div className="conversation-dialog-actions relative z-20 flex shrink-0 flex-wrap justify-end items-center gap-1 border-b border-[var(--border)] bg-[var(--bg-card)] px-4 sm:px-8 lg:px-10 pt-3 pb-2">
           {/* 导出 */}
           <div className="relative" ref={exportPanelRef}>
             <button
@@ -373,6 +372,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
           </button>
         </div>
 
+        <div className="conversation-dialog-identity shrink-0 bg-[var(--bg-card)] px-4 sm:px-8 lg:px-10 pt-4">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           {group.small_head_url ? (
@@ -424,8 +424,9 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
             </button>
           ))}
         </div>
-        </div>{/* end sticky header */}
+        </div>{/* end group header */}
 
+        <div className="min-h-0 flex-1 overflow-y-auto">
         <div
           id={`group-panel-${tab}`}
           role="tabpanel"
@@ -1002,6 +1003,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({ group, onClo
         ) : null}
       </div>{/* end content padding */}
       </div>{/* end inner scroll div */}
+      </div>{/* end toolbar and scroll layout */}
       </div>{/* end outer rounded clip div */}
 
       {dayPanel && (
@@ -1097,13 +1099,11 @@ const getGroupStatusTier = (g: GroupInfo): 0 | 1 | 2 | 3 => {
 };
 
 const GROUP_STATUS_BADGES = [
-  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#e7f8f0] text-[#07c160]">活跃</span>,
-  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#f0fce8] text-[#7bc934]">温热</span>,
-  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-[#ff9500]">渐冷</span>,
-  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#eef1f7] text-[#576b95]">沉寂</span>,
+  <span className="data-status data-status-active">活跃</span>,
+  <span className="data-status data-status-warm">温热</span>,
+  <span className="data-status data-status-cooling">渐冷</span>,
+  <span className="data-status data-status-quiet">沉寂</span>,
 ];
-
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactClick, onGroupClick, blockedGroups = [], onBlockGroup, onOpenSettings }) => {
   const { privacyMode } = usePrivacyMode();
@@ -1172,8 +1172,8 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
     return sortDir === 'asc' ? cmp : -cmp;
   });
 
-  const totalPages = Math.ceil(sorted.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
+  const visiblePage = Math.min(currentPage, Math.max(1, Math.ceil(sorted.length / itemsPerPage)));
+  const startIndex = (visiblePage - 1) * itemsPerPage;
   const currentGroups = sorted.slice(startIndex, startIndex + itemsPerPage);
 
   const SortIcon = ({ col }: { col: GroupSortKey }) => {
@@ -1191,7 +1191,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
       <button
         type="button"
         onClick={() => handleSort(col)}
-        className="flex min-h-9 items-center gap-1 whitespace-nowrap rounded-lg px-1 text-xs font-black uppercase tracking-wider text-gray-500 transition-colors hover:text-[#07c160]"
+        className="flex min-h-9 items-center gap-1 whitespace-nowrap rounded-md px-1 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--accent-text)]"
       >
         {children}<SortIcon col={col} />
       </button>
@@ -1345,7 +1345,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
       })()}
 
       {/* 群列表 */}
-      <div className="dk-card bg-white dk-border border border-gray-100 rounded-2xl sm:rounded-3xl overflow-hidden">
+      <div className="dk-card bg-white dk-border border border-gray-100 rounded-xl overflow-hidden">
         {/* 桌面表格 */}
         <div className="hidden sm:block overflow-x-auto">
           <table className="w-full">
@@ -1402,7 +1402,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
                   <td className="px-3 py-3.5 text-sm">
                     {(group.member_count ?? 0) > 0 ? (
                       <div className="flex flex-col items-start gap-0.5">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--text-secondary)] tabular-nums">
                           <Users size={11} />{group.member_count}
                         </span>
                         {(group.my_rank ?? 0) > 0 && group.total_messages > 0 && (
@@ -1514,81 +1514,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({ allContacts, onContactCl
           </div>
         )}
 
-        {/* Pagination */}
-        {sorted.length > 0 && (
-          <div className="dk-thead dk-border px-4 sm:px-8 py-4 sm:py-5 bg-[#f8f9fb] border-t border-gray-100 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="text-xs sm:text-sm text-gray-600 font-medium">
-                {startIndex + 1}–{Math.min(startIndex + itemsPerPage, sorted.length)} / {sorted.length}
-              </span>
-              <div className="hidden sm:flex items-center gap-1">
-                {PAGE_SIZE_OPTIONS.map(size => (
-                  <button
-                    key={size}
-                    onClick={() => { setItemsPerPage(size); setCurrentPage(1); }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                      itemsPerPage === size
-                        ? 'bg-[#07c160] text-white'
-                        : 'text-gray-400 hover:bg-white dark:hover:bg-white/5 hover:text-gray-600'
-                    }`}
-                  >
-                    {size}
-                  </button>
-                ))}
-                <span className="text-xs text-gray-300 ml-1">条/页</span>
-              </div>
-            </div>
-
-            <div className="flex gap-1 sm:gap-2">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-3 sm:px-4 py-2 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-white/5"
-              >
-                上一页
-              </button>
-              <div className="hidden sm:flex items-center gap-1">
-                {(() => {
-                  const pages: (number | '...')[] = [];
-                  const delta = 2;
-                  const left = currentPage - delta;
-                  const right = currentPage + delta;
-                  let last = 0;
-                  for (let p = 1; p <= totalPages; p++) {
-                    if (p === 1 || p === totalPages || (p >= left && p <= right)) {
-                      if (last && p - last > 1) pages.push('...');
-                      pages.push(p);
-                      last = p;
-                    }
-                  }
-                  return pages.map((p, idx) =>
-                    p === '...' ? (
-                      <span key={`ellipsis-${idx}`} className="w-8 text-center text-gray-400 text-sm">…</span>
-                    ) : (
-                      <button
-                        key={p}
-                        onClick={() => setCurrentPage(p as number)}
-                        className={`w-10 h-10 rounded-xl font-bold text-sm transition-all ${
-                          currentPage === p ? 'bg-[#07c160] text-white shadow-lg shadow-green-100/50' : 'hover:bg-white dark:hover:bg-white/5 hover:shadow-sm'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    )
-                  );
-                })()}
-              </div>
-              <span className="sm:hidden flex items-center text-sm text-gray-500 px-2">{currentPage}/{totalPages}</span>
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="px-3 sm:px-4 py-2 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-white/5"
-              >
-                下一页
-              </button>
-            </div>
-          </div>
-        )}
+        {sorted.length > 0 && <DataPagination total={sorted.length} page={visiblePage} pageSize={itemsPerPage} onPageChange={setCurrentPage} onPageSizeChange={size => { setItemsPerPage(size); setCurrentPage(1); }} />}
       </div>
 
       {/* 对比模式浮动栏 */}

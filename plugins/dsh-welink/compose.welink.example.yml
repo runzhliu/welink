@@ -1,0 +1,12 @@
+# Add this overlay to the DSH Compose project only after reviewing its service
+# name and the WeLink Compose network name. It does not expose a host port.
+services:
+  deepseek-harness:
+    networks:
+      - default
+      - welink
+
+networks:
+  welink:
+    external: true
+    name: welink-test_default

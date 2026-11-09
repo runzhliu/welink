@@ -374,7 +374,13 @@ func serverMain() {
 	// 移动端配对鉴权：若 MobilePairingToken 不为空，所有外部 /api/* 请求
 	// 必须带对应 Bearer token；同源请求（PC 本机）和 /app/info 等白名单
 	// 端点始终放行。未启用时完全是 no-op。
-	api.Use(requirePairingTokenIfEnabled)
+	api.Use(func(c *gin.Context) {
+		if c.Request.URL.Path == "/api/agent/query" {
+			requireAgentAccess(c)
+			return
+		}
+		requirePairingTokenIfEnabled(c)
+	})
 	registerChatGPTRoutes(r, api)
 	registerChatGPTModelsRoute(api)
 
@@ -3220,6 +3226,8 @@ func serverMain() {
 		})
 
 		// 时光轴（聊天日历）
+		registerAgentQueryRoutes(prot, getSvc)
+
 		registerCalendarRoutes(prot, getSvc)
 
 		// 纪念日 & 提醒

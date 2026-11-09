@@ -1,0 +1,7 @@
+/* Let each category keep its own space while preventing sparse charts from
+   stretching the actual bars across the full category width. */
+.chart-bar-width {
+  width: 100%;
+  max-width: 28px;
+  flex-shrink: 0;
+}

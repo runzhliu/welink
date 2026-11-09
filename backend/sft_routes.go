@@ -260,17 +260,16 @@ func sftUserOriginAllowed(c *gin.Context) bool {
 	if hasValidPairingToken(c.Request) {
 		return true
 	}
-	if raw := c.GetHeader("Origin"); raw != "" {
-		u, e := url.Parse(raw)
-		if e != nil {
-			return false
-		}
-		h := u.Hostname()
-		if h != "localhost" && h != "127.0.0.1" && h != "::1" {
+	if !isLoopbackRequest(c.Request) {
+		return false
+	}
+	if origin := c.GetHeader("Origin"); origin != "" {
+		u, err := url.Parse(origin)
+		if err != nil || (u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1" && u.Hostname() != "::1") {
 			return false
 		}
 	}
-	return isLoopbackRequest(c.Request) || isSameOriginBrowserRequest(c.Request)
+	return true
 }
 
 var sftShutdownHook atomic.Value

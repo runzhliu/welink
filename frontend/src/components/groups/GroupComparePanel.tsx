@@ -77,7 +77,7 @@ export const GroupComparePanel: React.FC<Props> = ({ groups, onClose }) => {
                   return item?.fullName ?? l;
                 }}
               />
-              <Bar dataKey="messages" radius={[6, 6, 0, 0]} maxBarSize={60}>
+              <Bar dataKey="messages" radius={[6, 6, 0, 0]} maxBarSize={28}>
                 {barData.map((entry, i) => (
                   <rect key={i} fill={entry.color} />
                 ))}

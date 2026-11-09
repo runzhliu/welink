@@ -7,11 +7,10 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Users, MessageSquarePlus, Loader2, Send, Trash2, X, Search, FileText, Shuffle, Zap, Square, Share2, Check, Save, History, Plus } from 'lucide-react';
-import html2canvas from 'html2canvas';
 import axios from 'axios';
 import type { ContactStats } from '../../types';
 import { avatarSrc } from '../../utils/avatar';
-import { prepareForCapture } from '../../utils/exportPng';
+import { captureCardToPng } from '../../utils/exportPng';
 import { getServerURL, getToken } from '../../runtimeConfig';
 import { TTSButton } from '../common/TTSButton';
 
@@ -329,90 +328,47 @@ export const VirtualGroupChat: React.FC<Props> = ({ contacts }) => {
     setExporting(true);
     setExported(false);
     try {
-      // 构造一个 wrapper 克隆出聊天内容 + 品牌头尾
-      const chatNode = scrollRef.current.cloneNode(true) as HTMLElement;
-      // 展开全部消息（去掉 max-height 等限制）
-      chatNode.style.maxHeight = 'none';
-      chatNode.style.overflow = 'visible';
-      chatNode.style.height = 'auto';
-
-      const wrapper = document.createElement('div');
-      // CJK 字体放最前 —— 避免 canvas 端 system-ui fallback 漏字 (考→老 等)
-      wrapper.style.cssText = `
-        width: 720px; background: #ffffff; padding: 0;
-        font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Micro Hei', system-ui, -apple-system, sans-serif;
-        letter-spacing: 0;
-        position: fixed; left: -10000px; top: 0; z-index: -1;
-      `;
-      // header —— logo + 标题；用 inline-svg 以保证 html2canvas 总能渲染
       const header = document.createElement('div');
-      header.style.cssText = `background: linear-gradient(90deg, #09d46a, #06a850); padding: 20px 28px; color: white;`;
-      header.innerHTML = `
-        <div style="font-size: 20px; font-weight: 900; display:flex; align-items:center; gap:8px;">
-          <svg width="24" height="24" viewBox="0 0 100 100" style="display:inline-block; background:white; border-radius:6px; padding:2px;"><rect width="100" height="100" rx="22" fill="#07c160"/><g transform="translate(22, 20)"><rect x="2" y="2" width="52" height="42" rx="7" fill="none" stroke="white" stroke-width="5" stroke-linejoin="round"/><line x1="14" y1="17" x2="42" y2="17" stroke="white" stroke-width="4.5" stroke-linecap="round"/><line x1="14" y1="27" x2="34" y2="27" stroke="white" stroke-width="4.5" stroke-linecap="round"/><polyline points="8,44 2,56 16,48" fill="white" stroke="white" stroke-width="1" stroke-linejoin="round"/></g></svg>
-          <span>WeLink · AI 虚拟群聊</span>
-        </div>
-        <div style="font-size: 12px; opacity: 0.8; margin-top: 4px;">${topic ? `场景：${topic} · ` : ''}成员 ${members.length} 位 · 共 ${history.length} 条消息</div>
-      `;
-      wrapper.appendChild(header);
-      // 成员头像条
-      const mbar = document.createElement('div');
-      mbar.style.cssText = 'display: flex; gap: 8px; padding: 12px 28px; background: #f8f9fb; border-bottom: 1px solid #eee; align-items: center;';
-      members.forEach(m => {
+      header.style.cssText = 'background:#07845f;padding:20px 28px;color:white;';
+      const title = document.createElement('div');
+      title.style.cssText = 'font-size:20px;font-weight:900;';
+      title.textContent = 'WeLink · AI 虚拟群聊';
+      const subtitle = document.createElement('div');
+      subtitle.style.cssText = 'font-size:12px;opacity:.8;margin-top:4px;overflow-wrap:anywhere;';
+      subtitle.textContent = `${topic ? `场景：${topic} · ` : ''}成员 ${members.length} 位 · 共 ${history.length} 条消息`;
+      header.append(title, subtitle);
+      const memberBar = document.createElement('div');
+      memberBar.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;padding:12px 28px;background:#f8f9fb;border-bottom:1px solid #eee;align-items:center;';
+      members.forEach(member => {
         const pill = document.createElement('div');
-        pill.style.cssText = 'display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid #eee; border-radius:999px; padding:4px 10px 4px 4px; font-size:12px;';
-        pill.innerHTML = `<img src="${avatarSrc(m.big_head_url || m.small_head_url || '')}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;background:#eee" /><span>${displayOf(m)}</span>`;
-        mbar.appendChild(pill);
+        pill.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #eee;border-radius:999px;padding:4px 10px 4px 4px;font-size:12px;';
+        const image = document.createElement('img');
+        image.src = avatarSrc(member.big_head_url || member.small_head_url || '') || '';
+        image.style.cssText = 'width:22px;height:22px;border-radius:50%;object-fit:cover;background:#eee';
+        const name = document.createElement('span');
+        name.textContent = displayOf(member);
+        pill.append(image, name);
+        memberBar.appendChild(pill);
       });
-      wrapper.appendChild(mbar);
-      // 聊天区
-      chatNode.style.background = '#f8faf8';
-      chatNode.style.padding = '20px 28px';
-      chatNode.style.border = 'none';
-      chatNode.style.borderRadius = '0';
-      wrapper.appendChild(chatNode);
-      // footer
       const footer = document.createElement('div');
-      footer.style.cssText = 'padding:16px 28px; background:#f8f9fb; border-top: 1px solid #eee; display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#888;';
-      footer.innerHTML = `
-        <div>
-          <div><strong style="color:#555">github.com/runzhliu/welink</strong></div>
-          <div style="color:#bbb; margin-top:2px;">© ${new Date().getFullYear()} @runzhliu · AGPL-3.0</div>
-        </div>
-        <div style="color:#07c160; font-weight:700;">welink.click →</div>
-      `;
-      wrapper.appendChild(footer);
-      document.body.appendChild(wrapper);
-      await prepareForCapture(wrapper);
-
-      const canvas = await html2canvas(wrapper, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        // onclone：把字体强制套到每个非 mono 元素上 + 去 truncate，避免 ellipsis 切字
-        onclone: (clonedDoc) => {
-          const stack = "'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Micro Hei', system-ui, -apple-system, sans-serif";
-          clonedDoc.querySelectorAll<HTMLElement>('*').forEach(el => {
-            let cur = '';
-            try { cur = clonedDoc.defaultView?.getComputedStyle(el).fontFamily ?? ''; } catch {}
-            if (!/mono|courier|consolas|menlo/i.test(cur)) el.style.fontFamily = stack;
-            if (el.classList.contains('truncate')) {
-              el.classList.remove('truncate');
-              el.style.whiteSpace = 'normal';
-              el.style.overflow = 'visible';
-            }
-          });
+      footer.style.cssText = 'padding:16px 28px;background:#f8f9fb;border-top:1px solid #eee;font-size:11px;color:#888;';
+      footer.textContent = `github.com/runzhliu/welink · © ${new Date().getFullYear()} @runzhliu · AGPL-3.0`;
+      const result = await captureCardToPng(scrollRef.current, {
+        filename: `welink-virtual-group-${Date.now()}`,
+        prependHTML: header.outerHTML + memberBar.outerHTML,
+        appendHTML: footer.outerHTML,
+        beforeCapture: wrapper => {
+          const chatNode = wrapper.children[2] as HTMLElement;
+          chatNode.style.maxHeight = 'none';
+          chatNode.style.overflow = 'visible';
+          chatNode.style.height = 'auto';
+          chatNode.style.background = '#f8faf8';
+          chatNode.style.padding = '20px 28px';
+          chatNode.style.border = 'none';
+          chatNode.style.borderRadius = '0';
         },
       });
-      const dataUrl = canvas.toDataURL('image/png');
-      document.body.removeChild(wrapper);
-
-      // 下载
-      const a = document.createElement('a');
-      a.href = dataUrl;
-      a.download = `welink-virtual-group-${Date.now()}.png`;
-      a.click();
+      if (!result.ok) throw new Error(result.error || '未知错误');
       setExported(true);
       setTimeout(() => setExported(false), 3000);
     } catch (e) {

@@ -1,0 +1,63 @@
+name: Screenshot visual checks
+
+on:
+  pull_request:
+    paths: ['frontend/**', '.github/workflows/screenshot-visual.yml']
+  push:
+    branches: [main]
+    paths: ['frontend/**', '.github/workflows/screenshot-visual.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screenshot-visual-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    name: ${{ matrix.os }} / ${{ matrix.browser }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, browser: chromium }
+          - { os: ubuntu-latest, browser: firefox }
+          - { os: ubuntu-latest, browser: webkit }
+          - { os: macos-latest, browser: chromium }
+          - { os: macos-latest, browser: webkit }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund --registry=https://registry.npmjs.org/
+      - name: Install Noto CJK fonts on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
+      - name: Install browser and system dependencies on Linux
+        if: runner.os == 'Linux'
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Install browser on macOS
+        if: runner.os == 'macOS'
+        run: npx playwright install ${{ matrix.browser }}
+      - name: Check exported PNGs with synthetic data
+        run: npm run test:visual -- --project=${{ matrix.browser }}
+      - name: Upload synthetic test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.os }}-${{ matrix.browser }}
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7

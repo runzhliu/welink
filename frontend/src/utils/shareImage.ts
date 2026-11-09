@@ -1,10 +1,10 @@
 /**
  * shareImage.ts — HTML→PNG 实现的分享卡片截图
- * 使用 html-to-image 捕获真实 DOM，marked 渲染 Markdown（含表格）
+ * 通过统一截图工具捕获 DOM，marked 渲染 Markdown（含表格）
  * 支持所有现代浏览器 + macOS App WebView
  */
 
-import html2canvas from 'html2canvas';
+import { renderCaptureCanvas } from './exportPng';
 import { marked } from 'marked';
 import QRCode from 'qrcode';
 
@@ -679,7 +679,7 @@ export async function generateShareImage(options: ShareImageOptions): Promise<st
   document.body.appendChild(wrap);
 
   try {
-    const cvs = await html2canvas(card, {
+    const cvs = await renderCaptureCanvas(card, {
       scale: 2,
       useCORS: true,       // 允许加载同源代理图片
       allowTaint: false,

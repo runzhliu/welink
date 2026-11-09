@@ -5,6 +5,7 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { X, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import '../common/chart-bars.css';
 
 interface Props {
   displayName: string;
@@ -210,7 +211,7 @@ export const ForecastChartModal: React.FC<Props> = ({
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group">
                     <div
-                      className="w-full rounded-t-md transition-all relative"
+                      className="chart-bar-width rounded-t-md transition-all relative"
                       style={{
                         height: `${pct}%`,
                         minHeight: v > 0 ? 2 : 0,

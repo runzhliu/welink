@@ -150,56 +150,27 @@ features:
   </div>
 </div>
 
-## 动图直观感受
+## 新版界面预览
+
+以下浅色界面预览由新版页面截图切换组成，使用内置的虚构演示数据。
 
 <div class="welink-video-hero">
   <div class="welink-video-card">
-    <div class="welink-video-card-label">🪞 AI 分身</div>
-    <video src="/pics/1-AI分身.mp4" poster="/pics/1.png" autoplay loop muted playsinline onclick="zoomVideo(this.src)"></video>
+    <div class="welink-video-card-label">联系人画像</div>
+    <img src="/pics/demos/contact.gif" alt="私聊列表与联系人画像的浅色界面预览" loading="lazy">
   </div>
   <div class="welink-video-card">
-    <div class="welink-video-card-label">🧠 AI 分析</div>
-    <video src="/pics/2-AI分析.mp4" poster="/pics/2.png" autoplay loop muted playsinline onclick="zoomVideo(this.src)"></video>
+    <div class="welink-video-card-label">群聊画像与微信视图</div>
+    <img src="/pics/demos/groups.gif" alt="群聊画像与微信视图的浅色界面预览" loading="lazy">
   </div>
-</div>
-
-<!-- 视频点击放大遮罩 -->
-<div id="video-overlay" onclick="this.style.display='none';this.querySelector('video').src=''" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.85);cursor:zoom-out;justify-content:center;align-items:center;">
-  <video autoplay loop muted playsinline style="max-width:92vw;max-height:92vh;border-radius:12px;"></video>
-</div>
-
-<script setup>
-import { onMounted } from 'vue'
-onMounted(() => {
-  window.zoomVideo = (src) => {
-    const overlay = document.getElementById('video-overlay')
-    const video = overlay.querySelector('video')
-    video.src = src
-    overlay.style.display = 'flex'
-  }
-})
-</script>
-
-<div class="welink-more-videos">
-
-<details>
-<summary>📽️ 查看更多功能演示（10 条）</summary>
-
-<div class="welink-video-grid">
-  <div class="welink-lazy-video"><div class="lbl">AI 群聊</div><video src="/pics/3-AI群聊.mp4" poster="/pics/3.png" loop muted playsinline preload="none"></video></div>
-  <div class="welink-lazy-video"><div class="lbl">AI 首页</div><video src="/pics/4-AI首页.mp4" poster="/pics/4.png" loop muted playsinline preload="none"></video></div>
-  <div class="welink-lazy-video"><div class="lbl">快速入门引导</div><video src="/pics/5-快速入门引导.mp4" poster="/pics/5.png" loop muted playsinline preload="none"></video></div>
-  <div class="welink-lazy-video"><div class="lbl">好友总览</div><video src="/pics/6-好友总览.mp4" poster="/pics/6.png" loop muted playsinline preload="none"></video></div>
-  <div class="welink-lazy-video"><div class="lbl">好友深度画像</div><video src="/pics/7-好友深度画像.mp4" poster="/pics/7.png" loop muted playsinline preload="none"></video></div>
-  <div class="welink-lazy-video"><div class="lbl">群聊画像</div><video src="/pics/8-群聊画像.mp4" poster="/pics/8.png" loop muted playsinline preload="none"></video></div>
-  <div class="welink-lazy-video"><div class="lbl">全局搜索</div><video src="/pics/9-全局搜索.mp4" loop muted playsinline preload="none"></video></div>
-  <div class="welink-lazy-video"><div class="lbl">时间线</div><video src="/pics/10-时间线.mp4" loop muted playsinline preload="none"></video></div>
-  <div class="welink-lazy-video"><div class="lbl">时光机</div><video src="/pics/11-时光机.mp4" loop muted playsinline preload="none"></video></div>
-  <div class="welink-lazy-video"><div class="lbl">纪念日</div><video src="/pics/12-纪念日.mp4" loop muted playsinline preload="none"></video></div>
-</div>
-
-</details>
-
+  <div class="welink-video-card">
+    <div class="welink-video-card-label">私聊微信视图</div>
+    <img src="/pics/demos/wechat.gif" alt="私聊微信视图的浅色界面预览" loading="lazy">
+  </div>
+  <div class="welink-video-card">
+    <div class="welink-video-card-label">SFT 工作台</div>
+    <img src="/pics/demos/sft.gif" alt="SFT 工作台流程的浅色界面预览" loading="lazy">
+  </div>
 </div>
 
 <p class="welink-all-features-cta">

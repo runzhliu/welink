@@ -1,0 +1,8 @@
+- insert:
+    - id: welink
+      name: '@runzhliu/dsh-welink'
+      config:
+        baseUrl: !!js process.env.WELINK_URL || 'http://127.0.0.1:8088'
+        allowedConversations: !!js JSON.parse(process.env.WELINK_ALLOWED_CONVERSATIONS || '[]')
+        allowedHttpHosts: !!js JSON.parse(process.env.WELINK_ALLOWED_HTTP_HOSTS || '[]')
+        allowMessages: !!js process.env.WELINK_ALLOW_MESSAGES === '1'

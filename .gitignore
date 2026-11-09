@@ -91,3 +91,10 @@ workers/sft/build/
 workers/sft/dist/
 # Server-specific image pins; start from server-compose.demo-release.example.yml.
 server-compose.demo-release.yml
+
+# Playwright 测试报告和临时截图（均由测试生成）
+frontend/playwright-report/
+frontend/test-results/
+
+# DSH 插件依赖
+plugins/dsh-welink/node_modules/

@@ -707,6 +707,12 @@ a.btn-download:active::after {
   cursor: zoom-in;
 }
 
+.welink-video-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .welink-video-card-label {
   position: absolute;
   top: 10px;

@@ -103,11 +103,11 @@ export const MonthlyTrendChart: React.FC<MonthlyTrendChartProps> = ({ data }) =>
           <Tooltip content={<CustomTooltip mode={mode} />} cursor={{ fill: '#f8f9fb' }} />
           {showPrivate && (
             <Bar dataKey="private" stackId="a" fill="url(#mtPrivateGrad)"
-              radius={stacked ? [0, 0, 0, 0] : [8, 8, 0, 0]} maxBarSize={60} />
+              radius={stacked ? [0, 0, 0, 0] : [8, 8, 0, 0]} maxBarSize={28} />
           )}
           {showGroup && (
             <Bar dataKey="group" stackId="a" fill="url(#mtGroupGrad)"
-              radius={[8, 8, 0, 0]} maxBarSize={60} />
+              radius={[8, 8, 0, 0]} maxBarSize={28} />
           )}
         </BarChart>
       </ResponsiveContainer>

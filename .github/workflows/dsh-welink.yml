@@ -1,0 +1,38 @@
+name: WeLink DSH plugin checks
+on:
+  pull_request:
+    paths: ['plugins/dsh-welink/**', 'backend/agent_*', 'backend/pairing*', 'backend/service/**', 'backend/main.go', '.github/workflows/dsh-welink.yml']
+  push:
+    branches: [main]
+    paths: ['plugins/dsh-welink/**', 'backend/agent_*', 'backend/pairing*', 'backend/service/**', 'backend/main.go', '.github/workflows/dsh-welink.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  plugin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: plugins/dsh-welink
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: plugins/dsh-welink/package-lock.json
+      - run: npm ci --no-audit --no-fund --registry=https://registry.npmjs.org/
+      - run: npm test
+      - name: Verify native DSH tools with synthetic data
+        run: ./tests/smoke-dsh.sh
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: go test ./...
+        working-directory: backend

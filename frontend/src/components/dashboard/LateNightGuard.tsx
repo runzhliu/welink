@@ -7,6 +7,7 @@ import { Moon, Clock, Star } from 'lucide-react';
 import type { ContactStats, GlobalStats } from '../../types';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { Avatar } from '../common/Avatar';
+import '../common/chart-bars.css';
 
 interface Props {
   globalStats: GlobalStats | null;
@@ -158,14 +159,14 @@ export const LateNightGuard: React.FC<Props> = ({
                 {nightHours.map((count, hour) => (
                   <div
                     key={hour}
-                    className="flex-1 flex flex-col items-center gap-1"
+                    className="min-w-0 flex-1 flex flex-col items-center gap-1"
                   >
                     <span className="text-[10px] text-gray-400">
                       {count > 0 ? count.toLocaleString() : ''}
                     </span>
-                    <div className="w-full flex items-end" style={{ height: 48 }}>
+                    <div className="w-full flex items-end justify-center" style={{ height: 48 }}>
                       <div
-                        className="w-full bg-gradient-to-t from-[#1a1a2e] to-[#576b95] rounded-t-md transition-all duration-500"
+                        className="chart-bar-width bg-gradient-to-t from-[#1a1a2e] to-[#576b95] rounded-t-md transition-all duration-500"
                         style={{
                           height: `${(count / barMax) * 100}%`,
                           minHeight: count > 0 ? 4 : 0,

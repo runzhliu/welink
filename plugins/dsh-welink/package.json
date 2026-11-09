@@ -1,0 +1,41 @@
+{
+  "name": "@runzhliu/dsh-welink",
+  "version": "0.1.0",
+  "description": "Scoped read-only WeLink tools for DeepSeek Harness.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "authorize-container.sh",
+    "compose.welink.example.yml",
+    "README.md"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "welink"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": ">=24.9",
+    "dsh": "^0.2.2-alpha.2"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "scripts": {
+    "test": "node --test *.test.js"
+  }
+}

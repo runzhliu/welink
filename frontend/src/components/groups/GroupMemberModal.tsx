@@ -7,6 +7,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import '../common/chart-bars.css';
 import { X, Loader2, BarChart3, Clock, Moon, CalendarDays, ExternalLink } from 'lucide-react';
 import type { GroupMemberDetail } from '../../types';
 import { groupsApi } from '../../services/api';
@@ -159,8 +160,8 @@ export const GroupMemberModal: React.FC<Props> = ({ groupUsername, groupName, me
                     {data.weekly_dist.map((c, i) => (
                       <div key={i} className="flex-1 h-full flex flex-col items-center gap-0.5" title={`周${WEEKDAYS[i]} — ${c} 条`}>
                         {/* flex-1 区域有确定高度，柱子百分比才生效 */}
-                        <div className="w-full flex-1 flex items-end">
-                          <div className="w-full rounded-sm bg-[#10aeff]/70" style={{ height: `${Math.max(c > 0 ? 8 : 2, (c / maxWeek) * 100)}%` }} />
+                        <div className="w-full flex-1 flex items-end justify-center">
+                          <div className="chart-bar-width rounded-sm bg-[#10aeff]/70" style={{ height: `${Math.max(c > 0 ? 8 : 2, (c / maxWeek) * 100)}%` }} />
                         </div>
                         <span className="text-[8px] text-gray-300">{WEEKDAYS[i]}</span>
                       </div>
@@ -173,8 +174,8 @@ export const GroupMemberModal: React.FC<Props> = ({ groupUsername, groupName, me
                   </div>
                   <div className="flex items-end gap-[2px] h-12">
                     {trend.map(t => (
-                      <div key={t.month} className="flex-1 h-full flex items-end" title={`${t.month} — ${t.count} 条`}>
-                        <div className="w-full rounded-sm bg-[#ff9500]/60" style={{ height: `${Math.max(t.count > 0 ? 8 : 2, (t.count / maxTrend) * 100)}%` }} />
+                      <div key={t.month} className="min-w-0 flex-1 h-full flex items-end justify-center" title={`${t.month} — ${t.count} 条`}>
+                        <div className="chart-bar-width rounded-sm bg-[#ff9500]/60" style={{ height: `${Math.max(t.count > 0 ? 8 : 2, (t.count / maxTrend) * 100)}%` }} />
                       </div>
                     ))}
                   </div>

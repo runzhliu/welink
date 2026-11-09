@@ -1,0 +1,12 @@
+.data-pagination { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; padding: 14px 18px; border-top: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.data-pagination-info, .data-pagination-pages, .data-pagination-sizes, .data-pagination-numbers, .data-pagination-number { display: flex; align-items: center; gap: 4px; }
+.data-pagination-info { gap: 16px; }.data-pagination-sizes { gap: 2px; }.data-pagination-sizes > span { margin-left: 5px; color: var(--text-muted); }
+.data-pagination button { display: inline-flex; align-items: center; justify-content: center; min-height: 30px; padding: 0 9px; border: 1px solid transparent; border-radius: 6px; color: var(--text-secondary); font-weight: 500; transition: background .15s, border-color .15s, color .15s; }
+.data-pagination button:hover:not(:disabled) { background: var(--bg-subtle); color: var(--text-primary); }
+.data-pagination button:disabled { color: var(--text-muted); opacity: .5; }
+.data-pagination button[aria-current="page"], .data-pagination button[aria-pressed="true"] { border-color: var(--border); background: var(--accent-soft); color: var(--accent-text); font-weight: 650; }
+.data-pagination-numbers button { min-width: 30px; }.data-pagination-ellipsis { color: var(--text-muted); padding: 0 4px; }.data-pagination-mobile { display: none; padding: 0 8px; }
+.data-status { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.data-status::before { content: ''; width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--status-color, var(--text-muted)); }
+.data-status-active { --status-color: #087f5b; }.data-status-warm { --status-color: #79a682; }.data-status-cooling { --status-color: #d18b3f; }.data-status-quiet { --status-color: #8594a5; }.data-status-empty { --status-color: #b4bec3; }
+@media (max-width: 640px) { .data-pagination { padding: 12px 16px; }.data-pagination-sizes, .data-pagination-numbers { display: none; }.data-pagination-mobile { display: inline; } }

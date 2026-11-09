@@ -315,9 +315,9 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-      <div className={`overflow-y-auto p-4 sm:p-8 lg:p-10 ${fullscreen ? 'h-full' : 'max-h-[calc(100dvh-2rem)] sm:max-h-[92vh]'}`}>
+      <div className={`flex min-h-0 flex-col ${fullscreen ? 'h-full' : 'max-h-[calc(100dvh-2rem)] sm:max-h-[92vh]'}`}>
         {/* Top-right actions */}
-        <div className="conversation-dialog-actions sticky top-0 z-20 bg-[var(--bg-card)] flex flex-wrap justify-end items-center gap-1 mb-3">
+        <div className="conversation-dialog-actions relative z-20 flex shrink-0 flex-wrap justify-end items-center gap-1 border-b border-[var(--border)] bg-[var(--bg-card)] px-4 sm:px-8 lg:px-10 pt-3 pb-2">
           {/* 导出 */}
           <div className="relative" ref={exportPanelRef}>
             <button
@@ -425,10 +425,9 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
           </button>
         </div>
 
-        <div className="animate-in fade-in duration-200">
-
-        {/* Header */}
-        <div className="mb-6 sm:mb-8 flex items-center gap-4">
+        <div className="conversation-dialog-identity shrink-0 border-b border-[var(--border)] px-4 sm:px-8 lg:px-10 pt-4 pb-4">
+        {/* Profile and controls stay outside the scrolling content. */}
+        <div className="flex items-center gap-4">
           <div className="relative flex-shrink-0">
             {useAiAvatar && aiAvatarURL ? (
               <button
@@ -484,7 +483,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
               </>
             )}
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-0.5">
               <h3 id="contact-dialog-title" className={`dk-text text-xl sm:text-3xl font-black tracking-tight text-[#1d1d1f]${privacyMode ? ' privacy-blur' : ''}`}>
                 {displayName}
@@ -549,6 +548,10 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
             )}
           </div>
         </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-8 lg:px-10 pt-4 pb-4 sm:pb-8 lg:pb-10">
+        <div className="animate-in fade-in duration-200">
 
         {/* 聊天里程碑 */}
         {contact.total_messages > 0 && (() => {
@@ -975,6 +978,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ contact, onClose, on
         </div>
           </div>
       </div>{/* end inner scroll div */}
+      </div>{/* end toolbar and scroll layout */}
       </div>{/* end outer rounded clip div */}
     </div>
 
