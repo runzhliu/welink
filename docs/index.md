@@ -49,7 +49,7 @@ features:
   - icon: 🔌
     title: DSH 插件
     details: 将授权的私聊和群聊接入 DeepSeek Harness，按日期或关键词查询，让 Agent 帮你整理信息。
-    link: https://github.com/runzhliu/welink-test/tree/main/plugins/dsh-welink
+    link: https://github.com/runzhliu/welink/tree/main/plugins/dsh-welink
     linkText: 查看插件与接入指南
   - icon: 💕
     title: 关系动态预测
@@ -166,7 +166,7 @@ WeLink DSH 插件让 DeepSeek Harness（包括独立的 Super Agent 容器）通
   <p>演示使用虚构群聊数据：查询指定日期的消息，整理待办、负责人和待确认事项。</p>
 </div>
 
-[查看 DSH 插件与安装指南 →](https://github.com/runzhliu/welink-test/tree/main/plugins/dsh-welink) · 插件随源码提供，需使用包含 Agent 查询接口的 WeLink 后端。
+[查看 DSH 插件与安装指南 →](https://github.com/runzhliu/welink/tree/main/plugins/dsh-welink) · 插件随源码提供，需使用包含 Agent 查询接口的 WeLink 后端。
 
 ## 新版界面预览
 
