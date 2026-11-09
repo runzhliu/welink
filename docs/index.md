@@ -152,16 +152,56 @@ features:
 
 ## 新版界面预览
 
-以下浅色界面预览由新版页面截图切换组成，使用内置的虚构演示数据。
+以下浅色界面预览由操作前后的页面截图组成，使用内置的虚构演示数据；AI 回复为演示模式的预置内容。
 
 <div class="welink-video-hero">
   <div class="welink-video-card">
-    <div class="welink-video-card-label">联系人画像</div>
+    <div class="welink-video-card-label">AI 分身</div>
+    <img src="/pics/demos/ai-clone.gif" alt="AI 分身浅色界面预览" loading="lazy">
+  </div>
+  <div class="welink-video-card">
+    <div class="welink-video-card-label">AI 分析</div>
+    <img src="/pics/demos/ai-analysis.gif" alt="AI 分析浅色界面预览" loading="lazy">
+  </div>
+  <div class="welink-video-card">
+    <div class="welink-video-card-label">AI 群聊配置</div>
+    <img src="/pics/demos/ai-groups.gif" alt="AI 群聊配置浅色界面预览" loading="lazy">
+  </div>
+  <div class="welink-video-card">
+    <div class="welink-video-card-label">AI 首页</div>
+    <img src="/pics/demos/ai-home.gif" alt="AI 首页浅色界面预览" loading="lazy">
+  </div>
+  <div class="welink-video-card">
+    <div class="welink-video-card-label">快速入门引导</div>
+    <img src="/pics/demos/onboarding.gif" alt="快速入门引导浅色界面预览" loading="lazy">
+  </div>
+  <div class="welink-video-card">
+    <div class="welink-video-card-label">好友总览</div>
     <img src="/pics/demos/contact.gif" alt="私聊列表与联系人画像的浅色界面预览" loading="lazy">
   </div>
   <div class="welink-video-card">
-    <div class="welink-video-card-label">群聊画像与微信视图</div>
+    <div class="welink-video-card-label">好友深度画像</div>
+    <img src="/pics/demos/portrait.gif" alt="好友深度画像浅色界面预览" loading="lazy">
+  </div>
+  <div class="welink-video-card">
+    <div class="welink-video-card-label">群聊画像</div>
     <img src="/pics/demos/groups.gif" alt="群聊画像与微信视图的浅色界面预览" loading="lazy">
+  </div>
+  <div class="welink-video-card">
+    <div class="welink-video-card-label">全局搜索</div>
+    <img src="/pics/demos/search.gif" alt="全局搜索浅色界面预览" loading="lazy">
+  </div>
+  <div class="welink-video-card">
+    <div class="welink-video-card-label">时间线</div>
+    <img src="/pics/demos/timeline.gif" alt="时间线浅色界面预览" loading="lazy">
+  </div>
+  <div class="welink-video-card">
+    <div class="welink-video-card-label">时光机</div>
+    <img src="/pics/demos/calendar.gif" alt="时光机浅色界面预览" loading="lazy">
+  </div>
+  <div class="welink-video-card">
+    <div class="welink-video-card-label">纪念日</div>
+    <img src="/pics/demos/anniversary.gif" alt="纪念日浅色界面预览" loading="lazy">
   </div>
   <div class="welink-video-card">
     <div class="welink-video-card-label">私聊微信视图</div>

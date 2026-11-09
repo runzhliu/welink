@@ -62,11 +62,21 @@ SFT 侧重学习表达习惯，不保证记住或准确回答具体事实；涉�
 
 ## 功能示例
 
-以下浅色界面预览由新版页面截图切换组成，使用项目内置的虚构演示数据。
+以下浅色界面预览由操作前后的页面截图组成，使用项目内置的虚构演示数据；AI 回复为演示模式的预置内容。
 
-| 私聊与联系人画像 | 群聊画像与微信视图 |
+| AI 分身 | AI 分析 |
 |:---:|:---:|
-| ![私聊与联系人画像](pics/demos/contact.gif) | ![群聊画像与微信视图](pics/demos/groups.gif) |
+| ![AI 分身](pics/demos/ai-clone.gif) | ![AI 分析](pics/demos/ai-analysis.gif) |
+| **AI 群聊配置** | **AI 首页** |
+| ![AI 群聊配置](pics/demos/ai-groups.gif) | ![AI 首页](pics/demos/ai-home.gif) |
+| **快速入门引导** | **好友总览** |
+| ![快速入门引导](pics/demos/onboarding.gif) | ![好友总览](pics/demos/contact.gif) |
+| **好友深度画像** | **群聊画像** |
+| ![好友深度画像](pics/demos/portrait.gif) | ![群聊画像](pics/demos/groups.gif) |
+| **全局搜索** | **时间线** |
+| ![全局搜索](pics/demos/search.gif) | ![时间线](pics/demos/timeline.gif) |
+| **时光机** | **纪念日** |
+| ![时光机](pics/demos/calendar.gif) | ![纪念日](pics/demos/anniversary.gif) |
 | **私聊微信视图** | **SFT 工作台** |
 | ![私聊微信视图](pics/demos/wechat.gif) | ![SFT 工作台](pics/demos/sft.gif) |
 
