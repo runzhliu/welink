@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "description": "Scoped read-only WeLink tools for DeepSeek Harness.",
   "license": "AGPL-3.0-only",
+  "homepage": "https://github.com/runzhliu/welink/tree/main/plugins/dsh-welink#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/runzhliu/welink.git",
+    "directory": "plugins/dsh-welink"
+  },
   "type": "module",
   "main": "./index.js",
   "exports": {
@@ -16,7 +22,8 @@
     "cordis.patch.yml",
     "authorize-container.sh",
     "compose.welink.example.yml",
-    "README.md"
+    "README.md",
+    "screenshots.json"
   ],
   "keywords": [
     "deepseek-harness",

@@ -19,7 +19,15 @@
 
 需要 Node.js 24.9 或更高，以及 DSH 0.2.2 系列（已在 `0.2.2-rc.1` 容器用合成数据验证）。本机如果是更早版本的 DSH，请先使用兼容版本；不要用本机 CLI 的版本推断独立容器的版本。
 
-在仓库根目录运行：
+可以从 WeLink 的正式版本安装，以下命令将版本固定在 v0.4.1：
+
+```sh
+dsh plugin --profile web add 'github:runzhliu/welink#v0.4.1&path:/plugins/dsh-welink'
+```
+
+安装需要访问 GitHub 和 npm registry。安装到独立容器时，应在该容器对应的 DSH 环境中执行；安装后启动或重启对应的 DSH 实例。还需要按下文配置 WeLink 地址、会话授权和独立的只读令牌。
+
+也可以从本地源码打包安装。在仓库根目录运行：
 
 ```sh
 cd plugins/dsh-welink
