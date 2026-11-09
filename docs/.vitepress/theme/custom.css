@@ -79,6 +79,9 @@
 .welink-sft-journey strong { font-size: 14px; }
 .welink-sft-journey small, .welink-sft-spotlight .welink-sft-footnote { color: var(--vp-c-text-2); font-size: 12px; line-height: 1.6; }
 .welink-sft-spotlight .welink-sft-footnote { margin: 16px 0 0; }
+.welink-dsh-demo { margin: 20px 0 12px; overflow: hidden; border: 1px solid var(--vp-c-divider); border-radius: 12px; background: var(--vp-c-bg); }
+.welink-dsh-demo img { display: block; width: 100%; height: auto; }
+.welink-dsh-demo p { margin: 0; padding: 12px 16px; color: var(--vp-c-text-2); font-size: 13px; line-height: 1.6; }
 @media (max-width: 768px) {
   .welink-sft-spotlight { padding: 20px; }
   .welink-sft-journey { grid-template-columns: repeat(2, minmax(0, 1fr)); }

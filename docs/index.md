@@ -46,6 +46,11 @@ features:
     details: 把聊天记录炼化为 Claude Code / Codex / Cursor 等 AI 工具的 Skill 文件包。3 种类型 × 6 种格式。
     link: /skill-forge
     linkText: 了解更多
+  - icon: 🔌
+    title: DSH 插件
+    details: 将授权的私聊和群聊接入 DeepSeek Harness，按日期或关键词查询，让 Agent 帮你整理信息。
+    link: https://github.com/runzhliu/welink-test/tree/main/plugins/dsh-welink
+    linkText: 查看插件与接入指南
   - icon: 💕
     title: 关系动态预测
     details: 扫描最近 6 月节奏，给每个联系人打「升温/稳定/降温/濒危」4 档，AI 生成破冰开场白。主动占比 + 响应时延 + 连续冷却多维信号。
@@ -149,6 +154,19 @@ features:
     <div class="pillar-body">DeepSeek / 豆包 / Kimi / OpenAI / Claude / Gemini / Ollama / Vertex / Bedrock / OpenRouter / SiliconFlow / Azure …… 原生支持，多配置热切换，哪家便宜用哪家。</div>
   </div>
 </div>
+
+## 与 DSH 一起使用
+
+WeLink DSH 插件让 DeepSeek Harness（包括独立的 Super Agent 容器）通过只读工具查询你授权的聊天记录。你可以让 Agent 查找某天的私聊或群聊，或按关键词检索，再整理成摘要、待办与待确认事项。
+
+插件默认不授权任何会话，聊天原文访问也默认关闭；连接时需要配置会话范围和独立的只读令牌。DSH 可能保存查询结果，使用远程模型时内容也会发送给所选服务，请按自己的部署环境管理数据。
+
+<div class="welink-dsh-demo">
+  <img src="/pics/dsh-welink-demo.png" alt="DSH 使用 WeLink 插件查询虚构群聊并整理待办的演示" loading="lazy">
+  <p>演示使用虚构群聊数据：查询指定日期的消息，整理待办、负责人和待确认事项。</p>
+</div>
+
+[查看 DSH 插件与安装指南 →](https://github.com/runzhliu/welink-test/tree/main/plugins/dsh-welink) · 插件随源码提供，需使用包含 Agent 查询接口的 WeLink 后端。
 
 ## 新版界面预览
 
