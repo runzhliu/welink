@@ -20,7 +20,7 @@
 
 CI：`.github/workflows/sft-checks.yml` 运行后端竞态、前端构建 / 交互、Python 合约检查。
 
-v0.4.0 已发布；其现有产物经过单独核对，并不代表以下硬件验收完成。后续稳定版 Release 工作流会校验 `workers/sft/verified-matrix.json`，当前记录仍为空。真实验收后填写测试 commit 与证据，相关应用 / 训练代码再次变化会使旧记录失效。
+v0.4.0 已发布；其现有产物经过单独核对，并不代表以下硬件验收完成。v0.4.1 经维护者批准单次例外发布，MLX、CUDA 完整硬件验收及完整视觉验收仍未完成。后续稳定版 Release 工作流继续校验 `workers/sft/verified-matrix.json`，当前记录仍为空。真实验收后填写测试 commit 与证据，相关应用 / 训练代码再次变化会使旧记录失效。
 
 ## 正式发布前必须补齐
 
