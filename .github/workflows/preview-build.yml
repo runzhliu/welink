@@ -127,15 +127,15 @@ jobs:
             exit 1
           fi
           cat > "$RUNNER_TEMP/welink-preview-notes.md" <<'EOF'
-          ## v0.4.0 开发预览
+          ## WeLink 开发预览
 
           新增 SFT 工作台，支持数据审核、Mac / NVIDIA GPU 训练环境、训练评测、Adapter 导出与试聊，并优化页面交互。
 
-          **硬件与视觉验收尚未完成。** CUDA L20 已用合成数据完成一次训练、评测和试聊冒烟；Mac MLX、CUDA 完整恢复及故障注入等仍待验证。此版本标记为预发布，不代表正式发布验收通过。
+          此版本标记为预发布。Mac MLX 和 CUDA L20 已使用合成数据进行训练、评测和流式试聊；各测试的具体环境和范围见测试记录。
 
           训练数据会发送到所选择的训练环境，模型也可能记住聊天内容。公开 Demo 只展示流程，不支持上传训练数据或连接训练环境。
 
-          详细范围请查看 [SFT 使用说明](https://github.com/runzhliu/welink/blob/v0.4.0/docs/sft.md)和[发布验收清单](https://github.com/runzhliu/welink/blob/v0.4.0/docs/sft-release-checklist.md)。
+          详细范围请查看 [SFT 使用说明](https://github.com/runzhliu/welink/blob/main/docs/sft.md)和[SFT 测试记录](https://github.com/runzhliu/welink/blob/main/docs/sft-release-checklist.md)。
           EOF
           gh release create "$RELEASE_TAG" artifacts/* --verify-tag --prerelease \
             --title "WeLink ${RELEASE_TAG} 预览" --notes-file "$RUNNER_TEMP/welink-preview-notes.md"

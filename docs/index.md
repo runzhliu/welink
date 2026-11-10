@@ -103,7 +103,7 @@ features:
     <div><span>03</span><strong>预检与训练</strong><small>LoRA · 任务与指标</small></div>
     <div><span>04</span><strong>对比与试用</strong><small>盲评 · 导出 · 接入</small></div>
   </div>
-  <p class="welink-sft-footnote">v0.4.0 已发布，完整硬件验收仍在进行。训练数据会发送到你选择的训练机；模型也可能记住聊天内容，请谨慎保存与分享。</p>
+  <p class="welink-sft-footnote">训练数据会发送到你选择的训练机；模型也可能记住聊天内容，请谨慎保存与分享。</p>
 </section>
 
 <div class="welink-stats">

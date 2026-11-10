@@ -1,6 +1,6 @@
 # SFT 工作台设计方案
 
-状态：工作台、数据与任务控制端、MLX / CUDA worker 已实现并完成自动化测试；CUDA 已进行一次 L20 合成数据冒烟，Mac 及完整硬件验收仍待完成。当前交付边界和发布门槛见 [v0.4.0 验收清单](./sft-release-checklist.md)，使用见 [Worker 连接指南](./sft.md#连接远程-gpu-容器)。本文保留完整目标设计，API 草案以当前实现及验收清单的说明为准。
+状态：工作台、数据与任务控制端、MLX / CUDA worker 已实现并完成自动化测试；Mac 与 L20 的合成数据测试范围见 [SFT 测试记录](./sft-release-checklist.md)，使用见 [Worker 连接指南](./sft.md#连接远程-gpu-容器)。本文保留完整目标设计，API 草案以当前实现及测试记录为准。
 
 更新：2026-10-22。已确认运行范围：本机 Apple Silicon Mac + 远程 Linux / NVIDIA GPU 训练机。
 

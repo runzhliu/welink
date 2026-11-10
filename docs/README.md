@@ -52,8 +52,8 @@
 
 | 文件 | 内容 |
 |------|------|
-| [sft-workbench-design.md](./sft-workbench-design.md) | SFT 工作台完整设计，已落地工作台与 worker；硬件验收待完成 |
-| [sft-release-checklist.md](./sft-release-checklist.md) | v0.4.0 已验证范围、真实训练 / 视觉发布门槛与当前交付边界 |
+| [sft-workbench-design.md](./sft-workbench-design.md) | SFT 工作台、数据处理与 worker 设计 |
+| [sft-release-checklist.md](./sft-release-checklist.md) | SFT 自动化、Mac 与 CUDA 的测试记录和功能边界 |
 | [SFT Worker 连接指南](./sft.md#连接远程-gpu-容器) | Mac / CUDA 环境安装、远程连接与配对；完整 Worker 说明位于仓库 `workers/sft/README.md` |
 
 ## 贡献

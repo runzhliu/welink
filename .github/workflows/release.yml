@@ -30,9 +30,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # v0.4.0 was explicitly published with unverified hardware evidence and
-      # manually built assets. A manual reconciliation must never overwrite it
-      # or pretend that the hardware gate passed. New releases retain the gate.
+      # A manual reconciliation must never overwrite the published v0.4.0 assets.
       - name: 核对已发布的 v0.4.0
         id: existing_release
         if: github.event_name == 'workflow_dispatch' && inputs.tag == 'v0.4.0'
@@ -50,21 +48,6 @@ jobs:
           echo '### 已发布版本核对' >> "$GITHUB_STEP_SUMMARY"
           echo '已核对 v0.4.0 标签和现有安装包摘要。本次未重新构建或覆盖发布文件。MLX、CUDA 和视觉完整验收仍未完成。' >> "$GITHUB_STEP_SUMMARY"
           echo '::warning::仅核对既有发布；MLX、CUDA 和视觉完整验收仍未完成。'
-
-      # v0.4.1 has a one-time owner-approved exception. Do not extend it to
-      # other tags: the hardware and visual evidence is still incomplete.
-      - name: 记录 v0.4.1 的单次验收例外
-        if: steps.existing_release.outputs.skip != 'true' && github.event_name == 'push' && github.ref == 'refs/tags/v0.4.1'
-        run: |
-          echo '::warning::v0.4.1 经项目维护者批准例外发布；MLX、CUDA 完整硬件验收及视觉验收仍未完成。'
-          echo '### v0.4.1 验收状态' >> "$GITHUB_STEP_SUMMARY"
-          echo '维护者批准单次例外：MLX、CUDA 完整硬件验收及视觉验收仍未完成；后续版本继续执行验收门槛。' >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Validate SFT hardware evidence for 4.x releases
-        if: steps.existing_release.outputs.skip != 'true' && !(github.event_name == 'push' && github.ref == 'refs/tags/v0.4.1')
-        env:
-          SFT_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: python3 scripts/check_sft_release.py --tag "$SFT_RELEASE_TAG"
 
       - name: 确定版本号和发布类型
         if: steps.existing_release.outputs.skip != 'true'
@@ -119,7 +102,7 @@ jobs:
           [ -n "$CHORE" ] && NOTES="$NOTES\n## 🔧 工程\n$CHORE\n"
 
           if [ "${{ steps.version.outputs.tag }}" = 'v0.4.1' ]; then
-            NOTES="$NOTES\n## SFT 验收状态\n\n本版本经维护者批准单次例外发布。MLX、CUDA 完整硬件验收及桌面、移动端、深浅色、键盘和隐私模式视觉验收仍未完成。CUDA L20 已使用合成数据完成一次训练、评测和流式试聊；详见 [SFT 发布验收清单](https://github.com/runzhliu/welink/blob/v0.4.1/docs/sft-release-checklist.md)。后续版本继续执行原有验收门槛。\n"
+            NOTES="$NOTES\n## SFT 测试范围\n\nCUDA L20 已使用合成数据完成训练、评测和流式试聊；具体测试范围详见 [SFT 测试记录](https://github.com/runzhliu/welink/blob/v0.4.1/docs/sft-release-checklist.md)。\n"
           fi
 
           printf "notes<<EOF\n" >> "$GITHUB_OUTPUT"

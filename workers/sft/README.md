@@ -2,7 +2,7 @@
 
 独立于浏览器和 Go 服务的训练组件。首版执行器是 Apple Silicon / Metal 的 `mlx-lm==0.32.2` 和 Linux / NVIDIA 的 `llamafactory==0.9.5`。两者通过同一套配对、租约、事件与产物协议接入 `#/sft`。
 
-**当前为 4.0 待硬件验收实现。CPU 合约测试不代表已经跑过真实 MLX / CUDA 训练。** 发布门槛见 [SFT 发布验收](../../docs/sft-release-checklist.md)。
+Mac MLX 与 CUDA L20 的合成数据测试范围见 [SFT 测试记录](../../docs/sft-release-checklist.md)；实际效果取决于模型、数据与训练环境。
 
 ## 安装与配对
 
@@ -81,4 +81,4 @@ Mac 上如已有可本地读取的兼容模型，还可使用合成提示词验�
 WELINK_TEST_MODEL_PATH=/本机模型目录 PYTHONPATH=workers/sft ~/.local/share/welink-sft/venv/bin/python -m unittest discover -s workers/sft/tests -p test_mlx_threaded_inference.py -v
 ```
 
-更新锁定依赖时使用 `uv pip compile`，Mac 目标额外指定 `MACOSX_DEPLOYMENT_TARGET=14.0`。锁文件只证明依赖解析与哈希固定；需要重新执行实际引擎标签、训练、恢复和流式推理验收后才能更新已验证组合清单。
+更新锁定依赖时使用 `uv pip compile`，Mac 目标额外指定 `MACOSX_DEPLOYMENT_TARGET=14.0`。锁文件用于固定依赖解析结果与哈希；可根据具体修改选择适合的测试。

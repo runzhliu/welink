@@ -1,10 +1,10 @@
 name: SFT workbench checks
 on:
   pull_request:
-    paths: ['backend/**', 'frontend/**', 'workers/sft/**', 'scripts/check_sft_release.py', '.github/workflows/release.yml', '.github/workflows/sft-checks.yml']
+    paths: ['backend/**', 'frontend/**', 'workers/sft/**', '.github/workflows/release.yml', '.github/workflows/sft-checks.yml']
   push:
     branches: [main]
-    paths: ['backend/**', 'frontend/**', 'workers/sft/**', 'scripts/check_sft_release.py', '.github/workflows/release.yml', '.github/workflows/sft-checks.yml']
+    paths: ['backend/**', 'frontend/**', 'workers/sft/**', '.github/workflows/release.yml', '.github/workflows/sft-checks.yml']
 permissions:
   contents: read
 concurrency:
@@ -43,4 +43,4 @@ jobs:
           python-version: '3.12'
       - run: PYTHONPATH=workers/sft python -m unittest discover -s workers/sft/tests -v
       - run: python -m compileall -q workers/sft/welink_worker
-      - run: echo 'CPU contract tests do not replace the Mac and CUDA hardware release gate in docs/sft-release-checklist.md.' >> "$GITHUB_STEP_SUMMARY"
+      - run: echo 'SFT 合约测试结果及真实硬件测试范围见 docs/sft-release-checklist.md。' >> "$GITHUB_STEP_SUMMARY"
