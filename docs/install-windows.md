@@ -95,7 +95,7 @@ $env:PORT=9090; & "C:\Program Files\WeLink\WeLink.exe"
 
 ## 从源码构建
 
-需要 Go 1.22+、Node.js 18+、[TDM-GCC](https://jmeubank.github.io/tdm-gcc/) 或其他 MinGW 工具链。
+需要 Go 1.22+、Node.js 22.12+、[TDM-GCC](https://jmeubank.github.io/tdm-gcc/) 或其他 MinGW 工具链。
 
 ```powershell
 git clone https://github.com/runzhliu/welink

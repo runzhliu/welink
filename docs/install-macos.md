@@ -94,7 +94,7 @@ PORT=9090 /Applications/WeLink.app/Contents/MacOS/WeLink
 
 ## 从源码构建
 
-需要 Go 1.22+、Node.js 18+、Xcode Command Line Tools。
+需要 Go 1.22+、Node.js 22.12+、Xcode Command Line Tools。
 
 ```bash
 git clone https://github.com/runzhliu/welink

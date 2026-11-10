@@ -4,7 +4,7 @@
 # 避免走 QEMU 模拟跑 Node.js（否则 arm64 上的 npm ci 要慢 5-10 倍，CI 卡死）。
 # 前端产物（dist/ 的 JS/CSS/HTML）是纯静态文件、架构无关，
 # 可以直接 COPY 给每个目标架构的 nginx final stage。
-FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
+FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json ./
 # 用官方 registry 装包：仓库的 .npmrc 钉死了 npmmirror（淘宝镜像）方便国内开发，

@@ -13,10 +13,10 @@ ENV ADSENSE_AD_SLOT=$ADSENSE_AD_SLOT
 RUN apk add --no-cache git
 
 WORKDIR /app
-COPY package.json ./
+COPY package.json package-lock.json ./
 # 仓库 .npmrc 走 npmmirror（国内镜像）方便开发，但 docker build 偶尔会卡死，
 # 强制走官方源避坑（同前端 Dockerfile）。
-RUN npm install --registry=https://registry.npmjs.org/
+RUN npm ci --no-audit --no-fund --registry=https://registry.npmjs.org/
 COPY . .
 
 RUN if [ -n "$ADSENSE_PUBLISHER_ID" ]; then \
