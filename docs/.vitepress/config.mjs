@@ -21,6 +21,7 @@ function getVersion() {
 }
 
 const version = getVersion()
+const displayVersion = version.startsWith('v') ? version : `v${version}`
 
 const SITE_URL = 'https://welink.click'
 const OG_IMAGE = `${SITE_URL}/logo.svg`
@@ -177,7 +178,7 @@ export default defineConfig({
     ],
 
     footer: {
-      message: `WeLink · AGPL-3.0 · 本地优先，数据去向取决于所选服务 · v${version}`,
+      message: `WeLink · AGPL-3.0 · 本地优先，数据去向取决于所选服务 · ${displayVersion}`,
       copyright: '© 2025 WeLink contributors · <a href="https://github.com/runzhliu/welink">GitHub</a> · <a href="https://github.com/runzhliu/welink/issues">反馈问题</a> · <a href="https://demo.welink.click">在线 Demo</a>',
     },
 

@@ -30,7 +30,7 @@ RUN if [ -n "$ADSENSE_PUBLISHER_ID" ]; then \
 # 将版本号注入到文档中（替换占位符 {{VERSION}}）
 RUN sed -i "s/{{VERSION}}/${VERSION}/g" install.md
 
-RUN npm run build
+RUN WELINK_VERSION="${VERSION}" npm run build
 
 FROM nginx:alpine
 COPY --from=builder /app/.vitepress/dist /usr/share/nginx/html
