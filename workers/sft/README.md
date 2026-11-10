@@ -75,4 +75,10 @@ PYTHONPATH=workers/sft python3 -m unittest discover -s workers/sft/tests -v
 cd frontend && npm ci && npm run test:ui && npm run build
 ```
 
+Mac 上如已有可本地读取的兼容模型，还可使用合成提示词验证模型加载线程与 HTTP 请求线程之间的 MLX 推理；测试不会下载模型：
+
+```sh
+WELINK_TEST_MODEL_PATH=/本机模型目录 PYTHONPATH=workers/sft ~/.local/share/welink-sft/venv/bin/python -m unittest discover -s workers/sft/tests -p test_mlx_threaded_inference.py -v
+```
+
 更新锁定依赖时使用 `uv pip compile`，Mac 目标额外指定 `MACOSX_DEPLOYMENT_TARGET=14.0`。锁文件只证明依赖解析与哈希固定；需要重新执行实际引擎标签、训练、恢复和流式推理验收后才能更新已验证组合清单。

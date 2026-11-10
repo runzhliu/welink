@@ -22,8 +22,13 @@ class Inference:
         self.model_path = path
         self.lock = threading.Lock()
         if config["engine"] == "mlx":
+            import mlx.core as mx
             from mlx_lm import load
             self.model, self.tokenizer = load(str(path), adapter_path=str(adapter) if adapter else None, tokenizer_config={"trust_remote_code": False}, trust_remote_code=False)
+            # MLX loading can leave lazy operations bound to the loading
+            # thread's CPU stream. HTTP requests run in different threads, so
+            # materialize the weights before handing the model to the server.
+            mx.eval(self.model.parameters())
         else:
             from llamafactory.chat import ChatModel
             args = {"model_name_or_path": str(path), "template": config["template"], "finetuning_type": "lora", "trust_remote_code": False, "infer_backend": "huggingface", "enable_thinking": False}
