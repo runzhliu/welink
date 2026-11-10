@@ -12,7 +12,7 @@ interface InitializingScreenProps {
   cancellable?: boolean;          // 是否显示「取消」按钮
   onCancelled?: () => void;       // 取消成功后回调
   error?: string;
-  onRetry?: () => void;
+  onRetry?: () => void | Promise<void>;
 }
 
 function fmtElapsed(ms: number): string {
@@ -30,6 +30,13 @@ export const InitializingScreen: React.FC<InitializingScreenProps> = ({
   onRetry,
 }) => {
   const [cancelling, setCancelling] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  const handleRetry = async () => {
+    if (!onRetry || retrying) return;
+    setRetrying(true);
+    try { await onRetry(); } finally { setRetrying(false); }
+  };
 
   const handleCancel = async () => {
     if (cancelling) return;
@@ -126,7 +133,7 @@ export const InitializingScreen: React.FC<InitializingScreenProps> = ({
 
         {/* 取消按钮 */}
         {(cancellable || (error && onRetry)) && <div className="mt-5 flex items-center gap-3">
-          {error && onRetry && <button type="button" onClick={onRetry} className="ui-button ui-button-primary">重试索引</button>}
+          {error && onRetry && <button type="button" onClick={() => void handleRetry()} disabled={retrying || cancelling} className="ui-button ui-button-primary">{retrying ? '正在重试…' : '重试索引'}</button>}
         {cancellable && (
           <button
             type="button"

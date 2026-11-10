@@ -30,8 +30,10 @@ async function installFixtures(page) {
       data = { scanned_contacts: 1, anchor_month: '2025-10', newcomers: social, faded: [], revived: [], all: social, generated_at: 1 };
     } else if (url.pathname === '/api/contacts/active-dates') {
       data = { dates: ['2024-01-01'] };
-    } else if (url.pathname === '/api/groups/messages') {
+    } else if (url.pathname === '/api/groups/messages' || url.pathname === '/api/contacts/messages') {
       data = messages;
+    } else if (url.pathname === '/api/agent/access') {
+      data = route.request().method() === 'POST' ? { token: 'synthetic-only-token', expires_at: '2026-12-01T00:00:00Z' } : { state: 'none' };
     } else {
       throw new Error(`Unexpected API request: ${url.pathname}`);
     }
@@ -178,3 +180,31 @@ test('群聊长图包含向下延伸的聊天内容', async ({ page }, testInfo)
   expect(bubbles.count, '长图中应有本人消息气泡').toBeGreaterThan(1000);
   expect(bubbles.bottom, '聊天内容应延伸到长图接近底部的位置').toBeGreaterThan(png.height * 0.8);
 });
+
+test('私聊长图包含完整的上下聊天内容', async ({ page }, testInfo) => {
+  await page.goto('/tests/visual/fixture.html?view=wechat-private');
+  await expect(page.getByText('第 1 条虚构消息', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: '导出图片' }).click();
+  const png = await downloadedPng(page, page.getByRole('button', { name: '下载 PNG' }), testInfo, 'private-wechat-long.png');
+  expect(png.width).toBe(1320);
+  expect(png.height).toBeGreaterThan(2868);
+  const bubbles = colorBounds(png, [149, 236, 105]);
+  expect(bubbles.count, '私聊气泡应被绘制').toBeGreaterThan(1000);
+  expect(bubbles.bottom, '末尾消息应出现在长图下方').toBeGreaterThan(png.height * 0.8);
+});
+
+for (const theme of ['light', 'dark']) {
+  test(`Agent 授权移动端布局与确认流程（${theme}）`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/tests/visual/fixture.html?view=agent&theme=${theme}`);
+    await expect(page.getByText('尚未授权')).toBeVisible();
+    await page.getByRole('checkbox', { name: /虚构联系人/ }).check();
+    await page.getByRole('button', { name: '检查并创建授权' }).click();
+    const dialog = page.getByRole('dialog', { name: '确认 Agent 授权' });
+    await expect(dialog).toContainText('将授权 1 个会话');
+    await dialog.getByRole('button', { name: '确认创建' }).click();
+    await expect(page.getByLabel('一次性 Agent 凭据')).toHaveAttribute('type', 'password');
+    await expect(page.getByText('授权有效不代表 DSH 已连接。', { exact: false })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+}

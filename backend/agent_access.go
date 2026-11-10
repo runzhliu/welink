@@ -17,6 +17,7 @@ import (
 
 type agentAccessPolicy struct {
 	TokenSHA256   string    `json:"token_sha256"`
+	OwnerID       string    `json:"owner_id,omitempty"`
 	Conversations []string  `json:"conversations"`
 	Actions       []string  `json:"actions"`
 	ExpiresAt     time.Time `json:"expires_at"`
@@ -24,11 +25,16 @@ type agentAccessPolicy struct {
 
 const agentScopeKey = "welink.agent.scope"
 
-func loadAgentAccessPolicy() *agentAccessPolicy {
+func agentAccessPath() string {
 	path := os.Getenv("WELINK_AGENT_ACCESS_PATH")
 	if path == "" {
 		path = filepath.Join(filepath.Dir(preferencesPath()), "agent-access.json")
 	}
+	return path
+}
+
+func loadAgentAccessPolicy() *agentAccessPolicy {
+	path := agentAccessPath()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil

@@ -79,6 +79,16 @@ func agentQueryHandler(getService func() agentQueryService) gin.HandlerFunc {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "聊天数据尚未就绪"})
 			return
 		}
+		if v, ok := c.Get(agentScopeKey); ok {
+			policy, valid := v.(*agentAccessPolicy)
+			if valid && policy.OwnerID != "" {
+				identity, supportsIdentity := svc.(interface{ SFTIdentity() string })
+				if !supportsIdentity || identity.SFTIdentity() != policy.OwnerID {
+					c.JSON(http.StatusForbidden, gin.H{"error": "授权不属于当前数据账号"})
+					return
+				}
+			}
+		}
 		if q.Action == "dates" {
 			dates := svc.ContactActiveDates(q.Username)
 			end := max(0, len(dates)-q.Offset)

@@ -90,6 +90,7 @@ func sftPINGate(api *gin.RouterGroup) gin.HandlerFunc {
 }
 
 func registerSFTRoutes(r *gin.Engine, api, prot *gin.RouterGroup, acquire func() (*service.ContactService, func()), active func() *service.ContactService, port func() string) {
+	gate := sftPINGate(api)
 	owner := func() string {
 		svc, release := acquire()
 		if svc == nil {
@@ -98,6 +99,7 @@ func registerSFTRoutes(r *gin.Engine, api, prot *gin.RouterGroup, acquire func()
 		defer release()
 		return svc.SFTIdentity()
 	}
+	registerAgentManagementRoutes(api, gate, owner)
 	cfg := sft.Config{Root: filepath.Join(filepath.Dir(preferencesPath()), "sft-data"), Owner: owner}
 	cfg.InferenceOwner = func() string {
 		svc := active()
@@ -152,7 +154,6 @@ func registerSFTRoutes(r *gin.Engine, api, prot *gin.RouterGroup, acquire func()
 			log.Printf("[SFT] 本机停止请求写入失败: %v", e)
 		}
 	})
-	gate := sftPINGate(api)
 	group := api.Group("/sft")
 	group.Use(gate)
 	controller.Routes(group)

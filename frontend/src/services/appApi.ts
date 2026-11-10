@@ -60,6 +60,11 @@ export interface AppConfig {
   demo_mode?: boolean;
 }
 
+export interface DataPreflightResult {
+  ok: boolean;
+  checks: { name: string; status: 'ok' | 'warning' | 'error'; message: string }[];
+}
+
 export const appApi = {
   getInfo: () => api.get<AppInfo>('/app/info').then((r) => r.data),
 
@@ -67,6 +72,9 @@ export const appApi = {
 
   browse: (prompt: string) =>
     api.get<{ path: string }>('/app/browse', { params: { prompt } }).then((r) => r.data.path),
+
+  preflight: (dataDir: string) =>
+    api.post<DataPreflightResult>('/app/data-preflight', { data_dir: dataDir }).then((r) => r.data),
 
   setup: (dataDir: string, logDir: string) =>
     api.post<{ status: string; error?: string; warnings?: string[] }>('/app/setup', { data_dir: dataDir, log_dir: logDir })

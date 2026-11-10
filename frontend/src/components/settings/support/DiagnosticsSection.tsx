@@ -4,6 +4,7 @@ import axios from 'axios';
 import { RelativeTime } from '../../common/RelativeTime';
 import { FeedbackModal } from '../../common/FeedbackModal';
 import { useToast } from '../../common/Toast';
+import { diagnosticReportMarkdown } from '../../../utils/diagnosticReport';
 
 type DiagSection = { status: 'ok' | 'warn' | 'error' | 'skipped'; message: string };
 type DiagResult = {
@@ -36,48 +37,11 @@ export const DiagnosticsSection: React.FC<{
     }
   };
 
-  const diagToMarkdown = (d: DiagResult): string => {
-    const statusEmoji = (s: string) => s === 'ok' ? '✅' : s === 'warn' ? '⚠️' : s === 'skipped' ? '⏭️' : '❌';
-    const lines: string[] = [];
-    lines.push(`# WeLink 诊断报告`);
-    lines.push(`> 生成时间：${new Date(d.generated_at).toLocaleString()}`);
-    lines.push('');
-    lines.push(`## ${statusEmoji(d.data_dir.status)} 数据目录`);
-    lines.push(`- 状态：**${d.data_dir.message}**`);
-    if (d.data_dir.path) lines.push('- 路径：`' + d.data_dir.path + '`');
-    if (d.data_dir.warnings?.length) {
-      lines.push('- 警告：');
-      d.data_dir.warnings.forEach(w => lines.push(`  - ${w}`));
-    }
-    lines.push('');
-    lines.push(`## ${statusEmoji(d.index.status)} 索引`);
-    lines.push(`- 状态：**${d.index.message}**`);
-    lines.push(`- is_initialized=${d.index.is_initialized}, is_indexing=${d.index.is_indexing}, total_cached=${d.index.total_cached}`);
-    if (d.index.last_error) lines.push('- last_error：`' + d.index.last_error + '`');
-    lines.push('');
-    lines.push(`## LLM Profiles`);
-    if (d.llm_profiles.length === 0) {
-      lines.push('- 未配置任何 LLM profile');
-    } else {
-      d.llm_profiles.forEach(p => {
-        lines.push(`- ${statusEmoji(p.status)} **${p.name}**（${p.provider} / ${p.model || '?'}）— ${p.message}`);
-        if (p.base_url) lines.push('  - base_url：`' + p.base_url + '`');
-        lines.push(`  - api_key：${p.has_api_key ? '已配置' : '未配置'}`);
-        if (p.latency_ms) lines.push(`  - 延迟：${p.latency_ms}ms`);
-      });
-    }
-    lines.push('');
-    lines.push(`## ${statusEmoji(d.disk.status)} 磁盘`);
-    lines.push(`- ${d.disk.message}`);
-    lines.push('- AI 分析库：`' + d.disk.ai_analysis_db_path + '`');
-    return lines.join('\n');
-  };
-
   const copyDiagMd = async () => {
     if (!diag) return;
     try {
-      await navigator.clipboard.writeText(diagToMarkdown(diag));
-      toast.success('已复制诊断报告到剪贴板（Markdown 格式）');
+      await navigator.clipboard.writeText(diagnosticReportMarkdown(diag));
+      toast.success('已复制脱敏诊断报告到剪贴板');
     } catch (e: unknown) {
       toast.error('复制失败：' + (e as Error).message);
     }

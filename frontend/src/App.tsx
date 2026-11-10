@@ -362,6 +362,7 @@ function AppInner() {
   };
 
   const handleStart = async (from: number | null, to: number | null, label: string) => {
+    setIndexStartError('');
     setInitLoading(true);
     try {
       await globalApi.init(from, to);
@@ -373,12 +374,15 @@ function AppInner() {
       startPolling(); // 重新开始轮询，等待 is_initialized 变为 true
     } catch (e) {
       console.error('Init failed', e);
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      setIndexStartError(err.response?.data?.error || err.message || '后端未响应');
     } finally {
       setInitLoading(false);
     }
   };
 
   const handleReselect = () => {
+    setIndexStartError('');
     setHasStarted(false);
     setTimeRange(ALL_TIME);
     localStorage.removeItem('welink_hasStarted');
@@ -515,7 +519,7 @@ function AppInner() {
 
   // 用户还没选时间范围，或主动点了「重新选择」
   if (!hasStarted) {
-    return <WelcomePage onStart={handleStart} loading={initLoading} isAppMode={appInfo.app_mode} />;
+    return <WelcomePage onStart={handleStart} loading={initLoading} isAppMode={appInfo.app_mode} error={indexStartError} />;
   }
 
   // 已选择时间范围，等待索引完成
@@ -526,10 +530,11 @@ function AppInner() {
         progress={progress}
         cancellable
         error={indexStartError || lastError}
-        onRetry={() => {
+        onRetry={async () => {
           setIndexStartError('');
           autoIndexAttempted.current = true;
-          void globalApi.init(timeRange.from, timeRange.to).then(() => startPolling()).catch((e: unknown) => setIndexStartError(e instanceof Error ? e.message : '无法开始索引'));
+          try { await globalApi.init(timeRange.from, timeRange.to); startPolling(); }
+          catch (e: unknown) { setIndexStartError(e instanceof Error ? e.message : '无法开始索引'); }
         }}
       />
     );
@@ -621,6 +626,7 @@ function AppInner() {
         ) : activeTab === 'settings' ? (
           <SettingsPage
             isAppMode={appInfo.app_mode}
+            isDemoMode={appInfo.demo_mode ?? false}
             appVersion={appInfo.version}
             blockedUsers={blockedUsers}
             blockedGroups={blockedGroups}

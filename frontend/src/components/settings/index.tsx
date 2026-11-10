@@ -35,6 +35,7 @@ import { MobilePairingSection } from '../common/MobilePairingSection';
 import { DiagnosticsSection } from './support/DiagnosticsSection';
 import { UsageSection } from './support/UsageSection';
 import { AboutSection } from './support/AboutSection';
+import { AgentAccessSection } from './system/AgentAccessSection';
 
 // 共享 localStorage key —— GroupsView.tsx 还在用
 export {
@@ -46,6 +47,7 @@ export {
 
 interface SettingsPageProps {
   isAppMode: boolean;
+  isDemoMode?: boolean;
   appVersion?: string;
   blockedUsers: string[];
   blockedGroups: string[];
@@ -65,6 +67,7 @@ interface SettingsPageProps {
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   isAppMode,
+  isDemoMode = false,
   appVersion,
   blockedUsers,
   blockedGroups,
@@ -183,6 +186,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         );
       case 'lock':
         return <LockSection key={id} />;
+      case 'agent':
+        return <AgentAccessSection key={id} contacts={allContacts} groups={allGroups} demo={isDemoMode} privacyMode={privacyMode} />;
       case 'profiles':
         return <DataProfilesSection key={id} isAppMode={isAppMode} />;
       case 'backup':

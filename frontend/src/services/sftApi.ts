@@ -21,6 +21,8 @@ let owner = '';
 const pendingKeys = new Map<string, string>();
 const base = () => `${getServerURL().replace(/\/+$/, '')}/api/sft`;
 const headers = () => ({ ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}), 'X-SFT-Session': session, ...(owner ? { 'X-SFT-Owner': owner } : {}) });
+// Shared short-lived PIN session for sensitive Agent authorization settings.
+export const sensitiveSessionHeaders = () => ({ ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}), 'X-SFT-Session': session });
 export class SFTError extends Error { constructor(message: string, public status = 0) { super(message); } }
 
 async function request<T>(method: string, path: string, data?: unknown): Promise<T> {

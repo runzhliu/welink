@@ -18,6 +18,7 @@ for (const extension of ['.ts', '.tsx']) require.extensions[extension] = (module
 require.extensions['.css'] = () => {};
 const { WelcomePage } = require('../src/components/common/WelcomePage.tsx');
 const { DataPagination } = require('../src/components/common/DataPagination.tsx');
+const { InitializingScreen } = require('../src/components/common/InitializingScreen.tsx');
 after(async () => window.happyDOM.close());
 
 test('欢迎页保留全部数据选择并支持键盘切换', async () => {
@@ -43,5 +44,23 @@ test('分页保留页码和每页数量选择', async () => {
     await act(async () => host.querySelector('[aria-label="第 2 页"]').click());
     await act(async () => [...host.querySelectorAll('button')].find(b => b.textContent === '50').click());
     assert.deepEqual(changes, [['page', 2], ['size', 50]]);
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});
+
+test('欢迎页显示索引启动错误，重试进行中不会重复提交', async () => {
+  const host = document.createElement('div'); document.body.append(host); const root = createRoot(host);
+  let resolveRetry, attempts = 0;
+  try {
+    await act(async () => root.render(React.createElement(WelcomePage, { loading: false, onStart() {}, error: '后端暂不可用' })));
+    assert.match(host.querySelector('[role="alert"]').textContent, /后端暂不可用/);
+    const pending = new Promise(resolve => { resolveRetry = resolve; });
+    await act(async () => root.render(React.createElement(InitializingScreen, { error: '索引失败', onRetry: () => { attempts++; return pending; } })));
+    const retry = [...host.querySelectorAll('button')].find(b => b.textContent.includes('重试索引'));
+    await act(async () => retry.click());
+    assert.equal(retry.disabled, true);
+    await act(async () => retry.click());
+    assert.equal(attempts, 1);
+    await act(async () => { resolveRetry(); await pending; });
+    assert.equal(retry.disabled, false);
   } finally { await act(async () => root.unmount()); host.remove(); }
 });

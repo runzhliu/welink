@@ -41,6 +41,7 @@ export const SECTIONS: SectionMeta[] = [
   // 隐私与安全
   { id: 'blocked',   title: '隐私屏蔽',   icon: ShieldOff,  groupId: 'privacy' },
   { id: 'lock',      title: '屏幕锁定',   icon: Lock,       groupId: 'privacy' },
+  { id: 'agent',     title: 'Agent 授权', icon: Bot,        groupId: 'privacy' },
 
   // 数据
   { id: 'profiles',  title: '多账号',     icon: Users,      groupId: 'data' },

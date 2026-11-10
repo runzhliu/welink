@@ -5,6 +5,8 @@ import { ToastProvider } from '../../src/components/common/Toast';
 import { FlirtProbe } from '../../src/components/labs/FlirtProbe';
 import { SocialFlow } from '../../src/components/labs/SocialFlow';
 import { WeChatView } from '../../src/components/contact/WeChatView';
+import { AgentAccessSection } from '../../src/components/settings/system/AgentAccessSection';
+import type { ContactStats } from '../../src/types';
 import '../../src/index.css';
 
 const params = new URLSearchParams(location.search);
@@ -13,5 +15,7 @@ const view = params.get('view');
 const component = view === 'flirt' ? <FlirtProbe />
   : view === 'social' ? <SocialFlow />
   : view === 'wechat' ? <WeChatView username="synthetic@chatroom" displayName="虚构测试群" isGroup lastMessageTime="2024-01-01" />
+  : view === 'wechat-private' ? <WeChatView username="synthetic-1" displayName="虚构联系人" lastMessageTime="2024-01-01" />
+  : view === 'agent' ? <AgentAccessSection contacts={[{ username: 'synthetic-1', remark: '虚构联系人' } as ContactStats]} groups={[]} demo={false} privacyMode={false} />
   : <div>未知测试场景</div>;
 createRoot(document.getElementById('root')!).render(<ToastProvider><main>{component}</main></ToastProvider>);

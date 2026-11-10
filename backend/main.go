@@ -383,6 +383,7 @@ func serverMain() {
 	})
 	registerChatGPTRoutes(r, api)
 	registerChatGPTModelsRoute(api)
+	registerDataPreflight(api, hasFrontend)
 
 	// 配对相关端点
 	registerPairingRoutes(api)

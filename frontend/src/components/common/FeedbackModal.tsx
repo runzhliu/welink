@@ -13,6 +13,7 @@ import { X, Bug, Github, Copy, Download, Loader2, CheckCircle2 } from 'lucide-re
 import { useToast } from './Toast';
 import { canReveal } from '../../utils/reveal';
 import { useEscape } from '../../hooks/useEscape';
+import { diagnosticReportMarkdown, type DiagnosticReportData } from '../../utils/diagnosticReport';
 
 interface Props {
   open: boolean;
@@ -26,7 +27,7 @@ interface Props {
 const GITHUB_URL_BUDGET = 7000;
 const REPO = 'runzhliu/welink';
 
-type DiagResult = any; // 结构和 Settings 里一致，此处只读不改
+type DiagResult = DiagnosticReportData;
 
 function buildEnvSection(appVersion?: string): string {
   const ua = navigator.userAgent;
@@ -39,30 +40,6 @@ function buildEnvSection(appVersion?: string): string {
     `- 提交时间：${new Date().toISOString()}`,
   ];
   return parts.join('\n');
-}
-
-function diagToMarkdown(d: DiagResult): string {
-  if (!d) return '';
-  const statusEmoji = (s: string) => s === 'ok' ? '✅' : s === 'warn' ? '⚠️' : s === 'skipped' ? '⏭️' : '❌';
-  const lines: string[] = [];
-  lines.push(`### ${statusEmoji(d.data_dir.status)} 数据目录`);
-  lines.push(`- ${d.data_dir.message}`);
-  if (d.data_dir.path) lines.push('- 路径：`' + d.data_dir.path + '`');
-  d.data_dir.warnings?.forEach((w: string) => lines.push(`- ⚠️ ${w}`));
-  lines.push('');
-  lines.push(`### ${statusEmoji(d.index.status)} 索引`);
-  lines.push(`- ${d.index.message}（total_cached=${d.index.total_cached}）`);
-  if (d.index.last_error) lines.push('- last_error：`' + d.index.last_error + '`');
-  lines.push('');
-  lines.push(`### LLM Profiles`);
-  if (!d.llm_profiles.length) lines.push('- 未配置');
-  d.llm_profiles.forEach((p: any) => {
-    lines.push(`- ${statusEmoji(p.status)} **${p.name}**（${p.provider} / ${p.model || '?'}）— ${p.message}`);
-  });
-  lines.push('');
-  lines.push(`### ${statusEmoji(d.disk.status)} 磁盘`);
-  lines.push(`- ${d.disk.message}`);
-  return lines.join('\n');
 }
 
 export const FeedbackModal: React.FC<Props> = ({ open, onClose, appVersion, initialTitle, initialBody }) => {
@@ -113,7 +90,7 @@ export const FeedbackModal: React.FC<Props> = ({ open, onClose, appVersion, init
       sections.push(`## 环境信息\n\n${buildEnvSection(appVersion)}`);
     }
     if (includeDiag && diag) {
-      sections.push(`## 诊断报告\n\n${diagToMarkdown(diag)}`);
+      sections.push(diagnosticReportMarkdown(diag));
     }
     return sections.join('\n\n');
   };
@@ -237,7 +214,7 @@ export const FeedbackModal: React.FC<Props> = ({ open, onClose, appVersion, init
             </label>
             <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
               <input type="checkbox" checked={includeDiag} onChange={e => setIncludeDiag(e.target.checked)} />
-              附带诊断报告（数据目录状态 / 索引状态 / LLM 配置健康度）
+              附带脱敏诊断报告（不含路径、服务地址和错误原文）
               {diagLoading && <Loader2 size={12} className="animate-spin text-gray-400" />}
               {diag && !diagLoading && <CheckCircle2 size={12} className="text-[#07c160]" />}
             </label>

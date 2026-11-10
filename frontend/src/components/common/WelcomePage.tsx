@@ -23,9 +23,10 @@ interface WelcomePageProps {
   onStart: (from: number | null, to: number | null, label: string) => void;
   loading: boolean;
   isAppMode?: boolean;
+  error?: string;
 }
 
-export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAppMode = false }) => {
+export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAppMode = false, error }) => {
   const [selected, setSelected] = useState(2);
   const today = new Date().toISOString().slice(0, 10);
   const [customFrom, setCustomFrom] = useState('');
@@ -72,6 +73,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onStart, loading, isAp
             <div><label htmlFor="welcome-start-date">开始日期</label><DatePicker id="welcome-start-date" aria-label="开始日期" value={customFrom} onValueChange={setCustomFrom} max={customTo || today} /><small>留空则从最早开始</small></div>
             <div><label htmlFor="welcome-end-date">结束日期</label><DatePicker id="welcome-end-date" aria-label="结束日期" value={customTo} onValueChange={setCustomTo} min={customFrom || undefined} max={today} /><small>留空则到今天</small></div>
           </div>}
+          {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400 mb-3 break-words">无法开始索引：{error}。请检查连接后重试。</p>}
           <button type="button" className="ui-button ui-button-primary welcome-start" onClick={handleStart} disabled={loading}>
             {loading ? <><Loader2 size={16} className="animate-spin" />正在建立索引…</> : <>开始分析 <ArrowRight size={16} /></>}
           </button>
