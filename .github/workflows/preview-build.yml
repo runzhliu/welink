@@ -56,7 +56,7 @@ jobs:
       - run: make dmg
       - name: 生成校验和
         run: cd dist && shasum -a 256 WeLink.dmg > WeLink.dmg.sha256
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-preview
           path: |
@@ -88,7 +88,7 @@ jobs:
       - run: make exe
       - name: 生成校验和
         run: cd dist && sha256sum WeLink-windows-amd64.zip > WeLink-windows-amd64.zip.sha256
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-preview
           path: |
