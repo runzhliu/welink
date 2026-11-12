@@ -10,6 +10,7 @@ import { AIHomePage } from '../../src/components/dashboard/AIHomePage';
 import { ReplyAssistant } from '../../src/components/dashboard/ReplyAssistant';
 import { SharePreview } from '../../src/components/common/SharePreview';
 import { LLMAnalysisTab } from '../../src/components/contact/LLMAnalysisTab';
+import { ModelAvatar } from '../../src/components/common/ModelAvatar';
 import type { ContactStats } from '../../src/types';
 import '../../src/index.css';
 
@@ -26,5 +27,6 @@ const component = view === 'flirt' ? <FlirtProbe />
   : view === 'share' ? <SharePreview options={{ question: '虚构问题', answer: '虚构回答与私人内容', contactName: '虚构姓名', stats: { timestamp: 1700000000000 } }} onClose={() => {}} />
   : view === 'analysis-contact' ? <LLMAnalysisTab username="synthetic-1" displayName="虚构联系人" isGroup={false} />
   : view === 'analysis-group' ? <LLMAnalysisTab username="synthetic@chatroom" displayName="虚构群聊" isGroup />
+  : view === 'model-avatars' ? <div className="flex gap-4 p-8"><ModelAvatar provider="chatgpt" model="gpt-6.1-terra" /><ModelAvatar provider="chatgpt" model="future-model" /><ModelAvatar provider="deepseek" model="deepseek-flash" /><ModelAvatar provider="unknown" model="unknown" /></div>
   : <div>未知测试场景</div>;
 createRoot(document.getElementById('root')!).render(<ToastProvider><main>{component}</main></ToastProvider>);

@@ -3,13 +3,15 @@ import React from 'react';
 import { MessageSquare } from 'lucide-react';
 
 // Local assets avoid third-party requests while viewing private conversations.
-const icons = import.meta.glob<string>('../../assets/model-providers/*.svg', { eager: true, query: '?url', import: 'default' });
+// Inline the bundled, trusted SVGs: WebKit can render URL-based SVG masks as
+// solid squares. The assets are part of the app, never supplied by a user.
+const icons = import.meta.glob<string>('../../assets/model-providers/*.svg', { eager: true, query: '?raw', import: 'default' });
 const brands: { icon: string; color: string; model: RegExp; provider: RegExp }[] = [
   { icon: 'deepseek', color: '#4d6bfe', model: /deepseek/i, provider: /^deepseek$/i },
   { icon: 'claude', color: '#d97757', model: /claude/i, provider: /^(claude|anthropic)$/i },
   { icon: 'googlegemini', color: '#4285f4', model: /gemini/i, provider: /^(gemini|vertex)$/i },
   { icon: 'qwen', color: '#6554e8', model: /qwen|通义/i, provider: /^(qwen|dashscope)$/i },
-  { icon: 'openai', color: '#202123', model: /(^|[/.])(gpt|o[134](?:-|\b)|chatgpt)/i, provider: /^(openai|azure)$/i },
+  { icon: 'openai', color: '#202123', model: /(^|[/.])(gpt|o[134](?:-|\b)|chatgpt)/i, provider: /^(openai|chatgpt|azure)$/i },
   { icon: 'minimax', color: '#ed4141', model: /minimax/i, provider: /^minimax(?:-cn)?$/i },
   { icon: 'kimi', color: '#222', model: /kimi|moonshot/i, provider: /^(kimi|moonshot)$/i },
   { icon: 'zhipu', color: '#4459b8', model: /(^|[/.])glm|chatglm/i, provider: /^(glm|zhipu)$/i },
@@ -34,6 +36,6 @@ export const ModelAvatar: React.FC<{ provider?: string; model?: string }> = ({ p
   const icon = brand && icons[`../../assets/model-providers/${brand.icon}.svg`];
   if (!brand || !icon) return <div aria-label="AI 助手" className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-[#576b95] text-white mt-0.5"><MessageSquare size={13} /></div>;
   return <div title={`${provider || brand.icon}${model ? ` · ${model}` : ''}`} aria-label={`${brand.icon} 模型`} className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-white border border-black/5 mt-0.5">
-    <span className="w-[18px] h-[18px]" style={{ backgroundColor: brand.color, mask: `url(${icon}) center / contain no-repeat`, WebkitMask: `url(${icon}) center / contain no-repeat` }} />
+    <span aria-hidden="true" className="w-[18px] h-[18px] [&>svg]:block [&>svg]:w-full [&>svg]:h-full" style={{ color: brand.color, fill: brand.color }} dangerouslySetInnerHTML={{ __html: icon }} />
   </div>;
 };
