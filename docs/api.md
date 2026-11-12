@@ -144,7 +144,7 @@
 
 ### `GET /api/contacts/export?username=wxid&from=0&to=0`
 
-导出联系人聊天记录（最多 50,000 条），from/to 为 Unix 秒。
+导出联系人聊天记录，`from` / `to` 为 Unix 秒；可选 `limit` 为 1～50,000，返回范围内最近的相应条数并按时间正序排列。省略时最多返回最近 50,000 条；`from` 和 `to` 均为 0 时沿用当前索引范围。
 
 ### `GET /api/contacts/cooling`
 
@@ -243,7 +243,7 @@ AI 关系摘要（低 token 统计预处理，给 `/ai/analyze` 打底）。
 
 ### `GET /api/groups/export?username=xxx@chatroom&from=0&to=0`
 
-导出群聊记录（最多 50,000 条）。
+导出群聊记录，时间参数和可选 `limit` 与联系人导出接口相同。
 
 ### `GET /api/groups/member-detail?username=xxx@chatroom&member=wxid`
 

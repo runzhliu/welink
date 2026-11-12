@@ -15,6 +15,7 @@ export interface ShareImageOptions {
   answer: string;
   contactName?: string;
   avatarUrl?: string;
+  hideAvatar?: boolean;
   stats?: {
     provider?: string;
     model?: string;
@@ -54,7 +55,7 @@ function isWebView(): boolean {
 }
 
 /** 下载图片；App 模式返回保存路径，浏览器模式返回文件名 */
-async function downloadPng(dataUrl: string, filename: string): Promise<string> {
+export async function downloadPng(dataUrl: string, filename: string): Promise<string> {
   if (isWebView()) {
     // App 模式：通过后端写入用户配置的下载目录（默认 ~/Downloads）
     const base64 = dataUrl.split(',')[1] ?? dataUrl;
@@ -396,8 +397,8 @@ export async function generateReportImage(options: ReportImageOptions): Promise<
 // ─── 主函数 ───────────────────────────────────────────────────────────────────
 
 /** 生成并下载分享图片；返回保存路径（App 模式）或文件名（浏览器模式） */
-export async function generateShareImage(options: ShareImageOptions): Promise<string> {
-  const { question, answer, contactName, avatarUrl, stats } = options;
+export async function generateShareImage(options: ShareImageOptions, previewOnly = false): Promise<string> {
+  const { question, answer, contactName, avatarUrl, hideAvatar, stats } = options;
 
   const FONT = "system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif";
 
@@ -406,7 +407,7 @@ export async function generateShareImage(options: ShareImageOptions): Promise<st
   const [qrDataUrl, answerHtml, avatarDataUrl, faviconImg, githubImg] = await Promise.all([
     QRCode.toDataURL('https://welink.click', { width: 96, margin: 1, color: { dark: '#1d1d1f', light: '#f8f9fb' } }),
     Promise.resolve(marked.parse(answer) as string),
-    fetchAvatarDataUrl(avatarUrl),
+    fetchAvatarDataUrl(hideAvatar ? undefined : avatarUrl),
     fetch('/favicon.svg').then(r => r.text()).then(svg => loadSvgAsImage(svg, 42)).catch(() => null),
     loadSvgAsImage(GITHUB_SVG_SOURCE, 12),
   ]);
@@ -499,7 +500,8 @@ export async function generateShareImage(options: ShareImageOptions): Promise<st
     tmpCtx.font = `600 ${13 * S}px ${FF}`;
     const textW = tmpCtx.measureText(badgeText).width / S;
 
-    const BW = 5 + 28 + 8 + textW + 14;
+    const textX = hideAvatar ? 14 : 5 + 28 + 8;
+    const BW = textX + textW + 14;
     const BR = BH / 2; // border-radius: 圆角 = 半高，呈现为胶囊形
 
     const badgeCvs = document.createElement('canvas');
@@ -532,6 +534,7 @@ export async function generateShareImage(options: ShareImageOptions): Promise<st
 
     // 头像圆形（x=5, y=5, 28×28）
     const AX = 5 * S, AY = 5 * S, AW = 28 * S;
+    if (!hideAvatar) {
     bCtx.save();
     bCtx.beginPath();
     bCtx.arc(AX + AW / 2, AY + AW / 2, AW / 2, 0, Math.PI * 2);
@@ -548,13 +551,14 @@ export async function generateShareImage(options: ShareImageOptions): Promise<st
       bCtx.fillText(initial, AX + AW / 2, AY + AW / 2);
     }
     bCtx.restore();
+    }
 
     // 文字（垂直居中）
     bCtx.textBaseline = 'middle';
     bCtx.textAlign = 'left';
     bCtx.fillStyle = '#07c160';
     bCtx.font = `600 ${13 * S}px ${FF}`;
-    bCtx.fillText(badgeText, (5 + 28 + 8) * S, (BH / 2) * S);
+    bCtx.fillText(badgeText, textX * S, (BH / 2) * S);
 
     body.appendChild(badgeCvs);
   }
@@ -687,6 +691,7 @@ export async function generateShareImage(options: ShareImageOptions): Promise<st
       logging: false,
     });
     const dataUrl = cvs.toDataURL('image/png');
+    if (previewOnly) return dataUrl;
     const safeName = contactName
       ? contactName.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '_').slice(0, 20)
       : 'analysis';

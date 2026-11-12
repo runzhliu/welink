@@ -238,7 +238,7 @@ function AppInner() {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
 
   // Backend Status Hook
-  const { isInitialized, isIndexing, backendReady, startPolling, progress, lastError } = useBackendStatus(1000);
+  const { status: indexStatus, isInitialized, isIndexing, backendReady, startPolling, progress, lastError } = useBackendStatus(1000);
   const [indexStartError, setIndexStartError] = useState('');
   const autoIndexAttempted = useRef(false);
 
@@ -554,6 +554,8 @@ function AppInner() {
           <AIHomePage
             contacts={contacts}
             timeRange={timeRange}
+            indexStatus={indexStatus}
+            demoMockActive={appInfo.demo_mock_active}
             onReselect={handleReselect}
             onContactClick={handleContactClick}
             onGroupClick={(g) => setSelectedGroup(g)}

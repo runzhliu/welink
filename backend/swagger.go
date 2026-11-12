@@ -574,9 +574,12 @@ func swaggerSpec() []byte {
       "get": {
         "tags": ["联系人"],
         "summary": "导出联系人全量聊天记录",
-        "description": "返回指定联系人在已索引时间范围内的全量消息，最多 50000 条，按时间正序排列。",
+        "description": "返回指定时间范围内最近的消息，按时间正序排列；未指定时间范围时使用索引范围。",
         "parameters": [
-          { "name": "username", "in": "query", "required": true, "schema": { "type": "string" } }
+          { "name": "username", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "from", "in": "query", "schema": { "type": "integer" }, "description": "起始 Unix 秒" },
+          { "name": "to", "in": "query", "schema": { "type": "integer" }, "description": "结束 Unix 秒" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 50000, "default": 50000 }, "description": "最多返回的最近消息条数" }
         ],
         "responses": {
           "200": { "description": "全量消息列表（最多 50000 条）", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ChatMessage" } } } } },
@@ -718,9 +721,12 @@ func swaggerSpec() []byte {
       "get": {
         "tags": ["群聊"],
         "summary": "导出群聊全量聊天记录",
-        "description": "返回指定群聊在已索引时间范围内的全量消息，最多 50000 条，按时间正序排列。",
+        "description": "返回指定时间范围内最近的消息，按时间正序排列；未指定时间范围时使用索引范围。",
         "parameters": [
-          { "name": "username", "in": "query", "required": true, "schema": { "type": "string" } }
+          { "name": "username", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "from", "in": "query", "schema": { "type": "integer" }, "description": "起始 Unix 秒" },
+          { "name": "to", "in": "query", "schema": { "type": "integer" }, "description": "结束 Unix 秒" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 50000, "default": 50000 }, "description": "最多返回的最近消息条数" }
         ],
         "responses": {
           "200": { "description": "全量消息列表（最多 50000 条）" },

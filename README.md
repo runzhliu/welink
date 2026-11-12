@@ -136,7 +136,9 @@ SFT 侧重学习表达习惯，不保证记住或准确回答具体事实；涉�
 
 ### 我的口吻回复助手
 
-在 AI 首页切换到「我的口吻回复」，粘贴对方消息、选择语气和模型，生成可编辑、复制的草稿。只会向所选模型发送手动输入的内容，不自动读取历史聊天、不保存或发送草稿。普通模型不会自动学习你的口吻；使用个人 SFT 模型前，请先在模型训练工作台完成部署并接入模型配置。
+在 AI 首页切换到「我的口吻回复」，粘贴对方消息、选择语气和模型，生成可编辑、复制的草稿。也可以选择联系人，从最近消息中勾选最多 5 条自己的文本回复作为风格示例；发送前可检查所选原文。选中的示例和输入内容会发送给所选模型，草稿不会自动保存或发送。普通模型不会自动学习你的口吻；使用个人 SFT 模型前，请先在模型训练工作台完成部署并接入模型配置。
+
+AI 首页支持对同一问题选择两个已配置模型进行对比，确认后才会向两个服务发送相同材料。普通联系人和群聊分析支持查看回答中引用的聊天原文及上下文；引用原文会保存在本机 AI 对话历史中。AI 分析分享图可编辑内容并预览实际图片，按需隐藏标题姓名、头像和生成时间；正文仍需手动检查。
 
 ### 对话历史持久化
 
@@ -331,8 +333,10 @@ LLM 批量阅读聊天记录，自动提炼关键事实（人名、事件、情�
 | 豆包（火山方舟） | 字节 Doubao 系列，OpenAI 兼容；默认 `doubao-seed-2-1-pro-260915` |
 | Kimi | Moonshot（月之暗面），支持超长上下文 |
 | OpenAI | 默认 `gpt-6-astra`，标准 API |
+| ChatGPT 订阅 | 符合条件的账号可在本机授权使用订阅额度，详见 [配置说明](docs/ai-analysis.md#chatgpt-订阅登录) |
 | Claude | 默认 `claude-opus-5-5`，通过原生 Messages API 接入 |
 | Gemini | 默认 `gemini-3.8-flash`，支持 OAuth 2.0 认证 |
+| Antigravity 订阅 | 通过用户自行部署的第三方网关接入；Google 不支持个人订阅的第三方接入，可能影响账号。详见 [风险与配置说明](docs/ai-analysis.md#google-antigravity-订阅与-gemini-api) |
 | **Vertex AI** | **Google Cloud Vertex AI，原生支持**。认证方式：Service Account JSON → JWT → OAuth2 token（自动缓存刷新）。走 Vertex AI 的 OpenAI 兼容端点，支持所有 Gemini 模型 |
 | **AWS Bedrock** | **原生支持**。认证方式：AWS SigV4 签名（手写实现，无 AWS SDK 依赖）。新版 Claude 使用 Mantle Messages API（默认 Opus 5.5），保留旧版 Runtime 配置路径 |
 | MiniMax | 国内版 + 国际版，默认 `MiniMax-M3.1-Flash` |
@@ -356,6 +360,8 @@ LLM 批量阅读聊天记录，自动提炼关键事实（人名、事件、情�
 | 自定义 | 任意兼容 OpenAI 接口的模型服务 |
 
 在设置页面填写提供商、Base URL、API Key 和模型名称即可。支持为 AI 对话和记忆提炼分别指定不同的模型。
+
+AI 首页的联系人和群聊分析在发送前会显示数据范围、实际读取条数和目标模型，可展开检查本次聊天记录、问题及历史对话。自动遮盖仅覆盖部分常见敏感信息，发送前仍应自行检查。
 
 > **Vertex AI 配置**：选择 `Google Vertex AI` provider → 粘贴完整的 Service Account JSON → 填写 GCP Project ID 和 Region → 选择模型（默认 `google/gemini-3.8-flash`）
 >
@@ -398,6 +404,8 @@ WeLink 内置 [MCP（Model Context Protocol）](https://modelcontextprotocol.io/
 完整配置见 [mcp-server/README.md](mcp-server/README.md)。
 
 使用 DeepSeek Harness 的用户也可以安装 [WeLink DSH 插件](plugins/dsh-welink/README.md)。插件默认不授权任何会话、不开放聊天原文；配置授权后可在 DSH 中按日期或关键词查询，支持私聊和群聊。该插件当前随源码提供，需要使用包含 Agent 查询接口的 WeLink 后端。
+
+「设置 → 连接 AI Agent」提供接入步骤和一次性凭据的 WeLink 授权测试。测试通过只表示浏览器到 WeLink 的授权接口可用；DSH 容器的网络和插件配置仍需在 DSH 中验证。
 
 ![DSH 使用 WeLink 插件整理群聊待办的演示](pics/dsh-welink-demo.png)
 

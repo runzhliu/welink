@@ -14,7 +14,11 @@ export function conversationFetch(path: string, init: RequestInit = {}) {
 
 export async function saveConversation(key: string, messages: unknown[]) {
   if (deleting.has(key)) return;
+  // Serialize saves for the same conversation so a slower older request cannot
+  // overwrite a newer snapshot after it has already been stored.
+  const earlier = [...(pending.get(key) ?? [])];
   const request = (async () => {
+    await Promise.allSettled(earlier);
     const response = await conversationFetch('', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, messages }) });
     if (!response.ok) throw new Error('保存对话失败');
   })();

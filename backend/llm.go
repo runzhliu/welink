@@ -146,6 +146,9 @@ func defaultsFor(p *llmConfig) {
 	case "chatgpt":
 		// Never send a subscription bearer token to a user-configurable URL.
 		p.baseURL = chatGPTResource
+	case "antigravity":
+		// This is a user-operated OpenAI-compatible gateway, not an OAuth token.
+		p.baseURL = strings.TrimRight(strings.TrimSpace(p.baseURL), "/")
 	case "openai":
 		if p.baseURL == "" {
 			p.baseURL = "https://api.openai.com/v1"
@@ -298,6 +301,26 @@ func defaultsFor(p *llmConfig) {
 }
 
 // ─── Profile 辅助 ──────────────────────────────────────────────────────────────
+
+// A preview must not silently send to a different provider after another tab
+// edits or removes the selected profile.
+type llmExpectedProfile struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	BaseURL  string `json:"base_url"`
+}
+
+func llmProfileMatches(prefs Preferences, profileID string, expected llmExpectedProfile) bool {
+	if profileID != "" {
+		for _, p := range prefs.LLMProfiles {
+			if p.ID == profileID {
+				return p.Provider == expected.Provider && p.Model == expected.Model && p.BaseURL == expected.BaseURL
+			}
+		}
+		return false
+	}
+	return prefs.LLMProvider == expected.Provider && prefs.LLMModel == expected.Model && prefs.LLMBaseURL == expected.BaseURL
+}
 
 // llmConfigForProfile 根据 profile_id 从 LLMProfiles 中查找配置；
 // 找不到或 profileID 为空时回退到单配置字段（向后兼容）。

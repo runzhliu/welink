@@ -3,6 +3,7 @@ import { Plus, Loader2, Check } from 'lucide-react';
 import axios from 'axios';
 import { ProfileCard } from './ProfileCard';
 import { genId, newProfile, type LLMProfile, type ProviderValue } from './types';
+import { connectionErrorHint } from './connectionErrors';
 
 export const LLMSection: React.FC = () => {
   const [profiles, setProfiles] = useState<LLMProfile[]>([newProfile(1)]);
@@ -13,6 +14,8 @@ export const LLMSection: React.FC = () => {
   // per-profile test state
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testMsgs, setTestMsgs] = useState<Record<string, { ok: boolean; text: string }>>({});
+  const [gatewayModels, setGatewayModels] = useState<Record<string, string[]>>({});
+  const [modelLoadingId, setModelLoadingId] = useState<string | null>(null);
 
   // Gemini OAuth（全局）
   const [geminiClientID, setGeminiClientID] = useState('');
@@ -113,12 +116,27 @@ export const LLMSection: React.FC = () => {
       const r = await axios.post<{ ok: boolean; provider: string; model: string }>('/api/ai/llm/test', { profile_id: profileId });
       setTestMsgs(prev => ({ ...prev, [profileId]: { ok: true, text: `连接成功（${r.data.provider} · ${r.data.model}）` } }));
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? '连接失败';
-      setTestMsgs(prev => ({ ...prev, [profileId]: { ok: false, text: msg } }));
+      const msg = (e as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ?? (e as Error)?.message ?? '';
+      setTestMsgs(prev => ({ ...prev, [profileId]: { ok: false, text: connectionErrorHint(msg) } }));
     } finally {
       setTestingId(null);
-      setTimeout(() => setTestMsgs(prev => { const n = { ...prev }; delete n[profileId]; return n; }), 5000);
     }
+  };
+
+  const handleGatewayModels = async (profileId: string) => {
+    setModelLoadingId(profileId);
+    setTestMsgs(prev => { const next = { ...prev }; delete next[profileId]; return next; });
+    try {
+      await axios.put('/api/preferences/llm', await buildPayload());
+      await loadPreferences();
+      const result = await axios.post<{ models: string[] }>('/api/ai/llm/gateway-models', { profile_id: profileId });
+      setGatewayModels(prev => ({ ...prev, [profileId]: result.data.models }));
+      setTestMsgs(prev => ({ ...prev, [profileId]: { ok: true, text: result.data.models.length ? `获取到 ${result.data.models.length} 个模型，请选择后测试连接。` : '网关没有返回模型列表，可以手动填写模型名。' } }));
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error ?? (e as Error)?.message ?? '';
+      setGatewayModels(prev => ({ ...prev, [profileId]: [] }));
+      setTestMsgs(prev => ({ ...prev, [profileId]: { ok: false, text: connectionErrorHint(msg) } }));
+    } finally { setModelLoadingId(null); }
   };
 
   const handleGeminiAuth = async () => {
@@ -160,6 +178,7 @@ export const LLMSection: React.FC = () => {
 
   return (
     <div className="space-y-3">
+        <fieldset disabled={saving || !!testingId || !!modelLoadingId} className="min-w-0 space-y-3">
         {profiles.map((p, i) => (
           <ProfileCard
             key={p.id}
@@ -174,17 +193,27 @@ export const LLMSection: React.FC = () => {
             onGeminiAuth={handleGeminiAuth}
             onGeminiRevoke={handleGeminiRevoke}
             geminiAuthBusy={geminiAuthBusy}
-            onChange={updated => setProfiles(prev => prev.map(x => x.id === updated.id ? updated : x))}
+            showGeminiAuth={i === profiles.findIndex(profile => profile.provider === 'gemini')}
+            onChange={updated => {
+              setProfiles(prev => prev.map(x => x.id === updated.id ? updated : x));
+              setTestMsgs(prev => { const next = { ...prev }; delete next[updated.id]; return next; });
+              if (updated.base_url !== p.base_url || updated.api_key !== p.api_key || updated.provider !== p.provider) setGatewayModels(prev => ({ ...prev, [updated.id]: [] }));
+            }}
             onDelete={() => setProfiles(prev => prev.filter(x => x.id !== p.id))}
             onSaveAndTest={handleSaveAndTest}
             testing={testingId === p.id}
             testMsg={testMsgs[p.id] ?? null}
+            gatewayModels={gatewayModels[p.id] ?? []}
+            onLoadGatewayModels={handleGatewayModels}
+            gatewayModelsLoading={modelLoadingId === p.id}
           />
         ))}
+        </fieldset>
 
         {/* 添加配置 */}
         <button
           onClick={() => setProfiles(prev => [...prev, newProfile(prev.length + 1)])}
+          disabled={saving || !!testingId || !!modelLoadingId}
           className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-gray-200 dark:border-white/10 text-sm text-gray-400 hover:border-[#07c160] hover:text-[#07c160] transition-colors"
         >
           <Plus size={14} />
@@ -210,7 +239,7 @@ export const LLMSection: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || !!testingId || !!modelLoadingId}
             className="ui-button ui-button-primary"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}

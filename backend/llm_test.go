@@ -161,3 +161,88 @@ func TestOpenAIReasoningContentStream(t *testing.T) {
 		t.Fatalf("thinking=%q answer=%q err=%v", thinking, answer, err)
 	}
 }
+
+func TestAntigravityGatewayProfile(t *testing.T) {
+	requests := 0
+	mockLLMHTTP(t, func(req *http.Request) string {
+		requests++
+		if req.URL.String() != "http://localhost:8045/v1/chat/completions" {
+			t.Fatalf("unexpected gateway URL: %s", req.URL)
+		}
+		if req.Header.Get("Authorization") != "Bearer gateway-test-key" {
+			t.Fatal("gateway key was not sent")
+		}
+		var body openAIRequest
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Model != "gateway-model" || len(body.Messages) == 0 {
+			t.Fatalf("wrong model or messages: %+v", body)
+		}
+		if body.Stream {
+			return "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\ndata: [DONE]\n\n"
+		}
+		return `{"choices":[{"message":{"content":"hello"}}]}`
+	})
+	prefs := Preferences{LLMProfiles: []LLMProfile{{ID: "gateway", Provider: "antigravity", APIKey: "gateway-test-key", BaseURL: " http://localhost:8045/v1/ ", Model: "gateway-model"}}}
+	cfg := llmConfigForProfile("gateway", prefs)
+	if _, err := testLLMConfig(cfg); err != nil {
+		t.Fatalf("connection test: %v", err)
+	}
+	var streamed string
+	if err := dispatchLLMStream(func(c StreamChunk) { streamed += c.Delta }, []LLMMessage{{Role: "user", Content: "synthetic"}}, cfg); err != nil || streamed != "hello" {
+		t.Fatalf("stream: %q, %v", streamed, err)
+	}
+	if got, err := CompleteLLMWithProfile([]LLMMessage{{Role: "user", Content: "synthetic"}}, prefs, "gateway"); err != nil || got != "hello" {
+		t.Fatalf("completion: %q, %v", got, err)
+	}
+	if requests != 3 {
+		t.Fatalf("expected 3 requests, got %d", requests)
+	}
+}
+
+func TestAntigravityGatewayModelDiscovery(t *testing.T) {
+	requests := 0
+	mockLLMHTTP(t, func(req *http.Request) string {
+		requests++
+		if req.URL.String() != "http://localhost:8045/v1/models" || req.Header.Get("Authorization") != "Bearer gateway-test-key" {
+			t.Fatal("incorrect gateway request")
+		}
+		return `{"data":[{"id":"model-b"},{"id":"model-a"},{"id":"model-a"},{"id":""}]}`
+	})
+	cfg := llmConfig{provider: "antigravity", baseURL: "http://localhost:8045/v1", apiKey: "gateway-test-key"}
+	models, err := antigravityGatewayModels(cfg)
+	if err != nil || strings.Join(models, ",") != "model-a,model-b" || requests != 1 {
+		t.Fatalf("models=%v requests=%d err=%v", models, requests, err)
+	}
+	cfg.baseURL = "http://user:secret@localhost:8045/v1"
+	if _, err := antigravityGatewayModels(cfg); err == nil || requests != 1 {
+		t.Fatal("embedded credentials must be rejected before request")
+	}
+	cfg.baseURL = "http://localhost:8045/v1"
+	httpClientFast.Transport = llmTestTransport(func(req *http.Request) (*http.Response, error) {
+		requests++
+		return &http.Response{StatusCode: http.StatusFound, Header: http.Header{"Location": []string{"https://untrusted.example/models"}}, Body: io.NopCloser(strings.NewReader("")), Request: req}, nil
+	})
+	if _, err := antigravityGatewayModels(cfg); err == nil || requests != 2 {
+		t.Fatal("gateway redirects must not be followed")
+	}
+}
+
+func TestPreviewRejectsChangedOrRemovedProfile(t *testing.T) {
+	prefs := Preferences{LLMProvider: "openai", LLMModel: "legacy", LLMProfiles: []LLMProfile{{ID: "one", Provider: "custom", Model: "example", BaseURL: "http://example.test/v1"}}}
+	expected := llmExpectedProfile{Provider: "custom", Model: "example", BaseURL: "http://example.test/v1"}
+	if !llmProfileMatches(prefs, "one", expected) {
+		t.Fatal("unchanged profile rejected")
+	}
+	if llmProfileMatches(prefs, "removed", expected) {
+		t.Fatal("removed profile must not fall back")
+	}
+	expected.BaseURL = "http://other.test/v1"
+	if llmProfileMatches(prefs, "one", expected) {
+		t.Fatal("changed endpoint accepted")
+	}
+	if !llmProfileMatches(prefs, "", llmExpectedProfile{Provider: "openai", Model: "legacy"}) {
+		t.Fatal("legacy profile rejected")
+	}
+}

@@ -1,5 +1,7 @@
 import { Select } from '../common/Select';
 import { ModelAvatar } from '../common/ModelAvatar';
+import { Dialog } from '../common/Dialog';
+import { RelativeTime } from '../common/RelativeTime';
 /**
  * AI 首页 — 以「直接问我」为核心的纯净首页，对话直接在页面内生成
  */
@@ -12,19 +14,20 @@ import { saveConversation } from '../../services/conversationStore';
 import { ConversationHistory } from './ConversationHistory';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { generateShareImage } from '../../utils/shareImage';
+import { SharePreview } from '../common/SharePreview';
 import { Avatar } from '../common/Avatar';
-import { RevealLink } from '../common/RevealLink';
 import { avatarSrc } from '../../utils/avatar';
-import type { ContactStats, TimeRange, ChatMessage, GroupInfo, GroupChatMessage } from '../../types';
+import type { ContactStats, TimeRange, ChatMessage, GroupInfo, GroupChatMessage, BackendStatus } from '../../types';
 import { contactsApi, groupsApi } from '../../services/api';
 import { usePrivacyMode } from '../../contexts/PrivacyModeContext';
 import { isAIConfigError } from '../../utils/aiError';
 import { AIConfigNotice } from '../common/AIConfigNotice';
+import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
+import { ModelComparison } from './ModelComparison';
 
 const PROVIDER_LABELS: Record<string, string> = {
   deepseek: 'DeepSeek', kimi: 'Kimi', gemini: 'Gemini', glm: 'GLM',
-  grok: 'Grok', openai: 'OpenAI', claude: 'Claude', ollama: 'Ollama', custom: '自定义',
+  grok: 'Grok', openai: 'OpenAI', claude: 'Claude', ollama: 'Ollama', custom: '自定义', antigravity: 'Antigravity 网关',
 };
 
 // ─── 可选对象（联系人 or 群聊）──────────────────────────────────────────────
@@ -45,6 +48,12 @@ function itemAvatar(item: SelectableItem): string | undefined {
 
 function itemId(item: SelectableItem): string {
   return (item.kind === 'contact' ? 'c:' : 'g:') + item.data.username;
+}
+
+function buildAnalysisPrompt(context: string, labels: string): string {
+  return context
+    ? `你是一个聊天记录分析助手。以下是${labels}的聊天记录（已脱敏处理）：\n\n${context}\n\n请根据以上聊天记录回答用户的问题，分析时请客观、有洞察力，用中文回答。涉及具体聊天内容的结论请使用对应消息编号引用，例如 [1]；只能引用上面实际存在的编号，不要编造。`
+    : `你是一个聊天记录分析助手，请帮助分析${labels}的聊天记录，用中文回答。`;
 }
 
 // ─── 隐私脱敏 ─────────────────────────────────────────────────────────────────
@@ -247,11 +256,14 @@ const SubjectPicker: React.FC<{
 
 // ─── 消息气泡 ──────────────────────────────────────────────────────────────────
 
+type HomeSource = { id: string; username: string; display_name: string; is_group: boolean; avatar_url?: string; date: string; time: string; content: string; is_mine: boolean; speaker?: string };
+type ProfileItem = { id: string; name: string; provider: string; model?: string; base_url?: string };
 type ChatMsg = {
   role: 'user' | 'assistant';
   content: string;
   thinking?: string;
   streaming?: boolean;
+  sources?: HomeSource[];
   stats?: { elapsed: number; tokensPerSec: number; chars: number; provider?: string; model?: string; timestamp?: number };
 };
 
@@ -265,8 +277,9 @@ const MessageBubble: React.FC<{
   onOpenSettings?: () => void;
 }> = ({ msg, contactName, avatarUrl, prevQuestion, llmProvider, llmModel, onOpenSettings }) => {
   const [copied, setCopied] = useState(false);
-  const [sharing, setSharing] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [thinkingOpen, setThinkingOpen] = useState(false);
+  const [sourceTarget, setSourceTarget] = useState<SearchContextTarget | null>(null);
   const [showPerfMetrics, setShowPerfMetrics] = useState<boolean>(() => {
     try { return localStorage.getItem('welink_home_perf_metrics') === '1'; } catch { return false; }
   });
@@ -297,40 +310,6 @@ const MessageBubble: React.FC<{
     }).catch(() => {});
   };
 
-  const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string; path?: string } | null>(null);
-
-  const handleShare = async () => {
-    if (!msg.content || sharing) return;
-    setSharing(true);
-    setShareMsg(null);
-    try {
-      const savedPath = await generateShareImage({
-        question: prevQuestion,
-        answer: msg.content,
-        contactName,
-        avatarUrl,
-        stats: msg.stats ? {
-          provider: msg.stats.provider,
-          model: msg.stats.model,
-          elapsedSecs: msg.stats.elapsed,
-          tokensPerSec: msg.stats.tokensPerSec,
-          charCount: msg.stats.chars,
-          timestamp: msg.stats.timestamp,
-        } : undefined,
-      });
-      const isAppMode = savedPath.startsWith('/') || /^[A-Z]:\\/i.test(savedPath);
-      setShareMsg({
-        ok: true,
-        text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载',
-        path: isAppMode ? savedPath : undefined,
-      });
-    } catch (err) {
-      setShareMsg({ ok: false, text: `生成失败：${(err as Error).message}` });
-    } finally {
-      setSharing(false);
-      setTimeout(() => setShareMsg(null), 4000);
-    }
-  };
 
   return (
     <div className="flex flex-col gap-1">
@@ -405,6 +384,7 @@ const MessageBubble: React.FC<{
               </div>
             )}
           </div>
+          {!!msg.sources?.length && !msg.streaming && <details className="rounded-lg border dk-border p-2 text-xs"><summary className="cursor-pointer font-semibold">查看引用的聊天记录（{msg.sources.length}）</summary><p className="mt-1 text-gray-500">引用是模型给出的线索，请打开上下文核对；原文保存在本机对话历史中。</p>{msg.sources.map(source => <button key={source.id} type="button" className="mt-2 block w-full text-left rounded bg-gray-50 dark:bg-white/5 p-2 break-all" onClick={() => setSourceTarget({ username: source.username, displayName: source.display_name, date: source.date, targetTime: source.time, targetContent: source.content, isGroup: source.is_group, avatarUrl: source.avatar_url })}>[{source.id}] {source.date} {source.time} · {source.content}</button>)}</details>}
           {msg.content && !msg.streaming && (
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
@@ -416,24 +396,19 @@ const MessageBubble: React.FC<{
                 {copied ? '已复制' : '复制'}
               </button>
               <button
-                onClick={handleShare}
-                disabled={sharing}
+                onClick={() => setShareOpen(true)}
                 className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#576b95] hover:bg-[#f0f4ff] dark:hover:bg-[#576b95]/15 transition-colors disabled:opacity-50"
                 title="保存为图片分享"
               >
-                {sharing ? <Loader2 size={11} className="animate-spin" /> : <Share2 size={11} />}
-                {sharing ? '生成中…' : '分享'}
+                <Share2 size={11} />
+                分享
               </button>
             </div>
           )}
         </div>
       </div>
-      {shareMsg && (
-        <p className={`text-[10px] font-medium ml-9 break-all leading-relaxed ${shareMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
-          {shareMsg.text}
-          {shareMsg.path && <RevealLink path={shareMsg.path} className="ml-2" />}
-        </p>
-      )}
+      {shareOpen && <SharePreview options={{ question: prevQuestion, answer: msg.content, contactName, avatarUrl, stats: msg.stats ? { provider: msg.stats.provider, model: msg.stats.model, elapsedSecs: msg.stats.elapsed, tokensPerSec: msg.stats.tokensPerSec, charCount: msg.stats.chars, timestamp: msg.stats.timestamp } : undefined }} onClose={() => setShareOpen(false)} />}
+      {sourceTarget && <SearchContextModal {...sourceTarget} onClose={() => setSourceTarget(null)} />}
     </div>
   );
 };
@@ -443,6 +418,8 @@ const MessageBubble: React.FC<{
 export interface AIHomePageProps {
   contacts: ContactStats[];
   timeRange: TimeRange;
+  indexStatus?: BackendStatus | null;
+  demoMockActive?: boolean;
   onReselect: () => void;
   onContactClick?: (contact: ContactStats) => void;
   onGroupClick?: (group: GroupInfo) => void;
@@ -453,6 +430,8 @@ export interface AIHomePageProps {
 export const AIHomePage: React.FC<AIHomePageProps> = ({
   contacts,
   timeRange,
+  indexStatus,
+  demoMockActive = false,
   onReselect,
   onContactClick,
   onGroupClick,
@@ -470,6 +449,11 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   const [loading, setLoading] = useState(false);
   const [homeMsgLimit, setHomeMsgLimit] = useState<number | null>(200); // null = 全部
   const [ctxLoading, setCtxLoading] = useState(false);
+  const [contextError, setContextError] = useState('');
+  const [pendingRequest, setPendingRequest] = useState<{ question: string; context: string; labels: string; counts: { name: string; count: number; capped: boolean }[]; history: ChatMsg[]; sources: HomeSource[]; profileId: string; provider: string; model: string; baseURL: string; range: string } | null>(null);
+  const [compareProfileId, setCompareProfileId] = useState('');
+  const [comparison, setComparison] = useState<{ profiles: [ProfileItem, ProfileItem]; messages: { role: string; content: string }[]; sources: HomeSource[] } | null>(null);
+  const prepareGeneration = useRef(0);
   // 快捷 prompt 展开状态：默认 collapsed（只显示前 3 个 + 「更多」），用户可展开全部
   const [presetsExpanded, setPresetsExpanded] = useState<boolean>(() => {
     try { return localStorage.getItem('welink_home_presets_expanded') === '1'; } catch { return false; }
@@ -508,6 +492,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasChatHistory = messages.length > 0;
 
@@ -517,18 +502,17 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   }, []);
 
   // Provider profiles（支持多配置切换）
-  interface ProfileItem { id: string; name: string; provider: string; model?: string; }
   const [profiles, setProfiles] = useState<ProfileItem[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState('');
   useEffect(() => {
     fetch('/api/preferences')
       .then(r => r.json())
-      .then((d: { llm_profiles?: ProfileItem[]; llm_provider?: string; llm_model?: string }) => {
+      .then((d: { llm_profiles?: ProfileItem[]; llm_provider?: string; llm_model?: string; llm_base_url?: string }) => {
         if (d.llm_profiles && d.llm_profiles.length > 0) {
           setProfiles(d.llm_profiles);
           setSelectedProfileId(d.llm_profiles[0].id);
         } else if (d.llm_provider) {
-          const p = { id: '__default__', name: d.llm_provider, provider: d.llm_provider, model: d.llm_model ?? '' };
+          const p = { id: '__default__', name: d.llm_provider, provider: d.llm_provider, model: d.llm_model ?? '', base_url: d.llm_base_url ?? '' };
           setProfiles([p]);
           setSelectedProfileId('__default__');
         }
@@ -538,6 +522,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   const selectedProfile = profiles.find(p => p.id === selectedProfileId) ?? profiles[0];
   const llmProvider = selectedProfile?.provider ?? '';
   const llmModel = selectedProfile?.model ?? '';
+  const llmBaseURL = selectedProfile?.base_url ?? '';
 
   // 联系人与群聊按最近消息排序，按批次浏览而不丢失选择。
   const allRecentItems = useMemo(() => {
@@ -615,7 +600,15 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   };
 
   const scrollToBottom = useCallback(() => {
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+    if (scrollTimerRef.current) return;
+    scrollTimerRef.current = setTimeout(() => {
+      scrollTimerRef.current = null;
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  }, []);
+
+  useEffect(() => () => {
+    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -623,8 +616,13 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   }, [messages.length, hasChatHistory, scrollToBottom]);
 
   const handleNewChat = () => {
+    prepareGeneration.current++;
+    setPendingRequest(null);
+    setContextError('');
     abortRef.current?.abort();
+    abortRef.current = null;
     setMessages([]);
+    setConversationKey(null);
     setLoading(false);
     setCtxLoading(false);
     setInput('');
@@ -656,29 +654,44 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
 
     setLoading(true);
     setCtxLoading(true);
-    setInput('');
+    setContextError('');
+    setInput(q);
+    const generation = ++prepareGeneration.current;
 
     // 加载所有选中对象的消息
     const totalLimit = homeMsgLimit;
     const perItem = totalLimit != null ? Math.max(50, Math.floor(totalLimit / selectedItems.length)) : undefined;
     const sections: string[] = [];
+    const counts: { name: string; count: number; capped: boolean }[] = [];
+    const sources: HomeSource[] = [];
 
     try {
       for (const item of selectedItems) {
+        if (generation !== prepareGeneration.current) return;
         const name = itemName(item);
         if (item.kind === 'contact') {
-          const msgs: ChatMessage[] = await contactsApi.exportMessages(item.data.username) ?? [];
+          const msgs: ChatMessage[] = await contactsApi.exportMessages(item.data.username, timeRange.from ?? undefined, timeRange.to ?? undefined, perItem) ?? [];
           const recent = perItem && msgs.length > perItem ? msgs.slice(-perItem) : msgs;
-          const lines = recent.map(m => `[${m.date ?? ''} ${m.time}] ${m.is_mine ? '我' : name}：${m.content}`);
+          const lines = recent.map(m => { const id = String(sources.length + 1); sources.push({ id, username: item.data.username, display_name: name, is_group: false, avatar_url: itemAvatar(item), date: m.date || '', time: m.time, content: m.content, is_mine: m.is_mine }); return `[${id}] [${m.date ?? ''} ${m.time}] ${m.is_mine ? '我' : name}：${m.content}`; });
+          counts.push({ name, count: recent.length, capped: msgs.length >= 50000 });
           sections.push(`=== 与「${name}」的聊天记录 ===\n${lines.map(l => maskPrivacy(l, name)).join('\n')}`);
         } else {
-          const msgs: GroupChatMessage[] = await groupsApi.exportMessages(item.data.username) ?? [];
+          const msgs: GroupChatMessage[] = await groupsApi.exportMessages(item.data.username, timeRange.from ?? undefined, timeRange.to ?? undefined, perItem) ?? [];
           const recent = perItem && msgs.length > perItem ? msgs.slice(-perItem) : msgs;
-          const lines = recent.map(m => `[${m.date ?? ''} ${m.time}] ${m.speaker || '成员'}：${m.content}`);
+          const lines = recent.map(m => { const id = String(sources.length + 1); sources.push({ id, username: item.data.username, display_name: name, is_group: true, avatar_url: itemAvatar(item), date: m.date || '', time: m.time, content: m.content, is_mine: m.is_mine, speaker: m.speaker }); return `[${id}] [${m.date ?? ''} ${m.time}] ${m.speaker || '成员'}：${m.content}`; });
+          counts.push({ name, count: recent.length, capped: msgs.length >= 50000 });
           sections.push(`=== 「${name}」群聊记录 ===\n${lines.map(l => maskPrivacy(l)).join('\n')}`);
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      if (generation === prepareGeneration.current) {
+        setContextError('读取聊天记录失败，请检查数据目录后重试。本次没有发送请求。');
+        setCtxLoading(false);
+        setLoading(false);
+      }
+      return;
+    }
+    if (generation !== prepareGeneration.current) return;
     setCtxLoading(false);
 
     const ctxText = sections.join('\n\n');
@@ -686,15 +699,24 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
       item.kind === 'contact' ? `「${itemName(item)}」` : `「${itemName(item)}」群`
     ).join('、');
 
-    const userMsg: ChatMsg = { role: 'user', content: q.trim() };
-    const newMessages = [...messages, userMsg];
+    setCompareProfileId('');
+    setPendingRequest({ question: q.trim(), context: ctxText, labels: contactLabels, counts, history: messages, sources, profileId: selectedProfileId, provider: llmProvider, model: llmModel, baseURL: llmBaseURL, range: timeRange.label });
+    setLoading(false);
+  }, [loading, selectedItems, messages, selectedProfileId, llmProvider, llmModel, llmBaseURL, homeMsgLimit, timeRange.from, timeRange.to, timeRange.label]);
+
+  const confirmSend = async () => {
+    if (!pendingRequest || loading) return;
+    const { question, context: ctxText, labels: contactLabels, history, sources, profileId, provider, model, baseURL } = pendingRequest;
+    setPendingRequest(null);
+    setLoading(true);
+    setInput('');
+    const userMsg: ChatMsg = { role: 'user', content: question };
+    const newMessages = [...history, userMsg];
     const assistantIdx = newMessages.length;
     setMessages([...newMessages, { role: 'assistant', content: '', streaming: true }]);
     scrollToBottom();
 
-    const sysPrompt = ctxText
-      ? `你是一个聊天记录分析助手。以下是${contactLabels}的聊天记录（已脱敏处理）：\n\n${ctxText}\n\n请根据以上聊天记录回答用户的问题，分析时请客观、有洞察力，用中文回答，语言自然流畅。`
-      : `你是一个聊天记录分析助手，请帮助分析${contactLabels}的聊天记录，用中文回答。`;
+    const sysPrompt = buildAnalysisPrompt(ctxText, contactLabels);
 
     const abort = new AbortController();
     abortRef.current = abort;
@@ -709,7 +731,8 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
             { role: 'system', content: sysPrompt },
             ...newMessages.map(m => ({ role: m.role, content: m.content })),
           ],
-          profile_id: selectedProfileId !== '__default__' ? selectedProfileId : '',
+          profile_id: profileId !== '__default__' ? profileId : '',
+          expected_profile: { provider, model, base_url: baseURL },
         }),
         signal: abort.signal,
       });
@@ -722,6 +745,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
       const reader = resp.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let completed = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -734,7 +758,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
           try {
             const chunk = JSON.parse(line.slice(6)) as { delta?: string; thinking?: string; done?: boolean; error?: string };
             if (chunk.error) throw new Error(chunk.error);
-            if (chunk.done) break;
+            if (chunk.done) { completed = true; break; }
             if (chunk.delta || chunk.thinking) {
               setMessages(prev => {
                 const next = [...prev];
@@ -753,15 +777,17 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
           }
         }
       }
+      if (!completed) throw new Error('响应中断，结果可能不完整，请重试。');
     } catch (e: unknown) {
-      if ((e as { name?: string }).name === 'AbortError') return;
+      if ((e as { name?: string }).name === 'AbortError' || abortRef.current !== abort) return;
       setMessages(prev => {
         const next = [...prev];
         const msg = next[assistantIdx];
-        if (msg) next[assistantIdx] = { ...msg, content: `❌ ${e instanceof Error ? e.message : '请求失败'}`, streaming: false };
+        if (msg) next[assistantIdx] = { ...msg, content: `${msg.content ? `${msg.content}\n\n` : ''}❌ ${e instanceof Error ? e.message : '请求失败'}`, streaming: false };
         return next;
       });
     } finally {
+      if (abortRef.current !== abort) return;
       const elapsed = (Date.now() - streamStart) / 1000;
       setMessages(prev => {
         const next = [...prev];
@@ -769,14 +795,15 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         if (msg?.streaming) {
           const chars = msg.content.length;
           const tokensPerSec = elapsed > 0.1 ? Math.round(chars / elapsed / 1.5) : 0;
-          next[assistantIdx] = { ...msg, streaming: false, stats: { elapsed, tokensPerSec, chars, provider: llmProvider, model: llmModel, timestamp: Date.now() } };
+          const ids = new Set(Array.from(msg.content.matchAll(/\[(\d+)\]/g), match => match[1]));
+          next[assistantIdx] = { ...msg, streaming: false, sources: sources.filter(source => ids.has(source.id)), stats: { elapsed, tokensPerSec, chars, provider, model, timestamp: Date.now() } };
         }
         return next;
       });
       setLoading(false);
       abortRef.current = null;
     }
-  }, [loading, selectedItems, messages, scrollToBottom, selectedProfileId, llmProvider, llmModel]);
+  };
 
   // 自动保存对话到后端
   useEffect(() => {
@@ -798,6 +825,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
       content: m.content,
       provider: m.stats?.provider,
       model: m.stats?.model,
+      ...(m.sources?.length ? { sources: m.sources } : {}),
     }));
     saveConversation(key, saveData).then(() => {
       window.dispatchEvent(new Event('welink:conversation-saved'));
@@ -810,9 +838,10 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
       const resp = await fetch(`/api/ai/conversations?key=${encodeURIComponent(key)}`);
       const data = await resp.json();
       if (data.messages?.length) {
-        setMessages(data.messages.map((m: { role: string; content: string }) => ({
+        setMessages(data.messages.map((m: { role: string; content: string; sources?: HomeSource[] }) => ({
           role: m.role as 'user' | 'assistant',
           content: m.content,
+          sources: m.sources,
         })));
         setConversationKey(key);
       }
@@ -852,7 +881,9 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
   };
 
   const handleStop = () => {
+    prepareGeneration.current++;
     abortRef.current?.abort();
+    abortRef.current = null;
     setMessages(prev => {
       const next = [...prev];
       const last = next[next.length - 1];
@@ -877,6 +908,23 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
 
   const inputCard = (
     <div className="w-full max-w-2xl mx-auto">
+      <Dialog open={!!pendingRequest} title="确认发送内容" onClose={() => setPendingRequest(null)}>
+        {pendingRequest && <div className="space-y-4">
+          <p className="text-xs text-[var(--text-secondary)]">{demoMockActive ? '目标：演示回复，使用模拟数据，不调用外部模型。' : <>目标：{PROVIDER_LABELS[pendingRequest.provider] ?? (pendingRequest.provider || '未配置模型')}{pendingRequest.model ? ` · ${pendingRequest.model}` : ''}。内容将发送到所选模型服务；第三方网关还会接收这些内容。</>}</p>
+          <p className="text-xs text-[var(--text-secondary)]">数据范围：{pendingRequest.range} · 聊天记录 {pendingRequest.counts.reduce((n, item) => n + item.count, 0)} 条 · 历史对话 {pendingRequest.history.length} 条</p>
+          <p className={`text-xs text-[var(--text-secondary)] break-words${privacyMode ? ' privacy-blur' : ''}`}>{pendingRequest.counts.map(item => `${item.name}：${item.count} 条`).join('；')}</p>
+          {pendingRequest.counts.some(item => item.capped) && <p className="text-xs text-amber-600">部分会话达到读取上限，最多读取最近 50,000 条，较早记录可能未包含。</p>}
+          {pendingRequest.counts.every(item => item.count === 0) && <p className="text-xs text-amber-600">所选范围没有读取到聊天记录，请确认数据范围。</p>}
+          <p className="text-xs text-[var(--text-secondary)]">已尝试遮盖聊天正文中的手机号、身份证、邮箱、卡号及部分私聊联系人名称；提示词标题、问题和历史对话可能仍含姓名或敏感信息，请检查后发送。</p>
+          {profiles.length > 1 && <label className="block text-xs font-semibold">多模型对比（可选）<select aria-label="选择对比模型" className="dk-input mt-2 w-full" value={compareProfileId} onChange={e => setCompareProfileId(e.target.value)}><option value="">只发送给当前模型</option>{profiles.filter(p => p.id !== pendingRequest.profileId).map(p => <option value={p.id} key={p.id}>{p.name || p.provider}{p.model ? ` · ${p.model}` : ''}</option>)}</select>{compareProfileId && <span className="mt-1 block font-normal text-amber-600">相同内容会分别发送给两个模型服务，可能产生两次费用；对比结果不会保存。</span>}</label>}
+          <details><summary className="cursor-pointer text-xs font-semibold text-[var(--accent-text)]">查看将发送的完整提示词、问题和历史对话</summary>
+            <pre className={`mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-[var(--bg-subtle)] p-3 text-xs text-[var(--text-primary)]${privacyMode ? ' privacy-blur' : ''}`}>{buildAnalysisPrompt(pendingRequest.context, pendingRequest.labels)}{'\n\n'}{pendingRequest.history.map(m => `${m.role === 'user' ? '我' : 'AI'}：${m.content}`).join('\n')}{'\n'}我：{pendingRequest.question}</pre>
+          </details>
+          <div className="flex justify-end gap-2"><button type="button" className="ui-button ui-button-secondary" onClick={() => setPendingRequest(null)}>返回修改</button><button type="button" className="ui-button ui-button-primary" onClick={() => { const first = profiles.find(p => p.id === pendingRequest.profileId); const second = profiles.find(p => p.id === compareProfileId); if (compareProfileId && first && second && first.id !== second.id) { setComparison({ profiles: [first, second], sources: pendingRequest.sources, messages: [{ role: 'system', content: buildAnalysisPrompt(pendingRequest.context, pendingRequest.labels) }, ...pendingRequest.history.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: pendingRequest.question }] }); setPendingRequest(null); setCompareProfileId(''); } else { void confirmSend(); } }}>{compareProfileId ? '确认发送给两个模型' : '确认发送'}</button></div>
+        </div>}
+      </Dialog>
+      {comparison && <ModelComparison profiles={comparison.profiles} messages={comparison.messages} sources={comparison.sources} onClose={() => setComparison(null)} />}
+      {contextError && <p role="alert" className="mb-2 text-xs text-red-600 dark:text-red-400">{contextError}</p>}
       <div className={`home-composer ${noSelectionHint ? 'needs-subject' : ''}`}>
         {/* 分析对象选择区 */}
         <div className="px-4 pt-3.5 pb-2.5">
@@ -982,8 +1030,8 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
             </div>
             <p className="mt-1.5 text-[10px] text-gray-300 font-medium">
               {homeMsgLimit === null
-                ? '将使用时间范围内全部记录，消息量大时 token 消耗较高'
-                : `每个联系人/群取最近 ${homeMsgLimit} 条`}
+                ? '每个会话最多读取范围内最近 50,000 条，消息量大时 token 消耗较高'
+                : `选中对象共享约 ${homeMsgLimit} 条的预算，每个对象至少取 50 条`}
               {' · '}手机号等敏感信息自动脱敏
               {homeMsgLimit === null && (
                 <span className="text-orange-400"> · 大量消息建议去联系人页面用混合检索分析</span>
@@ -1088,7 +1136,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         {/* 输入区 */}
         <div className="sticky bottom-0 bg-white/90 dark:bg-[#1c1c1e]/90 backdrop-blur border-t border-gray-100 dark:border-white/10 px-4 sm:px-6 py-4">
           <AIConfigNotice
-            visible={profiles.length === 0}
+            visible={profiles.length === 0 && !demoMockActive}
             onOpenSettings={onOpenSettings}
             className="max-w-3xl mx-auto mb-3"
           />
@@ -1119,6 +1167,10 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
             重新选择
           </button>
         </div>
+        {indexStatus && <p className="mt-2 text-xs text-[var(--text-secondary)]" role="status">
+          {indexStatus.last_error ? '索引出现问题，请重新选择时间范围并重试' : indexStatus.is_indexing ? '正在更新索引' : indexStatus.is_initialized ? `索引已就绪 · ${indexStatus.total_cached} 位联系人` : '索引尚未完成'}
+          {!indexStatus.last_error && !!indexStatus.last_indexed_at && <> · 本次服务运行期间索引完成于 <RelativeTime ts={indexStatus.last_indexed_at} /></>}
+        </p>}
       </div>
 
       {/* 模式切换 */}
@@ -1142,7 +1194,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
         <button type="button" onClick={() => setMode('reply')} aria-pressed={mode === 'reply'}>我的口吻回复</button>
       </div>
 
-      {mode === 'reply' ? <ReplyAssistant onOpenSettings={onOpenSettings} /> : mode === 'cross' ? (
+      {mode === 'reply' ? <ReplyAssistant contacts={contacts} onOpenSettings={onOpenSettings} /> : mode === 'cross' ? (
         <div className="w-full max-w-2xl mx-auto" style={{ minHeight: 400 }}>
           <CrossContactQA
             onOpenSettings={onOpenSettings}
@@ -1185,7 +1237,7 @@ export const AIHomePage: React.FC<AIHomePageProps> = ({
 
       {/* AI 未配置提示（优先级最高，覆盖在输入卡片之前） */}
       <AIConfigNotice
-        visible={profiles.length === 0}
+        visible={profiles.length === 0 && !demoMockActive}
         onOpenSettings={onOpenSettings}
         className="w-full max-w-2xl mb-4"
       />

@@ -6,6 +6,8 @@
 
 import { useSyncExternalStore } from 'react';
 
+export interface AnalysisSource { id: string; username: string; display_name: string; is_group: boolean; date: string; time: string; content: string; is_mine: boolean; speaker?: string }
+
 export interface AnalysisMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -17,6 +19,7 @@ export interface AnalysisMessage {
   tokensPerSec?: number;
   charCount?: number;
   timestamp?: number; // Unix ms，回答完成时刻
+  sources?: AnalysisSource[];
 }
 
 export interface AnalysisState {

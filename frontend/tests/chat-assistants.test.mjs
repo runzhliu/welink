@@ -33,8 +33,8 @@ const { ReplyAssistant } = require('../src/components/dashboard/ReplyAssistant.t
 const { CrossContactQA } = require('../src/components/dashboard/CrossContactQA.tsx');
 const { AIHomePage } = require('../src/components/dashboard/AIHomePage.tsx');
 Module._load = load;
-const { searchApi, groupsApi } = require('../src/services/api.ts');
-const oldFetch = globalThis.fetch, oldSearch = searchApi.global, oldGroups = groupsApi.getList;
+const { searchApi, groupsApi, contactsApi } = require('../src/services/api.ts');
+const oldFetch = globalThis.fetch, oldSearch = searchApi.global, oldGroups = groupsApi.getList, oldExport = contactsApi.exportMessages;
 let root, host, requests;
 const json = data => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
 function stream(parts) {
@@ -44,7 +44,7 @@ function stream(parts) {
 const buttons = text => [...host.querySelectorAll('button')].filter(b => b.textContent.trim() === text);
 async function click(button) { assert.ok(button); await act(async () => button.click()); }
 beforeEach(() => { requests = []; host = document.createElement('div'); document.body.append(host); root = createRoot(host); });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); globalThis.fetch = oldFetch; searchApi.global = oldSearch; groupsApi.getList = oldGroups; });
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); globalThis.fetch = oldFetch; searchApi.global = oldSearch; groupsApi.getList = oldGroups; contactsApi.exportMessages = oldExport; });
 after(async () => window.happyDOM.close());
 
 test('回复助手只发送输入内容和所选模型，支持编辑结果', async () => {
@@ -100,4 +100,150 @@ test('最近聊天按时间换批并保留已选择的联系人', async () => {
   assert.match(host.textContent, /已选 1 个对话/);
   await click(buttons('换一批')[0]);
   assert.ok(byName('联系人0'));
+});
+
+test('分析前预览真实范围和内容，确认后才发送；读取失败不发送', async () => {
+  globalThis.fetch = async (url, options = {}) => {
+    requests.push({ url, options });
+    if (url === '/api/preferences') return json({ llm_profiles: [{ id: 'p1', provider: 'antigravity', model: 'synthetic-model' }] });
+    if (url === '/api/ai/analyze') return stream(['data: {"delta":"合成回复"}\n\ndata: {"done":true}\n\n']);
+    return json({ ok: true });
+  };
+  groupsApi.getList = async () => [];
+  let range;
+  contactsApi.exportMessages = async (...args) => { range = args; return [{ date: '2024-01-01', time: '12:00', is_mine: false, content: '合成测试消息' }]; };
+  const contacts = [{ username: 'fake', remark: '测试联系人', nickname: '', total_messages: 1, last_message_time: '2024-01-01' }];
+  await act(async () => root.render(React.createElement(AIHomePage, { contacts, timeRange: { from: 100, to: 200, label: '测试范围' }, indexStatus: { is_initialized: true, is_indexing: false, total_cached: 1, last_indexed_at: Math.floor(Date.now() / 1000) }, onReselect() {} })));
+  assert.match(host.textContent, /索引已就绪 · 1 位联系人/);
+  await click([...host.querySelector('[aria-label="最近聊天"]').querySelectorAll('button')].find(b => b.textContent.includes('测试联系人')));
+  await act(async () => Simulate.change(host.querySelector('textarea[aria-label="输入分析问题"]'), { target: { value: '总结一下' } }));
+  await click(host.querySelector('[aria-label="发送问题"]'));
+  assert.deepEqual(range, ['fake', 100, 200, 200]);
+  assert.equal(requests.filter(r => r.url === '/api/ai/analyze').length, 0);
+  const dialog = document.querySelector('[role="dialog"]');
+  assert.match(dialog.textContent, /测试范围 · 聊天记录 1 条/);
+  assert.match(dialog.textContent, /合成测试消息/);
+  await click([...dialog.querySelectorAll('button')].find(b => b.textContent === '返回修改'));
+  assert.equal(document.querySelector('[role="dialog"]'), null);
+  contactsApi.exportMessages = async () => { throw new Error('private path'); };
+  await click(host.querySelector('[aria-label="发送问题"]'));
+  assert.match(host.textContent, /读取聊天记录失败/);
+  assert.equal(requests.filter(r => r.url === '/api/ai/analyze').length, 0);
+  contactsApi.exportMessages = async () => [{ date: '2024-01-01', time: '12:00', is_mine: false, content: '合成测试消息' }];
+  await click(host.querySelector('[aria-label="发送问题"]'));
+  await click([...document.querySelector('[role="dialog"]').querySelectorAll('button')].find(b => b.textContent === '确认发送'));
+  const sent = JSON.parse(requests.find(r => r.url === '/api/ai/analyze').options.body);
+  assert.equal(sent.profile_id, 'p1');
+  assert.deepEqual(sent.expected_profile, { provider: 'antigravity', model: 'synthetic-model', base_url: '' });
+  assert.match(sent.messages[0].content, /合成测试消息/);
+  const firstKeys = requests.filter(r => r.url === '/api/ai/conversations' && r.options.method === 'PUT').map(r => JSON.parse(r.options.body).key);
+  assert.ok(firstKeys.length > 0);
+  await click(host.querySelector('[title="返回首页"]'));
+  await new Promise(resolve => setTimeout(resolve, 5));
+  await act(async () => Simulate.change(host.querySelector('textarea[aria-label="输入分析问题"]'), { target: { value: '新的问题' } }));
+  await click(host.querySelector('[aria-label="发送问题"]'));
+  await click([...document.querySelector('[role="dialog"]').querySelectorAll('button')].find(b => b.textContent === '确认发送'));
+  const allKeys = requests.filter(r => r.url === '/api/ai/conversations' && r.options.method === 'PUT').map(r => JSON.parse(r.options.body).key);
+  assert.ok(allKeys.some(key => key !== firstKeys[0]), '返回首页后新对话不能覆盖之前的记录');
+});
+
+test('响应没有完成事件时显示中断而非正常结束', async () => {
+  globalThis.fetch = async url => url === '/api/preferences'
+    ? json({ llm_profiles: [{ id: 'p1', provider: 'custom', model: 'synthetic' }] })
+    : url === '/api/ai/analyze' ? stream(['data: {"delta":"未完成"}\n\n']) : json({ ok: true });
+  groupsApi.getList = async () => [];
+  contactsApi.exportMessages = async () => [{ date: '2024-01-01', time: '12:00', is_mine: false, content: '合成消息' }];
+  const contacts = [{ username: 'fake', remark: '联系人', nickname: '', total_messages: 1, last_message_time: '2024-01-01' }];
+  await act(async () => root.render(React.createElement(AIHomePage, { contacts, timeRange: { from: null, to: null, label: '全部' }, onReselect() {} })));
+  await click([...host.querySelector('[aria-label="最近聊天"]').querySelectorAll('button')].find(b => b.textContent.includes('联系人')));
+  await act(async () => Simulate.change(host.querySelector('textarea[aria-label="输入分析问题"]'), { target: { value: '总结一下' } }));
+  await click(host.querySelector('[aria-label="发送问题"]'));
+  await click([...document.querySelector('[role="dialog"]').querySelectorAll('button')].find(b => b.textContent === '确认发送'));
+  assert.match(host.textContent, /响应中断，结果可能不完整/);
+});
+
+test('演示模式无需配置真实模型，预览明确说明使用模拟回复', async () => {
+  globalThis.fetch = async url => url === '/api/preferences' ? json({}) : url === '/api/ai/analyze' ? stream(['data: {"delta":"演示回复"}\n\ndata: {"done":true}\n\n']) : json({ ok: true });
+  groupsApi.getList = async () => [];
+  contactsApi.exportMessages = async () => [{ date: '2024-01-01', time: '12:00', is_mine: false, content: '演示消息' }];
+  const contacts = [{ username: 'fake', remark: '联系人', nickname: '', total_messages: 1, last_message_time: '2024-01-01' }];
+  await act(async () => root.render(React.createElement(AIHomePage, { contacts, timeRange: { from: null, to: null, label: '全部' }, demoMockActive: true, onReselect() {} })));
+  assert.doesNotMatch(host.textContent, /还未配置 AI 接口/);
+  await click([...host.querySelector('[aria-label="最近聊天"]').querySelectorAll('button')].find(b => b.textContent.includes('联系人')));
+  await act(async () => Simulate.change(host.querySelector('textarea[aria-label="输入分析问题"]'), { target: { value: '总结一下' } }));
+  await click(host.querySelector('[aria-label="发送问题"]'));
+  assert.match(document.querySelector('[role="dialog"]').textContent, /演示回复，使用模拟数据，不调用外部模型/);
+  await click([...document.querySelector('[role="dialog"]').querySelectorAll('button')].find(b => b.textContent === '确认发送'));
+  assert.match(host.textContent, /演示回复/);
+});
+
+test('口吻回复只发送用户勾选的历史示例，并在发送前确认', async () => {
+  globalThis.fetch = async (url, options = {}) => {
+    requests.push({ url, options });
+    if (String(url).endsWith('/preferences')) return json({ llm_profiles: [{ id: 'p1', provider: 'test' }] });
+    return stream(['data: {"delta":"好的"}\n\ndata: {"done":true}\n\n']);
+  };
+  contactsApi.exportMessages = async () => [
+    { date: '2024-01-01', time: '10:00', is_mine: true, type: 1, content: '选中的回复' },
+    { date: '2024-01-01', time: '10:01', is_mine: true, type: 1, content: '没有勾选的回复' },
+    { date: '2024-01-01', time: '10:02', is_mine: false, type: 1, content: '不能作为示例的文本' },
+  ];
+  await act(async () => root.render(React.createElement(ReplyAssistant, { contacts: [{ username: 'friend', remark: '朋友' }] })));
+  await act(async () => Simulate.change(host.querySelector('textarea'), { target: { value: '周末吃饭吗' } }));
+  await act(async () => Simulate.change(host.querySelector('[aria-label="选择参考联系人"]'), { target: { value: 'friend' } }));
+  assert.doesNotMatch(host.textContent, /不能作为示例的文本/);
+  await act(async () => Simulate.change(host.querySelector('input[type="checkbox"]'), { target: { checked: true } }));
+  await click(buttons('生成草稿')[0]);
+  assert.equal(requests.filter(r => r.options.method === 'POST').length, 0);
+  assert.match(document.querySelector('[role="dialog"]').textContent, /选中的回复/);
+  await click([...document.querySelector('[role="dialog"]').querySelectorAll('button')].find(b => b.textContent === '确认生成'));
+  const payload = JSON.parse(requests.find(r => r.url.endsWith('/ai/analyze')).options.body);
+  assert.match(payload.messages[1].content, /选中的回复/);
+  assert.doesNotMatch(payload.messages[1].content, /没有勾选的回复/);
+});
+
+test('首页引用只保存模型实际引用的来源并可打开上下文', async () => {
+  globalThis.fetch = async (url, options = {}) => {
+    requests.push({ url, options });
+    if (url === '/api/preferences') return json({ llm_profiles: [{ id: 'p1', provider: 'test' }] });
+    if (url === '/api/ai/analyze') return stream(['data: {"delta":"依据 [1] 和无效编号 [99]"}\n\ndata: {"done":true}\n\n']);
+    return json({ ok: true });
+  };
+  groupsApi.getList = async () => [];
+  contactsApi.exportMessages = async () => [{ date: '2024-01-01', time: '12:00', is_mine: false, content: '测试引用' }, { date: '2024-01-02', time: '12:00', is_mine: true, content: '未引用' }];
+  await act(async () => root.render(React.createElement(AIHomePage, { contacts: [{ username: 'fake', remark: '联系人', nickname: '', total_messages: 2, last_message_time: '2024-01-02' }], timeRange: { from: null, to: null, label: '全部' }, onReselect() {} })));
+  await click([...host.querySelector('[aria-label="最近聊天"]').querySelectorAll('button')].find(b => b.textContent.includes('联系人')));
+  await act(async () => Simulate.change(host.querySelector('textarea[aria-label="输入分析问题"]'), { target: { value: '总结' } }));
+  await click(host.querySelector('[aria-label="发送问题"]'));
+  await click([...document.querySelector('[role="dialog"]').querySelectorAll('button')].find(b => b.textContent === '确认发送'));
+  const payload = JSON.parse(requests.find(r => r.url === '/api/ai/analyze').options.body);
+  assert.match(payload.messages[0].content, /\[1\].*测试引用/);
+  assert.match(host.textContent, /查看引用的聊天记录（1）/);
+  await click([...host.querySelectorAll('button')].find(b => b.textContent.includes('[1]') && b.textContent.includes('测试引用')));
+  assert.match(host.querySelector('[data-source="fake"]').textContent, /测试引用/);
+  const saved = JSON.parse(requests.filter(r => r.url === '/api/ai/conversations' && r.options.method === 'PUT').at(-1).options.body);
+  assert.equal(saved.messages.at(-1).sources.length, 1);
+});
+
+test('双模型对比必须确认，两个请求的材料相同', async () => {
+  globalThis.fetch = async (url, options = {}) => {
+    requests.push({ url, options });
+    if (url === '/api/preferences') return json({ llm_profiles: [{ id: 'p1', provider: 'one' }, { id: 'p2', provider: 'two' }] });
+    if (url === '/api/ai/analyze') return stream(['data: {"delta":"模型回答"}\n\ndata: {"done":true}\n\n']);
+    return json({ ok: true });
+  };
+  groupsApi.getList = async () => [];
+  contactsApi.exportMessages = async () => [{ date: '2024-01-01', time: '12:00', is_mine: false, content: '合成材料' }];
+  await act(async () => root.render(React.createElement(AIHomePage, { contacts: [{ username: 'fake', remark: '联系人', nickname: '', total_messages: 1, last_message_time: '2024-01-01' }], timeRange: { from: null, to: null, label: '全部' }, onReselect() {} })));
+  await click([...host.querySelector('[aria-label="最近聊天"]').querySelectorAll('button')].find(b => b.textContent.includes('联系人')));
+  await act(async () => Simulate.change(host.querySelector('textarea[aria-label="输入分析问题"]'), { target: { value: '总结' } }));
+  await click(host.querySelector('[aria-label="发送问题"]'));
+  const dialog = document.querySelector('[role="dialog"]');
+  await act(async () => Simulate.change(dialog.querySelector('[aria-label="选择对比模型"]'), { target: { value: 'p2' } }));
+  assert.equal(requests.filter(r => r.url === '/api/ai/analyze').length, 0);
+  await click([...dialog.querySelectorAll('button')].find(b => b.textContent === '确认发送给两个模型'));
+  const sent = requests.filter(r => r.url === '/api/ai/analyze').map(r => JSON.parse(r.options.body));
+  assert.deepEqual(sent.map(p => p.profile_id).sort(), ['p1', 'p2']);
+  assert.deepEqual(sent[0].messages, sent[1].messages);
+  assert.match(document.querySelector('[role="dialog"]').textContent, /模型回答对比/);
 });

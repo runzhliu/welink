@@ -5,6 +5,7 @@ import type { ContactStats, GroupInfo } from '../../../types';
 import { agentAccessApi, type AgentAccessStatus } from '../../../services/agentAccessApi';
 import { sftApi } from '../../../services/sftApi';
 import { Dialog } from '../../common/Dialog';
+import { getServerURL } from '../../../runtimeConfig';
 
 interface Props { contacts: ContactStats[]; groups: GroupInfo[]; demo: boolean; privacyMode: boolean }
 
@@ -22,6 +23,7 @@ export const AgentAccessSection: React.FC<Props> = ({ contacts, groups, demo, pr
   const [secret, setSecret] = useState('');
   const [locked, setLocked] = useState(false);
   const [pin, setPin] = useState('');
+  const [probe, setProbe] = useState('');
   const options = useMemo(() => {
     const all = [
       ...contacts.filter(c => c.username).map(c => ({ id: c.username, label: c.remark || c.nickname || c.username, kind: '私聊' })),
@@ -66,6 +68,17 @@ export const AgentAccessSection: React.FC<Props> = ({ contacts, groups, demo, pr
     try { await navigator.clipboard.writeText(secret); setNotice('凭据已复制，请保存到 DSH 的受保护文件。'); }
     catch { setError('无法复制，请手动保存凭据。'); }
   };
+  const testCredential = async () => {
+    const username = status?.conversations?.[0];
+    if (!secret || !username) return;
+    setBusy(true); setProbe('');
+    try {
+      const response = await fetch(`${getServerURL().replace(/\/+$/, '')}/api/agent/query`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` }, body: JSON.stringify({ action: 'dates', username, max_items: 1, max_chars: 20, offset: 0 }) });
+      if (!response.ok) throw new Error(response.status === 401 ? '凭据无效或已过期，请重新授权。' : response.status === 403 ? '会话或当前账号不在授权范围内。' : `服务返回 ${response.status}，请检查数据索引和服务状态。`);
+      setProbe('WeLink 授权接口测试通过。此测试从浏览器发起，仍需在 DSH 容器内验证网络和插件配置。');
+    } catch (e) { setProbe(e instanceof Error ? e.message : '无法连接 WeLink 授权接口。'); }
+    finally { setBusy(false); }
+  };
   const stateText: Record<AgentAccessStatus['state'], string> = {
     none: '尚未授权', active: '授权有效', expired: '授权已过期', legacy: '旧版授权未绑定当前账号', invalid: '授权文件无法读取', other_account: '授权属于其他数据账号',
   };
@@ -75,6 +88,7 @@ export const AgentAccessSection: React.FC<Props> = ({ contacts, groups, demo, pr
     <div className="flex items-center gap-2 mb-3"><Bot size={18} className="text-[var(--accent-text)]" /><h3 className="text-base font-semibold dk-text">连接 AI Agent</h3></div>
     <p className="text-sm text-[var(--text-secondary)] mb-4">为 DSH 等工具创建单个、限时的只读授权。聊天原文默认不开放。</p>
     <div className="dk-card dk-border border rounded-xl p-5 space-y-4">
+      <div className="rounded-lg bg-[var(--bg-subtle)] p-3 text-xs leading-relaxed text-[var(--text-secondary)]"><strong className="dk-text">DSH 接入步骤</strong><ol className="mt-2 list-decimal space-y-1 pl-4"><li>在 DSH 运行环境安装 WeLink 插件，并确认插件已启用。</li><li>选择允许查询的会话和操作，创建授权并安全保存一次性凭据。</li><li>配置 DSH 的 WeLink 地址、凭据文件和会话白名单。独立容器中的 127.0.0.1 是容器自身。</li><li>在 DSH 容器的插件目录运行 node diagnose.js，检查网络和凭据；再在 DSH 中请求查看获授权会话的日期，确认插件已加载。</li></ol></div>
       {demo ? <p className="text-sm text-[var(--text-secondary)]">公开演示仅展示功能，不支持创建 Agent 授权。</p> : <>
         {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         {notice && <p role="status" className="text-sm text-[var(--accent-text)]">{notice}</p>}
@@ -100,7 +114,7 @@ export const AgentAccessSection: React.FC<Props> = ({ contacts, groups, demo, pr
           <p className="text-xs text-[var(--text-secondary)]">DSH 可能保存查询结果；使用远程模型时，返回的内容可能发送给所选服务。</p>
           <button type="button" className="ui-button ui-button-primary" disabled={!selected.length || busy} onClick={() => setConfirm('create')}>检查并创建授权</button>
         </>}
-        {secret && <div className="border dk-border rounded-lg p-4 space-y-3"><strong className="text-sm">一次性凭据</strong><p className="text-xs text-[var(--text-secondary)]">只显示这一次。请保存到 DSH 运行环境中仅本人可读的文件，再设置 WELINK_TOKEN_FILE 为该文件的绝对路径。不要粘贴到聊天或分享截图。</p><input aria-label="一次性 Agent 凭据" type="password" readOnly value={secret} className="dk-input w-full" /><div className="flex flex-wrap gap-2"><button type="button" className="ui-button ui-button-secondary" onClick={() => void copy()}><Copy size={14} />复制凭据</button><button type="button" className="ui-button ui-button-secondary" onClick={() => setSecret('')}>我已保存，关闭</button></div></div>}
+        {secret && <div className="border dk-border rounded-lg p-4 space-y-3"><strong className="text-sm">一次性凭据</strong><p className="text-xs text-[var(--text-secondary)]">只显示这一次。请保存到 DSH 运行环境中仅本人可读的文件，再设置 WELINK_TOKEN_FILE 为该文件的绝对路径。不要粘贴到聊天或分享截图。</p><input aria-label="一次性 Agent 凭据" type="password" readOnly value={secret} className="dk-input w-full" /><div className="flex flex-wrap gap-2"><button type="button" className="ui-button ui-button-secondary" onClick={() => void copy()}><Copy size={14} />复制凭据</button><button type="button" className="ui-button ui-button-secondary" disabled={busy} onClick={() => void testCredential()}>测试 WeLink 授权</button><button type="button" className="ui-button ui-button-secondary" onClick={() => { setSecret(''); setProbe(''); }}>我已保存，关闭</button></div>{probe && <p role="status" className="text-xs text-[var(--text-secondary)]">{probe}</p>}</div>}
         <p className="text-xs text-[var(--text-secondary)]">当前仅支持一个授权；重新授权前须撤销旧授权。撤销只阻止后续查询，无法删除 DSH 或模型服务已经保存的数据。<a className="ml-1 text-[var(--accent-text)] underline" href="https://github.com/runzhliu/welink/tree/main/plugins/dsh-welink" target="_blank" rel="noopener noreferrer">查看 DSH 连接指南</a></p>
       </>}
     </div>

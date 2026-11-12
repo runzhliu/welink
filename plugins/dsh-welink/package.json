@@ -19,6 +19,7 @@
   "files": [
     "index.js",
     "client.js",
+    "diagnose.js",
     "cordis.patch.yml",
     "authorize-container.sh",
     "compose.welink.example.yml",

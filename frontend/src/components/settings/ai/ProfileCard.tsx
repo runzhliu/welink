@@ -23,9 +23,13 @@ export const ProfileCard: React.FC<{
   onSaveAndTest: (profileId: string) => void;
   testing: boolean;
   testMsg: { ok: boolean; text: string } | null;
+  gatewayModels?: string[];
+  onLoadGatewayModels?: (profileId: string) => void;
+  gatewayModelsLoading?: boolean;
+  showGeminiAuth?: boolean;
 }> = ({ profile, index, total, geminiAuthorized, geminiClientID, geminiClientSecret,
          onGeminiClientIDChange, onGeminiClientSecretChange, onGeminiAuth, onGeminiRevoke,
-         geminiAuthBusy, onChange, onDelete, onSaveAndTest, testing, testMsg }) => {
+         geminiAuthBusy, onChange, onDelete, onSaveAndTest, testing, testMsg, gatewayModels = [], onLoadGatewayModels, gatewayModelsLoading = false, showGeminiAuth = index === 0 }) => {
   const provInfo = PROVIDERS.find(p => p.value === profile.provider) ?? PROVIDERS[0];
   const defaultModel = getDefaultModel(profile.provider, profile.base_url);
   const model = profile.model || defaultModel;
@@ -111,11 +115,32 @@ export const ProfileCard: React.FC<{
         </div>
       )}
 
+      {profile.provider === 'gemini' && (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-3 space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+          <p className="font-semibold text-[var(--text-primary)]">Google AI / Antigravity 订阅用户</p>
+          <p>这里使用 Gemini API Key 或 Google API 授权，额度和计费与个人订阅分开；下方 Google OAuth 登录不会启用 Antigravity 订阅额度。如需使用第三方网关，请在提供商中选择 Antigravity 订阅。</p>
+          <p>使用云端模型分析时，选定的聊天内容会发送给 Google。</p>
+          <button type="button" onClick={() => openProviderUrl('https://antigravity.google/docs/faq')} className="inline-flex items-center gap-1 font-semibold text-[var(--accent-text)] hover:underline">
+            查看 Google 官方说明 <ExternalLink size={12} />
+          </button>
+        </div>
+      )}
+
+      {profile.provider === 'antigravity' && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-500/10 dark:border-amber-500/30 p-3 space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+          <p className="font-semibold text-[var(--text-primary)]">第三方网关接入 · 请先了解风险</p>
+          <p>Google 不支持第三方软件使用 Antigravity 个人订阅，账号可能被限制或停用；网关协议、模型和额度也可能随时变化。</p>
+          <p>请自行安装并登录可信的 OpenAI 兼容 Antigravity 网关，在下方填写网关密钥、地址和网关提供的模型名。不要填写 Google 密码或 OAuth 令牌。分析内容会发送给网关及其上游服务，请确认你信任它们。</p>
+          <p>本机示例：http://127.0.0.1:8045/v1；WeLink 运行在 Docker 时，宿主机网关通常使用 http://host.docker.internal:8045/v1。</p>
+          <button type="button" onClick={() => openProviderUrl('https://antigravity.google/docs/faq')} className="inline-flex items-center gap-1 font-semibold text-[var(--accent-text)] hover:underline">查看 Google 官方说明 <ExternalLink size={12} /></button>
+        </div>
+      )}
+
       {/* API Key */}
       <div>
         <label htmlFor={`key-${profile.id}`} className="flex items-center gap-2 text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wide">
           <span>
-            {profile.provider === 'vertex' ? 'Service Account JSON' : 'API Key'}
+            {profile.provider === 'vertex' ? 'Service Account JSON' : profile.provider === 'antigravity' ? '网关 API Key' : 'API Key'}
             {profile.provider === 'ollama' && <span className="ml-1 font-normal normal-case text-gray-400">（本地无需填写）</span>}
             {profile.provider === 'gemini' && geminiAuthorized && <span className="ml-1 font-normal normal-case text-gray-400">（OAuth 已授权，可留空）</span>}
             {profile.provider === 'bedrock' && <span className="ml-1 font-normal normal-case text-gray-400">（格式：AccessKeyId:SecretAccessKey）</span>}
@@ -169,6 +194,7 @@ export const ProfileCard: React.FC<{
               : profile.provider === 'ollama' ? '留空即可'
               : profile.provider === 'gemini' && geminiAuthorized ? '已通过 OAuth 授权'
               : profile.provider === 'bedrock' ? 'AccessKeyId:SecretAccessKey'
+              : profile.provider === 'antigravity' ? '请输入网关 API Key，不要填写 Google 令牌'
               : '请输入 API Key'
           }
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white font-mono dk-input"
@@ -185,9 +211,9 @@ export const ProfileCard: React.FC<{
       )}
 
       {/* Gemini OAuth（全局唯一，仅在第一个 Gemini profile 处显示） */}
-      {profile.provider === 'gemini' && index === 0 && (
+      {profile.provider === 'gemini' && showGeminiAuth && (
         <div className="rounded-lg border border-blue-100 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 p-3 space-y-2">
-          <p className="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wide">Google OAuth 登录（可选）</p>
+          <p className="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wide">Google API OAuth 授权（可选，与 Antigravity 订阅无关）</p>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-[10px] font-bold text-blue-600 dark:text-blue-400 mb-1">Client ID</label>
@@ -227,7 +253,7 @@ export const ProfileCard: React.FC<{
         </label>
         <div className="flex items-center gap-2">
           <input aria-label="Base URL" type="text" value={profile.base_url ?? ''} onChange={e => set('base_url', e.target.value)}
-            placeholder={defaultBaseURL ? `默认：${defaultBaseURL}` : '请输入 Base URL'}
+            placeholder={defaultBaseURL ? `默认：${defaultBaseURL}` : profile.provider === 'antigravity' ? '例如 http://127.0.0.1:8045/v1' : '请输入 Base URL'}
             className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white font-mono dk-input" />
           {profile.provider === 'ollama' && (
             <button onClick={() => set('base_url', 'http://host.docker.internal:11434/v1')}
@@ -244,8 +270,13 @@ export const ProfileCard: React.FC<{
           模型 <span className="font-normal normal-case">{defaultModel ? '（留空使用默认）' : '（必填）'}</span>
         </label>
         <input aria-label="模型名称" type="text" value={profile.model ?? ''} onChange={e => set('model', e.target.value)}
-          placeholder={defaultModel ? `默认：${defaultModel}` : profile.provider === 'azure' ? '请输入 Azure 部署名称' : '请输入模型名'}
+          placeholder={defaultModel ? `默认：${defaultModel}` : profile.provider === 'azure' ? '请输入 Azure 部署名称' : profile.provider === 'antigravity' ? '请输入网关支持的模型名' : '请输入模型名'}
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#07c160] bg-white font-mono dk-input" />
+        {profile.provider === 'antigravity' && <div className="mt-2 space-y-2">
+          <button type="button" onClick={() => onLoadGatewayModels?.(profile.id)} disabled={gatewayModelsLoading || testing} className="ui-button ui-button-secondary">{gatewayModelsLoading ? '正在获取…' : '保存并获取网关模型'}</button>
+          {gatewayModels.length > 0 && <Select aria-label="选择网关模型" value={profile.model ?? ''} onValueChange={value => set('model', value)} className="w-full ui-select"><option value="">选择网关模型</option>{gatewayModels.map(id => <option key={id} value={id}>{id}</option>)}</Select>}
+          <p className="text-xs text-[var(--text-muted)]">网关没有提供模型列表时可手动填写。模型是否属于订阅取决于网关配置。</p>
+        </div>}
       </div>
 
       {/* MiniMax 思考模型提示 */}

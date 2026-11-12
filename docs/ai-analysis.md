@@ -8,6 +8,7 @@
 - [LLM 配置](#llm-配置)
 - [ChatGPT 订阅登录](#chatgpt-订阅登录)
 - [Claude 订阅的 API 额度](#claude-订阅的-api-额度)
+- [Google Antigravity 订阅与 Gemini API](#google-antigravity-订阅与-gemini-api)
 - [Embedding 配置](#embedding-配置)
 - [Gemini OAuth 2.0 授权](#gemini-oauth-20-授权)
 - [全量分析模式](#全量分析模式)
@@ -90,6 +91,19 @@ Claude 订阅与 Claude API 是不同服务。Anthropic 当前不允许第三方
 
 符合条件的 Claude Max、Ultra 和 Team 订阅包含可领取的 Claude API 额度。用户可在 Claude 的账单设置中，将订阅与有权限管理的 Claude Console 组织关联，再把该组织的 API Key 填入 WeLink 的 Claude 配置。Pro 订阅不包含该项额度，具体资格、额度、有效期和使用规则以 [Anthropic 官方说明](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers)为准。
 
+### Google Antigravity 订阅与 Gemini API
+
+WeLink 可连接用户自行部署的 OpenAI 兼容 Antigravity 网关，使用网关所提供的订阅模型。这是第三方接入，并非 Google 官方支持的功能：Google 的 [Antigravity FAQ](https://antigravity.google/docs/faq) 不支持第三方应用使用 Antigravity 登录或包装 CLI 使用个人订阅额度，可能限制或停用账号；协议、模型和额度也可能发生变化。
+
+1. 自行安装并启动可信的 Antigravity 兼容网关，例如 [Antigravity Manager](https://github.com/lbjlaq/Antigravity-Manager)，在网关中完成账号授权并启用 API 服务。请自行评估网关的安全性和凭证存储方式。
+2. 在 WeLink 的「设置 → AI 配置 → 分析模型」选择 **Antigravity 订阅（第三方网关）**，填入网关 API Key、OpenAI 兼容 Base URL 和网关支持的模型名。密钥是网关配置的 API Key，不是 Google 密码或 OAuth 令牌。
+3. 本机运行 WeLink 且网关在本机时，地址可参考 `http://127.0.0.1:8045/v1`；WeLink 在 Docker 内而网关在宿主机时，可参考 `http://host.docker.internal:8045/v1`。实际地址、端口和容器网络以网关配置为准。
+4. 点击「保存并获取网关模型」可查询网关提供的模型列表，也可以手动填写；再点击「测试连接」。这两个操作会先保存当前模型配置。可用模型、认证和订阅额度取决于网关与 Google，WeLink 本身不管理 Google 登录或令牌。
+
+网关可接触你发送的聊天内容及其上游凭据；分析内容会经过网关再发送到其上游服务。请使用可信网关、妥善保护访问密钥和网络端口，并确认隐私设置。
+
+要在 WeLink 使用 Gemini，可在 Google AI Studio 创建 Gemini API Key，在「设置 → AI 配置 → 分析模型」选择 Gemini 并填写 Key，然后测试并保存。也可以按下文配置 Vertex AI。两者的可用模型、额度和费用以各自的 API 或 Cloud 项目为准，与 Antigravity 个人订阅分别计算。WeLink 原有的 Google OAuth 功能用于 Google API 授权，也不会启用 Antigravity 订阅额度。分析时，选定的聊天内容会发送给 Google。
+
 ### 支持的 Provider
 
 默认型号核对日期：**2026-10-20**。仅在模型字段留空时使用新默认值；已经填写的模型名、Base URL 和凭证会继续保留。
@@ -100,6 +114,7 @@ Claude 订阅与 Claude API 是不同服务。Anthropic 当前不允许第三方
 | `doubao` | 豆包（火山方舟 Volcengine Ark） | `doubao-seed-2-1-pro-260915` |
 | `kimi` | Kimi（月之暗面） | `kimi-k3` |
 | `gemini` | Google Gemini（AI Studio） | `gemini-3.8-flash` |
+| `antigravity` | Antigravity 订阅（第三方 OpenAI 兼容网关） | 用户填写网关模型名 |
 | `vertex` | **Google Vertex AI**（原生） | `google/gemini-3.8-flash` |
 | `bedrock` | **AWS Bedrock**（原生） | `anthropic.claude-opus-5-5` |
 | `glm` | 智谱 AI | `glm-5.3` |
@@ -428,6 +443,8 @@ Gemini provider 支持两种鉴权方式，二选一：
 1. **API Key**：在设置中直接填写 Gemini API Key。
 2. **Google OAuth 2.0**：通过标准 OAuth 流程授权，无需手动管理 API Key，Token 到期自动刷新。
 
+这两种方式均使用 Google API 的权限和额度，不使用 Antigravity 或 Google AI 个人订阅额度。
+
 ### 授权流程
 
 ```
@@ -483,6 +500,10 @@ Gemini provider 支持两种鉴权方式，二选一：
 1. 前端选择目标联系人/群聊和时间范围，根据消息数量估算 Token 用量。
 2. 前端对聊天内容进行隐私脱敏处理后，通过对话消息列表发送至 `POST /api/ai/analyze`。
 3. 后端直接将消息转发给 LLM，以 SSE 流式返回增量结果。
+
+AI 首页和联系人／群聊的全量分析会为发送的消息编号；回答标注有效编号时，可展开原文并打开上下文。分段摘要时最终模型只收到摘要，因此不提供原文编号引用。引用只能帮助核对，不能保证模型结论正确；被引用的原文会随对话保存在本机 AI 历史中。
+
+AI 首页的发送预览还支持选择第二个模型进行对比：确认后两个模型各收到相同的提示词、问题与历史，可能分别计费；对比结果不会保存。分享 AI 分析时可以编辑问题和回答、选择隐藏标题姓名、头像及生成时间，并检查生成的图片后再下载。正文中的隐私内容需自行修改。
 
 ### Token 估算
 

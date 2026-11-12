@@ -200,6 +200,7 @@ export interface BackendStatus {
   total_cached: number;
   progress?: IndexProgress;
   last_error?: string;
+  last_indexed_at?: number;
 }
 
 export type TabType = 'dashboard' | 'inbox' | 'digest' | 'stats' | 'contacts' | 'db' | 'groups' | 'search' | 'calendar' | 'anniversary' | 'urls' | 'skills' | 'sft' | 'labs' | 'gallery' | 'memory' | 'tasks' | 'export' | 'settings';

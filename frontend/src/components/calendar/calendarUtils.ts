@@ -36,7 +36,7 @@ export const MONTH_NAMES = ['1月', '2月', '3月', '4月', '5月', '6月', '7�
 // ─── LLM 供应商 → 显示名 ─────────────────────────────────────────────────────
 export const PROVIDER_LABELS: Record<string, string> = {
   deepseek: 'DeepSeek', kimi: 'Kimi', gemini: 'Gemini', glm: 'GLM',
-  grok: 'Grok', openai: 'OpenAI', claude: 'Claude', ollama: 'Ollama', custom: '自定义',
+  grok: 'Grok', openai: 'OpenAI', claude: 'Claude', ollama: 'Ollama', custom: '自定义', antigravity: 'Antigravity 网关',
 };
 
 // ─── SSE 流解析 ──────────────────────────────────────────────────────────────

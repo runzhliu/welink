@@ -41,6 +41,7 @@ const { DatePicker } = load('DatePicker');
 const { TimePicker } = load('TimePicker');
 const { Dialog } = load('Dialog');
 const { Avatar } = load('Avatar');
+const { connectionErrorHint } = require('../src/components/settings/ai/connectionErrors.ts');
 let root;
 async function render(node) {
   const host = document.createElement('div'); document.body.append(host);
@@ -86,6 +87,13 @@ test('Selecting the current provider does not reset its existing configuration',
   await click(document.querySelector('button'));
   await click(document.querySelector('[role="option"]'));
   assert.equal(changes, 0);
+});
+
+test('模型连接错误提供安全的排查提示，不回显服务端原文', () => {
+  assert.match(connectionErrorHint('API error 401 secret-token'), /认证/);
+  assert.match(connectionErrorHint('HTTP 429'), /额度|限流/);
+  assert.match(connectionErrorHint('connect refused'), /Docker/);
+  assert.doesNotMatch(connectionErrorHint('API error 401 secret-token'), /secret-token/);
 });
 
 test('Select closes outside, on Tab, and stays closed when disabled', async () => {

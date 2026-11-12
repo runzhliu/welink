@@ -108,9 +108,9 @@ export const contactsApi = {
       params: { username, q, ...(includeMine ? { include_mine: 'true' } : {}) }
     }),
 
-  exportMessages: (username: string, from?: number, to?: number) =>
+  exportMessages: (username: string, from?: number, to?: number, limit?: number) =>
     api.get<void, import('../types').ChatMessage[]>('/contacts/export', {
-      params: { username, ...(from ? { from } : {}), ...(to ? { to } : {}) },
+      params: { username, ...(from ? { from } : {}), ...(to ? { to } : {}), ...(limit ? { limit } : {}) },
       timeout: 120000,
     }),
 
@@ -481,9 +481,9 @@ export const groupsApi = {
   searchMessages: (username: string, q: string, speaker?: string) =>
     api.get<void, GroupChatMessage[]>('/groups/search', { params: { username, q, ...(speaker ? { speaker } : {}) } }),
 
-  exportMessages: (username: string, from?: number, to?: number) =>
+  exportMessages: (username: string, from?: number, to?: number, limit?: number) =>
     api.get<void, GroupChatMessage[]>('/groups/export', {
-      params: { username, ...(from ? { from } : {}), ...(to ? { to } : {}) },
+      params: { username, ...(from ? { from } : {}), ...(to ? { to } : {}), ...(limit ? { limit } : {}) },
       timeout: 120000,
     }),
 

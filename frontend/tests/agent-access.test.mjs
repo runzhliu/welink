@@ -29,7 +29,9 @@ after(async () => window.happyDOM.close());
 const button = text => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === text);
 test('Agent 授权默认仅开放日期，创建前确认并可撤销', async () => {
   calls = []; const host = document.createElement('div'); document.body.append(host); const root = createRoot(host);
+  const originalFetch = globalThis.fetch;
   try {
+    globalThis.fetch = async (url, options) => { calls.push(['probe', url, options]); return new Response(JSON.stringify({ dates: [] }), { status: 200 }); };
     await act(async () => root.render(React.createElement(AgentAccessSection, { contacts: [{ username: 'synthetic', remark: '虚构联系人' }], groups: [], demo: false, privacyMode: false })));
     const checkboxes = [...host.querySelectorAll('input[type=checkbox]')];
     assert.equal(checkboxes.length, 3);
@@ -42,12 +44,17 @@ test('Agent 授权默认仅开放日期，创建前确认并可撤销', async ()
     assert.deepEqual(calls.find(c => c[0] === 'create'), ['create', ['synthetic'], ['dates'], 168]);
     assert.equal(host.querySelector('[aria-label="一次性 Agent 凭据"]').type, 'password');
     assert.equal(localStorage.length, 0);
+    await act(async () => button('测试 WeLink 授权').click());
+    assert.match(host.textContent, /仍需在 DSH 容器内验证/);
+    const probe = calls.find(c => c[0] === 'probe');
+    assert.equal(probe[2].headers.Authorization, 'Bearer synthetic-secret');
+    assert.deepEqual(JSON.parse(probe[2].body), { action: 'dates', username: 'synthetic', max_items: 1, max_chars: 20, offset: 0 });
     await act(async () => button('撤销当前授权').click());
     await act(async () => button('确认撤销').click());
     assert.equal(calls.filter(c => c[0] === 'revoke').length, 1);
     assert.equal(host.querySelector('[aria-label="一次性 Agent 凭据"]'), null);
     assert.match(host.textContent, /授权已撤销/);
-  } finally { await act(async () => root.unmount()); host.remove(); }
+  } finally { globalThis.fetch = originalFetch; await act(async () => root.unmount()); host.remove(); }
 });
 
 test('公开演示不读取或创建 Agent 授权', async () => {

@@ -63,9 +63,27 @@ test('删除等待当前未完成的自动保存，避免对话复活', async ()
   };
   const save = saveConversation('ai-home:pending', [{ role: 'user', content: '示例' }]);
   const remove = deleteConversation('ai-home:pending');
-  await Promise.resolve();
+  await new Promise(resolve => setTimeout(resolve, 0));
   assert.deepEqual(calls, ['PUT']);
   finishSave();
   await Promise.all([save, remove]);
   assert.deepEqual(calls, ['PUT', 'DELETE']);
+});
+
+test('同一对话的保存按顺序发送，较旧内容不能覆盖较新的内容', async () => {
+  const sent = [];
+  let finishFirst;
+  globalThis.fetch = async (_url, init = {}) => {
+    const content = JSON.parse(init.body).messages[0].content;
+    sent.push(content);
+    if (content === '旧内容') return new Promise(resolve => { finishFirst = () => resolve(json({ ok: true })); });
+    return json({ ok: true });
+  };
+  const older = saveConversation('ai-home:ordered', [{ content: '旧内容' }]);
+  const newer = saveConversation('ai-home:ordered', [{ content: '新内容' }]);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(sent, ['旧内容']);
+  finishFirst();
+  await Promise.all([older, newer]);
+  assert.deepEqual(sent, ['旧内容', '新内容']);
 });

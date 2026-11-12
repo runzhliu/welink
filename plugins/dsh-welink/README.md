@@ -62,6 +62,16 @@ Agent 查询需要独立的只读令牌，即使从本机回环连接也必须�
 
 新建授权绑定当前数据账号，切换账号后不会继续放行。现有旧版授权仍可使用但未绑定账号；如需账号隔离，先撤销旧授权并重新创建。当前只支持一个授权，撤销后已有凭据立即不能继续查询，但无法清除 DSH 或模型服务已经保存的内容。公开 Demo 不支持管理授权。
 
+### 在 DSH 环境诊断连接
+
+「设置 → 连接 AI Agent」可以先测试浏览器到 WeLink 的授权接口。若要检查 DSH 容器自身的网络、凭据和授权，请在 DSH 运行环境中，使用与插件相同的 `WELINK_URL`、`WELINK_ALLOWED_CONVERSATIONS`、`WELINK_ALLOWED_HTTP_HOSTS` 和 `WELINK_TOKEN_FILE`，运行插件目录中的：
+
+```sh
+node diagnose.js
+```
+
+诊断只用白名单第一个会话查询日期权限，不打印凭据、日期或聊天内容；它测试该环境中的客户端配置，但不能证明 DSH 已加载插件。若使用插件配置文件覆盖了环境变量，应先确保诊断时的参数与实际配置一致。
+
 ## 独立 DSH / Super Agent 容器
 
 插件也能作为 DSH Web profile 的原生工具安装到独立的 Super Agent 实例；它不依赖 Super Agent 原型，也不注册事件 Source。不要挂载 `decrypted/`、个人 home 或 Docker socket：DSH 只需访问 WeLink 的受控 API。需要先在目标容器或镜像中安装该插件，再把上述环境变量配置到该实例。容器内的 `127.0.0.1` 是容器自身，不能默认代表宿主机。

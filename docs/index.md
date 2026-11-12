@@ -23,6 +23,11 @@ hero:
       link: https://github.com/runzhliu/welink
 
 features:
+  - icon: 🔌
+    title: 灵活选择 AI 服务
+    details: 支持 API、符合条件的 ChatGPT 订阅，以及通过用户自行部署的第三方网关接入 Antigravity；个人订阅的第三方接入有账号风险。
+    link: /ai-analysis#google-antigravity-订阅与-gemini-api
+    linkText: 查看模型配置与隐私说明
   - icon: 🧪
     title: SFT 工作台 · v0.4.0
     details: 从私聊准备数据，在 Mac 或 NVIDIA GPU 环境训练 LoRA，比较效果、导出并接入 WeLink。

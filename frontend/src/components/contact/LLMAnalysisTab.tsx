@@ -10,8 +10,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { MessageSquare, Send, RotateCcw, Loader2, AlertTriangle, Info, Copy, Check, CalendarDays, SlidersHorizontal, Square, Database, Search, Share2, ChevronDown, ChevronRight, ListTree, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { generateShareImage } from '../../utils/shareImage';
-import { RevealLink } from '../common/RevealLink';
+import { SharePreview } from '../common/SharePreview';
 import { TTSButton } from '../common/TTSButton';
 import { contactsApi, groupsApi } from '../../services/api';
 import { CalendarRangePicker } from './CalendarRangePicker';
@@ -24,7 +23,8 @@ import {
   scheduleSaveToDB,
   deleteFromDB,
 } from '../../stores/llmAnalysisStore';
-import type { AnalysisMessage } from '../../stores/llmAnalysisStore';
+import type { AnalysisMessage, AnalysisSource } from '../../stores/llmAnalysisStore';
+import { SearchContextModal, type SearchContextTarget } from '../search/SearchContextModal';
 
 // ─── 类型 ──────────────────────────────────────────────────────────────────────
 
@@ -173,22 +173,22 @@ async function loadMessages(
   from: string,
   to: string,
   limit?: number,
-): Promise<{ text: string; count: number; lines: string[] }> {
+): Promise<{ text: string; count: number; lines: string[]; sources: AnalysisSource[] }> {
   const fromTs = from ? Math.floor(new Date(from).getTime() / 1000) : 0;
   const toTs   = to   ? Math.floor(new Date(to   + 'T23:59:59').getTime() / 1000) : 0;
 
   if (isGroup) {
-    const msgs = await groupsApi.exportMessages(username, fromTs || undefined, toTs || undefined) ?? [];
-    if (msgs.length === 0) return { text: '（该时间范围内暂无聊天记录）', count: 0, lines: [] };
+    const msgs = await groupsApi.exportMessages(username, fromTs || undefined, toTs || undefined, limit) ?? [];
+    if (msgs.length === 0) return { text: '（该时间范围内暂无聊天记录）', count: 0, lines: [], sources: [] };
     const recent = limit && msgs.length > limit ? msgs.slice(-limit) : msgs;
     const lines = recent.map(m => `[${m.date ?? ''} ${m.time}] ${m.speaker}：${m.content}`);
-    return { text: lines.join('\n'), count: lines.length, lines };
+    return { text: lines.join('\n'), count: lines.length, lines, sources: recent.map((m, i) => ({ id: String(i + 1), username, display_name: displayName, is_group: true, date: m.date || '', time: m.time, content: m.content, is_mine: m.is_mine, speaker: m.speaker })) };
   } else {
-    const msgs = await contactsApi.exportMessages(username, fromTs || undefined, toTs || undefined) ?? [];
-    if (msgs.length === 0) return { text: '（该时间范围内暂无聊天记录）', count: 0, lines: [] };
+    const msgs = await contactsApi.exportMessages(username, fromTs || undefined, toTs || undefined, limit) ?? [];
+    if (msgs.length === 0) return { text: '（该时间范围内暂无聊天记录）', count: 0, lines: [], sources: [] };
     const recent = limit && msgs.length > limit ? msgs.slice(-limit) : msgs;
     const lines = recent.map(m => `[${m.date ?? ''} ${m.time}] ${m.is_mine ? '我' : displayName}：${m.content}`);
-    return { text: lines.join('\n'), count: lines.length, lines };
+    return { text: lines.join('\n'), count: lines.length, lines, sources: recent.map((m, i) => ({ id: String(i + 1), username, display_name: displayName, is_group: false, date: m.date || '', time: m.time, content: m.content, is_mine: m.is_mine })) };
   }
 }
 
@@ -204,9 +204,9 @@ const AssistantMessage: React.FC<{
   onDelete?: () => void;
 }> = ({ msg, displayName, avatarUrl, prevQuestion, currentProvider, currentModel, onDelete }) => {
   const [copied, setCopied] = useState(false);
-  const [sharing, setSharing] = useState(false);
-  const [shareMsg, setShareMsg] = useState<{ ok: boolean; text: string; path?: string } | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
   const [thinkingOpen, setThinkingOpen] = useState(false);
+  const [sourceTarget, setSourceTarget] = useState<SearchContextTarget | null>(null);
 
   const handleCopy = () => {
     if (!msg.content) return;
@@ -216,34 +216,6 @@ const AssistantMessage: React.FC<{
     }).catch(() => {});
   };
 
-  const handleShare = async () => {
-    if (!msg.content || sharing) return;
-    setSharing(true);
-    setShareMsg(null);
-    try {
-      const savedPath = await generateShareImage({
-        question: prevQuestion,
-        answer: msg.content,
-        contactName: displayName,
-        avatarUrl,
-        stats: msg.elapsedSecs !== undefined ? {
-          provider: msg.provider,
-          model: msg.model,
-          elapsedSecs: msg.elapsedSecs,
-          tokensPerSec: msg.tokensPerSec,
-          charCount: msg.charCount,
-          timestamp: msg.timestamp,
-        } : undefined,
-      });
-      const isAppMode = savedPath.startsWith('/') || /^[A-Z]:\\/i.test(savedPath);
-      setShareMsg({ ok: true, text: isAppMode ? `已保存至 ${savedPath}` : '图片已下载', path: isAppMode ? savedPath : undefined });
-    } catch (err) {
-      setShareMsg({ ok: false, text: `生成失败：${(err as Error).message}` });
-    } finally {
-      setSharing(false);
-      setTimeout(() => setShareMsg(null), 4000);
-    }
-  };
 
   if (msg.role === 'user') {
     return (
@@ -328,6 +300,7 @@ const AssistantMessage: React.FC<{
               </div>
             )}
           </div>
+          {!!msg.sources?.length && !msg.streaming && <details className="rounded-lg border dk-border p-2 text-xs"><summary className="cursor-pointer font-semibold">查看引用的聊天记录（{msg.sources.length}）</summary><p className="mt-1 text-gray-500">请打开上下文核对；原文保存在本机对话历史中。</p>{msg.sources.map(source => <button key={source.id} type="button" className="mt-2 block w-full text-left rounded bg-gray-50 dark:bg-white/5 p-2 break-all" onClick={() => setSourceTarget({ username: source.username, displayName: source.display_name, date: source.date, targetTime: source.time, targetContent: source.content, isGroup: source.is_group })}>[{source.id}] {source.date} {source.time} · {source.content}</button>)}</details>}
           {msg.content && !msg.streaming && (
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <TTSButton text={msg.content} size={13} showLabel title="朗读回答" />
@@ -340,13 +313,12 @@ const AssistantMessage: React.FC<{
                 {copied ? '已复制' : '复制'}
               </button>
               <button
-                onClick={handleShare}
-                disabled={sharing}
+                onClick={() => setShareOpen(true)}
                 className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-gray-400 hover:text-[#576b95] hover:bg-[#f0f4ff] dark:hover:bg-[#576b95]/15 transition-colors disabled:opacity-50"
                 title="保存为图片分享"
               >
-                {sharing ? <Loader2 size={11} className="animate-spin" /> : <Share2 size={11} />}
-                {sharing ? '生成中…' : '分享'}
+                <Share2 size={11} />
+                分享
               </button>
               {onDelete && (
                 <button
@@ -363,12 +335,8 @@ const AssistantMessage: React.FC<{
         </div>
       </div>
       {/* 保存路径提示：移出 max-w-[80%] 容器，避免长路径被截断 */}
-      {shareMsg && (
-        <p className={`text-[10px] font-medium ml-9 break-all leading-relaxed ${shareMsg.ok ? 'text-[#07c160]' : 'text-red-500'}`}>
-          {shareMsg.text}
-          {shareMsg.path && <RevealLink path={shareMsg.path} className="ml-2" />}
-        </p>
-      )}
+      {shareOpen && <SharePreview options={{ question: prevQuestion, answer: msg.content, contactName: displayName, avatarUrl, stats: msg.elapsedSecs !== undefined ? { provider: msg.provider, model: msg.model, elapsedSecs: msg.elapsedSecs, tokensPerSec: msg.tokensPerSec, charCount: msg.charCount, timestamp: msg.timestamp } : undefined }} onClose={() => setShareOpen(false)} />}
+      {sourceTarget && <SearchContextModal {...sourceTarget} onClose={() => setSourceTarget(null)} />}
     </div>
   );
 };
@@ -429,6 +397,7 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
   const [ctxStatus, setCtxStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const contextRef  = useRef<string | null>(null);
   const linesRef    = useRef<string[] | null>(null);
+  const sourcesRef = useRef<AnalysisSource[]>([]);
   const loadAbortRef = useRef<AbortController | null>(null);
 
   const limit = getProviderLimit(provider, llmModel);
@@ -501,6 +470,7 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
   useEffect(() => {
     contextRef.current = null;
     linesRef.current = null;
+    sourcesRef.current = [];
     setRealMsgCount(null);
     setCtxStatus('loading');
     loadAbortRef.current?.abort();
@@ -510,10 +480,11 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
     const effectiveFrom = (!quickMode && msgLimit != null) ? '' : rangeFrom;
     const effectiveTo   = (!quickMode && msgLimit != null) ? '' : rangeTo;
     loadMessages(username, displayName, isGroup, effectiveFrom, effectiveTo, quickMode ? 200 : (msgLimit ?? undefined))
-      .then(({ text, count, lines }) => {
+      .then(({ text, count, lines, sources }) => {
         if (cancelled) return;
         contextRef.current = text;
         linesRef.current = lines;
+        sourcesRef.current = sources;
         setRealMsgCount(count);
         setCtxStatus('ready');
       })
@@ -989,6 +960,8 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
       ? linesRef.current.map(l => maskPrivacy(l, displayName, isGroup))
       : linesRef.current;
 
+    let citationSources: AnalysisSource[] = [];
+
     if (realMsgCount !== null && estimateTokens(realMsgCount) > limit && linesRef.current && linesRef.current.length > 0) {
       const chunkLines = effectiveLines ?? linesRef.current;
       try {
@@ -1014,13 +987,16 @@ export const LLMAnalysisTab: React.FC<LLMAnalysisProps> = ({
         updateAnalysisState(key, prev => ({ ...prev, loading: false, chunkProgress: null, abort: null }));
         return;
       }
+    } else if (effectiveLines) {
+      citationSources = sourcesRef.current;
+      effectiveCtx = effectiveLines.map((line, i) => `[${i + 1}] ${line}`).join('\n');
     }
 
     const systemPrompt = `你是一个聊天记录分析助手。以下是${roleDesc}（时间范围：${rangeFrom || '全部'} ~ ${rangeTo || '全部'}）：
 
 ${effectiveCtx}
 
-请根据以上聊天记录回答用户的问题。分析时请客观、有洞察力，用中文回答，语言自然流畅。`;
+请根据以上聊天记录回答用户的问题。分析时请客观、有洞察力，用中文回答，语言自然流畅。${citationSources.length ? '涉及具体聊天内容的结论请用对应消息编号引用，例如 [1]；只能引用实际存在的编号，不要编造。' : ''}`;
 
     const llmMessages = [
       { role: 'system', content: systemPrompt },
@@ -1102,7 +1078,8 @@ ${effectiveCtx}
         if (msg) {
           const charCount = msg.content.length;
           const tokensPerSec = elapsedSecs > 0.1 ? Math.round(charCount / elapsedSecs / 1.5) : 0;
-          next[assistantIdx] = { ...msg, streaming: false, provider, model: llmModel, elapsedSecs, tokensPerSec, charCount, timestamp: Date.now() };
+          const ids = new Set(Array.from(msg.content.matchAll(/\[(\d+)\]/g), match => match[1]));
+          next[assistantIdx] = { ...msg, streaming: false, provider, model: llmModel, elapsedSecs, tokensPerSec, charCount, timestamp: Date.now(), sources: citationSources.filter(source => ids.has(source.id)) };
         }
         return { ...prev, messages: next, loading: false, abort: null };
       });
@@ -1526,7 +1503,7 @@ ${effectiveCtx}
                 </button>
               ))}
               {msgLimit !== null && (
-                <span className="text-[10px] text-[#576b95]">· 全部聊天记录中最近 {msgLimit} 条，不受时间范围限制</span>
+                <span className="text-[10px] text-[#576b95]">· 当前索引范围内最近 {msgLimit} 条</span>
               )}
             </div>
             {msgLimit === null && (

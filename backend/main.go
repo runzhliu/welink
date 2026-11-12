@@ -412,11 +412,12 @@ func serverMain() {
 
 		if !trusted {
 			c.JSON(http.StatusOK, gin.H{
-				"app_mode":      hasFrontend,
-				"demo_mode":     demoModeEnabled(),
-				"version":       appVersion,
-				"platform":      runtime.GOOS,
-				"needs_pairing": currentPairingToken() != "",
+				"app_mode":         hasFrontend,
+				"demo_mode":        demoModeEnabled(),
+				"demo_mock_active": DemoMockActive(),
+				"version":          appVersion,
+				"platform":         runtime.GOOS,
+				"needs_pairing":    currentPairingToken() != "",
 			})
 			return
 		}
@@ -431,17 +432,18 @@ func serverMain() {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"app_mode":     hasFrontend,
-			"demo_mode":    demoModeEnabled(),
-			"needs_setup":  needsSetup,
-			"ready":        ready,
-			"version":      appVersion,
-			"platform":     runtime.GOOS,
-			"data_dir":     prefs.DataDir,
-			"reason":       reason,
-			"probed_paths": probeDataDirs(prefs.DataDir),
-			"can_demo":     hasFrontend,
-			"self_info":    selfInfo,
+			"app_mode":         hasFrontend,
+			"demo_mode":        demoModeEnabled(),
+			"demo_mock_active": DemoMockActive(),
+			"needs_setup":      needsSetup,
+			"ready":            ready,
+			"version":          appVersion,
+			"platform":         runtime.GOOS,
+			"data_dir":         prefs.DataDir,
+			"reason":           reason,
+			"probed_paths":     probeDataDirs(prefs.DataDir),
+			"can_demo":         hasFrontend,
+			"self_info":        selfInfo,
 		})
 	})
 
@@ -1436,24 +1438,29 @@ func serverMain() {
 	// 后端拉取聊天记录 → 构造 prompt → 流式转发 LLM 响应
 	api.POST("/ai/analyze", func(c *gin.Context) {
 		var body struct {
-			Username  string       `json:"username"`
-			IsGroup   bool         `json:"is_group"`
-			From      int64        `json:"from"`
-			To        int64        `json:"to"`
-			Messages  []LLMMessage `json:"messages"`
-			ProfileID string       `json:"profile_id"`
+			Username        string              `json:"username"`
+			IsGroup         bool                `json:"is_group"`
+			From            int64               `json:"from"`
+			To              int64               `json:"to"`
+			Messages        []LLMMessage        `json:"messages"`
+			ProfileID       string              `json:"profile_id"`
+			ExpectedProfile *llmExpectedProfile `json:"expected_profile"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 			return
 		}
 		prefs := loadPreferences()
+		if body.ExpectedProfile != nil && !llmProfileMatches(prefs, body.ProfileID, *body.ExpectedProfile) {
+			c.JSON(http.StatusConflict, gin.H{"error": "模型配置已发生变化，请刷新页面、重新选择模型并预览后再发送"})
+			return
+		}
 		cfg := llmConfigForProfile(body.ProfileID, prefs)
-		if cfg.provider == "" {
+		if cfg.provider == "" && !DemoMockActive() {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 AI 接口"})
 			return
 		}
-		if cfg.apiKey == "" && cfg.provider != "ollama" {
+		if cfg.apiKey == "" && cfg.provider != "ollama" && !DemoMockActive() {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请先在设置中配置 API Key 或完成账号授权"})
 			return
 		}
@@ -2697,6 +2704,41 @@ func serverMain() {
 		c.JSON(http.StatusOK, gin.H{"ok": true, "provider": cfg.provider, "model": model})
 	})
 
+	// Model discovery uses only an already-saved gateway profile; credentials are
+	// never returned to the browser and redirects cannot forward the gateway key.
+	api.POST("/ai/llm/gateway-models", func(c *gin.Context) {
+		if isDemoMode && DemoAIDisabled() {
+			demoBlockLLMWrite(c)
+			return
+		}
+		var body struct {
+			ProfileID string `json:"profile_id"`
+		}
+		if c.ShouldBindJSON(&body) != nil || body.ProfileID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请先选择网关配置"})
+			return
+		}
+		prefs := loadPreferences()
+		found := false
+		for _, p := range prefs.LLMProfiles {
+			if p.ID == body.ProfileID && p.Provider == "antigravity" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "未找到 Antigravity 网关配置"})
+			return
+		}
+		cfg := llmConfigForProfile(body.ProfileID, prefs)
+		models, err := antigravityGatewayModels(cfg)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"models": models})
+	})
+
 	// POST /api/ai/mem/test — 验证记忆提炼本地模型配置是否可用
 	api.POST("/ai/mem/test", func(c *gin.Context) {
 		prefs := loadPreferences()
@@ -3480,7 +3522,12 @@ func serverMain() {
 			var from, to int64
 			fmt.Sscanf(c.Query("from"), "%d", &from)
 			fmt.Sscanf(c.Query("to"), "%d", &to)
-			c.JSON(http.StatusOK, getSvc().ExportContactMessages(uname, from, to))
+			limit, err := strconv.Atoi(c.DefaultQuery("limit", strconv.Itoa(service.ExportLimit)))
+			if err != nil || limit < 1 || limit > service.ExportLimit {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "limit 必须在 1 到 50000 之间"})
+				return
+			}
+			c.JSON(http.StatusOK, getSvc().ExportContactMessagesLimited(uname, from, to, limit))
 		})
 
 		// AI 摘要数据（统计特征 + 采样消息，用于生成 AI 报告/日记/画像卡）
@@ -3649,7 +3696,12 @@ func serverMain() {
 			var from, to int64
 			fmt.Sscanf(c.Query("from"), "%d", &from)
 			fmt.Sscanf(c.Query("to"), "%d", &to)
-			c.JSON(http.StatusOK, getSvc().ExportGroupMessages(uname, from, to))
+			limit, err := strconv.Atoi(c.DefaultQuery("limit", strconv.Itoa(service.ExportLimit)))
+			if err != nil || limit < 1 || limit > service.ExportLimit {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "limit 必须在 1 到 50000 之间"})
+				return
+			}
+			c.JSON(http.StatusOK, getSvc().ExportGroupMessagesLimited(uname, from, to, limit))
 		})
 
 		// 关系降温榜

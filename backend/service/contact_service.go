@@ -208,7 +208,8 @@ type ContactService struct {
 	cacheMu       sync.RWMutex
 	sftIdentity   string // immutable once the source account has been confirmed
 	isIndexing    bool
-	isInitialized bool // 标记初始化是否完成
+	isInitialized bool  // 标记初始化是否完成
+	lastIndexedAt int64 // 本次服务运行期间最近一次完成的索引时间
 	// 进度快照（由 performAnalysis 更新，/api/status 读取）
 	progressTotal             int    // 本轮总联系人数，0 = 未开始
 	progressDone              int    // 已完成联系人数
@@ -549,6 +550,7 @@ func (s *ContactService) reinitialize(newParams *AnalysisParams, from, to int64)
 		} else {
 			s.isInitialized = true
 			s.lastInitErr = ""
+			s.lastIndexedAt = time.Now().Unix()
 			log.Println("[INIT] Reinitialization complete.")
 		}
 		s.cancelFn = nil
@@ -584,6 +586,7 @@ func (s *ContactService) fullAnalysisTask() {
 	// 标记初始化完成
 	s.cacheMu.Lock()
 	s.isInitialized = true
+	s.lastIndexedAt = time.Now().Unix()
 	s.cacheMu.Unlock()
 	log.Println("[INIT] Initial analysis completed! Data ready.")
 
@@ -2129,6 +2132,11 @@ func (s *ContactService) ExportContactMessages(username string, from, to int64) 
 	return s.exportContactMessages(username, from, to, ExportLimit)
 }
 
+// ExportContactMessagesLimited returns the newest valid messages in range.
+func (s *ContactService) ExportContactMessagesLimited(username string, from, to int64, limit int) []ChatMessage {
+	return s.exportContactMessages(username, from, to, limit)
+}
+
 // ExportContactMessagesAll 导出联系人全部聊天记录（不限条数），用于 RAG 索引构建。
 func (s *ContactService) ExportContactMessagesAll(username string) []ChatMessage {
 	return s.exportContactMessages(username, 0, 0, 0)
@@ -2138,19 +2146,24 @@ func (s *ContactService) exportContactMessages(username string, from, to int64, 
 	tableName := db.GetTableName(username)
 	tw := exportTimeWhere(from, to, s.timeWhere())
 
-	var msgs []ChatMessage
+	type datedMessage struct {
+		ts  int64
+		msg ChatMessage
+	}
+	var dated []datedMessage
 	for _, mdb := range s.msgRepo.DBsForUsername(username) {
 		var contactRowID int64 = -1
 		mdb.QueryRow(fmt.Sprintf("SELECT rowid FROM Name2Id WHERE user_name = %q", username)).Scan(&contactRowID)
 
 		whereClause := tw
 		rows, err := mdb.Query(fmt.Sprintf(
-			"SELECT create_time, local_type, message_content, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s ORDER BY create_time ASC",
+			"SELECT create_time, local_type, message_content, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s ORDER BY create_time DESC",
 			tableName, whereClause,
 		))
 		if err != nil {
 			continue
 		}
+		read := 0
 		for rows.Next() {
 			var ts int64
 			var lt int
@@ -2185,22 +2198,32 @@ func (s *ContactService) exportContactMessages(username string, from, to int64, 
 			}
 			isMine := contactRowID < 0 || senderID != contactRowID
 			t := time.Unix(ts, 0).In(s.tz)
-			msgs = append(msgs, ChatMessage{
+			dated = append(dated, datedMessage{ts: ts, msg: ChatMessage{
 				Date:    t.Format("2006-01-02"),
 				Time:    t.Format("15:04"),
 				Content: content,
 				IsMine:  isMine,
 				Type:    lt,
-			})
+			}})
+			read++
+			if limit > 0 && read >= limit {
+				break
+			}
 		}
 		rows.Close()
 	}
 
-	sort.Slice(msgs, func(i, j int) bool {
-		return msgs[i].Date+msgs[i].Time < msgs[j].Date+msgs[j].Time
+	// Rows are read newest-first from each shard. Reverse ties to retain the
+	// database's ascending order within each timestamp before merging shards.
+	sort.SliceStable(dated, func(i, j int) bool {
+		return dated[i].ts > dated[j].ts
 	})
-	if limit > 0 && len(msgs) > limit {
-		msgs = msgs[len(msgs)-limit:]
+	if limit > 0 && len(dated) > limit {
+		dated = dated[:limit]
+	}
+	var msgs []ChatMessage
+	for i := len(dated) - 1; i >= 0; i-- {
+		msgs = append(msgs, dated[i].msg)
 	}
 	return msgs
 }
@@ -2209,6 +2232,11 @@ func (s *ContactService) exportContactMessages(username string, from, to int64, 
 // from/to 为 Unix 秒，传 0 则沿用已索引的时间范围
 func (s *ContactService) ExportGroupMessages(username string, from, to int64) []GroupChatMessage {
 	return s.exportGroupMessages(username, from, to, ExportLimit)
+}
+
+// ExportGroupMessagesLimited returns the newest valid messages in range.
+func (s *ContactService) ExportGroupMessagesLimited(username string, from, to int64, limit int) []GroupChatMessage {
+	return s.exportGroupMessages(username, from, to, limit)
 }
 
 // ExportGroupMessagesAll 导出群聊全部聊天记录（不限条数），用于 RAG 索引构建。
@@ -2230,7 +2258,11 @@ func (s *ContactService) exportGroupMessages(username string, from, to int64, li
 
 	nameMap := s.loadContactNameMap()
 	avatarMap := s.loadContactAvatarMap()
-	var msgs []GroupChatMessage
+	type datedMessage struct {
+		ts  int64
+		msg GroupChatMessage
+	}
+	var dated []datedMessage
 
 	for _, mdb := range s.msgRepo.DBsForUsername(username) {
 		id2name := make(map[int64]string)
@@ -2246,12 +2278,13 @@ func (s *ContactService) exportGroupMessages(username string, from, to int64, li
 		}
 
 		rows, err := mdb.Query(fmt.Sprintf(
-			"SELECT create_time, local_type, message_content, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s ORDER BY create_time ASC",
+			"SELECT create_time, local_type, message_content, COALESCE(WCDB_CT_message_content,0), COALESCE(real_sender_id,0) FROM [%s]%s ORDER BY create_time DESC",
 			tableName, tw,
 		))
 		if err != nil {
 			continue
 		}
+		read := 0
 		for rows.Next() {
 			var ts int64
 			var lt int
@@ -2305,7 +2338,7 @@ func (s *ContactService) exportGroupMessages(username string, from, to int64, li
 				speaker = "未知"
 			}
 			t := time.Unix(ts, 0).In(s.tz)
-			msgs = append(msgs, GroupChatMessage{
+			dated = append(dated, datedMessage{ts: ts, msg: GroupChatMessage{
 				Date:      t.Format("2006-01-02"),
 				Time:      t.Format("15:04"),
 				Speaker:   speaker,
@@ -2313,16 +2346,24 @@ func (s *ContactService) exportGroupMessages(username string, from, to int64, li
 				IsMine:    false,
 				Type:      lt,
 				AvatarURL: avatarMap[speakerWxid],
-			})
+			}})
+			read++
+			if limit > 0 && read >= limit {
+				break
+			}
 		}
 		rows.Close()
 	}
 
-	sort.Slice(msgs, func(i, j int) bool {
-		return msgs[i].Date+msgs[i].Time < msgs[j].Date+msgs[j].Time
+	sort.SliceStable(dated, func(i, j int) bool {
+		return dated[i].ts > dated[j].ts
 	})
-	if limit > 0 && len(msgs) > limit {
-		msgs = msgs[len(msgs)-limit:]
+	if limit > 0 && len(dated) > limit {
+		dated = dated[:limit]
+	}
+	var msgs []GroupChatMessage
+	for i := len(dated) - 1; i >= 0; i-- {
+		msgs = append(msgs, dated[i].msg)
 	}
 	return msgs
 }
@@ -3039,9 +3080,10 @@ func (s *ContactService) GetStatus() map[string]interface{} {
 	s.cacheMu.RLock()
 	defer s.cacheMu.RUnlock()
 	status := map[string]interface{}{
-		"is_indexing":    s.isIndexing,
-		"is_initialized": s.isInitialized,
-		"total_cached":   len(s.cache),
+		"is_indexing":     s.isIndexing,
+		"is_initialized":  s.isInitialized,
+		"total_cached":    len(s.cache),
+		"last_indexed_at": s.lastIndexedAt,
 	}
 	if s.isIndexing && s.progressTotal > 0 {
 		elapsedMs := time.Since(s.progressStart).Milliseconds()

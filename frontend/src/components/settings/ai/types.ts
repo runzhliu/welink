@@ -9,6 +9,7 @@ export const PROVIDERS = [
   { value: 'doubao',   label: '豆包（火山方舟）', defaultURL: 'https://ark.cn-beijing.volces.com/api/v3', defaultModel: 'doubao-seed-2-1-pro-260915', keyUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey', usageUrl: 'https://console.volcengine.com/finance/bill' },
   { value: 'kimi',     label: 'Kimi (Moonshot)', defaultURL: 'https://api.moonshot.cn/v1', defaultModel: 'kimi-k3', keyUrl: 'https://platform.moonshot.cn/console/api-keys', usageUrl: 'https://platform.moonshot.cn/console/info' },
   { value: 'gemini',   label: 'Gemini', defaultURL: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-3.8-flash', keyUrl: 'https://aistudio.google.com/apikey', usageUrl: 'https://aistudio.google.com/usage' },
+  { value: 'antigravity', label: 'Antigravity 订阅（第三方网关）', defaultURL: '', defaultModel: '', keyUrl: '', usageUrl: '' },
   { value: 'glm',      label: 'GLM（智谱 AI）', defaultURL: 'https://open.bigmodel.cn/api/paas/v4', defaultModel: 'glm-5.3', keyUrl: 'https://open.bigmodel.cn/usercenter/apikeys', usageUrl: 'https://open.bigmodel.cn/finance/manage' },
   { value: 'grok',     label: 'Grok (xAI)', defaultURL: 'https://api.x.ai/v1', defaultModel: 'grok-4.7', keyUrl: 'https://console.x.ai/', usageUrl: 'https://console.x.ai/team/default/usage' },
   { value: 'minimax',     label: 'MiniMax（国际版）', defaultURL: 'https://api.minimax.io/v1', defaultModel: 'MiniMax-M3.1-Flash', keyUrl: 'https://www.minimax.io/user-center/basic-information/interface-key', usageUrl: 'https://www.minimax.io/user-center/finance-management/finance-overview' },
@@ -76,7 +77,7 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 };
 
 export function getModelContextWindow(provider: string, model = ''): number | undefined {
-  if (provider === 'ollama' || provider === 'custom' || provider === 'azure') return undefined;
+  if (provider === 'ollama' || provider === 'custom' || provider === 'azure' || provider === 'antigravity') return undefined;
   return MODEL_CONTEXT_WINDOWS[model || getDefaultModel(provider)];
 }
 
