@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,16 +16,23 @@ import (
 //
 // 优先级：
 //  1. 环境变量 WELINK_PUBLIC_URL（供反代场景显式指定，例如 https://welink.example.com）
-//  2. 默认 http://127.0.0.1:<prefs.Port>
+//  2. 当前实际监听端口，服务尚未启动时使用配置端口
 //
 // 注意：过去该函数读 X-Forwarded-Proto / X-Forwarded-Host 来适配反代，
 // 但这些 header 完全由请求方控制——局域网/恶意浏览器页面可伪造它们，
 // 让授权服务器把 code 回传到攻击者的域名。现已改为仅信任服务端配置。
+var activeServerPort atomic.Pointer[string]
+
 func oauthPublicURL() string {
 	if v := strings.TrimRight(os.Getenv("WELINK_PUBLIC_URL"), "/"); v != "" {
 		return v
 	}
-	port := loadPreferences().Port
+	port := ""
+	if active := activeServerPort.Load(); active != nil {
+		port = *active
+	} else {
+		port = loadPreferences().Port
+	}
 	if port == "" {
 		port = "8080"
 	}

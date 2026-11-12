@@ -26,6 +26,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -42,6 +43,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 	_ "time/tzdata" // 嵌入时区数据库，确保 App 打包后 LoadLocation 正常工作
 
@@ -4660,6 +4662,7 @@ func serverMain() {
 	if err != nil {
 		log.Fatalf("WeLink 后端无法监听端口：%v", err)
 	}
+	activeServerPort.Store(&actualPort)
 	sftPort.Store(actualPort)
 	log.Printf("WeLink Backend serving on %s:%s", host, actualPort)
 
@@ -4680,39 +4683,42 @@ func serverMain() {
 }
 
 // listenWithFallback 绑定到 host:port。App 模式（fallback=true）下，如果首选
-// port 被占，会递增尝试最多 20 个端口，返回实际使用的 listener 和端口号。
+// port 被占，会递增尝试最多 20 个端口，之后由系统分配空闲端口。
 // Server 模式下只尝试一次以保留「端口由运维显式指定」的语义。
 func listenWithFallback(host, port string, fallback bool) (net.Listener, string, error) {
-	if host == "" {
-		// ":port" 语义：绑所有网卡
-		if l, err := net.Listen("tcp", ":"+port); err == nil {
-			return l, port, nil
-		} else if !fallback {
+	basePort, err := strconv.Atoi(port)
+	if err != nil || basePort < 0 || basePort > 65535 {
+		return nil, "", fmt.Errorf("端口号 %q 无效", port)
+	}
+	listen := func(candidate int) (net.Listener, string, error) {
+		l, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(candidate)))
+		if err != nil {
 			return nil, "", err
 		}
-	} else {
-		if l, err := net.Listen("tcp", host+":"+port); err == nil {
-			return l, port, nil
-		} else if !fallback {
-			return nil, "", err
-		}
+		return l, strconv.Itoa(l.Addr().(*net.TCPAddr).Port), nil
+	}
+	l, actual, err := listen(basePort)
+	if err == nil || !fallback {
+		return l, actual, err
+	}
+	if !errors.Is(err, syscall.EADDRINUSE) {
+		return nil, "", err
 	}
 
-	// App 模式端口递增回退
-	basePort, err := strconv.Atoi(port)
-	if err != nil {
-		return nil, "", fmt.Errorf("端口号 %q 解析失败：%w", port, err)
-	}
 	for i := 1; i <= 20; i++ {
-		cand := strconv.Itoa(basePort + i)
-		addr := host + ":" + cand
-		if host == "" {
-			addr = ":" + cand
+		candidate := basePort + i
+		if candidate > 65535 {
+			break
 		}
-		if l, err := net.Listen("tcp", addr); err == nil {
-			log.Printf("端口 %s 被占用，回退到 %s", port, cand)
-			return l, cand, nil
+		if l, actual, err := listen(candidate); err == nil {
+			log.Printf("端口 %s 不可用，回退到 %s", port, actual)
+			return l, actual, nil
 		}
 	}
-	return nil, "", fmt.Errorf("端口 %s 以及后续 20 个备选端口全部被占用", port)
+	l, actual, err = listen(0)
+	if err != nil {
+		return nil, "", fmt.Errorf("无法绑定首选或系统分配端口：%w", err)
+	}
+	log.Printf("首选端口 %s 及备选端口不可用，系统分配端口 %s", port, actual)
+	return l, actual, nil
 }
