@@ -23,6 +23,16 @@ hero:
       link: https://github.com/runzhliu/welink
 
 features:
+  - icon: 🔎
+    title: AI 分析有据可查 · v0.4.3
+    details: 分析前预览发送内容，查看回答引用的聊天原文，也可以让两个模型回答同一个问题。
+    link: /ai-analysis
+    linkText: 了解 AI 分析
+  - icon: ✍️
+    title: 我的口吻回复
+    details: 选择自己的历史回复作为风格示例，生成可以编辑和复制的回复草稿。
+    link: /ai-analysis
+    linkText: 查看使用指南
   - icon: 🔌
     title: 灵活选择 AI 服务
     details: 支持 API、符合条件的 ChatGPT 订阅，以及通过用户自行部署的第三方网关接入 Antigravity；个人订阅的第三方接入有账号风险。
@@ -53,7 +63,7 @@ features:
     linkText: 了解更多
   - icon: 🔌
     title: DSH 插件
-    details: 将授权的私聊和群聊接入 DeepSeek Harness，按日期或关键词查询，让 Agent 帮你整理信息。
+    details: 将授权的私聊和群聊接入 DeepSeek Harness，按日期或关键词查询；提供授权向导和连接诊断。
     link: https://github.com/runzhliu/welink/tree/main/plugins/dsh-welink
     linkText: 查看插件与接入指南
   - icon: 💕
